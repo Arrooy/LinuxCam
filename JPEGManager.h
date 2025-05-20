@@ -4,26 +4,9 @@
 #define JPEGMANAGER_H
 
 #include <turbojpeg.h>
-
+#include "image.h"
 namespace funnyface
 {
-
-struct TJImageDescription
-{
-    int width;
-    int height;
-    TJSAMP TJSampleFormat; // TJSAMP_444
-    TJCS TJColorSpace;     // TJCS_RGB
-    TJPF TJPixelFormat;    // TJPF_RGB
-    int pixelSizeBytes;
-};
-
-struct Image
-{
-    unsigned char* data;
-    unsigned long size;
-    TJImageDescription info;
-};
 
 class JPEGManager
 {
@@ -34,7 +17,7 @@ class JPEGManager
 
 
     bool saveToFile(const char* fileName, Image image);
-    bool readFromFile(const char* fileName, Image& image, TJPF pixelFormat = TJPF_RGBA);
+    bool readFromFile(const char* fileName, Image& image, TJPF pixelFormat = TJPF_RGB);
 
     bool decodeImage(const Image srcImage, unsigned char** destBuff);
 
@@ -47,7 +30,7 @@ class JPEGManager
      */
     bool encodeImage(const Image srcImage, Image& dstImage, int quality = 100);
 
-    bool encodeAndWriteToOutput(const Image srcImage, int quality = 100, TJPF pixelFormat = TJPF_RGBA);
+    bool encodeAndWriteToOutput(const Image srcImage, int quality = 100, TJPF pixelFormat = TJPF_RGB);
 
     bool decodeJPEGHeader(Image& image, unsigned long& size);
 
@@ -67,6 +50,8 @@ class JPEGManager
     Image d_image_;
 
     int o_fd_;
+
+    TJSAMP chrominance_subsampling_;
 };
 
 } // namespace funnyface

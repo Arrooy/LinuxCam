@@ -11,6 +11,9 @@
 #include <cstdlib>
 
 #include "common.h"
+#include "dlibDetectors.h"
+
+using namespace funnyface;
 
 // Definition of the static member
 std::atomic<bool> CameraManager::keepRunning_{true};
@@ -170,12 +173,18 @@ void CameraManager::cleanup_buffers(unsigned int index)
     buffers_ = nullptr;
 }
 
-bool CameraManager::update(std::function<void(funnyface::Image&)> paint)
+bool CameraManager::configureFaceDetector()
+{
+    faceDetector_ptr_ = std::make_shared<DlibFaceDetector>();
+    return true;
+}
+
+bool CameraManager::update(std::function<void(Image&, std::shared_ptr<FaceDetector>)> paint)
 {
     struct v4l2_buffer buf;
     keepRunning_ = true;
 
-    funnyface::Image raw_image;
+    Image raw_image;
     raw_image.data = nullptr;
     raw_image.size = 0L;
     bool success{true};
@@ -241,18 +250,12 @@ bool CameraManager::update(std::function<void(funnyface::Image&)> paint)
             break;
         }
 
+        const auto& start_decoding = std::chrono::high_resolution_clock::now();
         // Convert to Image and get the header info
-        funnyface::Image srcImage;
+        Image srcImage;
         srcImage.data = static_cast<unsigned char*>(buffers_[buf.index].start);
         srcImage.size = buf.bytesused;
-        srcImage.info.TJPixelFormat = TJPF_RGBA;
-
-        // lets save the image.
-        if (!jpegManager_->saveToFile("../Test.jpeg", srcImage))
-        {
-            success = false;
-            break;
-        }
+        srcImage.info.TJPixelFormat = TJPF_RGB;
 
         unsigned long raw_needed_size;
         bool valid_image = jpegManager_->decodeJPEGHeader(srcImage, raw_needed_size);
@@ -269,7 +272,8 @@ bool CameraManager::update(std::function<void(funnyface::Image&)> paint)
         {
             raw_image.data = static_cast<unsigned char*>(malloc(sizeof(unsigned char) * raw_needed_size));
             raw_image.size = raw_needed_size;
-            common::log_info("Reallocating raw image buffer to %d - %s", raw_needed_size, common::format_size(raw_needed_size));
+            common::log_info("Reallocating raw image buffer to %d - %s", raw_needed_size,
+                             common::format_size(raw_needed_size));
         }
 
         // Decode the image
@@ -281,15 +285,30 @@ bool CameraManager::update(std::function<void(funnyface::Image&)> paint)
 
         raw_image.info = srcImage.info;
 
-        // Process the image
-        paint(raw_image);
+        const auto& end_decoding = std::chrono::high_resolution_clock::now();
 
+        const auto& start_paint = std::chrono::high_resolution_clock::now();
+        // Process the image
+        paint(raw_image, faceDetector_ptr_);
+        const auto& end_paint = std::chrono::high_resolution_clock::now();
+
+
+        const auto& start_encoding = std::chrono::high_resolution_clock::now();
         // Encode and send to output
         if (!jpegManager_->encodeAndWriteToOutput(raw_image))
         {
             success = false;
             break;
         }
+        const auto& end_encoding = std::chrono::high_resolution_clock::now();
+
+        std::string decoding_time = common::format_duration(start_decoding, end_decoding);
+        std::string paint_time = common::format_duration(start_paint, end_paint);
+        std::string encoding_time = common::format_duration(start_encoding, end_encoding);
+
+        common::log_info("Decoding %s - Paint duration: %s - Encoding %s", decoding_time.c_str(), paint_time.c_str(),
+                         encoding_time.c_str());
+
 
         // Add the frame to the queue
         if (ioctl(input_fd_, VIDIOC_QBUF, &buf) == -1)

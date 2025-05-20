@@ -11,8 +11,10 @@
 #include <memory>
 
 #include "JPEGManager.h"
+#include "detectors.h"
 
-
+namespace funnyface
+{
 struct Buffer
 {
     size_t length;
@@ -24,7 +26,9 @@ class CameraManager
   public:
     CameraManager();
 
-    bool update(std::function<void(funnyface::Image&)> paint);
+    bool update(std::function<void(Image&, std::shared_ptr<FaceDetector>)> paint);
+
+    bool configureFaceDetector();
 
     // VIDEO_IN - VIDEO_WIDTH_IN - VIDEO_HEIGHT_IN
     bool configureInputCamera(const char* in_device, unsigned int width, unsigned int height);
@@ -33,7 +37,7 @@ class CameraManager
     // VIDEO_OUT - VIDEO_WIDTH_OUT - VIDEO_HEIGHT_OUT
     bool configureVirtualOuputCamera(const char* out_device, unsigned int width, unsigned int height);
 
-    inline void setJPEGManager(std::shared_ptr<funnyface::JPEGManager> jpegManager) { jpegManager_ = jpegManager; };
+    inline void setJPEGManager(std::shared_ptr<JPEGManager> jpegManager) { jpegManager_ = jpegManager; };
     inline int getOutputFd() const { return output_fd_; };
 
   private:
@@ -43,12 +47,14 @@ class CameraManager
     Buffer* buffers_;
     struct v4l2_requestbuffers bufrequest_;
 
-    std::shared_ptr<funnyface::JPEGManager> jpegManager_;
+    std::shared_ptr<JPEGManager> jpegManager_;
 
     int input_fd_;
     int output_fd_;
     static std::atomic<bool> keepRunning_;
+
+    std::shared_ptr<FaceDetector> faceDetector_ptr_;
 };
 
-
+} // namespace funnyface
 #endif // CAMERA_H

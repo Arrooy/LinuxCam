@@ -7,7 +7,6 @@
 
 using namespace funnyface;
 
-
 JPEGManager::JPEGManager(int fd, unsigned long width, unsigned long height, TJSAMP chrominance_subsampling)
 {
     d_image_.data = nullptr;
@@ -33,6 +32,7 @@ JPEGManager::JPEGManager(int fd, unsigned long width, unsigned long height, TJSA
     d_image_.info.height = height;
     d_image_.info.TJSampleFormat = chrominance_subsampling;
 
+    chrominance_subsampling_ = chrominance_subsampling; 
     o_fd_ = fd;
 }
 
@@ -75,6 +75,10 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
         common::log_error("JPEGManager::getJPEGHeaderInfo - stat %d cs %d sf%d", tj_stat, color_space, sample_format);
         common::errno_log((const char*) tjGetErrorStr2(d_handle_));
         return false;
+    }
+    else
+    {
+        common::log_info("JPEGManager::getJPEGHeaderInfo - width %d height %d Sample format is %d", image.info.width, image.info.height, sample_format);
     }
     image.info.TJSampleFormat = static_cast<TJSAMP>(sample_format);
     image.info.TJColorSpace = static_cast<TJCS>(color_space);
@@ -157,6 +161,7 @@ bool JPEGManager::decodeJPEGHeader(Image& image, unsigned long& size)
     }
 
     image.info.pixelSizeBytes = tjPixelSize[static_cast<int>(image.info.TJPixelFormat)];
+    common::log_info("Pixel size is %d", image.info.pixelSizeBytes);
     size = computeSizeInBytes(image.info.width, image.info.height, image.info.TJPixelFormat);
     return true;
 }
@@ -189,8 +194,7 @@ bool JPEGManager::saveToFile(const char* fileName, Image image)
 
 bool JPEGManager::encodeImage(const Image srcImage, Image& dstImage, int quality)
 {
-    int tj_stat =
-        tjCompress2(c_handle_, srcImage.data, dstImage.info.width, 0, dstImage.info.height, dstImage.info.TJPixelFormat,
+    int tj_stat = tjCompress2(c_handle_, srcImage.data, dstImage.info.width, 0, dstImage.info.height, dstImage.info.TJPixelFormat,
                     &dstImage.data, &dstImage.size, dstImage.info.TJSampleFormat, quality, 0);
 
     if (tj_stat != 0)
@@ -206,6 +210,7 @@ bool JPEGManager::encodeImage(const Image srcImage, Image& dstImage, int quality
 bool JPEGManager::encodeAndWriteToOutput(const Image srcImage, int quality, TJPF pixelFormat)
 {
     d_image_.info.TJPixelFormat = pixelFormat;
+    d_image_.info.TJSampleFormat = chrominance_subsampling_;
     if (!encodeImage(srcImage, d_image_, quality))
     {
         return false;

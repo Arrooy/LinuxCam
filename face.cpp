@@ -1,83 +1,58 @@
 #include "face.h"
+
+#include <utility>
+
 #include "math_utils.h"
 
-using namespace dlib;
- 
-Face::Face(full_object_detection face_landmarks)
+using namespace funnyface;
+
+Face::Face(std::vector<Landmark> landmarks, math_utils::Rect boundingBox) : boundingBox_(boundingBox)
 {
-    faceRect = face_landmarks.get_rect();
-
-    for (unsigned long id = face_landmarks.num_parts() - 1; id > 0; id--)
-    {
-        std::vector<point> new_points;
-
-        // This comparison is a shame...
-        if (id != 0 && id != 17 && id != 22 && id != 27 && id != 36 && id != 42 && id != 48 && id != 60)
-        {
-            // Interpolate points.
-            new_points = DDA(id, id - 1, face_landmarks);
-        }
-        else
-        {
-            new_points.push_back(face_landmarks.part(id));
-        }
-
-        int index = this->get_facepart_from_landmark_id(id);
-
-        auto it = face_points.find(index);
-        if (it == face_points.end())
-        {
-            face_points.insert(std::pair<int, std::vector<dlib::point>>(index, new_points));
-        }
-        else
-        {
-            face_points[index].insert(face_points[index].end(), new_points.begin(), new_points.end());
-        }
-    }
-
-    std::vector<point> new_points;
-
-    // Es crea el vector
-    new_points = DDA(0, 17, face_landmarks);
-    face_points.insert(std::pair<int, std::vector<dlib::point>>(FaceIndex::SILHOUETTE, new_points));
-
-    // Incrementem el vector.
-    new_points = DDA(16, 26, face_landmarks);
-    face_points[FaceIndex::SILHOUETTE].insert(face_points[FaceIndex::SILHOUETTE].end(), new_points.begin(),
-                                              new_points.end());
-
-    for (long id = 0; id <= 15; id++)
-    {
-        new_points = DDA(id, id + 1, face_landmarks);
-        face_points[FaceIndex::SILHOUETTE].insert(face_points[FaceIndex::SILHOUETTE].end(), new_points.begin(),
-                                                  new_points.end());
-    }
-
-    for (long id = 17; id <= 21; id++)
-    {
-        new_points = DDA(id, id + 1, face_landmarks);
-        face_points[FaceIndex::SILHOUETTE].insert(face_points[FaceIndex::SILHOUETTE].end(), new_points.begin(),
-                                                  new_points.end());
-    }
-
-    for (long id = 22; id <= 25; id++)
-    {
-        new_points = DDA(id, id + 1, face_landmarks);
-        face_points[FaceIndex::SILHOUETTE].insert(face_points[FaceIndex::SILHOUETTE].end(), new_points.begin(),
-                                                  new_points.end());
-    }
+    // Load landmarks
+    loadNewLandmarks(landmarks);
 }
+
+Face::Face(math_utils::Rect boundingBox) : boundingBox_(boundingBox){}
 
 Face::~Face()
 {
-    for (auto& item : face_points)
-    {
-        item.second.clear();
-    }
-    face_points.clear();
+    freeLandmarks();
 }
 
-int Face::get_facepart_from_landmark_id(unsigned long id)
+void Face::freeLandmarks()
+{
+    // Clear previous landmarks
+    for (auto& landmark : landmarks_)
+    {
+        landmark.second.clear();
+    }
+    landmarks_.clear();
+}
+
+void Face::loadNewLandmarks(std::vector<Landmark> landmarks)
+{
+    freeLandmarks();
+
+    // Fill the landmarks map with the new landmarks.
+    for (const Landmark& landmark : landmarks)
+    {
+        unsigned int id = landmark.i;
+        Face::FaceIndex index = this->get_facepart_from_landmark_id(id);
+        auto it = landmarks_.find(index);
+        if (it == landmarks_.end())
+        {
+            std::vector<Landmark> new_landmark;
+            new_landmark.push_back(landmark);
+            landmarks_.insert(std::pair<Face::FaceIndex, std::vector<Landmark>>(index, new_landmark));
+        }
+        else
+        {
+            landmarks_[index].push_back(landmark);
+        }
+    }
+}
+
+Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id) const
 {
     // Lookup table for landmark -> facepart translation
     if (id >= 0 && id <= 16)
@@ -121,82 +96,62 @@ int Face::get_facepart_from_landmark_id(unsigned long id)
         // Inner mouth
         return INNERMOUTH;
     }
-    return -1;
+    return UNKNOWN;
 }
 
-void Face::paint_outline_all(unsigned char* raw_frame_data)
+void Face::paintAllLandmarks(Image& image, bool joinPoints)
 {
-    for (auto const& face_part : face_points)
+    for (auto const& face_part : landmarks_)
     {
+        Pixel c(0, 255, 255);
         if (face_part.first == FaceIndex::SILHOUETTE)
         {
-            for (dlib::point p : face_part.second)
-            {
-                long pos = (p(0) + p(1) * VIDEO_WIDTH_OUT) * 3;
-                raw_frame_data[pos] = 0;
-                raw_frame_data[pos + 1] = 255;
-                raw_frame_data[pos + 2] = 0;
-            }
+            c = Pixel(0, 255, 0);
         }
-        else
-        {
-            for (dlib::point p : face_part.second)
-            {
-                long pos = (p(0) + p(1) * VIDEO_WIDTH_OUT) * 3;
-                raw_frame_data[pos] = 0;
-                raw_frame_data[pos + 1] = 255;
-                raw_frame_data[pos + 2] = 255;
-            }
-        }
+        paintFaceIndex(image, face_part.first, joinPoints, c);
     }
 }
 
-std::vector<dlib::point> Face::getFacePartPoints(FaceIndex facepart)
+void Face::paintBoundingBox(Image& image)
 {
-    return face_points[facepart];
-}
+    std::vector<math_utils::Point> points;
 
-void Face::paintRectangle(unsigned char* raw_frame_data)
-{
-    std::vector<dlib::vector<long, 2>> points;
-
-    auto left = DDA(faceRect.left(), faceRect.top(), faceRect.left(), faceRect.bottom());
+    // Generate face rectangle points
+    auto left = math_utils::DDA(boundingBox_.l, boundingBox_.t, boundingBox_.l, boundingBox_.b);
     points.insert(points.end(), left.begin(), left.end());
 
-    auto top = DDA(faceRect.left(), faceRect.top(), faceRect.right(), faceRect.top());
+    auto top = math_utils::DDA(boundingBox_.l, boundingBox_.t, boundingBox_.r, boundingBox_.t);
     points.insert(points.end(), top.begin(), top.end());
 
-    auto bottom = DDA(faceRect.left(), faceRect.bottom(), faceRect.right(), faceRect.bottom());
+    auto bottom = math_utils::DDA(boundingBox_.l, boundingBox_.b, boundingBox_.r, boundingBox_.b);
     points.insert(points.end(), bottom.begin(), bottom.end());
 
-    auto right = DDA(faceRect.right(), faceRect.top(), faceRect.right(), faceRect.bottom());
+    auto right = math_utils::DDA(boundingBox_.r, boundingBox_.t, boundingBox_.r, boundingBox_.b);
     points.insert(points.end(), right.begin(), right.end());
 
-    for (dlib::point p : points)
+    // Pant each point
+    for (const math_utils::Point& p : points)
     {
-        long pos = (p(0) + p(1) * VIDEO_WIDTH_OUT) * PIXEL_SIZE;
-        raw_frame_data[pos] = 0;
-        raw_frame_data[pos + 1] = 255;
-        raw_frame_data[pos + 2] = 0;
+        image.px(p.x, p.y, 0, 255, 0);
     }
 }
 
-void Face::paintInside(FaceIndex facepart, unsigned char* raw_frame_data)
+void Face::paintInside(Image& image, FaceIndex facepart)
 {
-    std::vector<dlib::point> points = face_points[facepart];
-
     int inside = 0;
     long startIndex = 0;
 
-    long startPixel = (faceRect.left() + faceRect.top() * VIDEO_WIDTH_OUT) * PIXEL_SIZE;
-    // El 25 es per corregir el bottom massa curt. Aixi no talla la cara,
-    long endPixel = (faceRect.right() + (faceRect.bottom() + 25) * VIDEO_WIDTH_OUT) * PIXEL_SIZE;
+    long startPixel = (boundingBox_.l + boundingBox_.t * image.info.width) * image.info.pixelSizeBytes;
 
-    for (long i = startPixel; i < endPixel; i += PIXEL_SIZE)
+    // El 25 es per corregir el bottom massa curt. Aixi no talla la cara,
+    long endPixel = (boundingBox_.r + (boundingBox_.b + 25) * image.info.width) * image.info.pixelSizeBytes;
+
+    for (long i = startPixel; i < endPixel; i += image.info.pixelSizeBytes)
     {
-        for (dlib::point p : points)
+        for (const Landmark& landmark : landmarks_[facepart])
         {
-            if ((p(0) + p(1) * VIDEO_WIDTH_OUT) * PIXEL_SIZE == i)
+            const math_utils::Point& p = landmark.p;
+            if ((p.x + p.y * image.info.width) * image.info.pixelSizeBytes == i)
             {
                 if (inside == 0)
                 {
@@ -204,58 +159,63 @@ void Face::paintInside(FaceIndex facepart, unsigned char* raw_frame_data)
                 }
                 else
                 {
-                    for (long v = startIndex; v <= i; v += PIXEL_SIZE)
+                    for (long v = startIndex; v <= i; v += image.info.pixelSizeBytes)
                     {
-                        raw_frame_data[v] = 0;
-                        raw_frame_data[v + 1] = 0; // raw_frame_data[v+1] / 2;
-                        raw_frame_data[v + 2] = 0;
+                        image.data[v] = 0;
+                        image.data[v + 1] = 0; // raw_frame_data[v+1] / 2;
+                        image.data[v + 2] = 0;
                     }
                 }
 
                 // Ingora pixels seguits.
-                if (startIndex != i - PIXEL_SIZE)
+                if (startIndex != i - image.info.pixelSizeBytes)
                 {
                     inside = 1 - inside;
                 }
                 else
                 {
-                    raw_frame_data[startIndex] = 0;
-                    raw_frame_data[startIndex + 1] = 0; // raw_frame_data[v+1] / 2;
-                    raw_frame_data[startIndex + 2] = 0;
+                    image.data[startIndex] = 0;
+                    image.data[startIndex + 1] = 0; // image.data[v+1] / 2;
+                    image.data[startIndex + 2] = 0;
                     startIndex = i;
                 }
                 break;
             }
         }
 
-        if (i % (VIDEO_WIDTH_OUT * PIXEL_SIZE) == 0)
+        if (i % (image.info.width * image.info.pixelSizeBytes) == 0)
         {
             // S'ha acabat la linia i estavem buscant un pixel parella.
             if (inside == 1)
             {
-                raw_frame_data[startIndex] = 0;
-                raw_frame_data[startIndex + 1] = 0;
-                raw_frame_data[startIndex + 2] = 0;
+                image.data[startIndex] = 0;
+                image.data[startIndex + 1] = 0;
+                image.data[startIndex + 2] = 0;
             }
             inside = 0;
         }
     }
 }
 
-void Face::paintOutline(FaceIndex facepart, unsigned char* raw_frame_data)
+void Face::paintFaceIndex(Image& image, FaceIndex facepart, bool joinPoints, Pixel color)
 {
-    std::vector<dlib::point> points = face_points[facepart];
-    for (dlib::point p : points)
+    std::vector<Landmark> points = landmarks_[facepart];
+    math_utils::Point lastPoint(-1, -1);
+    for (const Landmark& l : points)
     {
-        long pos = (p(0) + p(1) * VIDEO_WIDTH_OUT) * PIXEL_SIZE;
-        raw_frame_data[pos] = 0;
-        raw_frame_data[pos + 1] = 255;
-        raw_frame_data[pos + 2] = 255;
+        if (joinPoints)
+        {
+            if (lastPoint.x != -1 && lastPoint.y != -1)
+            {
+                // We know a last point. Proceed with DDA and paint it
+                std::vector<math_utils::Point> points = math_utils::DDA(lastPoint.x, lastPoint.y, l.p.x, l.p.y);
+                for (const math_utils::Point& p : points)
+                {
+                    image.px(p.x, p.y, color);
+                }
+            }
+            lastPoint = l.p;
+        }
+        image.px(l.p.x, l.p.y, color);
     }
-}
-
-std::vector<point> Face::DDA(unsigned long landmarkA, unsigned long landmarkB, full_object_detection face_landmarks)
-{
-    return math_utils::DDA(face_landmarks.part(landmarkA)(0), face_landmarks.part(landmarkA)(1), face_landmarks.part(landmarkB)(0),
-               face_landmarks.part(landmarkB)(1));
 }

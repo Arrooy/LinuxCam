@@ -2,11 +2,10 @@
 cmake_minimum_required(VERSION 3.10.0)
 project(FunnyFace)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-#set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_BUILD_TYPE Debug)
-
+set(CMAKE_BUILD_TYPE "Release")
+# set(CMAKE_BUILD_TYPE Debug)
 
 set(USE_AVX_INSTRUCTIONS ON CACHE BOOL "Use AVX instructions for Dlib")
 set(DLIB_NO_GUI_SUPPORT OFF CACHE BOOL "Disable GUI support for Dlib")
@@ -68,7 +67,7 @@ add_dependencies(libjpeg libjpeg_include_dir)
 add_dependencies(turbojpeg libjpeg_include_dir)
 
 # Define the main executable
-add_executable(FunnyFace main.cpp camera.h camera.cpp common.h JPEGManager.h JPEGManager.cpp)
+add_executable(FunnyFace main.cpp camera.h camera.cpp common.h JPEGManager.h JPEGManager.cpp image.h math_utils.h face.h face.cpp detectors.h dlibDetectors.h dlibDetectors.cpp)
 
 # Link dependencies
 target_link_libraries(FunnyFace dlib::dlib libjpeg turbojpeg)

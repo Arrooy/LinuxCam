@@ -9,4 +9,9 @@ dlib:
     sudo apt install libavutil-dev
 
 ncnn - https://github.com/Tencent/ncnn/wiki/how-to-build:
+
     sudo apt install build-essential git cmake libprotobuf-dev protobuf-compiler libomp-dev libopencv-dev
+
+    Clone repo
+    create build and execute:
+        cmake -DCMAKE_BUILD_TYPE=Release -DNCNN_VULKAN=ON -DNCNN_BUILD_EXAMPLES=ON -GNinja ..
