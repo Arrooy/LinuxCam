@@ -1,10 +1,9 @@
-/* -*- c++ -*- */
-
 #ifndef IMAGE_H
 #define IMAGE_H
 
 #include <turbojpeg.h>
 
+#include "common.h"
 namespace funnyface
 {
 
@@ -41,7 +40,12 @@ struct Image
     void px(unsigned long x, unsigned long y, const unsigned char r, const unsigned char g, const unsigned char b,
             const unsigned char a = DEFAULT_ALPHA)
     {
-        long index = (x + y * info.width) * info.pixelSizeBytes;
+        unsigned long index = (x + y * info.width) * info.pixelSizeBytes;
+        if (index >= size)
+        {
+            common::log_error("Image::px: index out of bounds [x,y] %ld, %ld %ld", x, y, index);
+            return;
+        }
         // TODO: Byte order depends on pixelFormat. Forced to RGBA for now
         data[index] = r;
         data[index + 1] = g;
@@ -63,6 +67,7 @@ struct Image
     unsigned long size;
     TJImageDescription info;
 };
+
 } // namespace funnyface
 
 

@@ -1,0 +1,115 @@
+#include "window.h"
+
+#include <iostream>
+
+#include "common.h"
+using namespace funnyface;
+
+// Check version in ubuntu with:
+// glxinfo | grep "OpenGL shading language version"
+// Mi worki -> 4.6 NVIDIA
+
+// | GLSL Version    | OpenGL | Features/Notes                                   |
+// | --------------- | ------ | ------------------------------------------------ |
+// | `#version 330`  | 3.3    | Widely supported, good baseline (2010)           |
+// | `#version 400+` | 4.0+   | Geometry shaders, tessellation, more precision   |
+// | `#version 450`  | 4.5    | Modern, powerful (ubiquitous with newer drivers) |
+
+Window::Window() : window_(nullptr), glslVersion_("#version 400")
+{
+}
+
+Window::~Window()
+{
+    shutdown();
+}
+
+bool Window::initialize(int width, int height, const std::string& title)
+{
+    // Setup GLFW
+    glfwSetErrorCallback(errorCallback);
+
+    if (!glfwInit())
+    {
+        common::log_error("Failed to initialize GLFW");
+        return false;
+    }
+
+    // GL 4.0 + GLSL 400
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    // Create window with graphics context
+    window_ = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
+    if (window_ == nullptr)
+    {
+        common::log_error("Failed to create GLFW window");
+        glfwTerminate();
+        return false;
+    }
+
+    glfwMakeContextCurrent(window_);
+    glfwSwapInterval(1); // Enable vsync
+
+    // Initialize GLAD
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        common::log_error("Failed to initialize GLAD");
+        return false;
+    }
+
+    common::log_info("GLFW Window initialized successfully. Size %d x %d", width, height);
+    return true;
+}
+
+void Window::shutdown()
+{
+    if (window_)
+    {
+        glfwDestroyWindow(window_);
+        window_ = nullptr;
+    }
+    glfwTerminate();
+}
+
+bool Window::shouldClose() const
+{
+    return window_ ? glfwWindowShouldClose(window_) : true;
+}
+
+void Window::pollEvents()
+{
+    glfwPollEvents();
+}
+
+void Window::swapBuffers()
+{
+    if (window_)
+    {
+        glfwSwapBuffers(window_);
+    }
+}
+
+void Window::getFramebufferSize(int& width, int& height) const
+{
+    if (window_)
+    {
+        glfwGetFramebufferSize(window_, &width, &height);
+    }
+    else
+    {
+        width = height = 0;
+    }
+}
+
+void Window::setViewport()
+{
+    int width, height;
+    getFramebufferSize(width, height);
+    glViewport(0, 0, width, height);
+}
+
+void Window::errorCallback(int error, const char* description)
+{
+    common::log_error("GLFW Error %d: %s", error, description);
+}

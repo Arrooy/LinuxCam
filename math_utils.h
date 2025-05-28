@@ -1,5 +1,3 @@
-/* -*- c++ -*- */
-
 #ifndef MATH_UTILS_H
 #define MATH_UTILS_H
 #include <stdlib.h>
@@ -68,6 +66,9 @@ std::vector<Point> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
     // calculate increment in x & y for each steps
     float xInc = static_cast<float>(dx) / static_cast<float>(steps);
     float yInc = static_cast<float>(dy) / static_cast<float>(steps);
+
+    // common::log_info("DDA line: (%d, %d) -> (%d, %d)", x1, y1, x2, y2);
+    // common::log_info("Steps and increment: %d, XInc %f, YInc%f", steps, xInc, yInc);
 
     // Put pixel for each step
     float x = static_cast<float>(x1);

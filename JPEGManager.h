@@ -1,5 +1,3 @@
-/* -*- c++ -*- */
-
 #ifndef JPEGMANAGER_H
 #define JPEGMANAGER_H
 
@@ -37,6 +35,7 @@ class JPEGManager
 
   private:
     unsigned long computeSizeInBytes(const int width, const int height, TJPF pixelFormat);
+
     inline unsigned long maxBufferSize(unsigned long width, unsigned long height, TJSAMP chrominance_subsampling) const
     {
         return tjBufSize(width, height, chrominance_subsampling);
@@ -50,8 +49,6 @@ class JPEGManager
     Image d_image_;
 
     int o_fd_;
-
-    TJSAMP chrominance_subsampling_;
 };
 
 } // namespace funnyface

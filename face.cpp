@@ -132,6 +132,9 @@ void Face::paintBoundingBox(Image& image)
     // Pant each point
     for (const math_utils::Point& p : points)
     {
+        // Check image bounds
+        if (p.x < 0 || p.x >= image.info.width || p.y < 0 || p.y >= image.info.height)
+            continue;
         image.px(p.x, p.y, 0, 255, 0);
     }
 }

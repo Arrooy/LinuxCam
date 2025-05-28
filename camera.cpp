@@ -2,21 +2,66 @@
 
 #include <fcntl.h>
 #include <linux/videodev2.h>
-#include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/select.h>
 #include <unistd.h>
 
+#include <csignal>
 #include <cstdlib>
 
 #include "common.h"
-#include "dlibDetectors.h"
-
 using namespace funnyface;
+
+// Dlib and this size, we get 20ms paint. 2ms Compress/Decompress.
+#define CAMERA_WIDTH 640L
+#define CAMERA_HEIGHT 480L
 
 // Definition of the static member
 std::atomic<bool> CameraManager::keepRunning_{true};
+
+
+CameraManager::~CameraManager()
+{
+    if (recordThread_.joinable())
+    {
+        recordThread_.join();
+    }
+
+    if (processingThread_.joinable())
+    {
+        processingThread_.join();
+    }
+
+    close(input_fd_);
+    close(output_fd_);
+}
+
+
+void CameraManager::logFormat(v4l2_format vid_format)
+{
+    common::log_info("vid_format->type                =%u", vid_format.type);
+    common::log_info("vid_format->fmt.pix.width       =%u", vid_format.fmt.pix.width);
+    common::log_info("vid_format->fmt.pix.height      =%u", vid_format.fmt.pix.height);
+    common::log_info("vid_format->fmt.pix.pixelformat =%u", vid_format.fmt.pix.pixelformat);
+    common::log_info("vid_format->fmt.pix.sizeimage   =%u", vid_format.fmt.pix.sizeimage);
+    common::log_info("vid_format->fmt.pix.field       =%u", vid_format.fmt.pix.field);
+    common::log_info("vid_format->fmt.pix.bytesperline=%u", vid_format.fmt.pix.bytesperline);
+    common::log_info("vid_format->fmt.pix.colorspace  =%u", vid_format.fmt.pix.colorspace);
+}
+
+bool CameraManager::getCapabilities(int fd, v4l2_capability& cap)
+{
+    CLEAR(cap);
+
+    // Retrieve device capabilities
+    if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0)
+    {
+        common::errno_log("CameraManager::getCapabilities - VIDIOC_QUERYCAP");
+        return false;
+    }
+    return true;
+}
 
 bool CameraManager::configureInputCamera(const char* in_device, unsigned int width, unsigned int height)
 {
@@ -30,12 +75,8 @@ bool CameraManager::configureInputCamera(const char* in_device, unsigned int wid
         return false;
     }
 
-    CLEAR(cap);
-
-    // Retrieve device capabilities
-    if (ioctl(input_fd_, VIDIOC_QUERYCAP, &cap) < 0)
+    if (!getCapabilities(input_fd_, cap))
     {
-        common::errno_log("CameraManager::configureInputCamera - VIDIOC_QUERYCAP");
         return false;
     }
 
@@ -53,17 +94,36 @@ bool CameraManager::configureInputCamera(const char* in_device, unsigned int wid
         return false;
     }
 
-    // Define video format
-    CLEAR(format);
-    format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    format.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
-    format.fmt.pix.width = width;
-    format.fmt.pix.height = height;
-
-    if (ioctl(input_fd_, VIDIOC_S_FMT, &format) < 0)
+    // Set the video format. Retry 1 times in case of failure
+    for (int i = 0; i < 2; i++)
     {
-        common::errno_log("CameraManager::configureInputCamera - VIDIOC_S_FMT");
-        return false;
+        // Define video format
+        CLEAR(format);
+        format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        format.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+        format.fmt.pix.width = width;
+        format.fmt.pix.height = height;
+
+        if (ioctl(input_fd_, VIDIOC_S_FMT, &format) < 0)
+        {
+            if (errno == EBUSY)
+            {
+                // Device busy, cloud be streaming... Try to stop the stream and try again
+                common::log_warn(
+                    "CameraManager::configureInputCamera - Device is busy, trying to stop the stream and try again.");
+                bool stop_success = stopInputStreaming();
+                if (!stop_success)
+                {
+                    common::errno_log("CameraManager::configureInputCamera - Error stopping streaming");
+                    return false;
+                }
+            }
+            else
+            {
+                common::errno_log("CameraManager::configureInputCamera - Error configuring input camera");
+                return false;
+            }
+        }
     }
 
     return true;
@@ -115,7 +175,7 @@ bool CameraManager::configureInputBuffers(unsigned int buffer_count)
         if (ioctl(input_fd_, VIDIOC_QUERYBUF, &buf) < 0)
         {
             common::errno_log("CameraManager::configureInputBuffers - VIDIOC_QUERYBUF");
-            cleanup_buffers(i);
+            cleanupBuffers(i);
             return false;
         }
 
@@ -130,7 +190,7 @@ bool CameraManager::configureInputBuffers(unsigned int buffer_count)
         if (buffers_[i].start == MAP_FAILED)
         {
             common::errno_log("CameraManager::configureInputBuffers - MMAP Failed");
-            cleanup_buffers(i);
+            cleanupBuffers(i);
             return false;
         }
 
@@ -141,195 +201,220 @@ bool CameraManager::configureInputBuffers(unsigned int buffer_count)
         if (-1 == ioctl(input_fd_, VIDIOC_QBUF, &buf))
         {
             common::errno_log("CameraManager::configureInputBuffers - VIDIOC_QBUF");
-            cleanup_buffers(i);
+            cleanupBuffers(i);
             return false;
         }
     }
 
     // Register the Ctrl-c signal to stop the program with no memory leaks.
-    signal(SIGINT, CameraManager::intHandler);
+    std::signal(SIGINT, CameraManager::intHandler);
+    std::signal(SIGSEGV, CameraManager::cleanupAndExit);
 
     // Activate streaming
     if (ioctl(input_fd_, VIDIOC_STREAMON, &bufrequest_.type) < 0)
     {
         common::errno_log("CameraManager::configureInputBuffers - VIDIOC_STREAMON Cannot activate streaming.");
-        cleanup_buffers(bufrequest_.count);
+        cleanupBuffers(bufrequest_.count);
         return false;
     }
     return true;
 }
 
-void CameraManager::cleanup_buffers(unsigned int index)
+void CameraManager::cleanupBuffers(unsigned int index)
 {
     // Free all buffers.
     for (unsigned int i = 0; i < index; i++)
     {
         if (-1 == munmap(buffers_[i].start, buffers_[i].length))
         {
-            common::errno_log("CameraManager::cleanup_buffers - munmap failed");
+            common::errno_log("CameraManager::cleanupBuffers - munmap failed");
         }
     }
     free(buffers_);
     buffers_ = nullptr;
 }
 
-bool CameraManager::configureFaceDetector()
+bool CameraManager::record()
 {
-    faceDetector_ptr_ = std::make_shared<DlibFaceDetector>();
+    recordThread_ = std::thread(
+        [this]()
+        {
+            struct v4l2_buffer buf;
+
+            Image raw_image;
+            raw_image.data = nullptr;
+            raw_image.size = 0L;
+            unsigned int total_discarded{0u};
+            unsigned long last_jpeg_size{0u};
+
+            while (keepRunning_)
+            {
+                fd_set fds;
+                struct timeval tv;
+                int r;
+
+                FD_ZERO(&fds);
+                FD_SET(input_fd_, &fds);
+
+                // Timeout.
+                tv.tv_sec = 2;
+                tv.tv_usec = 0;
+
+                r = select(input_fd_ + 1, &fds, nullptr, nullptr, &tv);
+
+                if (r == -1)
+                {
+                    if (EINTR == errno)
+                    {
+                        continue;
+                    }
+                    common::errno_log("CameraManager::record - Select failed");
+                    break;
+                }
+
+                if (r == 0)
+                {
+                    common::errno_log("CameraManager::record - Select timeout in main loop");
+                    break;
+                }
+
+                // Read frame
+                CLEAR(buf);
+                buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                buf.memory = V4L2_MEMORY_MMAP;
+
+                // The buffer's waiting in the outgoing queue
+                if (ioctl(input_fd_, VIDIOC_DQBUF, &buf) < 0)
+                {
+                    if (errno == EAGAIN || errno == EIO)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        common::errno_log("CameraManager::record - VIDIOC_QBUF");
+                        break;
+                    }
+                }
+
+                if (buf.index >= bufrequest_.count)
+                {
+                    common::errno_log("CameraManager::record - INVALID INDEX in BUFF. Aborting.");
+                    break;
+                }
+
+                const auto& start_decoding = std::chrono::high_resolution_clock::now();
+
+                // Convert to Image and get the header info
+                Image srcImage;
+                srcImage.data = static_cast<unsigned char*>(buffers_[buf.index].start);
+                srcImage.size = buf.bytesused;
+                srcImage.info.TJPixelFormat = TJPF_RGB; // TODO: This depends on the input camera.
+
+                if (srcImage.size != last_jpeg_size)
+                {
+                    common::log_info("CameraManager::record - Input jpeg size is %lu", srcImage.size);
+                    unsigned long raw_needed_size;
+                    bool valid_image = jpegManager_->decodeJPEGHeader(srcImage, raw_needed_size);
+                    if (!valid_image)
+                    {
+                        common::log_info("CameraManager::record - Invalid input image. Discarted. Total discarded: %d",
+                                         ++total_discarded);
+                        continue;
+                    }
+                    if (raw_image.size != raw_needed_size)
+                    {
+                        raw_image.size = raw_needed_size;
+                        if (raw_image.data != nullptr)
+                        {
+                            free(raw_image.data);
+                        }
+                        raw_image.data = static_cast<unsigned char*>(malloc(sizeof(unsigned char) * raw_image.size));
+                        common::log_warn("CameraManager::record - Reallocating raw image buffer to %d - %s",
+                                         raw_image.size, common::format_size(raw_image.size));
+                    }
+                    last_jpeg_size = srcImage.size;
+                }
+
+                // Decode the image
+                if (!jpegManager_->decodeImage(srcImage, &raw_image.data))
+                {
+                    common::log_error("CameraManager::record - Failed to decode image");
+                    break;
+                }
+
+                raw_image.info = srcImage.info;
+
+                const auto& end_decoding = std::chrono::high_resolution_clock::now();
+                std::string decoding_time = common::format_duration(start_decoding, end_decoding);
+                common::log_info("Decoding time: %s", decoding_time.c_str());
+
+                imageQueue_.push(raw_image);
+
+                // Add the frame to the queue
+                if (ioctl(input_fd_, VIDIOC_QBUF, &buf) == -1)
+                {
+                    common::errno_log("CameraManager::record - VIDIOC_QBUF");
+                    break;
+                }
+            }
+            common::log_warn("CameraManager::record thread dead.");
+
+            free(raw_image.data);
+            cleanupBuffers(bufrequest_.count);
+
+            stopInputStreaming();
+        });
+
     return true;
 }
 
-bool CameraManager::update(std::function<void(Image&, std::shared_ptr<FaceDetector>)> paint)
+bool CameraManager::stopInputStreaming()
 {
-    struct v4l2_buffer buf;
-    keepRunning_ = true;
-
-    Image raw_image;
-    raw_image.data = nullptr;
-    raw_image.size = 0L;
-    bool success{true};
-    unsigned int total_discarded{0u};
-
-    while (keepRunning_)
-    {
-        fd_set fds;
-        struct timeval tv;
-        int r;
-
-        FD_ZERO(&fds);
-        FD_SET(input_fd_, &fds);
-
-        // Timeout.
-        tv.tv_sec = 2;
-        tv.tv_usec = 0;
-
-        r = select(input_fd_ + 1, &fds, nullptr, nullptr, &tv);
-
-        if (r == -1)
-        {
-            if (EINTR == errno)
-            {
-                continue;
-            }
-            common::errno_log("CameraManager::update - Select failed");
-            success = false;
-            break;
-        }
-
-        if (r == 0)
-        {
-            common::errno_log("CameraManager::update - Select timeout in main loop");
-            success = false;
-            break;
-        }
-
-        // Read frame
-        CLEAR(buf);
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_MMAP;
-
-        // The buffer's waiting in the outgoing queue
-        if (ioctl(input_fd_, VIDIOC_DQBUF, &buf) < 0)
-        {
-            if (errno == EAGAIN || errno == EIO)
-            {
-                continue;
-            }
-            else
-            {
-                common::errno_log("CameraManager::update - VIDIOC_QBUF");
-                success = false;
-                break;
-            }
-        }
-
-        if (buf.index >= bufrequest_.count)
-        {
-            common::errno_log("CameraManager::update - INVALID INDEX in BUFF. Aborting.");
-            success = false;
-            break;
-        }
-
-        const auto& start_decoding = std::chrono::high_resolution_clock::now();
-        // Convert to Image and get the header info
-        Image srcImage;
-        srcImage.data = static_cast<unsigned char*>(buffers_[buf.index].start);
-        srcImage.size = buf.bytesused;
-        srcImage.info.TJPixelFormat = TJPF_RGB;
-
-        unsigned long raw_needed_size;
-        bool valid_image = jpegManager_->decodeJPEGHeader(srcImage, raw_needed_size);
-        if (!valid_image)
-        {
-            success = false;
-            common::log_info("Invalid input image. Discarted. Total discarded: %d", ++total_discarded);
-            continue;
-        }
-
-        total_discarded = 0;
-
-        if (raw_needed_size != raw_image.size || raw_image.data == nullptr)
-        {
-            raw_image.data = static_cast<unsigned char*>(malloc(sizeof(unsigned char) * raw_needed_size));
-            raw_image.size = raw_needed_size;
-            common::log_info("Reallocating raw image buffer to %d - %s", raw_needed_size,
-                             common::format_size(raw_needed_size));
-        }
-
-        // Decode the image
-        if (!jpegManager_->decodeImage(srcImage, &raw_image.data))
-        {
-            success = false;
-            break;
-        }
-
-        raw_image.info = srcImage.info;
-
-        const auto& end_decoding = std::chrono::high_resolution_clock::now();
-
-        const auto& start_paint = std::chrono::high_resolution_clock::now();
-        // Process the image
-        paint(raw_image, faceDetector_ptr_);
-        const auto& end_paint = std::chrono::high_resolution_clock::now();
-
-
-        const auto& start_encoding = std::chrono::high_resolution_clock::now();
-        // Encode and send to output
-        if (!jpegManager_->encodeAndWriteToOutput(raw_image))
-        {
-            success = false;
-            break;
-        }
-        const auto& end_encoding = std::chrono::high_resolution_clock::now();
-
-        std::string decoding_time = common::format_duration(start_decoding, end_decoding);
-        std::string paint_time = common::format_duration(start_paint, end_paint);
-        std::string encoding_time = common::format_duration(start_encoding, end_encoding);
-
-        common::log_info("Decoding %s - Paint duration: %s - Encoding %s", decoding_time.c_str(), paint_time.c_str(),
-                         encoding_time.c_str());
-
-
-        // Add the frame to the queue
-        if (ioctl(input_fd_, VIDIOC_QBUF, &buf) == -1)
-        {
-            common::errno_log("CameraManager::update - VIDIOC_QBUF");
-            success = false;
-            break;
-        }
-    }
-
     // Deactivate streaming
     if (ioctl(input_fd_, VIDIOC_STREAMOFF, &bufrequest_.type) < 0)
     {
-        common::errno_log("CameraManager::update - VIDIOC_STREAMOFF");
-        success = false;
+        common::errno_log("CameraManager::record - VIDIOC_STREAMOFF");
+        return false;
+    }
+    return true;
+}
+
+bool CameraManager::update(std::function<void(Image&)> paint)
+{
+    bool success{true};
+
+    // while (keepRunning_)
+    // {
+    // Get the next image
+    Image processed_image;
+    bool still_alive = imageQueue_.wait_and_pop(processed_image);
+    if (!still_alive)
+    {
+        // break;
+        return false;
     }
 
-    free(raw_image.data);
-    cleanup_buffers(bufrequest_.count);
-    close(input_fd_);
-    close(output_fd_);
+    const auto& start_paint = std::chrono::high_resolution_clock::now();
+    // Process the image
+    paint(processed_image);
+    const auto& end_paint = std::chrono::high_resolution_clock::now();
+
+    // Encode and send to output
+    if (!jpegManager_->encodeAndWriteToOutput(processed_image))
+    {
+        success = false;
+        return false;
+        // break;
+    }
+
+    const auto& end_encoding = std::chrono::high_resolution_clock::now();
+
+    std::string paint_time = common::format_duration(start_paint, end_paint);
+    std::string encoding_time = common::format_duration(end_paint, end_encoding);
+    common::log_info("Paint time: %s Encoding time: %s", paint_time.c_str(), encoding_time.c_str());
+    // }
+
     return success;
 }
 
@@ -338,7 +423,7 @@ bool CameraManager::configureVirtualOuputCamera(const char* out_device, unsigned
     struct v4l2_format format;
 
     // Get the file descriptor
-    if ((output_fd_ = open(out_device, O_WRONLY)) < 0)
+    if ((output_fd_ = open(out_device, O_RDWR)) < 0)
     {
         common::errno_log("Error open video out!");
         return false;
@@ -374,6 +459,41 @@ bool CameraManager::configureVirtualOuputCamera(const char* out_device, unsigned
     return true;
 }
 
-CameraManager::CameraManager()
+bool CameraManager::initialize()
 {
+    if (!configureVirtualOuputCamera("/dev/video8", CAMERA_WIDTH, CAMERA_HEIGHT))
+    {
+        common::log_error("CameraManager::initialize - Cannot proceed. Aborting.");
+        return false;
+    }
+
+    if (!configureInputCamera("/dev/video0", CAMERA_WIDTH, CAMERA_HEIGHT))
+    {
+        common::log_error("CameraManager::initialize - Cannot proceed. Aborting.");
+        // Here we should reconfigure the input device?
+        return false;
+    }
+
+    if (!configureInputBuffers(2))
+    {
+        common::log_error("CameraManager::initialize - Cannot proceed. Aborting.");
+        // Here we should reconfigure the input device?
+        return false;
+    }
+
+    jpegManager_ = std::make_shared<JPEGManager>(output_fd_, CAMERA_WIDTH, CAMERA_HEIGHT, TJSAMP::TJSAMP_444);
+
+    // Start streaming thread.
+    if (!record())
+    {
+        common::log_error("CameraManager::initialize - Unable to record. Aborting.");
+        return false;
+    }
+
+    // processingThread_ = std::thread(
+    //     [this]()
+    //     {
+
+    //     });
+    return true;
 }

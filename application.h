@@ -1,0 +1,46 @@
+#ifndef APP_H
+#define APP_H
+
+#include "camera.h"
+#include "imageRenderGL.h"
+#include "ui.h"
+#include "window.h"
+#include "detectors.h"
+
+
+namespace funnyface
+{
+
+class Application
+{
+  public:
+    Application();
+    ~Application();
+
+    // Initialize the application
+    bool initialize(int width = 1280, int height = 720, const std::string& title = "ImGui Application");
+
+    // Run the main application loop
+    void run();
+
+    // Shutdown the application
+    void shutdown();
+
+  private:
+    Window window_;
+    UI ui_;
+    CameraManager cameraManager_;
+
+    ImageRenderGL imageRender_;
+
+    std::shared_ptr<FaceDetector> faceDetector_ptr_;
+
+    // Main loop methods
+    void update();
+    void process(Image& image);
+    void render();
+};
+
+} // namespace funnyface
+
+#endif // APP_H

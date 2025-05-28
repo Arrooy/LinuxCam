@@ -1,5 +1,3 @@
-/* -*- c++ -*- */
-
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -32,6 +30,8 @@ enum class LogLevel
     WARN,
     ERROR
 };
+
+//TODO: instead of exit, return false and close app.
 
 static int log_fd = -1;
 static bool use_colors = true; // You can make this configurable too
@@ -111,7 +111,11 @@ inline void log_to_file(const char* msg)
 {
     if (log_fd != -1)
     {
-        write(log_fd, msg, strlen(msg));
+        if(write(log_fd, msg, strlen(msg)) == -1)
+        {
+            fprintf(stderr, "Failed to write to log file: %s\n", strerror(errno));
+            std::exit(EXIT_FAILURE);
+        }
     }
 }
 
@@ -127,7 +131,11 @@ inline void log_message(LogLevel level, const char* format, ...)
     char* user_msg = nullptr;
     va_list args;
     va_start(args, format);
-    vasprintf(&user_msg, format, args);
+    if(vasprintf(&user_msg, format, args) == -1)
+    {
+        fprintf(stderr, "log_message: vasprintf failed\n");
+        std::exit(EXIT_FAILURE);
+    }
     va_end(args);
 
     if (!user_msg)
@@ -138,7 +146,12 @@ inline void log_message(LogLevel level, const char* format, ...)
 
     // Final full log message
     char* full_msg = nullptr;
-    asprintf(&full_msg, "[%s] [%s] %s\n", time_buf, log_level_str(level), user_msg);
+    if(asprintf(&full_msg, "[%s] [%s] %s\n", time_buf, log_level_str(level), user_msg) == -1)
+    {
+        free(user_msg);
+        fprintf(stderr, "log_message: asprintf failed\n");
+        std::exit(EXIT_FAILURE);
+    }
 
     if (!full_msg)
     {
@@ -161,7 +174,10 @@ inline void log_message(LogLevel level, const char* format, ...)
 inline void log_vformatted(LogLevel level, const char* format, va_list args)
 {
     char* msg = nullptr;
-    vasprintf(&msg, format, args);
+    if(vasprintf(&msg, format, args) == -1)
+    {
+        log_message(level, "log_vformatted: vasprintf failed");
+    }
     if (msg)
     {
         log_message(level, "%s", msg);
@@ -210,22 +226,34 @@ inline const char* format_size(unsigned long size)
     // If size is smaller than 1 KB, print in bytes
     if (size < 1024)
     {
-        snprintf(buffer, sizeof(buffer), "%lu bytes", size);
+        if(snprintf(buffer, sizeof(buffer), "%lu bytes", size) == -1)
+        {
+            return "Error formatting size";
+        }
     }
     // If size is smaller than 1 MB, print in KB
     else if (size < 1024 * 1024)
     {
-        snprintf(buffer, sizeof(buffer), "%.2f KB", size / 1024.0);
+        if(snprintf(buffer, sizeof(buffer), "%.2f KB", size / 1024.0) == -1)
+        {
+            return "Error formatting size";
+        }
     }
     // If size is smaller than 1 GB, print in MB
     else if (size < 1024 * 1024 * 1024)
     {
-        snprintf(buffer, sizeof(buffer), "%.2f MB", size / (1024.0 * 1024));
+        if(snprintf(buffer, sizeof(buffer), "%.2f MB", size / (1024.0 * 1024)) == -1)
+        {
+            return "Error formatting size";
+        }
     }
     // If size is 1 GB or larger, print in GB
     else
     {
-        snprintf(buffer, sizeof(buffer), "%.2f GB", size / (1024.0 * 1024 * 1024));
+        if(snprintf(buffer, sizeof(buffer), "%.2f GB", size / (1024.0 * 1024 * 1024)) == -1)
+        {
+            return "Error formatting size";
+        }
     }
 
     return buffer;
@@ -237,24 +265,36 @@ inline std::string format_duration(int64_t micros)
 
     if (micros <= 0)
     {
-        snprintf(buffer, sizeof(buffer), "Invalid duration");
+        if(snprintf(buffer, sizeof(buffer), "Invalid duration") == -1)
+        {
+            return "Error formatting duration";
+        }
     }
     else if (micros < 1000)
     {
         double hz = 1e6 / micros;
-        snprintf(buffer, sizeof(buffer), "%ld µs (%.2f Hz)", micros, hz);
+        if(snprintf(buffer, sizeof(buffer), "%ld µs (%.2f Hz)", micros, hz) == -1)
+        {
+            return "Error formatting duration";
+        }
     }
     else if (micros < 1000 * 1000)
     {
         double ms = micros / 1000.0;
         double hz = 1e6 / micros;
-        snprintf(buffer, sizeof(buffer), "%.2f ms (%.2f Hz)", ms, hz);
+        if(snprintf(buffer, sizeof(buffer), "%.2f ms (%.2f Hz)", ms, hz) == -1)
+        {
+            return "Error formatting duration";
+        }
     }
     else if (micros < int64_t(60) * 1000 * 1000)
     {
         double s = micros / 1e6;
         double hz = 1e6 / micros;
-        snprintf(buffer, sizeof(buffer), "%.2f s (%.2f Hz)", s, hz);
+        if(snprintf(buffer, sizeof(buffer), "%.2f s (%.2f Hz)", s, hz) == -1)
+        {
+            return "Error formatting duration";
+        }
     }
     else
     {
@@ -262,7 +302,10 @@ inline std::string format_duration(int64_t micros)
         int64_t minutes = total_seconds / 60;
         int64_t seconds = total_seconds % 60;
         double hz = 1e6 / micros;
-        snprintf(buffer, sizeof(buffer), "%ld min %ld s (%.4f Hz)", minutes, seconds, hz);
+        if(snprintf(buffer, sizeof(buffer), "%ld min %ld s (%.4f Hz)", minutes, seconds, hz) == -1)
+        {
+            return "Error formatting duration";
+        }
     }
 
     return std::string(buffer);

@@ -1,5 +1,3 @@
-/* -*- c++ -*- */
-
 #ifndef DLIBDETECTORS_H
 #define DLIBDETECTORS_H
 

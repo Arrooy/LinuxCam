@@ -17,3 +17,7 @@ workspace.code-workspace
 cmake-build-debug/*
 .idea/*
 venv
+
+external/onnxruntime
+external/onnxruntime*
+todo
