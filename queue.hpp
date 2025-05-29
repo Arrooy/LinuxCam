@@ -21,9 +21,11 @@ class SafeQueue
         }
         queue_.push(item);
         const int size = queue_.size();
-        if (size > 5)
+        if (size > 3)
         {
-            funnyface::common::log_warn("Image queue is getting bigger. Size: %d", size);
+            // Empty queue
+            std::queue<T> empty;
+            std::swap(queue_, empty);
         }
         cond_var_.notify_one();
     }

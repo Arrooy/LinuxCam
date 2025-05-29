@@ -8,6 +8,10 @@ dlib:
     sudo apt install libavcodec-dev libswresample-dev libswscale-dev
     sudo apt install libavutil-dev
 
+cuda:
+    sudo apt install nvidia-cuda-toolkit
+    sudo apt-get -y install cudnn9-cuda-12
+
 ncnn - https://github.com/Tencent/ncnn/wiki/how-to-build:
 
     sudo apt install build-essential git cmake libprotobuf-dev protobuf-compiler libomp-dev libopencv-dev
