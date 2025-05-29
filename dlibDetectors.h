@@ -52,11 +52,11 @@ inline long width_step(const DlibImageWrapper& img) {
 }
 
 inline const void* image_data(const DlibImageWrapper& img) {
-    return static_cast<const void*>(img.image_.data);
+    return static_cast<const void*>(img.image_.data());
 }
 
 inline void* image_data(DlibImageWrapper& img) {
-    return static_cast<void*>(img.image_.data);
+    return static_cast<void*>(img.image_.data());
 }
 
 inline void set_image_size(DlibImageWrapper& img, long rows, long cols) {

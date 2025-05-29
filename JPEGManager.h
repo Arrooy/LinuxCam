@@ -3,6 +3,8 @@
 
 #include <turbojpeg.h>
 #include "image.h"
+#include <memory>
+
 namespace funnyface
 {
 
@@ -26,7 +28,7 @@ class JPEGManager
      * Destination info will be read from dstImage too.
      * @param quality - JPEG quality. 100 is the best quality. 1 is the worst quality.
      */
-    bool encodeImage(const Image srcImage, Image& dstImage, int quality = 100);
+    bool encodeImage(const Image& srcImage, Image& dstImage, unsigned long& compressedSize, int quality = 100);
 
     bool encodeAndWriteToOutput(const Image srcImage, int quality = 100, TJPF pixelFormat = TJPF_RGB);
 
@@ -46,7 +48,7 @@ class JPEGManager
     // Compress handler
     tjhandle c_handle_;
 
-    Image d_image_;
+    std::unique_ptr<Image> d_image_;
 
     int o_fd_;
 };

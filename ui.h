@@ -5,6 +5,8 @@
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
+#include <queue>
+
 namespace funnyface {
     class Profiler; // Forward declaration
 }
@@ -37,5 +39,13 @@ class UI
     void paintMainWindow();
     void paintDebugWindow();
 };
+
+// class Histogram 
+// {
+//   public:
+
+//   private:
+//    std::queue<std::chrono::microseconds> data_;
+// };
 
 #endif // UI_H

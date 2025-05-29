@@ -43,6 +43,7 @@ CameraManager::~CameraManager()
 
 void CameraManager::logFormat(v4l2_format vid_format)
 {
+    common::log_info("v4l2_format struct:");
     common::log_info("vid_format->type                =%u", vid_format.type);
     common::log_info("vid_format->fmt.pix.width       =%u", vid_format.fmt.pix.width);
     common::log_info("vid_format->fmt.pix.height      =%u", vid_format.fmt.pix.height);
@@ -258,7 +259,9 @@ bool CameraManager::record()
             unsigned int totalDiscarded{0u};
             unsigned int totalDiscardedHeader{0u};
             const unsigned int warmupDiscardCount{2u};
-            unsigned long last_jpeg_size{0u};
+
+            bool readJPEGHeader{true};
+            unsigned int decodingFailureCount{0u};
 
             while (keepRunning_)
             {
@@ -335,9 +338,9 @@ bool CameraManager::record()
                 Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
                 srcImage.info.TJPixelFormat = TJPF_RGB; // TODO: This depends on the input camera.
 
-                // Process immediately before requeuing
-                if (srcImage.size() != last_jpeg_size)
+                if (readJPEGHeader)
                 {
+                    // Get JPEG metadata
                     unsigned long raw_needed_size;
                     bool valid_image = jpegManager_->decodeJPEGHeader(srcImage, raw_needed_size);
                     if (!valid_image)
@@ -350,26 +353,46 @@ bool CameraManager::record()
                         }
                         continue;
                     }
+
                     if (raw_image.size() != raw_needed_size)
                     {
+                        // This JPEG is diferent from the previous ones. Requires a decoding buffer of different size.
                         raw_image.resize(raw_needed_size);
                         common::log_warn("CameraManager::record - Reallocating raw image buffer to %d - %s",
                                          raw_image.size(), common::format_size(raw_image.size()));
                     }
-                    last_jpeg_size = srcImage.size();
+
+                    // Disable header reading. Decoding failures can trigger a new header read.
+                    readJPEGHeader = false;
                 }
 
                 // Decode the image immediately
                 if (!jpegManager_->decodeImage(srcImage, raw_image))
                 {
-                    common::log_error("CameraManager::record - Failed to decode image");
-                    break;
+                    readJPEGHeader = true;
+                    if (!requeueFrame(input_fd_, buf))
+                    {
+                        break;
+                    }
+                    if (decodingFailureCount > 10)
+                    {
+                        common::log_error("CameraManager::record - Failed to decode image after %d attemps",
+                                          decodingFailureCount);
+                        break;
+                    }
+                    else
+                    {
+                        decodingFailureCount++;
+                        common::log_error("CameraManager::record - Decoding failed %d times", decodingFailureCount);
+                        continue;
+                    }
                 }
 
                 // Update raw_image info after successful decode
                 raw_image.info = srcImage.info;
 
-                imageQueue_.push(raw_image);
+                // TODO: FIXME: Here we are cloning all the data!
+                imageQueue_.push(raw_image.clone());
                 profiler_.stop("Input image decoding");
 
                 if (!requeueFrame(input_fd_, buf))

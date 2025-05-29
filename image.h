@@ -50,20 +50,12 @@ class Image
     {
         if (size > 0)
         {
-            data_ = std::shared_ptr<unsigned char>(static_cast<unsigned char*>(malloc(size)),
-                                                   std::default_delete<unsigned char[]>());
+            data_ = std::shared_ptr<unsigned char>(new unsigned char[size], std::default_delete<unsigned char[]>());
         }
     }
 
     // Constructor that adopts existing buffer without copying
-    Image(unsigned char* buffer, size_t size) : size_(size)
-    {
-        if (buffer && size > 0)
-        {
-            // Take ownership of the provided buffer
-            data_ = std::shared_ptr<unsigned char>(buffer, std::default_delete<unsigned char[]>());
-        }
-    }
+    Image(unsigned char* buffer, size_t size) : size_(size) { Image(buffer, size, true); }
 
     // Constructor for non-owning reference (for V4L2 buffers)
     Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(size)
@@ -77,7 +69,7 @@ class Image
             else
             {
                 // Non-owning reference - use custom deleter that does nothing
-                data_ = std::shared_ptr<unsigned char>(buffer, [](unsigned char*){});
+                data_ = std::shared_ptr<unsigned char>(buffer, [](unsigned char*) {});
             }
         }
     }
@@ -106,8 +98,7 @@ class Image
 
         if (size_ != newSize)
         {
-            std::shared_ptr<unsigned char> newData(static_cast<unsigned char*>(malloc(newSize)),
-                                                   std::default_delete<unsigned char[]>());
+            std::shared_ptr<unsigned char> newData(new unsigned char[newSize], std::default_delete<unsigned char[]>());
 
             if (data_ && newData)
             {
@@ -142,10 +133,9 @@ class Image
         }
     }
 
-    void px(unsigned long col, unsigned long row, const Pixel& c) { this->px(col, row, c.r, c.g, c.b, c.a); }
-
-    void px(unsigned long col, unsigned long row, const unsigned char r, const unsigned char g, const unsigned char b,
-            const unsigned char a = DEFAULT_ALPHA)
+    void ppx(unsigned long col, unsigned long row, const Pixel& c) { this->pxy(col, row, c.r, c.g, c.b, c.a); }
+    void pxy(unsigned long col, unsigned long row, const unsigned char r, const unsigned char g, const unsigned char b,
+             const unsigned char a = DEFAULT_ALPHA)
     {
         unsigned long idx = index(col, row);
         if (idx >= size_ || !data_)
@@ -153,7 +143,12 @@ class Image
             common::log_error("Image::px: index out of bounds [col,row] %ld, %ld Index: %ld", col, row, idx);
             return;
         }
+        this->pidx(idx, r, g, b, a);
+    }
 
+    void pidx(unsigned long idx, const unsigned char r, const unsigned char g, const unsigned char b,
+              const unsigned char a = DEFAULT_ALPHA)
+    {
         // TODO: Byte order depends on pixelFormat. Forced to RGBA for now
         unsigned char* data = data_.get();
         data[idx] = r;
@@ -172,6 +167,15 @@ class Image
     unsigned char* data() const { return data_ ? data_.get() : nullptr; }
 
     TJImageDescription info;
+
+
+    // Optional: Clone if you ever need a deep copy manually
+    Image clone() const {
+        Image copy(size_);
+        std::memcpy(copy.data(), data_.get(), size_);
+        copy.info = info;
+        return copy;
+    }
 
   private:
     inline unsigned long index(unsigned long col, unsigned long row) const

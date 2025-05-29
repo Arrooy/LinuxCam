@@ -37,7 +37,8 @@ class ImageRenderGL
     GLuint vao_, vbo_, ebo_;
     GLuint shaderProgram_;
 
-    int currentWidth_, currentHeight_;
+    unsigned long currentWidth_;
+    unsigned long currentHeight_;
 };
 
 } // namespace funnyface

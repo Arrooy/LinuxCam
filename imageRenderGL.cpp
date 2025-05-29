@@ -42,7 +42,6 @@ ImageRenderGL::~ImageRenderGL()
 
 bool ImageRenderGL::initialize()
 {
-
     common::log_info("ImageRenderGL starting");
     // Create shaders
     if (!createShaders())
@@ -76,7 +75,6 @@ bool ImageRenderGL::initialize()
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    common::log_info("a");
     // Upload index data
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
@@ -89,7 +87,6 @@ bool ImageRenderGL::initialize()
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    common::log_info("b");
     // Generate texture
     glGenTextures(1, &textureId_);
 
@@ -102,7 +99,7 @@ bool ImageRenderGL::initialize()
 
 bool ImageRenderGL::uploadImage(const Image& image)
 {
-    if (!image.data || image.info.width <= 0 || image.info.height <= 0)
+    if (!image.data() || image.info.width <= 0 || image.info.height <= 0)
     {
         common::log_error("Invalid image data");
         return false;
@@ -116,7 +113,8 @@ bool ImageRenderGL::uploadImage(const Image& image)
     // Only reallocate texture if size changed (avoids unnecessary GPU memory allocation)
     if (currentWidth_ != image.info.width || currentHeight_ != image.info.height)
     {
-        glTexImage2D(GL_TEXTURE_2D, 0, format, image.info.width, image.info.height, 0, format, GL_UNSIGNED_BYTE, image.data);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, image.info.width, image.info.height, 0, format, GL_UNSIGNED_BYTE,
+                     image.data());
         currentWidth_ = image.info.width;
         currentHeight_ = image.info.height;
         common::log_info("Texture reallocated: %d - %d", image.info.width, image.info.height);
@@ -124,7 +122,8 @@ bool ImageRenderGL::uploadImage(const Image& image)
     else
     {
         // Just update the existing texture data (faster!)
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.info.width, image.info.height, format, GL_UNSIGNED_BYTE, image.data);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.info.width, image.info.height, format, GL_UNSIGNED_BYTE,
+                        image.data());
     }
 
     // Set texture parameters for optimal performance
@@ -225,7 +224,6 @@ GLuint ImageRenderGL::compileShader(const char* source, GLenum type)
 
 GLuint ImageRenderGL::createShaderProgram(const char* vertexSource, const char* fragmentSource)
 {
-    common::log_info("createShaderProgramaa");
     GLuint vertexShader = compileShader(vertexSource, GL_VERTEX_SHADER);
     GLuint fragmentShader = compileShader(fragmentSource, GL_FRAGMENT_SHADER);
 

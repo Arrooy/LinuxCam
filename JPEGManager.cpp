@@ -9,8 +9,6 @@ using namespace funnyface;
 
 JPEGManager::JPEGManager(int fd, unsigned long width, unsigned long height, TJSAMP chrominance_subsampling)
 {
-    d_image_.data = nullptr;
-
     if ((c_handle_ = tjInitCompress()) == nullptr)
     {
         common::errno_log("JPEGManager::JPEGManager Constructor failed to init compressor");
@@ -26,22 +24,16 @@ JPEGManager::JPEGManager(int fd, unsigned long width, unsigned long height, TJSA
     }
 
     // Initialize the output buffer
-    d_image_.size = maxBufferSize(width, height, chrominance_subsampling);
-    common::log_info("JPEGManager::JPEGManager Constructor: JPEG buffer size: %d", d_image_.size);
-    d_image_.data = (unsigned char*) malloc(sizeof(unsigned char) * d_image_.size);
-    d_image_.info.width = width;
-    d_image_.info.height = height;
-    d_image_.info.TJSampleFormat = chrominance_subsampling;
+    const unsigned long image_size = maxBufferSize(width, height, chrominance_subsampling);
+    d_image_ = std::make_unique<Image>(image_size);
+    d_image_->info.width = width;
+    d_image_->info.height = height;
+    d_image_->info.TJSampleFormat = chrominance_subsampling;
     o_fd_ = fd;
 }
 
 JPEGManager::~JPEGManager()
 {
-    if (d_image_.data != nullptr)
-    {
-        free(d_image_.data);
-    }
-
     // Deallocate data buffer
     int tj_stat = tjDestroy(c_handle_);
 
@@ -64,8 +56,10 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
 {
     int sample_format{TJSAMP_UNKNOWN};
     int color_space{-1};
+    int width{-1};
+    int height{-1};
 
-    int tj_stat = tjDecompressHeader3(d_handle_, image.data(), image.size(), &image.info.width, &image.info.height,
+    int tj_stat = tjDecompressHeader3(d_handle_, image.data(), image.size(), &width, &height,
                                       &sample_format, &color_space);
 
     if (tj_stat != 0 || sample_format == -1 || color_space == -1)
@@ -75,11 +69,9 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
         common::errno_log((const char*) tjGetErrorStr2(d_handle_));
         return false;
     }
-    // else
-    // {
-    //     common::log_info("JPEGManager::getJPEGHeaderInfo - width %d height %d Sample format is %d", image.info.width,
-    //     image.info.height, sample_format);
-    // }
+
+    image.info.width = static_cast<unsigned long>(width);
+    image.info.height = static_cast<unsigned long>(height);
     image.info.TJSampleFormat = static_cast<TJSAMP>(sample_format);
     image.info.TJColorSpace = static_cast<TJCS>(color_space);
     return true;
@@ -191,14 +183,14 @@ bool JPEGManager::saveToFile(const char* fileName, Image image)
     return true;
 }
 
-bool JPEGManager::encodeImage(const Image& srcImage, Image& dstImage, int quality)
+bool JPEGManager::encodeImage(const Image& srcImage, Image& dstImage, unsigned long& compressedSize, int quality)
 {
     unsigned char* dstData = dstImage.data();
     unsigned long dstSize = dstImage.size();
-    
-    int tj_stat = tjCompress2(c_handle_, srcImage.data(), dstImage.info.width, 0, dstImage.info.height, 
-                              srcImage.info.TJPixelFormat, &dstData, &dstSize, dstImage.info.TJSampleFormat, 
-                              quality, TJFLAG_NOREALLOC);
+
+    int tj_stat = tjCompress2(c_handle_, srcImage.data(), dstImage.info.width, 0, dstImage.info.height,
+                              srcImage.info.TJPixelFormat, &dstData, &dstSize, dstImage.info.TJSampleFormat, quality,
+                              TJFLAG_NOREALLOC);
 
     if (tj_stat != 0)
     {
@@ -207,27 +199,22 @@ bool JPEGManager::encodeImage(const Image& srcImage, Image& dstImage, int qualit
         return false;
     }
 
-    // Update the image size after compression (buffer pointer shouldn't change with TJFLAG_NOREALLOC)
-    // But we need to update our internal size tracking
-    if (dstSize != dstImage.size())
-    {
-        // Size changed - this shouldn't happen with TJFLAG_NOREALLOC but let's be safe
-        common::log_warn("JPEGManager::encodeImage - Compressed size changed from %lu to %lu", dstImage.size(), dstSize);
-    }
-
+    // Update size, may be smaller thanks to jpeg.
+    compressedSize = dstSize;
     return true;
 }
 
 bool JPEGManager::encodeAndWriteToOutput(const Image srcImage, int quality, TJPF pixelFormat)
 {
-    d_image_.info.TJPixelFormat = pixelFormat;
-    if (!encodeImage(srcImage, d_image_, quality))
+    d_image_->info.TJPixelFormat = pixelFormat;
+    unsigned long encodedSize{0u};
+    if (!encodeImage(srcImage, *d_image_, encodedSize, quality))
     {
         return false;
     }
 
     // Use the actual compressed size for writing
-    int written = write(o_fd_, d_image_.data(), d_image_.size());
+    int written = write(o_fd_, d_image_->data(), encodedSize);
     if (written < 0)
     {
         close(o_fd_);

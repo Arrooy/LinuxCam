@@ -12,7 +12,9 @@ Face::Face(std::vector<Landmark> landmarks, math_utils::Rect boundingBox) : boun
     loadNewLandmarks(landmarks);
 }
 
-Face::Face(math_utils::Rect boundingBox) : boundingBox_(boundingBox){}
+Face::Face(math_utils::Rect boundingBox) : boundingBox_(boundingBox)
+{
+}
 
 Face::~Face()
 {
@@ -129,13 +131,17 @@ void Face::paintBoundingBox(Image& image)
     auto right = math_utils::DDA(boundingBox_.r, boundingBox_.t, boundingBox_.r, boundingBox_.b);
     points.insert(points.end(), right.begin(), right.end());
 
+    long width = image.info.width;
+    long height = image.info.height;
     // Pant each point
     for (const math_utils::Point& p : points)
     {
         // Check image bounds
-        if (p.x < 0 || p.x >= image.info.width || p.y < 0 || p.y >= image.info.height)
+        if (p.x < 0 || p.x >= width || p.y < 0 || p.y >= height)
+        {
             continue;
-        image.px(p.x, p.y, 0, 255, 0);
+        }
+        image.pxy(p.x, p.y, 0, 255, 0);
     }
 }
 
@@ -154,7 +160,8 @@ void Face::paintInside(Image& image, FaceIndex facepart)
         for (const Landmark& landmark : landmarks_[facepart])
         {
             const math_utils::Point& p = landmark.p;
-            if ((p.x + p.y * image.info.width) * image.info.pixelSizeBytes == i)
+            long index = static_cast<long>((p.x + p.y * image.info.width) * image.info.pixelSizeBytes);
+            if (index == i)
             {
                 if (inside == 0)
                 {
@@ -164,9 +171,7 @@ void Face::paintInside(Image& image, FaceIndex facepart)
                 {
                     for (long v = startIndex; v <= i; v += image.info.pixelSizeBytes)
                     {
-                        image.data[v] = 0;
-                        image.data[v + 1] = 0; // raw_frame_data[v+1] / 2;
-                        image.data[v + 2] = 0;
+                        image.pidx(v, 0, 0, 0);
                     }
                 }
 
@@ -177,9 +182,7 @@ void Face::paintInside(Image& image, FaceIndex facepart)
                 }
                 else
                 {
-                    image.data[startIndex] = 0;
-                    image.data[startIndex + 1] = 0; // image.data[v+1] / 2;
-                    image.data[startIndex + 2] = 0;
+                    image.pidx(startIndex, 0, 0, 0);
                     startIndex = i;
                 }
                 break;
@@ -191,9 +194,7 @@ void Face::paintInside(Image& image, FaceIndex facepart)
             // S'ha acabat la linia i estavem buscant un pixel parella.
             if (inside == 1)
             {
-                image.data[startIndex] = 0;
-                image.data[startIndex + 1] = 0;
-                image.data[startIndex + 2] = 0;
+                image.pidx(startIndex, 0, 0, 0);
             }
             inside = 0;
         }
@@ -214,11 +215,11 @@ void Face::paintFaceIndex(Image& image, FaceIndex facepart, bool joinPoints, Pix
                 std::vector<math_utils::Point> points = math_utils::DDA(lastPoint.x, lastPoint.y, l.p.x, l.p.y);
                 for (const math_utils::Point& p : points)
                 {
-                    image.px(p.x, p.y, color);
+                    image.ppx(p.x, p.y, color);
                 }
             }
             lastPoint = l.p;
         }
-        image.px(l.p.x, l.p.y, color);
+        image.ppx(l.p.x, l.p.y, color);
     }
 }

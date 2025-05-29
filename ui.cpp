@@ -126,7 +126,7 @@ void UI::paintMainWindow()
 
         //TODO: Make a sliding window fo this graph.
         static float arr[] = {0.6f, 0.1f, 1.0f, 0.5f, 0.92f, 0.1f, 0.2f};
-        ImGui::PlotHistogram("Histogram", arr, IM_ARRAYSIZE(arr), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80.0f));
+        ImGui::PlotHistogram("Histogram", arr, IM_ARRAYSIZE(arr), 0, NULL, 0.0f, 1.0f, ImVec2(0, 50.0f));
 
         // Add close button
         if (ImGui::Button("Close"))

@@ -84,7 +84,7 @@ void Application::update()
     // TODO: FIXME: This lambda has a Slight performance hit due to heap allocation and type-erasure (especially for
     // small, frequently called callbacks). also: Not inlineable across translation units. GPT suggests using Template
     // based approach (has zero overhead.)
-    cameraManager_.update([this](Image& img) { process(img); });
+     cameraManager_.update([this](Image& img) { process(img); });
 
     // Start new UI frame
     ui_.newFrame();
@@ -116,22 +116,22 @@ void Application::render()
 
 void Application::process(Image& image)
 {
-    if (faceDetector_ptr_ != nullptr)
-    {
-        profiler_.start("Face detector");
-        auto faces_rect = faceDetector_ptr_->detect(image);
-        profiler_.stop("Face detector");
+    // if (faceDetector_ptr_ != nullptr)
+    // {
+    //     profiler_.start("Face detector");
+    //     auto faces_rect = faceDetector_ptr_->detect(image);
+    //     profiler_.stop("Face detector");
 
-        if (faces_rect.size() > 0)
-        {
-            profiler_.start("Face painting");
-            for (const auto& face_rect : faces_rect)
-            {
-                Face face(face_rect);
-                face.paintBoundingBox(image);
-            }
-            profiler_.stop("Face painting");
-        }
-    }
+    //     if (faces_rect.size() > 0)
+    //     {
+    //         profiler_.start("Face painting");
+    //         for (const auto& face_rect : faces_rect)
+    //         {
+    //             Face face(face_rect);
+    //             face.paintBoundingBox(image);
+    //         }
+    //         profiler_.stop("Face painting");
+    //     }
+    // }
     imageRender_.uploadImage(image);
 }

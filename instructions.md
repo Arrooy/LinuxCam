@@ -8,6 +8,11 @@ dlib:
     sudo apt install libavcodec-dev libswresample-dev libswscale-dev
     sudo apt install libavutil-dev
 
+X11:
+    sudo apt-get install libxinerama-dev
+    sudo apt install libxcursor-dev
+    sudo apt-get install libxi-dev
+
 cuda:
     sudo apt install nvidia-cuda-toolkit
     sudo apt-get -y install cudnn9-cuda-12
