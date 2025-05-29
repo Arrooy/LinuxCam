@@ -255,8 +255,6 @@ bool CameraManager::record()
             struct v4l2_buffer buf;
 
             Image raw_image;
-            raw_image.data = nullptr;
-            raw_image.size = 0L;
             unsigned int totalDiscarded{0u};
             unsigned int totalDiscardedHeader{0u};
             const unsigned int warmupDiscardCount{2u};
@@ -333,13 +331,12 @@ bool CameraManager::record()
 
                 profiler_.start("Input image decoding");
 
-                // Convert to Image and get the header info
-                Image srcImage;
-                srcImage.data = static_cast<unsigned char*>(buffers_[buf.index].start);
-                srcImage.size = buf.bytesused;
+                // Use V4L2 buffer directly with non-owning reference
+                Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
                 srcImage.info.TJPixelFormat = TJPF_RGB; // TODO: This depends on the input camera.
 
-                if (srcImage.size != last_jpeg_size)
+                // Process immediately before requeuing
+                if (srcImage.size() != last_jpeg_size)
                 {
                     unsigned long raw_needed_size;
                     bool valid_image = jpegManager_->decodeJPEGHeader(srcImage, raw_needed_size);
@@ -353,32 +350,27 @@ bool CameraManager::record()
                         }
                         continue;
                     }
-                    if (raw_image.size != raw_needed_size)
+                    if (raw_image.size() != raw_needed_size)
                     {
-                        raw_image.size = raw_needed_size;
-                        if (raw_image.data != nullptr)
-                        {
-                            free(raw_image.data);
-                        }
-                        raw_image.data = static_cast<unsigned char*>(malloc(sizeof(unsigned char) * raw_image.size));
+                        raw_image.resize(raw_needed_size);
                         common::log_warn("CameraManager::record - Reallocating raw image buffer to %d - %s",
-                                         raw_image.size, common::format_size(raw_image.size));
+                                         raw_image.size(), common::format_size(raw_image.size()));
                     }
-                    last_jpeg_size = srcImage.size;
+                    last_jpeg_size = srcImage.size();
                 }
 
-                // Decode the image
-                if (!jpegManager_->decodeImage(srcImage, &raw_image.data))
+                // Decode the image immediately
+                if (!jpegManager_->decodeImage(srcImage, raw_image))
                 {
                     common::log_error("CameraManager::record - Failed to decode image");
                     break;
                 }
 
+                // Update raw_image info after successful decode
                 raw_image.info = srcImage.info;
 
-                profiler_.stop("Input image decoding");
-
                 imageQueue_.push(raw_image);
+                profiler_.stop("Input image decoding");
 
                 if (!requeueFrame(input_fd_, buf))
                 {
@@ -387,9 +379,7 @@ bool CameraManager::record()
             }
             common::log_warn("CameraManager::record thread dead.");
 
-            free(raw_image.data);
             cleanupBuffers(bufrequest_.count);
-
             stopInputStreaming();
         });
 
@@ -466,8 +456,9 @@ bool CameraManager::configureVirtualOuputCamera(const char* out_device, unsigned
     }
 
     // Configure the device
+    logFormat(format);
 
-    format.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG; // Si video to video
+    format.fmt.pix.pixelformat = V4L2_PIX_FMT_JPEG; // Si video to video
     // format.fmt.pix.colorspace = V4L2_PIX_FMT_ARGB32;
     // My camera is able to do: 1920x1080 1280x720 640x480 640x360 320x240
     format.fmt.pix.width = width;

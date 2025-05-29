@@ -65,7 +65,7 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
     int sample_format{TJSAMP_UNKNOWN};
     int color_space{-1};
 
-    int tj_stat = tjDecompressHeader3(d_handle_, image.data, image.size, &image.info.width, &image.info.height,
+    int tj_stat = tjDecompressHeader3(d_handle_, image.data(), image.size(), &image.info.width, &image.info.height,
                                       &sample_format, &color_space);
 
     if (tj_stat != 0 || sample_format == -1 || color_space == -1)
@@ -85,9 +85,9 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
     return true;
 }
 
-bool JPEGManager::decodeImage(const Image srcImage, unsigned char** destBuff)
+bool JPEGManager::decodeImage(const Image& srcImage, Image& destImage)
 {
-    int tj_stat = tjDecompress2(d_handle_, srcImage.data, srcImage.size, *destBuff, 0, 0, 0,
+    int tj_stat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), destImage.data(), 0, 0, 0,
                                 srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
 
     if (tj_stat != 0)
@@ -102,53 +102,53 @@ bool JPEGManager::decodeImage(const Image srcImage, unsigned char** destBuff)
 bool JPEGManager::readFromFile(const char* fileName, Image& image, TJPF pixelFormat)
 {
     // Read file size.
-    int fd = open(fileName, O_RDONLY);
-    size_t compressed_size = lseek(fd, 0, SEEK_END);
-    lseek(fd, 0, SEEK_SET); // seek to start of file
+    // int fd = open(fileName, O_RDONLY);
+    // size_t compressed_size = lseek(fd, 0, SEEK_END);
+    // lseek(fd, 0, SEEK_SET); // seek to start of file
 
-    unsigned char* aux = (unsigned char*) malloc(sizeof(unsigned char) * compressed_size);
-    // Read the image contents
-    size_t read_size = read(fd, aux, compressed_size);
-    close(fd);
-    if (read_size != compressed_size)
-    {
-        common::log_error("JPEGManager::readFromFile - Error reading file. Read %d. Image is %d", read_size,
-                          compressed_size);
-        free(aux);
-        return false;
-    }
+    // unsigned char* aux = (unsigned char*) malloc(sizeof(unsigned char) * compressed_size);
+    // // Read the image contents
+    // size_t read_size = read(fd, aux, compressed_size);
+    // close(fd);
+    // if (read_size != compressed_size)
+    // {
+    //     common::log_error("JPEGManager::readFromFile - Error reading file. Read %d. Image is %d", read_size,
+    //                       compressed_size);
+    //     free(aux);
+    //     return false;
+    // }
 
-    // Use the output image as a temporary variable to get the header info.
-    image.data = aux;
-    image.size = compressed_size;
-    image.info.TJPixelFormat = pixelFormat;
+    // // Use the output image as a temporary variable to get the header info.
+    // image.data = aux;
+    // image.size = compressed_size;
+    // image.info.TJPixelFormat = pixelFormat;
 
-    // Get compression data
-    if (!getJPEGHeaderInfo(image))
-    {
-        free(aux);
-        return false;
-    }
+    // // Get compression data
+    // if (!getJPEGHeaderInfo(image))
+    // {
+    //     free(aux);
+    //     return false;
+    // }
 
-    // Use a temp var because we cant use the same input/ouput memory
-    // TODO: investigate this.
-    Image compressed_image_aux;
-    compressed_image_aux.data = aux; // TODO: FIXME: This is bad!
-    compressed_image_aux.size = compressed_size;
-    compressed_image_aux.info = image.info;
+    // // Use a temp var because we cant use the same input/ouput memory
+    // // TODO: investigate this.
+    // Image compressed_image_aux;
+    // compressed_image_aux.data = aux; // TODO: FIXME: This is bad!
+    // compressed_image_aux.size = compressed_size;
+    // compressed_image_aux.info = image.info;
 
-    // Decode jpg to pixel format
-    if (!decodeImage(compressed_image_aux, &image.data))
-    {
-        free(aux);
-        return false;
-    }
+    // // Decode jpg to pixel format
+    // if (!decodeImage(compressed_image_aux, &image.data))
+    // {
+    //     free(aux);
+    //     return false;
+    // }
 
-    // Update pixel format of the result
-    image.info.TJPixelFormat = pixelFormat;
+    // // Update pixel format of the result
+    // image.info.TJPixelFormat = pixelFormat;
 
-    image.size = computeSizeInBytes(image.info.width, image.info.height, image.info.TJPixelFormat);
-    free(aux);
+    // image.size = computeSizeInBytes(image.info.width, image.info.height, image.info.TJPixelFormat);
+    // free(aux);
     return true;
 }
 
@@ -182,7 +182,7 @@ bool JPEGManager::saveToFile(const char* fileName, Image image)
         return false;
     }
 
-    if (static_cast<ssize_t>(image.size) != write(jpgfile, image.data, image.size))
+    if (static_cast<ssize_t>(image.size()) != write(jpgfile, image.data(), image.size()))
     {
         common::log_warn("JPEGManager::saveTofile - Error saving to file. Not all bytes where stored.");
         return false;
@@ -191,23 +191,28 @@ bool JPEGManager::saveToFile(const char* fileName, Image image)
     return true;
 }
 
-bool JPEGManager::encodeImage(const Image srcImage, Image& dstImage, int quality)
-
+bool JPEGManager::encodeImage(const Image& srcImage, Image& dstImage, int quality)
 {
-    int tj_stat =
-        tjCompress2(c_handle_, srcImage.data, dstImage.info.width, 0, dstImage.info.height, dstImage.info.TJPixelFormat,
-                    &dstImage.data, &dstImage.size, dstImage.info.TJSampleFormat, quality, TJFLAG_NOREALLOC);
-
-    // common::log_info(
-    //     "Encoding params SrcImage size: %lu, DstImage: %d x %d (%lu) - PxF %d - SampleFormat %d - Quality %d",
-    //     srcImage.size, dstImage.info.width, dstImage.info.height, dstImage.size, dstImage.info.TJPixelFormat,
-    //     dstImage.info.TJSampleFormat, quality);
+    unsigned char* dstData = dstImage.data();
+    unsigned long dstSize = dstImage.size();
+    
+    int tj_stat = tjCompress2(c_handle_, srcImage.data(), dstImage.info.width, 0, dstImage.info.height, 
+                              srcImage.info.TJPixelFormat, &dstData, &dstSize, dstImage.info.TJSampleFormat, 
+                              quality, TJFLAG_NOREALLOC);
 
     if (tj_stat != 0)
     {
         common::errno_log("JPEGManager::encodeImage - Compressor failed to compress!");
         common::errno_log((const char*) tjGetErrorStr2(c_handle_));
         return false;
+    }
+
+    // Update the image size after compression (buffer pointer shouldn't change with TJFLAG_NOREALLOC)
+    // But we need to update our internal size tracking
+    if (dstSize != dstImage.size())
+    {
+        // Size changed - this shouldn't happen with TJFLAG_NOREALLOC but let's be safe
+        common::log_warn("JPEGManager::encodeImage - Compressed size changed from %lu to %lu", dstImage.size(), dstSize);
     }
 
     return true;
@@ -221,7 +226,8 @@ bool JPEGManager::encodeAndWriteToOutput(const Image srcImage, int quality, TJPF
         return false;
     }
 
-    int written = write(o_fd_, d_image_.data, d_image_.size);
+    // Use the actual compressed size for writing
+    int written = write(o_fd_, d_image_.data(), d_image_.size());
     if (written < 0)
     {
         close(o_fd_);

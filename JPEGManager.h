@@ -17,7 +17,7 @@ class JPEGManager
     bool saveToFile(const char* fileName, Image image);
     bool readFromFile(const char* fileName, Image& image, TJPF pixelFormat = TJPF_RGB);
 
-    bool decodeImage(const Image srcImage, unsigned char** destBuff);
+    bool decodeImage(const Image& srcImage, Image& destImage);
 
     /**
      * Encode image to JPEG format.
