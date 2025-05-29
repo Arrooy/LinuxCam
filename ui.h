@@ -5,7 +5,9 @@
 #include <GLFW/glfw3.h>
 
 #include "imgui.h"
-
+namespace funnyface {
+    class Profiler; // Forward declaration
+}
 class UI
 {
   public:
@@ -29,8 +31,8 @@ class UI
 
   private:
 
-    bool showDebugWindow_;
-
+    bool show_profile_window_{true};
+    funnyface::Profiler& profiler_;
     // UI drawing functions
     void paintMainWindow();
     void paintDebugWindow();

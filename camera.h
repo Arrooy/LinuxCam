@@ -11,7 +11,7 @@
 #include "JPEGManager.h"
 #include <thread>
 #include "queue.hpp"
-
+#include "profiler.h"
 namespace funnyface
 {
 struct Buffer
@@ -23,7 +23,7 @@ struct Buffer
 class CameraManager
 {
   public:
-    CameraManager() = default;
+    CameraManager();
     ~CameraManager();
 
     bool initialize();
@@ -59,6 +59,7 @@ class CameraManager
     void cleanupBuffers(unsigned int index);
 
     bool stopInputStreaming();
+    bool requeueFrame(int fd, v4l2_buffer& buf);
 
     Buffer* buffers_;
     struct v4l2_requestbuffers bufrequest_;
@@ -73,6 +74,8 @@ class CameraManager
     std::thread recordThread_;
     std::thread processingThread_;
     SafeQueue<Image> imageQueue_;
+
+    Profiler& profiler_;
 };
 
 } // namespace funnyface

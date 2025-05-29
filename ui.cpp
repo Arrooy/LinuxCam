@@ -3,10 +3,10 @@
 #include "common.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-
+#include "profiler.h"
 using namespace funnyface;
 
-UI::UI() : showDebugWindow_(true)
+UI::UI() : profiler_(Profiler::getInstance())
 {
 }
 
@@ -62,13 +62,10 @@ void UI::newFrame()
 
 void UI::paint()
 {
+    ImGui::ShowDemoWindow();
+
     // Paint all UI windows
     paintMainWindow();
-
-    if (showDebugWindow_)
-    {
-        paintDebugWindow();
-    }
 }
 
 void UI::render()
@@ -80,10 +77,23 @@ void UI::render()
 
 void UI::paintMainWindow()
 {
-    ImGui::Begin("Hello, world!");
+    if (ImGui::BeginMainMenuBar())
+    {
+        // Menu bar
+        if (ImGui::BeginMenu("More Options..."))
+        {
+            ImGui::MenuItem("Toggle Profile Window", NULL, &show_profile_window_);
 
-    ImGui::Text("This is some useful text.");
-    ImGui::Checkbox("Debug window", &showDebugWindow_);
+            // ImGui::Separator();
+            // if (ImGui::MenuItem("Cut", "CTRL+X")) {}
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+
+    // ImGui::Text("Main content goes here...");
+
+    // ImGui::End(); // End main window
 
     // ImGui::SliderFloat("float", &m_floatValue, 0.0f, 1.0f);
     // ImGui::ColorEdit3("clear color", (float*) &m_clearColor);
@@ -94,20 +104,35 @@ void UI::paintMainWindow()
     // }
     // ImGui::SameLine();
     // ImGui::Text("counter = %d", m_counter);
-
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-
-    ImGui::End();
-}
-
-void UI::paintDebugWindow()
-{
-    ImGui::Begin("Another Window", &showDebugWindow_);
-    ImGui::Text("Hello from another window!");
-    if (ImGui::Button("Close Me"))
+    if (show_profile_window_)
     {
-        showDebugWindow_ = false;
+        float menu_bar_height = ImGui::GetFrameHeight();
+        ImVec2 window_pos = ImVec2(0, menu_bar_height);
+        ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always);
+
+        ImGui::Begin("Profiling window", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
+
+        // TODO: Change color base on hardcoded thresholds.
+        auto textColor = ImVec4(0.0f, 0.7f, 1.0f, 1.0f);
+        auto durations = profiler_.getDurations();
+        for (const auto& pair : durations)
+        {
+            ImGui::TextColored(textColor, "%s - %s", pair.first.c_str(),
+                               Profiler::format_duration(pair.second).c_str());
+        }
+
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+        //TODO: Make a sliding window fo this graph.
+        static float arr[] = {0.6f, 0.1f, 1.0f, 0.5f, 0.92f, 0.1f, 0.2f};
+        ImGui::PlotHistogram("Histogram", arr, IM_ARRAYSIZE(arr), 0, NULL, 0.0f, 1.0f, ImVec2(0, 80.0f));
+
+        // Add close button
+        if (ImGui::Button("Close"))
+        {
+            show_profile_window_ = false;
+        }
+        ImGui::End();
     }
-    ImGui::End();
 }

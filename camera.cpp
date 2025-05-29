@@ -20,6 +20,9 @@ using namespace funnyface;
 // Definition of the static member
 std::atomic<bool> CameraManager::keepRunning_{true};
 
+CameraManager::CameraManager() : profiler_(Profiler::getInstance())
+{
+}
 
 CameraManager::~CameraManager()
 {
@@ -208,7 +211,7 @@ bool CameraManager::configureInputBuffers(unsigned int buffer_count)
 
     // Register the Ctrl-c signal to stop the program with no memory leaks.
     std::signal(SIGINT, CameraManager::intHandler);
-    std::signal(SIGSEGV, CameraManager::cleanupAndExit);
+    // std::signal(SIGSEGV, CameraManager::cleanupAndExit);
 
     // Activate streaming
     if (ioctl(input_fd_, VIDIOC_STREAMON, &bufrequest_.type) < 0)
@@ -234,6 +237,16 @@ void CameraManager::cleanupBuffers(unsigned int index)
     buffers_ = nullptr;
 }
 
+bool CameraManager::requeueFrame(int fd, v4l2_buffer& buf)
+{
+    if (ioctl(fd, VIDIOC_QBUF, &buf) == -1)
+    {
+        common::errno_log("CameraManager::requeueFrame - VIDIOC_QBUF");
+        return false;
+    }
+    return true;
+}
+
 bool CameraManager::record()
 {
     recordThread_ = std::thread(
@@ -244,7 +257,9 @@ bool CameraManager::record()
             Image raw_image;
             raw_image.data = nullptr;
             raw_image.size = 0L;
-            unsigned int total_discarded{0u};
+            unsigned int totalDiscarded{0u};
+            unsigned int totalDiscardedHeader{0u};
+            const unsigned int warmupDiscardCount{2u};
             unsigned long last_jpeg_size{0u};
 
             while (keepRunning_)
@@ -259,7 +274,7 @@ bool CameraManager::record()
                 // Timeout.
                 tv.tv_sec = 2;
                 tv.tv_usec = 0;
-
+                profiler_.start("Waiting for OS camera frame");
                 r = select(input_fd_ + 1, &fds, nullptr, nullptr, &tv);
 
                 if (r == -1)
@@ -302,8 +317,21 @@ bool CameraManager::record()
                     common::errno_log("CameraManager::record - INVALID INDEX in BUFF. Aborting.");
                     break;
                 }
+                profiler_.stop("Waiting for OS camera frame");
 
-                const auto& start_decoding = std::chrono::high_resolution_clock::now();
+                // If we attached streaming mid frame, probably the fist buffer or two will be invalid.
+                if (totalDiscarded < warmupDiscardCount)
+                {
+                    totalDiscarded++;
+                    // re-queue the frame
+                    if (!requeueFrame(input_fd_, buf))
+                    {
+                        break;
+                    }
+                    continue;
+                }
+
+                profiler_.start("Input image decoding");
 
                 // Convert to Image and get the header info
                 Image srcImage;
@@ -313,13 +341,16 @@ bool CameraManager::record()
 
                 if (srcImage.size != last_jpeg_size)
                 {
-                    common::log_info("CameraManager::record - Input jpeg size is %lu", srcImage.size);
                     unsigned long raw_needed_size;
                     bool valid_image = jpegManager_->decodeJPEGHeader(srcImage, raw_needed_size);
                     if (!valid_image)
                     {
                         common::log_info("CameraManager::record - Invalid input image. Discarted. Total discarded: %d",
-                                         ++total_discarded);
+                                         ++totalDiscardedHeader);
+                        if (!requeueFrame(input_fd_, buf))
+                        {
+                            break;
+                        }
                         continue;
                     }
                     if (raw_image.size != raw_needed_size)
@@ -345,16 +376,12 @@ bool CameraManager::record()
 
                 raw_image.info = srcImage.info;
 
-                const auto& end_decoding = std::chrono::high_resolution_clock::now();
-                std::string decoding_time = common::format_duration(start_decoding, end_decoding);
-                common::log_info("Decoding time: %s", decoding_time.c_str());
+                profiler_.stop("Input image decoding");
 
                 imageQueue_.push(raw_image);
 
-                // Add the frame to the queue
-                if (ioctl(input_fd_, VIDIOC_QBUF, &buf) == -1)
+                if (!requeueFrame(input_fd_, buf))
                 {
-                    common::errno_log("CameraManager::record - VIDIOC_QBUF");
                     break;
                 }
             }
@@ -395,11 +422,13 @@ bool CameraManager::update(std::function<void(Image&)> paint)
         return false;
     }
 
-    const auto& start_paint = std::chrono::high_resolution_clock::now();
+    profiler_.start("Processing time");
     // Process the image
     paint(processed_image);
-    const auto& end_paint = std::chrono::high_resolution_clock::now();
+    profiler_.stop("Processing time");
 
+
+    profiler_.start("Encode and write output image");
     // Encode and send to output
     if (!jpegManager_->encodeAndWriteToOutput(processed_image))
     {
@@ -407,12 +436,8 @@ bool CameraManager::update(std::function<void(Image&)> paint)
         return false;
         // break;
     }
+    profiler_.stop("Encode and write output image");
 
-    const auto& end_encoding = std::chrono::high_resolution_clock::now();
-
-    std::string paint_time = common::format_duration(start_paint, end_paint);
-    std::string encoding_time = common::format_duration(end_paint, end_encoding);
-    common::log_info("Paint time: %s Encoding time: %s", paint_time.c_str(), encoding_time.c_str());
     // }
 
     return success;

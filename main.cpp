@@ -25,7 +25,7 @@ int main()
     Application app;
 
     // Initialize the application
-    if (!app.initialize(640, 480, "First testing application"))
+    if (!app.initialize(640, 480, ""))
     {
         common::log_error("Failed to initialize application");
         return -1;

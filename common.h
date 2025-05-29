@@ -12,8 +12,6 @@
 #include <string>
 #include <ctime>
 
-#include <chrono>
-#include <functional>
 // Macro to clear a buffer
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
@@ -259,64 +257,6 @@ inline const char* format_size(unsigned long size)
     return buffer;
 }
 
-inline std::string format_duration(int64_t micros)
-{
-    char buffer[64];
-
-    if (micros <= 0)
-    {
-        if(snprintf(buffer, sizeof(buffer), "Invalid duration") == -1)
-        {
-            return "Error formatting duration";
-        }
-    }
-    else if (micros < 1000)
-    {
-        double hz = 1e6 / micros;
-        if(snprintf(buffer, sizeof(buffer), "%ld µs (%.2f Hz)", micros, hz) == -1)
-        {
-            return "Error formatting duration";
-        }
-    }
-    else if (micros < 1000 * 1000)
-    {
-        double ms = micros / 1000.0;
-        double hz = 1e6 / micros;
-        if(snprintf(buffer, sizeof(buffer), "%.2f ms (%.2f Hz)", ms, hz) == -1)
-        {
-            return "Error formatting duration";
-        }
-    }
-    else if (micros < int64_t(60) * 1000 * 1000)
-    {
-        double s = micros / 1e6;
-        double hz = 1e6 / micros;
-        if(snprintf(buffer, sizeof(buffer), "%.2f s (%.2f Hz)", s, hz) == -1)
-        {
-            return "Error formatting duration";
-        }
-    }
-    else
-    {
-        int64_t total_seconds = micros / 1000000;
-        int64_t minutes = total_seconds / 60;
-        int64_t seconds = total_seconds % 60;
-        double hz = 1e6 / micros;
-        if(snprintf(buffer, sizeof(buffer), "%ld min %ld s (%.4f Hz)", minutes, seconds, hz) == -1)
-        {
-            return "Error formatting duration";
-        }
-    }
-
-    return std::string(buffer);
-}
-
-inline std::string format_duration(std::chrono::high_resolution_clock::time_point start,
-                                   std::chrono::high_resolution_clock::time_point end)
-{
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    return format_duration(duration);
-}
 
 } // namespace common
 } // namespace funnyface

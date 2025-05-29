@@ -1,12 +1,13 @@
 
 #include "application.h"
 
-#include "common.h"
-#include "dlibDetectors.h"
 #include <iostream>
 
+#include "common.h"
+#include "dlibDetectors.h"
+
 using namespace funnyface;
-Application::Application()
+Application::Application() : profiler_(Profiler::getInstance())
 {
 }
 
@@ -117,43 +118,20 @@ void Application::process(Image& image)
 {
     if (faceDetector_ptr_ != nullptr)
     {
-        
-        const auto& a= std::chrono::high_resolution_clock::now();
+        profiler_.start("Face detector");
         auto faces_rect = faceDetector_ptr_->detect(image);
-        const auto& b = std::chrono::high_resolution_clock::now();
-
-        std::string detector_sr = common::format_duration(a, b);
-        common::log_info("Paint - Face detection time: %s ", detector_sr.c_str());
+        profiler_.stop("Face detector");
 
         if (faces_rect.size() > 0)
         {
-            common::log_info("Paint - Found %d faces at %d,%d,%d,%d", faces_rect.size(), faces_rect[0].l,
-                             faces_rect[0].t, faces_rect[0].r, faces_rect[0].b);
+            profiler_.start("Face painting");
             for (const auto& face_rect : faces_rect)
             {
                 Face face(face_rect);
                 face.paintBoundingBox(image);
             }
+            profiler_.stop("Face painting");
         }
     }
     imageRender_.uploadImage(image);
-
-    // // Paint a circle in the middle of the image
-    // for (int x = 0; x < image.info.width; x++)
-    // {
-    //     for (int y = 0; y < image.info.height; y++)
-    //     {
-    //         int pos = (x + y * image.info.width) * image.info.pixelSizeBytes;
-    //         if(static_cast<unsigned long>(pos + image.info.pixelSizeBytes - 1) >= image.size)
-    //         {
-    //             common::log_warn("Paint - Invalid pos x,y %d&%d - index %d. Image size is %d. Skipping.",x,y, pos,
-    //             image.size); continue;
-    //         }
-
-    //         image.data[pos] = 0;
-    //         image.data[pos + 1] = 0;
-    //         image.data[pos + 2] = 0;
-    //         image.data[pos + 3] = 0;
-    //     }
-    // }
 }

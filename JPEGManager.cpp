@@ -133,7 +133,7 @@ bool JPEGManager::readFromFile(const char* fileName, Image& image, TJPF pixelFor
     // Use a temp var because we cant use the same input/ouput memory
     // TODO: investigate this.
     Image compressed_image_aux;
-    compressed_image_aux.data = aux;
+    compressed_image_aux.data = aux; // TODO: FIXME: This is bad!
     compressed_image_aux.size = compressed_size;
     compressed_image_aux.info = image.info;
 
@@ -198,10 +198,10 @@ bool JPEGManager::encodeImage(const Image srcImage, Image& dstImage, int quality
         tjCompress2(c_handle_, srcImage.data, dstImage.info.width, 0, dstImage.info.height, dstImage.info.TJPixelFormat,
                     &dstImage.data, &dstImage.size, dstImage.info.TJSampleFormat, quality, TJFLAG_NOREALLOC);
 
-    common::log_info(
-        "Encoding params SrcImage size: %lu, DstImage: %d x %d (%lu) - PxF %d - SampleFormat %d - Quality %d",
-        srcImage.size, dstImage.info.width, dstImage.info.height, dstImage.size, dstImage.info.TJPixelFormat,
-        dstImage.info.TJSampleFormat, quality);
+    // common::log_info(
+    //     "Encoding params SrcImage size: %lu, DstImage: %d x %d (%lu) - PxF %d - SampleFormat %d - Quality %d",
+    //     srcImage.size, dstImage.info.width, dstImage.info.height, dstImage.size, dstImage.info.TJPixelFormat,
+    //     dstImage.info.TJSampleFormat, quality);
 
     if (tj_stat != 0)
     {
