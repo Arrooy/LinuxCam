@@ -1,0 +1,18 @@
+input_camera:
+    name: "Logitech"
+    path: "/dev/video1"
+    width: 640
+    height: 480
+    buffer_count: 2
+
+output_camera:
+    name: "VirtualCamera"
+    path: "/dev/video8"
+    width: 640
+    height: 480
+    jpeg_quality: 90
+    subsampling: "444"  # Options: 444, 422, 420, gray, 440, 411
+
+external_images:
+    folder: "./images"
+

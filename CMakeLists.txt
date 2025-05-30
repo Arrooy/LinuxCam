@@ -184,6 +184,15 @@ add_custom_target(
 # Make sure modprobe happens after it's built
 add_dependencies(load_loopback_module v4l2loopback)
 
+include(FetchContent)
+
+FetchContent_Declare(
+  yaml-cpp
+  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+  GIT_TAG 0.8.0
+)
+FetchContent_MakeAvailable(yaml-cpp)
+
 # Define the main executable
 add_executable(FunnyFace
     main.cpp camera.h camera.cpp
@@ -210,6 +219,7 @@ target_link_libraries(FunnyFace
     ${OPENGL_LIBRARIES}
     GL
     glad
+    yaml-cpp::yaml-cpp
 )
 
 # Ensure include directory is set *after* it exists

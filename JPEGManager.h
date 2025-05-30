@@ -30,7 +30,7 @@ class JPEGManager
      */
     bool encodeImage(const Image& srcImage, Image& dstImage, unsigned long& compressedSize, int quality = 100);
 
-    bool encodeAndWriteToOutput(const Image srcImage, int quality = 100, TJPF pixelFormat = TJPF_RGB);
+    bool encodeAndWriteToOutput(const Image& srcImage, int quality = 100, TJPF pixelFormat = TJPF_RGB);
 
     bool decodeJPEGHeader(Image& image, unsigned long& size);
 

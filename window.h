@@ -13,7 +13,7 @@ class Window
     ~Window();
 
     // Initialize GLFW and create window
-    bool initialize(int width = 1280, int height = 720, const std::string& title = "Application");
+    bool initialize();
 
     // Cleanup GLFW and destroy window
     void shutdown();

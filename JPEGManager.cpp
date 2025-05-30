@@ -59,8 +59,8 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
     int width{-1};
     int height{-1};
 
-    int tj_stat = tjDecompressHeader3(d_handle_, image.data(), image.size(), &width, &height,
-                                      &sample_format, &color_space);
+    int tj_stat =
+        tjDecompressHeader3(d_handle_, image.data(), image.size(), &width, &height, &sample_format, &color_space);
 
     if (tj_stat != 0 || sample_format == -1 || color_space == -1)
     {
@@ -79,6 +79,8 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
 
 bool JPEGManager::decodeImage(const Image& srcImage, Image& destImage)
 {
+    destImage.beingUsed_ = true;
+
     int tj_stat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), destImage.data(), 0, 0, 0,
                                 srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
 
@@ -204,7 +206,7 @@ bool JPEGManager::encodeImage(const Image& srcImage, Image& dstImage, unsigned l
     return true;
 }
 
-bool JPEGManager::encodeAndWriteToOutput(const Image srcImage, int quality, TJPF pixelFormat)
+bool JPEGManager::encodeAndWriteToOutput(const Image& srcImage, int quality, TJPF pixelFormat)
 {
     d_image_->info.TJPixelFormat = pixelFormat;
     unsigned long encodedSize{0u};

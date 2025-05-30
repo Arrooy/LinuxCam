@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "common.h"
+#include "config.hpp"
 #include "dlibDetectors.h"
 
 using namespace funnyface;
@@ -16,10 +17,10 @@ Application::~Application()
     shutdown();
 }
 
-bool Application::initialize(int width, int height, const std::string& title)
+bool Application::initialize()
 {
     // Initialize window
-    if (!window_.initialize(width, height, title))
+    if (!window_.initialize())
     {
         common::log_error("Failed to initialize window");
         return false;
@@ -31,7 +32,11 @@ bool Application::initialize(int width, int height, const std::string& title)
         common::log_error("Failed to initialize UI");
         return false;
     }
+    // Load configuration for cameraManager
+    cameraManager_.setInputDevice(Config::getInstance().getInputCamera());
+    cameraManager_.setOutputDevice(Config::getInstance().getOutputCamera());
 
+    // Initialize camera manager
     if (!cameraManager_.initialize())
     {
         common::log_error("Failed to initialize Camera Manager");
@@ -84,7 +89,7 @@ void Application::update()
     // TODO: FIXME: This lambda has a Slight performance hit due to heap allocation and type-erasure (especially for
     // small, frequently called callbacks). also: Not inlineable across translation units. GPT suggests using Template
     // based approach (has zero overhead.)
-     cameraManager_.update([this](Image& img) { process(img); });
+    cameraManager_.update([this](Image& img) { process(img); });
 
     // Start new UI frame
     ui_.newFrame();

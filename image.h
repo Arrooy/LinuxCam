@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "common.h"
+#include <atomic>
 
 namespace funnyface
 {
@@ -170,18 +171,20 @@ class Image
 
 
     // Optional: Clone if you ever need a deep copy manually
-    Image clone() const {
-        Image copy(size_);
-        std::memcpy(copy.data(), data_.get(), size_);
-        copy.info = info;
-        return copy;
-    }
+    // Image clone() const {
+    //     Image copy(size_);
+    //     std::memcpy(copy.data(), data_.get(), size_);
+    //     copy.info = info;
+    //     return copy;
+    // }
 
+    std::atomic<bool> beingUsed_{false};
   private:
     inline unsigned long index(unsigned long col, unsigned long row) const
     {
         return (row * info.width + col) * info.pixelSizeBytes;
     }
+
 
     std::shared_ptr<unsigned char> data_;
     size_t size_;

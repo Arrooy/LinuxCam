@@ -8,6 +8,7 @@
 #include "detectors.h"
 #include "profiler.h"
 
+
 namespace funnyface
 {
 
@@ -18,7 +19,7 @@ class Application
     ~Application();
 
     // Initialize the application
-    bool initialize(int width = 1280, int height = 720, const std::string& title = "ImGui Application");
+    bool initialize();
 
     // Run the main application loop
     void run();

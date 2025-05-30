@@ -7,17 +7,29 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <thread>
 
 #include "JPEGManager.h"
-#include <thread>
-#include "queue.hpp"
 #include "profiler.h"
+#include "queue.hpp"
 namespace funnyface
 {
+
 struct Buffer
 {
     size_t length;
     void* start;
+};
+
+struct CapturingDevice
+{
+    const char* name = nullptr;
+    const char* device_path = nullptr;
+    int fd = -1;
+    unsigned int width = 0u;
+    unsigned int height = 0u;
+    unsigned int buffer_count = -1;
+    TJSAMP subsampling = TJSAMP_420; // Default subsampling
 };
 
 class CameraManager
@@ -26,22 +38,26 @@ class CameraManager
     CameraManager();
     ~CameraManager();
 
-    bool initialize();
+    void configureInputDevice(const char* in_device, unsigned int width = 640, unsigned int height = 480,
+                              unsigned int buffer_count = 2);
+    void configureOutputDevice(const char* out_device, unsigned int width = 640, unsigned int height = 480);
+    inline void setInputDevice(const CapturingDevice& device) { inputDevice_ = device; }
+    inline void setOutputDevice(const CapturingDevice& device) { outputDevice_ = device; }
 
+    bool initialize();
     bool update(std::function<void(Image&)> paint);
     bool record();
 
-    // VIDEO_IN - VIDEO_WIDTH_IN - VIDEO_HEIGHT_IN
-    bool configureInputCamera(const char* in_device, unsigned int width, unsigned int height);
+
+    // TODO: FIXME: Improve signal and shuting down mechanism. Run valgrind too.
+    bool is_alive() { return keepRunning_; }
+    void shutdown() { keepRunning_ = false; }
+  private:
+    bool configureInputCamera();
+    bool configureVirtualOuputCamera();
+
     bool configureInputBuffers(unsigned int buffer_count);
 
-    // VIDEO_OUT - VIDEO_WIDTH_OUT - VIDEO_HEIGHT_OUT
-    bool configureVirtualOuputCamera(const char* out_device, unsigned int width, unsigned int height);
-    
-    // TODO: FIXME: Improve signal and shuting down mechanism. Run valgrind too. 
-    bool is_alive() { return keepRunning_;}
-    void shutdown() { keepRunning_ = false;}
-  private:
     static void intHandler(int sig) { keepRunning_ = false; }
     static void cleanupAndExit(int sig)
     {
@@ -52,9 +68,9 @@ class CameraManager
     }
 
 
-
     bool getCapabilities(int fd, v4l2_capability& cap);
     void logFormat(v4l2_format vid_format);
+    void logSupportedResolutions(int fd, const char* device_name);
 
     void cleanupBuffers(unsigned int index);
 
@@ -65,15 +81,15 @@ class CameraManager
     struct v4l2_requestbuffers bufrequest_;
 
     std::shared_ptr<JPEGManager> jpegManager_{nullptr};
-
-    int input_fd_;
-    int output_fd_;
     static std::atomic<bool> keepRunning_;
 
+    CapturingDevice inputDevice_;
+    CapturingDevice outputDevice_;
 
     std::thread recordThread_;
     std::thread processingThread_;
-    SafeQueue<Image> imageQueue_;
+    SafeQueue<Image> imageQueue_; // TODO: delete.
+    Image currentImage_;
 
     Profiler& profiler_;
 };

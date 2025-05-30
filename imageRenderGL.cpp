@@ -104,7 +104,7 @@ bool ImageRenderGL::uploadImage(const Image& image)
         common::log_error("Invalid image data");
         return false;
     }
-
+    // TODO: FIXME: If input and output config sizes are different, this breaks. (core dumped)
     glBindTexture(GL_TEXTURE_2D, textureId_);
 
     // Determine format
@@ -143,6 +143,7 @@ void ImageRenderGL::renderBackground(int windowWidth, int windowHeight)
         return; // No texture or shader available
     }
 
+    // TODO: Fix error black image. At start.
     // Disable depth testing for background
     glDisable(GL_DEPTH_TEST);
 
