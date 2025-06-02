@@ -1,6 +1,6 @@
 input_camera:
     name: "Logitech"
-    path: "/dev/video1"
+    path: "/dev/video0"
     width: 640
     height: 480
     buffer_count: 2

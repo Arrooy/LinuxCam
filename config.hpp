@@ -64,11 +64,8 @@ class Config
 
     void loadInputCameraData(const YAML::Node& input)
     {
-        input_name_ = input["name"].as<std::string>();
-        input_path_ = input["path"].as<std::string>();
-
-        input_camera_.name = input_name_.c_str();
-        input_camera_.device_path = input_path_.c_str();
+        input_camera_.name = input["name"].as<std::string>();
+        input_camera_.device_path = input["path"].as<std::string>();
         input_camera_.width = input["width"].as<unsigned int>();
         input_camera_.height = input["height"].as<unsigned int>();
         input_camera_.buffer_count = input["buffer_count"].as<unsigned int>();
@@ -108,11 +105,8 @@ class Config
 
     bool loadOutputCameraData(const YAML::Node& output)
     {
-        output_name_ = output["name"].as<std::string>();
-        output_path_ = output["path"].as<std::string>();
-
-        output_camera_.name = output_name_.c_str();
-        output_camera_.device_path = output_path_.c_str();
+        output_camera_.name = output["name"].as<std::string>();
+        output_camera_.device_path = output["path"].as<std::string>();
         output_camera_.width = output["width"].as<unsigned int>();
         output_camera_.height = output["height"].as<unsigned int>();
 
@@ -173,9 +167,9 @@ class Config
     }
 
     // Get configuration sections
-    const CapturingDevice& getInputCamera() const { return input_camera_; }
-    const CapturingDevice& getOutputCamera() const { return output_camera_; }
-    const ExternalImages& getExternalImages() const { return external_images_; }
+    CapturingDevice getInputCamera() const { return input_camera_; }
+    CapturingDevice getOutputCamera() const { return output_camera_; }
+    ExternalImages getExternalImages() const { return external_images_; }
 
     // Get a value from the config
     template <typename T>

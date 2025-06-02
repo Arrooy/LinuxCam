@@ -11,11 +11,9 @@
 #include <cstdlib>
 
 #include "common.h"
-using namespace funnyface;
+#include "config.hpp"
 
-// Dlib and this size, we get 20ms paint. 2ms Compress/Decompress.
-#define CAMERA_WIDTH 640L
-#define CAMERA_HEIGHT 480L
+using namespace funnyface;
 
 // Definition of the static member
 std::atomic<bool> CameraManager::keepRunning_{true};
@@ -53,44 +51,63 @@ void CameraManager::logFormat(v4l2_format vid_format)
     common::log_info("vid_format->fmt.pix.colorspace  =%u", vid_format.fmt.pix.colorspace);
 }
 
-void CameraManager::logSupportedResolutions(int fd, const char* device_name)
+bool CameraManager::getCameraCapabilities(const CapturingDevice& device, CameraCapabilities& outCaps)
 {
+    struct v4l2_capability cap;
+    if (ioctl(device.fd, VIDIOC_QUERYCAP, &cap) == -1)
+    {
+        common::errno_log("CameraManager::getCameraCapabilities - VIDIOC_QUERYCAP");
+        close(device.fd);
+        return false;
+    }
+
+    // Check if we have the required capabilities
+    if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
+    {
+        common::errno_log(
+            "CameraManager::getCameraCapabilities - The device does not handle single-planar video capture.");
+        return false;
+    }
+
+    if (!(cap.capabilities & V4L2_CAP_STREAMING))
+    {
+        common::errno_log("CameraManager::getCameraCapabilities - The device does not handle streaming.");
+        return false;
+    }
+
+    outCaps.driver = reinterpret_cast<char*>(cap.driver);
+    outCaps.card = reinterpret_cast<char*>(cap.card);
+    outCaps.bus_info = reinterpret_cast<char*>(cap.bus_info);
+
     struct v4l2_fmtdesc fmtdesc;
-    struct v4l2_frmsizeenum frmsize;
-
-    common::log_info("Supported resolutions for device %s:", device_name);
-
-    // Enumerate pixel formats
     CLEAR(fmtdesc);
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    fmtdesc.index = 0;
 
-    while (ioctl(fd, VIDIOC_ENUM_FMT, &fmtdesc) == 0)
+    for (fmtdesc.index = 0; ioctl(device.fd, VIDIOC_ENUM_FMT, &fmtdesc) == 0; ++fmtdesc.index)
     {
-        common::log_info("  Format: %.4s (%s)", (char*) &fmtdesc.pixelformat, fmtdesc.description);
+        Format fmt;
+        fmt.description = reinterpret_cast<char*>(fmtdesc.description);
+        fmt.pixelformat = fmtdesc.pixelformat;
 
-        // Enumerate frame sizes for this format
+        struct v4l2_frmsizeenum frmsize;
         CLEAR(frmsize);
         frmsize.pixel_format = fmtdesc.pixelformat;
-        frmsize.index = 0;
 
-        while (ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) == 0)
+        for (frmsize.index = 0; ioctl(device.fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) == 0; ++frmsize.index)
         {
             if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE)
             {
-                common::log_info("    %ux%u", frmsize.discrete.width, frmsize.discrete.height);
+                FrameSize size;
+                size.width = frmsize.discrete.width;
+                size.height = frmsize.discrete.height;
+                fmt.sizes.push_back(size);
             }
-            else if (frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE)
-            {
-                common::log_info("    %ux%u to %ux%u (step %ux%u)", frmsize.stepwise.min_width,
-                                 frmsize.stepwise.min_height, frmsize.stepwise.max_width, frmsize.stepwise.max_height,
-                                 frmsize.stepwise.step_width, frmsize.stepwise.step_height);
-            }
-            frmsize.index++;
         }
 
-        fmtdesc.index++;
+        outCaps.formats.push_back(fmt);
     }
+
+    return true;
 }
 
 bool CameraManager::getCapabilities(int fd, v4l2_capability& cap)
@@ -144,7 +161,8 @@ bool CameraManager::stopInputStreaming()
 void CameraManager::configureInputDevice(const char* input_device, unsigned int width, unsigned int height,
                                          unsigned int buffer_count)
 {
-    inputDevice_.device_path = input_device;
+    inputDevice_.name = std::string("Unkown");
+    inputDevice_.device_path = std::string(input_device);
     inputDevice_.width = width;
     inputDevice_.height = height;
     inputDevice_.buffer_count = buffer_count;
@@ -152,6 +170,7 @@ void CameraManager::configureInputDevice(const char* input_device, unsigned int 
 }
 void CameraManager::configureOutputDevice(const char* out_device, unsigned int width, unsigned int height)
 {
+    outputDevice_.name = std::string("Unkown");
     outputDevice_.device_path = out_device;
     outputDevice_.width = width;
     outputDevice_.height = height;
@@ -160,13 +179,13 @@ void CameraManager::configureOutputDevice(const char* out_device, unsigned int w
 
 bool CameraManager::initialize()
 {
-    if (inputDevice_.device_path == nullptr)
+    if (inputDevice_.device_path.empty())
     {
         common::log_error("CameraManager::initialize - Input device not configured. Aborting.");
         return false;
     }
 
-    if (outputDevice_.device_path == nullptr)
+    if (outputDevice_.device_path.empty())
     {
         common::log_error("CameraManager::initialize - Output device not configured. Aborting.");
         return false;
@@ -192,8 +211,8 @@ bool CameraManager::initialize()
         return false;
     }
 
-    jpegManager_ =
-        std::make_shared<JPEGManager>(outputDevice_.fd, outputDevice_.width, outputDevice_.height, TJSAMP::TJSAMP_444);
+    jpegManager_ = std::make_shared<JPEGManager>(outputDevice_.fd, outputDevice_.width, outputDevice_.height,
+                                                 outputDevice_.subsampling);
 
     // Start streaming thread.
     if (!record())
@@ -207,32 +226,21 @@ bool CameraManager::initialize()
 
 bool CameraManager::configureInputCamera()
 {
-    struct v4l2_capability cap;
     struct v4l2_format format;
 
+    common::log_info("CameraManager::configureInputCamera - Configuring camera %s, path: %s", inputDevice_.name.c_str(),
+                     inputDevice_.device_path.c_str());
+
     // Get the file descriptor of the video device
-    if ((inputDevice_.fd = open(inputDevice_.device_path, O_RDWR)) < 0)
+    if ((inputDevice_.fd = open(inputDevice_.device_path.c_str(), O_RDWR)) < 0)
     {
         common::errno_log("CameraManager::configureInputCamera - Failed to open device");
         return false;
     }
 
-    if (!getCapabilities(inputDevice_.fd, cap))
+    if (!getCameraCapabilities(inputDevice_, inputDevice_.caps))
     {
-        return false;
-    }
-
-    // Check if we have the required capabilities
-    if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
-    {
-        common::errno_log(
-            "CameraManager::configureInputCamera - The device does not handle single-planar video capture.");
-        return false;
-    }
-
-    if (!(cap.capabilities & V4L2_CAP_STREAMING))
-    {
-        common::errno_log("CameraManager::configureInputCamera - The device does not handle streaming.");
+        common::errno_log("CameraManager::configureInputCamera - Failed to get camera capabilities");
         return false;
     }
 
@@ -242,7 +250,7 @@ bool CameraManager::configureInputCamera()
         // Define video format
         CLEAR(format);
         format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        format.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+        format.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG; // TODO: This must change.
         format.fmt.pix.width = inputDevice_.width;
         format.fmt.pix.height = inputDevice_.height;
 
@@ -268,8 +276,6 @@ bool CameraManager::configureInputCamera()
         }
     }
 
-    logSupportedResolutions(inputDevice_.fd, inputDevice_.device_path);
-
     return true;
 }
 
@@ -278,9 +284,9 @@ bool CameraManager::configureVirtualOuputCamera()
     struct v4l2_format format;
 
     common::log_info("CameraManager::configureVirtualOuputCamera - Configuring output device %s",
-                     outputDevice_.device_path);
+                     outputDevice_.device_path.c_str());
     // Get the file descriptor
-    if ((outputDevice_.fd = open(outputDevice_.device_path, O_RDWR)) < 0)
+    if ((outputDevice_.fd = open(outputDevice_.device_path.c_str(), O_RDWR)) < 0)
     {
         common::errno_log("Error open video out!");
         return false;
@@ -564,6 +570,8 @@ bool CameraManager::record()
                     }
                 }
 
+                decodingFailureCount = 0;
+
                 // Update currentImage_ info after successful decode
                 currentImage_.info = cameraInputInfo;
 
@@ -592,6 +600,10 @@ bool CameraManager::update(std::function<void(Image&)> paint)
     // while (keepRunning_)
     // {
     // Get the next image
+    if (!currentImage_.beingUsed_)
+    {
+        return success;
+    }
 
     profiler_.start("Processing time");
     // Process the image

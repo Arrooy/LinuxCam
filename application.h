@@ -7,7 +7,7 @@
 #include "window.h"
 #include "detectors.h"
 #include "profiler.h"
-
+#include <memory>
 
 namespace funnyface
 {
@@ -30,7 +30,8 @@ class Application
   private:
     Window window_;
     UI ui_;
-    CameraManager cameraManager_;
+
+    std::shared_ptr<CameraManager> cameraManager_;
     ImageRenderGL imageRender_;
 
     Profiler& profiler_;

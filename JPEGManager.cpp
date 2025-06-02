@@ -79,11 +79,10 @@ bool JPEGManager::getJPEGHeaderInfo(Image& image)
 
 bool JPEGManager::decodeImage(const Image& srcImage, Image& destImage)
 {
-    destImage.beingUsed_ = true;
-
     int tj_stat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), destImage.data(), 0, 0, 0,
                                 srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
 
+    destImage.beingUsed_ = true;
     if (tj_stat != 0)
     {
         common::errno_log("JPEGManager::decodeImage - Failed to decode image");

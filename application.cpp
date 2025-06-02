@@ -32,12 +32,14 @@ bool Application::initialize()
         common::log_error("Failed to initialize UI");
         return false;
     }
+    cameraManager_ = std::make_shared<CameraManager>();
+
     // Load configuration for cameraManager
-    cameraManager_.setInputDevice(Config::getInstance().getInputCamera());
-    cameraManager_.setOutputDevice(Config::getInstance().getOutputCamera());
+    cameraManager_->setInputDevice(Config::getInstance().getInputCamera());
+    cameraManager_->setOutputDevice(Config::getInstance().getOutputCamera());
 
     // Initialize camera manager
-    if (!cameraManager_.initialize())
+    if (!cameraManager_->initialize())
     {
         common::log_error("Failed to initialize Camera Manager");
         return false;
@@ -54,6 +56,8 @@ bool Application::initialize()
 
     faceDetector_ptr_ = std::make_shared<DlibFaceDetector>();
 
+    ui_.connect(cameraManager_);
+
     common::log_info("Application initialized successfully");
     return true;
 }
@@ -63,7 +67,7 @@ void Application::run()
     common::log_info("Starting main loop...");
 
     // Main loop
-    while (!window_.shouldClose() && cameraManager_.is_alive())
+    while (!window_.shouldClose() && cameraManager_->is_alive())
     {
         update();
         // TODO: FIXME:
@@ -71,7 +75,7 @@ void Application::run()
         render();
     }
 
-    cameraManager_.shutdown();
+    cameraManager_->shutdown();
 
     common::log_info("Main loop ended");
 }
@@ -89,7 +93,7 @@ void Application::update()
     // TODO: FIXME: This lambda has a Slight performance hit due to heap allocation and type-erasure (especially for
     // small, frequently called callbacks). also: Not inlineable across translation units. GPT suggests using Template
     // based approach (has zero overhead.)
-    cameraManager_.update([this](Image& img) { process(img); });
+    cameraManager_->update([this](Image& img) { process(img); });
 
     // Start new UI frame
     ui_.newFrame();

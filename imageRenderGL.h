@@ -1,9 +1,9 @@
 #ifndef IMAGERENDERGL_H
 #define IMAGERENDERGL_H
-
+// clang-format off
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
+// clang-format on
 #include "image.h"
 
 namespace funnyface

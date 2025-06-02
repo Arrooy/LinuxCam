@@ -1,15 +1,21 @@
 #ifndef UI_H
 #define UI_H
 
+// clang-format off
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+// clang-format on
 
-#include "imgui.h"
+#include <memory>
 #include <queue>
 
-namespace funnyface {
-    class Profiler; // Forward declaration
-}
+#include "camera.h"
+#include "imgui.h"
+
+namespace funnyface
+{
+class Profiler; // Forward declaration
+
 class UI
 {
   public:
@@ -18,6 +24,8 @@ class UI
 
     // Initialize the UI system
     bool initialize(GLFWwindow* window, const char* glsl_version = "#version 130");
+
+    inline void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = newCameraManager; }
 
     // Cleanup the UI system
     void shutdown();
@@ -32,20 +40,15 @@ class UI
     void render();
 
   private:
-
     bool show_profile_window_{true};
     funnyface::Profiler& profiler_;
+
+    std::shared_ptr<CameraManager> cameraManager_;
     // UI drawing functions
     void paintMainWindow();
     void paintDebugWindow();
+    void newMenu(CapturingDevice& device);
 };
-
-// class Histogram 
-// {
-//   public:
-
-//   private:
-//    std::queue<std::chrono::microseconds> data_;
-// };
+} // namespace funnyface
 
 #endif // UI_H

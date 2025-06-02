@@ -15,21 +15,44 @@
 namespace funnyface
 {
 
+
 struct Buffer
 {
     size_t length;
     void* start;
 };
 
+struct FrameSize
+{
+    unsigned int width;
+    unsigned int height;
+};
+
+struct Format
+{
+    std::string description;
+    unsigned int pixelformat;
+    std::vector<FrameSize> sizes;
+};
+
+struct CameraCapabilities
+{
+    std::string driver;
+    std::string card;
+    std::string bus_info;
+    std::vector<Format> formats;
+};
+
 struct CapturingDevice
 {
-    const char* name = nullptr;
-    const char* device_path = nullptr;
+    std::string name;
+    std::string device_path;
     int fd = -1;
     unsigned int width = 0u;
     unsigned int height = 0u;
-    unsigned int buffer_count = -1;
+    unsigned int buffer_count = 0u;
     TJSAMP subsampling = TJSAMP_420; // Default subsampling
+    CameraCapabilities caps;
 };
 
 class CameraManager
@@ -43,11 +66,16 @@ class CameraManager
     void configureOutputDevice(const char* out_device, unsigned int width = 640, unsigned int height = 480);
     inline void setInputDevice(const CapturingDevice& device) { inputDevice_ = device; }
     inline void setOutputDevice(const CapturingDevice& device) { outputDevice_ = device; }
+    CapturingDevice& getInputDevice() { return inputDevice_; }
+    CapturingDevice& getOutputDevice() { return outputDevice_; }
+
 
     bool initialize();
     bool update(std::function<void(Image&)> paint);
     bool record();
+    bool getCameraCapabilities(const CapturingDevice& device, CameraCapabilities& outCaps);
 
+    void reconfigureInputCamera();
 
     // TODO: FIXME: Improve signal and shuting down mechanism. Run valgrind too.
     bool is_alive() { return keepRunning_; }
@@ -70,7 +98,6 @@ class CameraManager
 
     bool getCapabilities(int fd, v4l2_capability& cap);
     void logFormat(v4l2_format vid_format);
-    void logSupportedResolutions(int fd, const char* device_name);
 
     void cleanupBuffers(unsigned int index);
 
