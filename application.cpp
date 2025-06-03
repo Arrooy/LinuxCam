@@ -1,4 +1,3 @@
-
 #include "application.h"
 
 #include <iostream>
@@ -32,7 +31,7 @@ bool Application::initialize()
         common::log_error("Failed to initialize UI");
         return false;
     }
-    cameraManager_ = std::make_shared<CameraManager>();
+    cameraManager_ = std::make_unique<CameraManager>();
 
     // Load configuration for cameraManager
     cameraManager_->setInputDevice(Config::getInstance().getInputCamera());
@@ -54,9 +53,10 @@ bool Application::initialize()
         return false;
     }
 
-    faceDetector_ptr_ = std::make_shared<DlibFaceDetector>();
+    faceDetector_ = std::make_unique<DlibFaceDetector>();
 
-    ui_.connect(cameraManager_);
+    // Pass pointer instead of reference
+    ui_.connect(cameraManager_.get());
 
     common::log_info("Application initialized successfully");
     return true;

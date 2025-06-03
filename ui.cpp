@@ -273,20 +273,119 @@ void UI::paintOutputDeviceConfig(CapturingDevice& device)
     // Resolution Settings
     if (ImGui::CollapsingHeader("Resolution Settings"))
     {
-        static int width_input = device.width;
-        static int height_input = device.height;
+        // Maintain aspect ratio toggle
+        ImGui::Checkbox("Maintain Input Device Aspect Ratio", &maintain_aspect_ratio_);
 
-        ImGui::InputInt("Width", &width_input);
-        ImGui::InputInt("Height", &height_input);
+        if (maintain_aspect_ratio_ && cameraManager_)
+        {
+            auto& input_device = cameraManager_->getInputDevice();
+            float input_aspect = static_cast<float>(input_device.width) / static_cast<float>(input_device.height);
+            ImGui::Text("Input Aspect Ratio: %.3f (%ux%u)", input_aspect, input_device.width, input_device.height);
+        }
 
-        if (width_input > 0)
+        ImGui::Separator();
+
+        // Find current resolution index
+        static int current_resolution_index = -1;
+        static int custom_width = device.width;
+        static int custom_height = device.height;
+
+        // Check if current resolution matches any preset
+        current_resolution_index = -1;
+        for (int i = 0; i < IM_ARRAYSIZE(common_resolutions_); i++)
         {
-            device.width = width_input;
+            if (common_resolutions_[i].width == device.width && common_resolutions_[i].height == device.height)
+            {
+                current_resolution_index = i;
+                break;
+            }
         }
-        if (height_input > 0)
+
+        // Resolution preset combobox
+        const char* preview_text =
+            (current_resolution_index >= 0) ? common_resolutions_[current_resolution_index].name : "Custom Resolution";
+
+        if (ImGui::BeginCombo("Resolution Preset", preview_text))
         {
-            device.height = height_input;
+            // Add common resolutions
+            for (int i = 0; i < IM_ARRAYSIZE(common_resolutions_); i++)
+            {
+                bool is_compatible = true;
+
+                // Check aspect ratio compatibility if maintaining aspect ratio
+                if (maintain_aspect_ratio_ && cameraManager_)
+                {
+                    auto& input_device = cameraManager_->getInputDevice();
+                    float input_aspect =
+                        static_cast<float>(input_device.width) / static_cast<float>(input_device.height);
+                    float preset_aspect = static_cast<float>(common_resolutions_[i].width)
+                                          / static_cast<float>(common_resolutions_[i].height);
+
+                    // Allow small tolerance for aspect ratio matching
+                    const float tolerance = 0.01f;
+                    is_compatible = (std::abs(input_aspect - preset_aspect) < tolerance);
+                }
+
+                // Skip incompatible resolutions entirely
+                if (!is_compatible)
+                {
+                    continue;
+                }
+
+                bool is_selected = (current_resolution_index == i);
+
+                if (ImGui::Selectable(common_resolutions_[i].name, is_selected))
+                {
+                    device.width = common_resolutions_[i].width;
+                    device.height = common_resolutions_[i].height;
+                    current_resolution_index = i;
+                    custom_width = device.width;
+                    custom_height = device.height;
+                }
+
+                if (is_selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            // Custom resolution option
+            ImGui::Separator();
+            bool is_custom_selected = (current_resolution_index == -1);
+            if (ImGui::Selectable("Custom Resolution", is_custom_selected))
+            {
+                current_resolution_index = -1;
+            }
+
+            ImGui::EndCombo();
         }
+
+        // Custom resolution inputs (only show if custom is selected or no preset matches)
+        if (current_resolution_index == -1)
+        {
+            ImGui::Separator();
+            ImGui::Text("Custom Resolution:");
+
+            if (ImGui::InputInt("Width", &custom_width))
+            {
+                if (custom_width > 0)
+                {
+                    device.width = custom_width;
+
+                    // Auto-adjust height if maintaining aspect ratio
+                    if (maintain_aspect_ratio_ && cameraManager_)
+                    {
+                        auto& input_device = cameraManager_->getInputDevice();
+                        float input_aspect =
+                            static_cast<float>(input_device.width) / static_cast<float>(input_device.height);
+                        custom_height = (int) (custom_width / input_aspect);
+                        device.height = custom_height;
+                    }
+                }
+            }
+        }
+
+        ImGui::Text("Current: %ux%u", device.width, device.height);
     }
 
     // Apply Changes Button

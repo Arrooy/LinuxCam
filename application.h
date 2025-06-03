@@ -31,12 +31,12 @@ class Application
     Window window_;
     UI ui_;
 
-    std::shared_ptr<CameraManager> cameraManager_;
+    std::unique_ptr<CameraManager> cameraManager_;
     ImageRenderGL imageRender_;
 
     Profiler& profiler_;
 
-    std::shared_ptr<FaceDetector> faceDetector_ptr_;
+    std::unique_ptr<FaceDetector> faceDetector_;
 
     // Main loop methods
     void update();
