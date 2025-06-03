@@ -169,16 +169,7 @@ class Image
 
     TJImageDescription info;
 
-
-    // Optional: Clone if you ever need a deep copy manually
-    // Image clone() const {
-    //     Image copy(size_);
-    //     std::memcpy(copy.data(), data_.get(), size_);
-    //     copy.info = info;
-    //     return copy;
-    // }
-
-    std::atomic<bool> beingUsed_{false};
+    mutable std::atomic<bool> beingUsed_{false};
   private:
     inline unsigned long index(unsigned long col, unsigned long row) const
     {

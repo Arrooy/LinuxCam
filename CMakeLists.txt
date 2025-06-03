@@ -196,6 +196,7 @@ FetchContent_MakeAvailable(yaml-cpp)
 # Define the main executable
 add_executable(FunnyFace
     main.cpp camera.h camera.cpp
+    InputDeviceContext.h InputDeviceContext.cpp
     common.h JPEGManager.h JPEGManager.cpp
     image.h math_utils.h
     face.h face.cpp
