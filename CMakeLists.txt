@@ -206,6 +206,7 @@ add_executable(FunnyFace
     application.cpp application.h
     imageRenderGL.cpp imageRenderGL.h
     profiler.h profiler.cpp
+    codec.h
 )
 
 # Link dependencies

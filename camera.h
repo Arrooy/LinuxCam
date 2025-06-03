@@ -64,6 +64,7 @@ class CameraManager
     void configureInputDevice(const char* in_device, unsigned int width = 640, unsigned int height = 480,
                               unsigned int buffer_count = 2);
     void configureOutputDevice(const char* out_device, unsigned int width = 640, unsigned int height = 480);
+
     inline void setInputDevice(const CapturingDevice& device) { inputDevice_ = device; }
     inline void setOutputDevice(const CapturingDevice& device) { outputDevice_ = device; }
     CapturingDevice& getInputDevice() { return inputDevice_; }

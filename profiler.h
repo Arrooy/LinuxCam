@@ -1,5 +1,6 @@
 #ifndef PROFILER_H
 #define PROFILER_H
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -13,40 +14,41 @@ class Profiler
     ~Profiler() = default;
 
     // Disable copy constructor and assignment operator
-    Profiler(Profiler& other) = delete;
-    Profiler(Profiler&&) = delete;
     Profiler(const Profiler&) = delete;
+    Profiler(Profiler&&) = delete;
+    Profiler& operator=(const Profiler&) = delete;
+    Profiler& operator=(Profiler&&) = delete;
 
-    void operator=(Profiler&&) = delete;
-    void operator=(const Profiler&) = delete;
-
-    static Profiler& getInstance()
+    static Profiler& getInstance() noexcept
     {
         static Profiler instance;
         return instance;
     }
     // TODO: Instead of storing last time, store list and average? Min, max? refresh every 20sec
-    void start(const std::string& name);
-    void stop(const std::string& name);
-    bool duration(const std::string& name, std::chrono::microseconds& duration);
-    std::unordered_map<std::string, std::chrono::microseconds> getDurations() const;
+    void start(const std::string& sourceName, const std::string& name);
+    void stop(const std::string& sourceName, const std::string& name);
+
+    bool duration(const std::string& sourceName, const std::string& name, std::chrono::microseconds& duration) const;
+    const std::unordered_map<std::string, std::chrono::microseconds>& getDurations() const;
+    std::unordered_map<std::string, std::chrono::microseconds> getDurations(const std::string& sourceName) const;
 
 
-    static inline std::string format_duration(std::chrono::microseconds duration);
-    static inline std::string format_duration(int64_t micros);
-    static inline std::string format_duration(std::chrono::high_resolution_clock::time_point start,
-                                              std::chrono::high_resolution_clock::time_point end);
+    static std::string format_duration(std::chrono::microseconds duration) noexcept;
+    static std::string format_duration(int64_t micros) noexcept;
+    static std::string format_duration(std::chrono::high_resolution_clock::time_point start,
+                                      std::chrono::high_resolution_clock::time_point end) noexcept;
   private:
-    Profiler() {}
+    Profiler() = default;
 
+    std::string makeKey(const std::string& sourceName, const std::string& name) const;
 
     std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> timers_;
     std::unordered_map<std::string, std::chrono::microseconds> durations_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
 };
 
 
-inline std::string Profiler::format_duration(int64_t micros)
+inline std::string Profiler::format_duration(int64_t micros) noexcept
 {
     char buffer[64];
 
@@ -99,13 +101,13 @@ inline std::string Profiler::format_duration(int64_t micros)
 }
 
 inline std::string Profiler::format_duration(std::chrono::high_resolution_clock::time_point start,
-                                             std::chrono::high_resolution_clock::time_point end)
+                                             std::chrono::high_resolution_clock::time_point end) noexcept
 {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     return Profiler::format_duration(duration);
 }
 
-inline std::string Profiler::format_duration(std::chrono::microseconds duration)
+inline std::string Profiler::format_duration(std::chrono::microseconds duration) noexcept
 {
     return Profiler::format_duration(duration.count());
 }

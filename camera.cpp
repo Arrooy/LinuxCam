@@ -443,7 +443,7 @@ bool CameraManager::record()
                 // Timeout.
                 tv.tv_sec = 2;
                 tv.tv_usec = 0;
-                profiler_.start("Waiting for OS camera frame");
+                profiler_.start("1", "Waiting for OS camera frame");
                 r = select(inputDevice_.fd + 1, &fds, nullptr, nullptr, &tv);
 
                 if (r == -1)
@@ -487,7 +487,7 @@ bool CameraManager::record()
                     break;
                 }
 
-                profiler_.stop("Waiting for OS camera frame");
+                profiler_.stop("1", "Waiting for OS camera frame");
 
                 // If we attached streaming mid frame, probably the fist buffer or two will be invalid.
                 if (totalDiscarded < warmupDiscardCount)
@@ -501,7 +501,7 @@ bool CameraManager::record()
                     continue;
                 }
 
-                profiler_.start("Input image decoding");
+                profiler_.start("1", "Input image decoding");
 
                 // Use V4L2 buffer directly with non-owning reference
                 Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
@@ -578,7 +578,7 @@ bool CameraManager::record()
                 currentImage_.info = cameraInputInfo;
 
                 // Image will be consumed by another thread.
-                profiler_.stop("Input image decoding");
+                profiler_.stop("1", "Input image decoding");
 
                 if (!requeueFrame(inputDevice_.fd, buf))
                 {
@@ -607,13 +607,13 @@ bool CameraManager::update(std::function<void(Image&)> paint)
         return success;
     }
 
-    profiler_.start("Processing time");
+    profiler_.start("1", "Processing time");
     // Process the image
     paint(currentImage_);
-    profiler_.stop("Processing time");
+    profiler_.stop("1", "Processing time");
 
 
-    profiler_.start("Encode and write output image");
+    profiler_.start("1", "Encode and write output image");
     // Encode and send to output
     if (!jpegManager_->encodeAndWriteToOutput(currentImage_))
     {
@@ -622,7 +622,7 @@ bool CameraManager::update(std::function<void(Image&)> paint)
         // break;
     }
     currentImage_.beingUsed_ = false;
-    profiler_.stop("Encode and write output image");
+    profiler_.stop("1", "Encode and write output image");
 
     // }
 
