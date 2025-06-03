@@ -176,19 +176,17 @@ void UI::paintInputDeviceConfig(CapturingDevice& device)
 
         for (std::size_t fmt_idx = 0; fmt_idx < device.caps.formats.size(); fmt_idx++)
         {
-            const Format& format = device.caps.formats[fmt_idx];
+            const auto& format = device.caps.formats[fmt_idx];
 
             if (ImGui::TreeNode(("Format " + std::to_string(fmt_idx)).c_str()))
             {
-                ImGui::Text("Description: %s", format.description.c_str());
-                ImGui::Text("Pixel Format: 0x%08X", format.pixelformat);
-
                 if (ImGui::TreeNode("Available Sizes"))
                 {
                     for (std::size_t size_idx = 0; size_idx < format.sizes.size(); size_idx++)
                     {
-                        const FrameSize& size = format.sizes[size_idx];
-                        bool is_current = (device.width == size.width && device.height == size.height);
+                        const auto& size = format.sizes[size_idx];
+                        bool is_current = (selected_format == static_cast<int>(fmt_idx) && 
+                                         selected_size == static_cast<int>(size_idx));
 
                         ImGui::PushID(fmt_idx * 1000 + size_idx);
                         if (ImGui::Selectable((std::to_string(size.width) + "x" + std::to_string(size.height)).c_str(),
