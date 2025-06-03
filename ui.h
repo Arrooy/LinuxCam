@@ -40,14 +40,21 @@ class UI
     void render();
 
   private:
-    bool show_profile_window_{true};
+    bool show_profiler_{true};
+    bool show_input_config_{true};
+    bool show_output_config_{false};
     funnyface::Profiler& profiler_;
 
     std::shared_ptr<CameraManager> cameraManager_;
+    
+    // Window positioning tracking
+    float current_y_{0.0f};
+    
     // UI drawing functions
     void paintMainWindow();
     void paintDebugWindow();
-    void newMenu(CapturingDevice& device);
+    void paintInputDeviceConfig(CapturingDevice& device);
+    void paintOutputDeviceConfig(CapturingDevice& device);
 };
 } // namespace funnyface
 

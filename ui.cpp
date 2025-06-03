@@ -67,9 +67,6 @@ void UI::paint()
 
     // Paint all UI windows
     paintMainWindow();
-
-    //TODO: ADRIA ARA: THIS SHOULD BE A SHARED POINTER.
-    newMenu(cameraManager_->getInputDevice());
 }
 
 void UI::render()
@@ -86,7 +83,9 @@ void UI::paintMainWindow()
         // Menu bar
         if (ImGui::BeginMenu("More Options..."))
         {
-            ImGui::MenuItem("Toggle Profile Window", NULL, &show_profile_window_);
+            ImGui::MenuItem("Toggle Profiler", NULL, &show_profiler_);
+            ImGui::MenuItem("Toggle Input Device", NULL, &show_input_config_);
+            ImGui::MenuItem("Toggle Output Device", NULL, &show_output_config_);
 
             // ImGui::Separator();
             // if (ImGui::MenuItem("Cut", "CTRL+X")) {}
@@ -95,26 +94,15 @@ void UI::paintMainWindow()
         ImGui::EndMainMenuBar();
     }
 
-    // ImGui::Text("Main content goes here...");
+    // Calculate base position for window stacking
+    float menu_bar_height = ImGui::GetFrameHeight();
+    current_y_ = menu_bar_height;
 
-    // ImGui::End(); // End main window
-
-    // ImGui::SliderFloat("float", &m_floatValue, 0.0f, 1.0f);
-    // ImGui::ColorEdit3("clear color", (float*) &m_clearColor);
-
-    // if (ImGui::Button("Button"))
-    // {
-    //     m_counter++;
-    // }
-    // ImGui::SameLine();
-    // ImGui::Text("counter = %d", m_counter);
-    if (show_profile_window_)
+    // Render profiler window
+    if (show_profiler_)
     {
-        float menu_bar_height = ImGui::GetFrameHeight();
-        ImVec2 window_pos = ImVec2(0, menu_bar_height);
-        ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always);
-
-        ImGui::Begin("Profiling window", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
+        ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_Always);
+        ImGui::Begin("Profiler", &show_profiler_, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
         // TODO: Change color base on hardcoded thresholds.
         auto textColor = ImVec4(0.0f, 0.7f, 1.0f, 1.0f);
@@ -135,15 +123,32 @@ void UI::paintMainWindow()
         // Add close button
         if (ImGui::Button("Close"))
         {
-            show_profile_window_ = false;
+            show_profiler_ = false;
         }
+        // Get window size while we're inside the window
+        ImVec2 window_size = ImGui::GetWindowSize();
+        current_y_ += window_size.y;
         ImGui::End();
+    }
+
+    // Render input device window
+    if (show_input_config_ && cameraManager_)
+    {
+        ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_Always);
+        paintInputDeviceConfig(cameraManager_->getInputDevice());
+    }
+
+    // Render output device window
+    if (show_output_config_ && cameraManager_)
+    {
+        ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_Always);
+        paintOutputDeviceConfig(cameraManager_->getOutputDevice());
     }
 }
 
-void UI::newMenu(CapturingDevice& device)
+void UI::paintInputDeviceConfig(CapturingDevice& device)
 {
-    ImGui::Begin("V4L2 Device Configuration");
+    ImGui::Begin("Input Device", &show_input_config_, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
     // Device Information
     if (ImGui::CollapsingHeader("Device Information", ImGuiTreeNodeFlags_DefaultOpen))
@@ -161,14 +166,6 @@ void UI::newMenu(CapturingDevice& device)
     {
         ImGui::Text("Resolution: %ux%u", device.width, device.height);
         ImGui::Text("Buffer Count: %u", device.buffer_count);
-
-        // Subsampling combo
-        const char* subsampling_items[] = {"4:4:4", "4:2:2", "4:2:0", "Grayscale", "4:4:0", "4:1:1"};
-        int current_subsampling = static_cast<int>(device.subsampling);
-        if (ImGui::Combo("Subsampling", &current_subsampling, subsampling_items, IM_ARRAYSIZE(subsampling_items)))
-        {
-            device.subsampling = static_cast<TJSAMP>(current_subsampling);
-        }
     }
 
     // Available Formats
@@ -177,7 +174,7 @@ void UI::newMenu(CapturingDevice& device)
         static int selected_format = -1;
         static int selected_size = -1;
 
-        for (int fmt_idx = 0; fmt_idx < device.caps.formats.size(); fmt_idx++)
+        for (std::size_t fmt_idx = 0; fmt_idx < device.caps.formats.size(); fmt_idx++)
         {
             const Format& format = device.caps.formats[fmt_idx];
 
@@ -188,7 +185,7 @@ void UI::newMenu(CapturingDevice& device)
 
                 if (ImGui::TreeNode("Available Sizes"))
                 {
-                    for (int size_idx = 0; size_idx < format.sizes.size(); size_idx++)
+                    for (std::size_t size_idx = 0; size_idx < format.sizes.size(); size_idx++)
                     {
                         const FrameSize& size = format.sizes[size_idx];
                         bool is_current = (device.width == size.width && device.height == size.height);
@@ -218,56 +215,100 @@ void UI::newMenu(CapturingDevice& device)
         }
     }
 
-    // Quick Settings
-    if (ImGui::CollapsingHeader("Quick Settings"))
+    // Apply Changes Button
+    ImGui::Separator();
+    if (ImGui::Button("Apply Changes"))
     {
-        // Buffer count input
-        int buffer_count = static_cast<int>(device.buffer_count);
-        if (ImGui::InputInt("Buffer Count", &buffer_count, 1, 10))
+        if (cameraManager_)
         {
-            if (buffer_count > 0)
-            {
-                device.buffer_count = static_cast<unsigned int>(buffer_count);
-            }
+            common::log_info("UI::paintInputDeviceConfig - Applying camera configuration changes");
+            cameraManager_->reconfigureInputCamera();
         }
-
-        // Common resolutions combo
-        if (!device.caps.formats.empty())
+        else
         {
-            static const char* common_resolutions[] = {"640x480",  "800x600",   "1024x768",
-                                                       "1280x720", "1920x1080", "Custom"};
-            static int current_res = 5; // Default to "Custom"
-
-            if (ImGui::Combo("Common Resolutions", &current_res, common_resolutions, IM_ARRAYSIZE(common_resolutions)))
-            {
-                switch (current_res)
-                {
-                    case 0:
-                        device.width = 640;
-                        device.height = 480;
-                        break;
-                    case 1:
-                        device.width = 800;
-                        device.height = 600;
-                        break;
-                    case 2:
-                        device.width = 1024;
-                        device.height = 768;
-                        break;
-                    case 3:
-                        device.width = 1280;
-                        device.height = 720;
-                        break;
-                    case 4:
-                        device.width = 1920;
-                        device.height = 1080;
-                        break;
-                    default:
-                        break; // Custom - no change
-                }
-            }
+            common::log_error("UI::paintInputDeviceConfig - Camera manager not available");
         }
     }
+
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Click to apply resolution and buffer changes");
+
+
+    // Update position for next window
+    current_y_ += ImGui::GetWindowSize().y;
+
+    ImGui::End();
+}
+
+void UI::paintOutputDeviceConfig(CapturingDevice& device)
+{
+    ImGui::Begin("Output Device", &show_output_config_,
+                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
+
+    // Device Information
+    if (ImGui::CollapsingHeader("Device Information", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Name: %s", device.name.c_str());
+        ImGui::Text("Path: %s", device.device_path.c_str());
+        ImGui::Text("FD: %d", device.fd);
+    }
+
+    // Current Settings
+    if (ImGui::CollapsingHeader("Current Settings", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Resolution: %ux%u", device.width, device.height);
+
+        // Subsampling selection
+        const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};
+        int current_subsampling = static_cast<int>(device.subsampling);
+
+        if (ImGui::Combo("Subsampling", &current_subsampling, subsampling_options, IM_ARRAYSIZE(subsampling_options)))
+        {
+            device.subsampling = static_cast<TJSAMP>(current_subsampling);
+        }
+
+        ImGui::Text("Current: %s", subsampling_options[current_subsampling]);
+    }
+
+    // Resolution Settings
+    if (ImGui::CollapsingHeader("Resolution Settings"))
+    {
+        static int width_input = device.width;
+        static int height_input = device.height;
+
+        ImGui::InputInt("Width", &width_input);
+        ImGui::InputInt("Height", &height_input);
+
+        if (width_input > 0)
+        {
+            device.width = width_input;
+        }
+        if (height_input > 0)
+        {
+            device.height = height_input;
+        }
+    }
+
+    // Apply Changes Button
+    ImGui::Separator();
+    if (ImGui::Button("Apply Changes"))
+    {
+        if (cameraManager_)
+        {
+            common::log_info("UI::paintOutputDeviceConfig - Applying output camera configuration changes");
+            cameraManager_->reconfigureOutputCamera();
+        }
+        else
+        {
+            common::log_error("UI::paintOutputDeviceConfig - Camera manager not available");
+        }
+    }
+
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Click to apply resolution and subsampling changes");
+
+    // Update position for next window
+    current_y_ += ImGui::GetWindowSize().y;
 
     ImGui::End();
 }

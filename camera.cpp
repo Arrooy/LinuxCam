@@ -83,6 +83,7 @@ bool CameraManager::getCameraCapabilities(const CapturingDevice& device, CameraC
     CLEAR(fmtdesc);
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
+    outCaps.formats.clear();
     for (fmtdesc.index = 0; ioctl(device.fd, VIDIOC_ENUM_FMT, &fmtdesc) == 0; ++fmtdesc.index)
     {
         Format fmt;
@@ -429,6 +430,7 @@ bool CameraManager::record()
             unsigned int decodingFailureCount{0u};
 
             TJImageDescription cameraInputInfo;
+            currentImage_.beingUsed_ = false;
             while (keepRunning_)
             {
                 fd_set fds;
@@ -584,7 +586,7 @@ bool CameraManager::record()
                 }
             }
             common::log_warn("CameraManager::record thread dead.");
-
+            currentImage_.beingUsed_ = true; // Mark current image as being used to avoid processing it.
             cleanupBuffers(bufrequest_.count);
             stopInputStreaming();
         });
@@ -625,4 +627,81 @@ bool CameraManager::update(std::function<void(Image&)> paint)
     // }
 
     return success;
+}
+
+void CameraManager::reconfigureInputCamera()
+{
+    common::log_info("CameraManager::reconfigureInputCamera - Starting camera reconfiguration");
+
+    // Signal to stop recording
+    keepRunning_ = false;
+
+    // Wait for record thread to finish
+    if (recordThread_.joinable())
+    {
+        common::log_info("CameraManager::reconfigureInputCamera - Waiting for record thread to finish");
+        recordThread_.join();
+    }
+
+    // Close current input device
+    if (inputDevice_.fd >= 0)
+    {
+        close(inputDevice_.fd);
+        inputDevice_.fd = -1;
+    }
+
+    // Reset running flag
+    keepRunning_ = true;
+
+    // Reconfigure input camera with new settings
+    if (!configureInputCamera())
+    {
+        common::log_error("CameraManager::reconfigureInputCamera - Failed to configure input camera");
+        return;
+    }
+
+    // Configure buffers with new settings
+    if (!configureInputBuffers(inputDevice_.buffer_count))
+    {
+        common::log_error("CameraManager::reconfigureInputCamera - Failed to configure input buffers");
+        return;
+    }
+
+    // Restart recording thread
+    if (!record())
+    {
+        common::log_error("CameraManager::reconfigureInputCamera - Failed to restart recording");
+        return;
+    }
+
+    common::log_info("CameraManager::reconfigureInputCamera - Camera reconfiguration completed successfully");
+}
+
+void CameraManager::reconfigureOutputCamera()
+{
+    common::log_info("CameraManager::reconfigureOutputCamera - Starting output camera reconfiguration");
+
+    // Close current output device
+    if (outputDevice_.fd >= 0)
+    {
+        close(outputDevice_.fd);
+        outputDevice_.fd = -1;
+    }
+
+    // Reconfigure output camera with new settings
+    if (!configureVirtualOuputCamera())
+    {
+        common::log_error("CameraManager::reconfigureOutputCamera - Failed to configure output camera");
+        return;
+    }
+
+    // Update JPEG manager with new settings
+    if (jpegManager_)
+    {
+        jpegManager_.reset();
+        jpegManager_ = std::make_shared<JPEGManager>(outputDevice_.fd, outputDevice_.width, outputDevice_.height,
+                                                     outputDevice_.subsampling);
+    }
+
+    common::log_info("CameraManager::reconfigureOutputCamera - Output camera reconfiguration completed successfully");
 }

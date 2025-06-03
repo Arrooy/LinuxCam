@@ -76,6 +76,7 @@ class CameraManager
     bool getCameraCapabilities(const CapturingDevice& device, CameraCapabilities& outCaps);
 
     void reconfigureInputCamera();
+    void reconfigureOutputCamera();
 
     // TODO: FIXME: Improve signal and shuting down mechanism. Run valgrind too.
     bool is_alive() { return keepRunning_; }
