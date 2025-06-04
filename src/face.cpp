@@ -1,8 +1,8 @@
-#include "face.h"
+#include "FunnyFace/face.h"
 
 #include <utility>
 
-#include "math_utils.h"
+#include "FunnyFace/math_utils.h"
 
 using namespace funnyface;
 

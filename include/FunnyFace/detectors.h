@@ -1,7 +1,7 @@
 #ifndef DETECTORS_H
 #define DETECTORS_H
 
-#include "face.h"
+#include "FunnyFace/face.h"
 namespace funnyface
 {
 

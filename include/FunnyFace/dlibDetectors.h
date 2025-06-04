@@ -5,10 +5,10 @@
 #include <dlib/pixel.h>
 #include <dlib/image_processing/generic_image.h>
 
-#include "detectors.h"
-#include "face.h"
+#include "FunnyFace/detectors.h"
+#include "FunnyFace/face.h"
 
-#include "common.h"
+#include "FunnyFace/common.h"
 
 // Tested and it works. The detection is not very good,
 // but it works. Good lighting is required. and release compilation. 

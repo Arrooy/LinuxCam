@@ -5,7 +5,7 @@
 
 #include <memory>
 
-#include "common.h"
+#include "FunnyFace/common.h"
 #include <atomic>
 
 namespace funnyface

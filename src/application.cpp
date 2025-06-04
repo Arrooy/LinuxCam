@@ -1,10 +1,10 @@
-#include "application.h"
+#include "FunnyFace/application.h"
 
 #include <iostream>
 
-#include "common.h"
+#include "FunnyFace/common.h"
 #include "config.hpp"
-#include "dlibDetectors.h"
+#include "FunnyFace/dlibDetectors.h"
 
 using namespace funnyface;
 Application::Application() : profiler_(Profiler::getInstance())
@@ -31,6 +31,7 @@ bool Application::initialize()
         common::log_error("Failed to initialize UI");
         return false;
     }
+
     cameraManager_ = std::make_unique<CameraManager>();
 
     // Load configuration for cameraManager

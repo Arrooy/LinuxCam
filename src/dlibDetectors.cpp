@@ -1,4 +1,4 @@
-#include "dlibDetectors.h"
+#include "FunnyFace/dlibDetectors.h"
 
 using namespace funnyface;
 

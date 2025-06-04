@@ -1,4 +1,4 @@
-#include "profiler.h"
+#include "FunnyFace/profiler.h"
 
 #include <chrono>
 

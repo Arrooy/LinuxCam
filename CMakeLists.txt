@@ -193,21 +193,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
+
 # Define the main executable
 add_executable(FunnyFace
-    main.cpp camera.h camera.cpp
-    InputDeviceContext.h InputDeviceContext.cpp
-    common.h JPEGManager.h JPEGManager.cpp
-    image.h math_utils.h
-    face.h face.cpp
-    detectors.h dlibDetectors.h dlibDetectors.cpp
-    queue.hpp
-    ui.cpp ui.h
-    window.cpp window.h
-    application.cpp application.h
-    imageRenderGL.cpp imageRenderGL.h
-    profiler.h profiler.cpp
-    codec.h
+    ${SRC_FILES}
 )
 
 # Link dependencies
@@ -232,6 +222,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     "${LIBJPEG_TURBO_INSTALL_DIR}/include"
+    ${PROJECT_SOURCE_DIR}/include
 )
 
 

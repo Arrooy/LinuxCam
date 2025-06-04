@@ -7,13 +7,13 @@
 #include <cstring>
 #include <string>
 
-#include "JPEGManager.h"
-#include "application.h"
-#include "camera.h"
-#include "common.h"
-#include "detectors.h"
-#include "face.h"
-#include "math_utils.h"
+#include "FunnyFace/JPEGManager.h"
+#include "FunnyFace/application.h"
+#include "FunnyFace/camera.h"
+#include "FunnyFace/common.h"
+#include "FunnyFace/detectors.h"
+#include "FunnyFace/face.h"
+#include "FunnyFace/math_utils.h"
 #include "config.hpp"
 
 using namespace funnyface;

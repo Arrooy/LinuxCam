@@ -1,8 +1,8 @@
-#include "window.h"
+#include "FunnyFace/window.h"
 
 #include <iostream>
 
-#include "common.h"
+#include "FunnyFace/common.h"
 #include "config.hpp"
 using namespace funnyface;
 

@@ -4,7 +4,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 // clang-format on
-#include "image.h"
+#include "FunnyFace/image.h"
 
 namespace funnyface
 {

@@ -1,8 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include "camera.h"
-#include "common.h"
+#include "FunnyFace/camera.h"
+#include "FunnyFace/common.h"
 #include "yaml-cpp/yaml.h"
 
 namespace funnyface

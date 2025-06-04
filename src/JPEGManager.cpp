@@ -1,9 +1,9 @@
-#include "JPEGManager.h"
+#include "FunnyFace/JPEGManager.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "common.h"
+#include "FunnyFace/common.h"
 
 using namespace funnyface;
 

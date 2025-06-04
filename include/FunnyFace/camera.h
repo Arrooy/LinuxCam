@@ -9,9 +9,9 @@
 #include <memory>
 #include <thread>
 
-#include "InputDeviceContext.h"
-#include "JPEGManager.h"
-#include "profiler.h"
+#include "FunnyFace/InputDeviceContext.h"
+#include "FunnyFace/JPEGManager.h"
+#include "FunnyFace/profiler.h"
 #include "queue.hpp"
 namespace funnyface
 {
@@ -65,7 +65,6 @@ class CameraManager
     InputDeviceContext inputDeviceContext_;
     CapturingDevice outputDevice_;
 
-    std::thread processingThread_;
     SafeQueue<Image> imageQueue_; // TODO: delete.
 
     Profiler& profiler_;

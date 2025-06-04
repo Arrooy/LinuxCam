@@ -1,4 +1,4 @@
-#include "camera.h"
+#include "FunnyFace/camera.h"
 
 #include <fcntl.h>
 #include <linux/videodev2.h>
@@ -10,7 +10,7 @@
 #include <csignal>
 #include <cstdlib>
 
-#include "common.h"
+#include "FunnyFace/common.h"
 #include "config.hpp"
 
 using namespace funnyface;
@@ -24,98 +24,7 @@ CameraManager::CameraManager() : profiler_(Profiler::getInstance())
 
 CameraManager::~CameraManager()
 {
-    if (processingThread_.joinable())
-    {
-        processingThread_.join();
-    }
-
     close(outputDevice_.fd);
-}
-
-void CameraManager::logFormat(v4l2_format vid_format)
-{
-    common::log_info("v4l2_format struct:");
-    common::log_info("vid_format->type                =%u", vid_format.type);
-    common::log_info("vid_format->fmt.pix.width       =%u", vid_format.fmt.pix.width);
-    common::log_info("vid_format->fmt.pix.height      =%u", vid_format.fmt.pix.height);
-    common::log_info("vid_format->fmt.pix.pixelformat =%u", vid_format.fmt.pix.pixelformat);
-    common::log_info("vid_format->fmt.pix.sizeimage   =%u", vid_format.fmt.pix.sizeimage);
-    common::log_info("vid_format->fmt.pix.field       =%u", vid_format.fmt.pix.field);
-    common::log_info("vid_format->fmt.pix.bytesperline=%u", vid_format.fmt.pix.bytesperline);
-    common::log_info("vid_format->fmt.pix.colorspace  =%u", vid_format.fmt.pix.colorspace);
-}
-
-bool CameraManager::getCameraCapabilities(const CapturingDevice& device, CameraCapabilities& outCaps)
-{
-    struct v4l2_capability cap;
-    if (ioctl(device.fd, VIDIOC_QUERYCAP, &cap) == -1)
-    {
-        common::errno_log("CameraManager::getCameraCapabilities - VIDIOC_QUERYCAP");
-        close(device.fd);
-        return false;
-    }
-
-    // Check if we have the required capabilities
-    if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
-    {
-        common::errno_log(
-            "CameraManager::getCameraCapabilities - The device does not handle single-planar video capture.");
-        return false;
-    }
-
-    if (!(cap.capabilities & V4L2_CAP_STREAMING))
-    {
-        common::errno_log("CameraManager::getCameraCapabilities - The device does not handle streaming.");
-        return false;
-    }
-
-    outCaps.driver = reinterpret_cast<char*>(cap.driver);
-    outCaps.card = reinterpret_cast<char*>(cap.card);
-    outCaps.bus_info = reinterpret_cast<char*>(cap.bus_info);
-
-    struct v4l2_fmtdesc fmtdesc;
-    CLEAR(fmtdesc);
-    fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-    outCaps.formats.clear();
-    for (fmtdesc.index = 0; ioctl(device.fd, VIDIOC_ENUM_FMT, &fmtdesc) == 0; ++fmtdesc.index)
-    {
-        Format fmt;
-        fmt.description = reinterpret_cast<char*>(fmtdesc.description);
-        fmt.pixelformat = fmtdesc.pixelformat;
-
-        struct v4l2_frmsizeenum frmsize;
-        CLEAR(frmsize);
-        frmsize.pixel_format = fmtdesc.pixelformat;
-
-        for (frmsize.index = 0; ioctl(device.fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) == 0; ++frmsize.index)
-        {
-            if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE)
-            {
-                FrameSize size;
-                size.width = frmsize.discrete.width;
-                size.height = frmsize.discrete.height;
-                fmt.sizes.push_back(size);
-            }
-        }
-
-        outCaps.formats.push_back(fmt);
-    }
-
-    return true;
-}
-
-bool CameraManager::getCapabilities(int fd, v4l2_capability& cap)
-{
-    CLEAR(cap);
-
-    // Retrieve device capabilities
-    if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0)
-    {
-        common::errno_log("CameraManager::getCapabilities - VIDIOC_QUERYCAP");
-        return false;
-    }
-    return true;
 }
 
 void CameraManager::configureInputDevice(const char* input_device, unsigned int width, unsigned int height,
@@ -129,6 +38,7 @@ void CameraManager::configureInputDevice(const char* input_device, unsigned int 
     device.buffer_count = buffer_count;
     device.fd = -1;
 }
+
 void CameraManager::configureOutputDevice(const char* out_device, unsigned int width, unsigned int height)
 {
     outputDevice_.name = std::string("Unkown");
@@ -261,15 +171,6 @@ bool CameraManager::update(std::function<void(Image&)> paint)
 void CameraManager::reconfigureInputCamera()
 {
     common::log_info("CameraManager::reconfigureInputCamera - Starting camera reconfiguration");
-
-    // Signal to stop recording
-    keepRunning_ = false;
-
-    // Stop recording through InputDeviceContext
-    inputDeviceContext_.stopRecording();
-
-    // Reset running flag
-    keepRunning_ = true;
 
     // Reconfigure input camera with new settings
     if (!inputDeviceContext_.reconfigureDevice(inputDeviceContext_.getDevice()))

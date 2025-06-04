@@ -2,7 +2,7 @@
 #define JPEGMANAGER_H
 
 #include <turbojpeg.h>
-#include "image.h"
+#include "FunnyFace/image.h"
 #include <memory>
 
 namespace funnyface

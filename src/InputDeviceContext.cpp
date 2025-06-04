@@ -1,4 +1,4 @@
-#include "InputDeviceContext.h"
+#include "FunnyFace/InputDeviceContext.h"
 
 #include <fcntl.h>
 #include <linux/videodev2.h>
@@ -10,7 +10,7 @@
 #include <cerrno>
 #include <cstring>
 
-#include "common.h"
+#include "FunnyFace/common.h"
 
 using namespace funnyface;
 
@@ -242,7 +242,6 @@ bool InputDeviceContext::stopStreaming()
         if (ioctl(device_.fd, VIDIOC_STREAMOFF, &bufrequest.type) < 0)
         {
             common::errno_log("InputDeviceContext::stopStreaming - VIDIOC_STREAMOFF");
-            cleanup();
             return false;
         }
     }
@@ -289,9 +288,24 @@ Image* InputDeviceContext::getCurrentImage()
     return &currentImage;
 }
 
+void InputDeviceContext::logFormat(v4l2_format vid_format)
+{
+    common::log_info("v4l2_format struct:");
+    common::log_info("vid_format->type                =%u", vid_format.type);
+    common::log_info("vid_format->fmt.pix.width       =%u", vid_format.fmt.pix.width);
+    common::log_info("vid_format->fmt.pix.height      =%u", vid_format.fmt.pix.height);
+    common::log_info("vid_format->fmt.pix.pixelformat =%u", vid_format.fmt.pix.pixelformat);
+    common::log_info("vid_format->fmt.pix.sizeimage   =%u", vid_format.fmt.pix.sizeimage);
+    common::log_info("vid_format->fmt.pix.field       =%u", vid_format.fmt.pix.field);
+    common::log_info("vid_format->fmt.pix.bytesperline=%u", vid_format.fmt.pix.bytesperline);
+    common::log_info("vid_format->fmt.pix.colorspace  =%u", vid_format.fmt.pix.colorspace);
+}
+
+
 bool InputDeviceContext::getCameraCapabilities()
 {
     struct v4l2_capability cap;
+    CLEAR(cap);
     if (ioctl(device_.fd, VIDIOC_QUERYCAP, &cap) == -1)
     {
         common::errno_log("InputDeviceContext::getCameraCapabilities - VIDIOC_QUERYCAP");
@@ -387,7 +401,7 @@ void InputDeviceContext::recordingLoop(std::shared_ptr<JPEGManager> jpegManager,
             break;
         }
 
-        if(isRecording == false)
+        if (isRecording == false)
         {
             common::log_info("InputDeviceContext::recordingLoop - Recording stopped, exiting loop");
             break;

@@ -1,12 +1,12 @@
 #ifndef APP_H
 #define APP_H
 
-#include "camera.h"
-#include "imageRenderGL.h"
-#include "ui.h"
-#include "window.h"
-#include "detectors.h"
-#include "profiler.h"
+#include "FunnyFace/camera.h"
+#include "FunnyFace/imageRenderGL.h"
+#include "FunnyFace/ui.h"
+#include "FunnyFace/window.h"
+#include "FunnyFace/detectors.h"
+#include "FunnyFace/profiler.h"
 #include <memory>
 
 namespace funnyface

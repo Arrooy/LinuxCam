@@ -1,6 +1,6 @@
-#include "imageRenderGL.h"
+#include "FunnyFace/imageRenderGL.h"
 
-#include "common.h"
+#include "FunnyFace/common.h"
 // Vertex shader for full-screen quad
 const char* vertexShaderSource = R"(
 #version 400 core

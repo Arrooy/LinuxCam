@@ -8,9 +8,9 @@
 #include <thread>
 #include <vector>
 
-#include "JPEGManager.h"
-#include "image.h"
-#include "profiler.h"
+#include "FunnyFace/JPEGManager.h"
+#include "FunnyFace/image.h"
+#include "FunnyFace/profiler.h"
 
 namespace funnyface
 {
@@ -91,6 +91,9 @@ class InputDeviceContext
     void recordingLoop(std::shared_ptr<JPEGManager> jpegManager, Profiler& profiler);
     bool requeueFrame(struct v4l2_buffer& buf);
     void cleanupBuffers();
+
+
+    void logFormat(v4l2_format vid_format);
 
     // Device state
     CapturingDevice device_;

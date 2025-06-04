@@ -5,8 +5,8 @@
 #include <map>
 #include <vector>
 
-#include "image.h"
-#include "math_utils.h"
+#include "FunnyFace/image.h"
+#include "FunnyFace/math_utils.h"
 
 namespace funnyface
 {

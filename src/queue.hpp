@@ -5,7 +5,7 @@
 #include <mutex>
 #include <queue>
 
-#include "common.h"
+#include "FunnyFace/common.h"
 template <typename T>
 class SafeQueue
 {
