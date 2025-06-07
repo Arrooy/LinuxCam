@@ -44,11 +44,12 @@ bool Window::initialize()
     // Remove title bar    
     // glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    int width = Config::getInstance().getOutputCamera().width;
-    int height = Config::getInstance().getOutputCamera().height;
+    int width, height;
+    Config::getInstance().getWindowSize(width,height);
+    std::string title = Config::getInstance().getWindowTitle();
 
     // Create window with graphics context
-    window_ = glfwCreateWindow(width, height, "TODO in yaml", nullptr, nullptr);
+    window_ = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     if (window_ == nullptr)
     {
         common::log_error("Failed to create GLFW window");

@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include "FunnyFace/camera.h"
+#include "FunnyFace/cameraManager.h"
 #include "FunnyFace/common.h"
 #include "yaml-cpp/yaml.h"
 
@@ -12,6 +12,17 @@ namespace funnyface
 struct ExternalImages
 {
     std::string folder;
+};
+
+struct WebcamDevice
+{
+    std::string name;
+    std::string device_path;
+    bool is_input{false};
+    unsigned int width = 0u;
+    unsigned int height = 0u;
+    unsigned int buffer_count = 0u;
+    TJSAMP subsampling = TJSAMP_420; // Default subsampling
 };
 
 // Class that reads configuration from a yaml file and provides access to it.
@@ -29,21 +40,24 @@ class Config
         }
     }
 
-    bool validateAndLoadInputCamera()
+    bool validateAndLoadInputCameras()
     {
-        if (!config_["input_camera"])
+        if (!config_["input_cameras"])
         {
             common::log_error("Missing input_camera section in config");
             return false;
         }
 
-        auto input = config_["input_camera"];
-        if (!validateInputCameraFields(input))
+        auto inputs = config_["input_cameras"];
+        for (const auto& input : inputs)
         {
-            return false;
-        }
+            if (!validateInputCameraFields(input))
+            {
+                return false;
+            }
 
-        loadInputCameraData(input);
+            loadInputCameraData(input);
+        }
         return true;
     }
 
@@ -64,28 +78,34 @@ class Config
 
     void loadInputCameraData(const YAML::Node& input)
     {
+        WebcamDevice input_camera_;
+        input_camera_.is_input = true;
         input_camera_.name = input["name"].as<std::string>();
         input_camera_.device_path = input["path"].as<std::string>();
         input_camera_.width = input["width"].as<unsigned int>();
         input_camera_.height = input["height"].as<unsigned int>();
         input_camera_.buffer_count = input["buffer_count"].as<unsigned int>();
+        cameras_.push_back(input_camera_);
     }
 
-    bool validateAndLoadOutputCamera()
+    bool validateAndLoadOutputCameras()
     {
-        if (!config_["output_camera"])
+        if (!config_["output_cameras"])
         {
             common::log_error("Missing output_camera section in config");
             return false;
         }
 
-        auto output = config_["output_camera"];
-        if (!validateOutputCameraFields(output))
+        auto outputs = config_["output_cameras"];
+        for (const auto& output : outputs)
         {
-            return false;
+            if (!validateOutputCameraFields(output))
+            {
+                return false;
+            }
+            loadOutputCameraData(output);
         }
-
-        return loadOutputCameraData(output);
+        return true;
     }
 
     bool validateOutputCameraFields(const YAML::Node& output)
@@ -105,15 +125,21 @@ class Config
 
     bool loadOutputCameraData(const YAML::Node& output)
     {
+        WebcamDevice output_camera_;
+        output_camera_.is_input = false;
         output_camera_.name = output["name"].as<std::string>();
         output_camera_.device_path = output["path"].as<std::string>();
         output_camera_.width = output["width"].as<unsigned int>();
         output_camera_.height = output["height"].as<unsigned int>();
-
-        return parseSubsamplingValue(output["subsampling"].as<std::string>());
+        bool result = parseSubsamplingValue(output["subsampling"].as<std::string>(), output_camera_.subsampling);
+        if (result)
+        {
+            cameras_.push_back(output_camera_);
+        }
+        return result;
     }
 
-    bool parseSubsamplingValue(const std::string& subsample)
+    bool parseSubsamplingValue(const std::string& subsample, TJSAMP& output_subsampling)
     {
         static const std::map<std::string, TJSAMP> subsamplingMap = {
             {"444",  TJSAMP_444 },
@@ -127,7 +153,7 @@ class Config
         auto it = subsamplingMap.find(subsample);
         if (it != subsamplingMap.end())
         {
-            output_camera_.subsampling = it->second;
+            output_subsampling = it->second;
             return true;
         }
 
@@ -154,6 +180,38 @@ class Config
         return true;
     }
 
+    bool validateAndLoadWindowConfig()
+    {
+        if (!config_["window"])
+        {
+            common::log_error("Missing window section in config");
+            return false;
+        }
+
+        auto window = config_["window"];
+        if (!window["title"])
+        {
+            common::log_error("Missing title field in window section");
+            return false;
+        }
+        windowTitle_ = config_["window"]["title"].as<std::string>();
+
+        if (!window["width"])
+        {
+            common::log_error("Missing width field in window section");
+            return false;
+        }
+        windowWidth_ = window["width"].as<int>();
+
+        if (!window["height"])
+        {
+            common::log_error("Missing height field in window section");
+            return false;
+        }
+        windowHeight_ = window["height"].as<int>();
+        return true;
+    }
+
   public:
     static Config& getInstance(const char* filename = "config.yaml")
     {
@@ -163,13 +221,20 @@ class Config
 
     bool loadConfiguration()
     {
-        return validateAndLoadInputCamera() && validateAndLoadOutputCamera() && validateAndLoadExternalImages();
+        return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages() && validateAndLoadWindowConfig();
     }
 
     // Get configuration sections
-    CapturingDevice getInputCamera() const { return input_camera_; }
-    CapturingDevice getOutputCamera() const { return output_camera_; }
+    std::vector<WebcamDevice> getWebcams() const { return cameras_; }
     ExternalImages getExternalImages() const { return external_images_; }
+
+    void getWindowSize(int& width, int& height) const
+    {
+        width = windowWidth_;
+        height = windowHeight_;
+    }
+
+    std::string getWindowTitle() const { return windowTitle_; }
 
     // Get a value from the config
     template <typename T>
@@ -184,15 +249,12 @@ class Config
 
   private:
     YAML::Node config_;
-    CapturingDevice input_camera_;
-    CapturingDevice output_camera_;
+    std::vector<WebcamDevice> cameras_;
     ExternalImages external_images_;
 
-    // String storage for const char* pointers in CapturingDevice
-    std::string input_name_;
-    std::string input_path_;
-    std::string output_name_;
-    std::string output_path_;
+    unsigned int windowWidth_;
+    unsigned int windowHeight_;
+    std::string windowTitle_;
 };
 
 } // namespace funnyface

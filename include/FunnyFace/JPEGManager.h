@@ -1,3 +1,4 @@
+#if 0
 #ifndef JPEGMANAGER_H
 #define JPEGMANAGER_H
 
@@ -56,3 +57,4 @@ class JPEGManager
 } // namespace funnyface
 
 #endif // JPEGMANAGER_H
+#endif

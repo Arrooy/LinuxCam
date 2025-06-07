@@ -1,3 +1,4 @@
+#if 0
 #include "FunnyFace/InputDeviceContext.h"
 
 #include <fcntl.h>
@@ -16,7 +17,7 @@ using namespace funnyface;
 
 InputDeviceContext::InputDeviceContext()
 {
-    currentImage.beingUsed_ = false;
+    image_.setBeingUsed(false);
 }
 
 InputDeviceContext::~InputDeviceContext()
@@ -285,7 +286,7 @@ void InputDeviceContext::stopRecording()
 
 Image* InputDeviceContext::getCurrentImage()
 {
-    return &currentImage;
+    return &image_;
 }
 
 void InputDeviceContext::logFormat(v4l2_format vid_format)
@@ -369,7 +370,7 @@ void InputDeviceContext::recordingLoop(std::shared_ptr<JPEGManager> jpegManager,
     unsigned int totalDiscardedHeader{0u};
     const unsigned int warmupDiscardCount{2u};
 
-    currentImage.beingUsed_ = false;
+    image_.setBeingUsed(false);
 
     while (isRecording.load())
     {
@@ -463,18 +464,18 @@ void InputDeviceContext::recordingLoop(std::shared_ptr<JPEGManager> jpegManager,
                 continue;
             }
 
-            if (currentImage.size() != raw_needed_size)
+            if (image_.size() != raw_needed_size)
             {
-                currentImage.resize(raw_needed_size);
+                image_.resize(raw_needed_size);
                 common::log_warn("InputDeviceContext::recordingLoop - Reallocating raw image buffer to %lu - %s",
-                                 currentImage.size(), common::format_size(currentImage.size()));
+                                 image_.size(), common::format_size(image_.size()));
             }
 
             cameraInputInfo = srcImage.info;
             readJPEGHeader = false;
         }
 
-        if (currentImage.beingUsed_)
+        if (image_.getBeingUsed())
         {
             if (!requeueFrame(buf))
             {
@@ -483,10 +484,10 @@ void InputDeviceContext::recordingLoop(std::shared_ptr<JPEGManager> jpegManager,
             continue;
         }
 
-        if (!jpegManager->decodeImage(srcImage, currentImage))
+        if (!jpegManager->decodeImage(srcImage, image_))
         {
             readJPEGHeader = true;
-            currentImage.beingUsed_ = false;
+            image_.setBeingUsed(false);
             if (!requeueFrame(buf))
             {
                 break;
@@ -506,7 +507,7 @@ void InputDeviceContext::recordingLoop(std::shared_ptr<JPEGManager> jpegManager,
         }
 
         decodingFailureCount = 0;
-        currentImage.info = cameraInputInfo;
+        image_.info = cameraInputInfo;
 
         profiler.stop("1", "Input image decoding");
 
@@ -519,7 +520,7 @@ void InputDeviceContext::recordingLoop(std::shared_ptr<JPEGManager> jpegManager,
     }
 
     common::log_warn("InputDeviceContext::recordingLoop thread dead for device: %s", device_.device_path.c_str());
-    currentImage.beingUsed_ = true;
+    image_.setBeingUsed(true);
     stopStreaming();
 }
 
@@ -551,3 +552,4 @@ void InputDeviceContext::cleanupBuffers()
         buffers = nullptr;
     }
 }
+#endif

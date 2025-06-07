@@ -4,9 +4,9 @@
 #include <turbojpeg.h>
 
 #include <memory>
+#include <mutex>
 
 #include "FunnyFace/common.h"
-#include <atomic>
 
 namespace funnyface
 {
@@ -45,6 +45,7 @@ class Image
   public:
     // Default constructor
     Image() : data_(nullptr), size_(0) {}
+    ~Image() = default;
 
     // Constructor with size allocation
     explicit Image(size_t size) : size_(size)
@@ -75,17 +76,69 @@ class Image
         }
     }
 
-    // Copy constructor
-    Image(const Image& other) = default;
+    // Copy constructor - properly handle mutex
+    Image(const Image& other) : info(other.info), size_(other.size_)
+    {
+        data_ = other.data_; // shared_ptr copy
+
+        // Copy the beingUsed state with proper locking
+        std::lock_guard<std::recursive_mutex> lock(other.beingUsedMutex_);
+        beingUsed_ = other.beingUsed_;
+    }
 
     // Move constructor
-    Image(Image&& other) noexcept = default;
+    Image(Image&& other) noexcept : info(other.info), size_(other.size_)
+    {
+        data_ = std::move(other.data_);
 
-    // Copy assignment
-    Image& operator=(const Image& other) = default;
+        // Move the beingUsed state with proper locking
+        std::lock_guard<std::recursive_mutex> lock(other.beingUsedMutex_);
+        beingUsed_ = other.beingUsed_;
+        other.setBeingUsed(false);
+        other.size_ = 0;
+    }
 
-    // Move assignment
-    Image& operator=(Image&& other) noexcept = default;
+    // Copy assignment operator - properly handle mutex
+    Image& operator=(const Image& other)
+    {
+        if (this != &other)
+        {
+            // Copy basic data
+            data_ = other.data_; // shared_ptr copy
+            size_ = other.size_;
+            info = other.info;
+
+            // Copy beingUsed state with proper locking (lock both mutexes in consistent order)
+            std::lock(beingUsedMutex_, other.beingUsedMutex_);
+            std::lock_guard<std::recursive_mutex> lock1(beingUsedMutex_, std::adopt_lock);
+            std::lock_guard<std::recursive_mutex> lock2(other.beingUsedMutex_, std::adopt_lock);
+
+            beingUsed_ = other.beingUsed_;
+        }
+        return *this;
+    }
+
+    // Move assignment operator
+    Image& operator=(Image&& other) noexcept
+    {
+        if (this != &other)
+        {
+            // Move basic data
+            data_ = std::move(other.data_);
+            size_ = other.size_;
+            info = other.info;
+
+            // Move beingUsed state with proper locking
+            std::lock(beingUsedMutex_, other.beingUsedMutex_);
+            std::lock_guard<std::recursive_mutex> lock1(beingUsedMutex_, std::adopt_lock);
+            std::lock_guard<std::recursive_mutex> lock2(other.beingUsedMutex_, std::adopt_lock);
+
+            beingUsed_ = other.beingUsed_;
+            other.setBeingUsed(false);
+            other.size_ = 0;
+        }
+        return *this;
+    }
 
     // Resize the image data
     void resize(size_t newSize)
@@ -165,17 +218,42 @@ class Image
     size_t size() const { return size_; }
 
     // Data accessor
-    unsigned char* data() const { return data_ ? data_.get() : nullptr; }
+    unsigned char* data() const { return data_ != nullptr ? data_.get() : nullptr; }
 
     TJImageDescription info;
 
-    mutable std::atomic<bool> beingUsed_{false};
+    std::unique_ptr<Image> deepCopy()
+    {
+        auto copy = std::make_unique<Image>(size_);
+        if (data_ && copy->data() && size_ > 0)
+        {
+            std::memcpy(copy->data(), data_.get(), size_);
+        }
+        copy->info = this->info;
+        setBeingUsed(false);
+        copy->setBeingUsed(true);
+        return copy;
+    }
+
+    bool getBeingUsed() const
+    {
+        std::lock_guard<std::recursive_mutex> lock(beingUsedMutex_);
+        return beingUsed_;
+    }
+
+    void setBeingUsed(bool val)
+    {
+        std::lock_guard<std::recursive_mutex> lock(beingUsedMutex_);
+        beingUsed_ = val;
+    }
   private:
     inline unsigned long index(unsigned long col, unsigned long row) const
     {
         return (row * info.width + col) * info.pixelSizeBytes;
     }
 
+    mutable std::recursive_mutex beingUsedMutex_;
+    bool beingUsed_{false};
 
     std::shared_ptr<unsigned char> data_;
     size_t size_;

@@ -9,7 +9,7 @@
 
 #include "FunnyFace/JPEGManager.h"
 #include "FunnyFace/application.h"
-#include "FunnyFace/camera.h"
+#include "FunnyFace/cameraManager.h"
 #include "FunnyFace/common.h"
 #include "FunnyFace/detectors.h"
 #include "FunnyFace/face.h"
@@ -18,12 +18,17 @@
 
 using namespace funnyface;
 
-int main()
+int main(int argc, char* argv[])
 {
     common::init_logger("a0.0.0");
     common::log_info("Num of cuda devices: %d", dlib::cuda::get_num_devices());
-
-    if(!Config::getInstance("../config.yaml").loadConfiguration())
+    std::string configFileLocation{"../config.yaml"};
+    if (argc > 1)
+    {
+        common::log_info("Config file: %s", argv[1]);
+        configFileLocation = std::string(argv[1]);
+    }
+    if (!Config::getInstance(configFileLocation.c_str()).loadConfiguration())
     {
         common::log_error("Failed to load configuration");
         return -1;

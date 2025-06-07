@@ -1,158 +1,208 @@
 #ifndef CODEC_H
 #define CODEC_H
 
-#include <memory>
-#include <type_traits>
-
+#include "FunnyFace/codecFactory.h"
 #include "FunnyFace/image.h"
 
 namespace funnyface
 {
 
-// Forward declarations for concrete implementations
-class JpegEncoder;
-class JpegDecoder;
-class DoNothingEncoder;
-class DoNothingDecoder;
-
-// JPEG-specific configuration
-class JpegEncoderConfig
+class JPEGDecoder : public Decoder
 {
   public:
-    int quality = 85;      // 0-100, higher = better quality
-    int subsampling = 420; // 420, 422, 444
-    bool progressive = false;
-};
-
-class JpegDecoderConfig
-{
-  public:
-    bool fast_decode = false;
-};
-
-class DoNothingEncoderConfig
-{
-  public:
-    // No configuration needed
-};
-
-class DoNothingDecoderConfig
-{
-  public:
-    // No configuration needed
-};
-
-class Encoder
-{
-  public:
-    Encoder() = default;
-    virtual ~Encoder() = default;
-
-    // Disable copy constructor and assignment operator
-    Encoder(const Encoder&) = delete;
-    Encoder(Encoder&&) = delete;
-    Encoder& operator=(const Encoder&) = delete;
-    Encoder& operator=(Encoder&&) = delete;
-
-    virtual bool encode(const Image& srcImage, Image& outImage) = 0;
-};
-
-class Decoder
-{
-  public:
-    Decoder() = default;
-    virtual ~Decoder() = default;
-
-    // Disable copy constructor and assignment operator
-    Decoder(const Decoder&) = delete;
-    Decoder(Decoder&&) = delete;
-    Decoder& operator=(const Decoder&) = delete;
-    Decoder& operator=(Decoder&&) = delete;
-
-    virtual bool decode(const Image& srcImage, Image& outImage) = 0;
-};
-
-template <typename EncoderConfig, typename DecoderConfig>
-class Codec
-{
-  public:
-    // Primary constructor using configs
-    Codec(const EncoderConfig& encoderConfig, const DecoderConfig& decoderConfig)
-        : encoder_(createEncoder(encoderConfig)), decoder_(createDecoder(decoderConfig))
+    JPEGDecoder(const ConfigBuilder& config)
     {
+        // config is ignored here because Decoder reads image info.
+        if ((d_handle_ = tjInitDecompress()) == nullptr)
+        {
+            common::errno_log("JPEGDecoder Constructor failed to init decompressor");
+            common::errno_log((const char*) tjGetErrorStr2(d_handle_));
+            return;
+        }
     }
 
-    // Static factory method
-    static std::unique_ptr<Codec> create(const EncoderConfig& encoderConfig, const DecoderConfig& decoderConfig)
+    JPEGDecoder()
     {
-        return std::make_unique<Codec>(encoderConfig, decoderConfig);
+        if (d_handle_ != nullptr)
+        {
+            int tj_stat = tjDestroy(d_handle_);
+
+            if (tj_stat != 0)
+            {
+                common::errno_log("JPEGDecoder::~JPEGDecoder Deconstructor failed to deinit decompressor");
+                common::errno_log((const char*) tjGetErrorStr2(d_handle_));
+            }
+        }
     }
 
-    bool encode(const Image& srcImage, Image& outImage) const
+    bool decode(const Image& srcImage, Image& outImage) override
     {
-        return encoder_ && encoder_->encode(srcImage, outImage);
+        int tj_stat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), outImage.data(), 0, 0, 0,
+                                    srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
+
+        // TODO: beingUsed must be removed with a better sync method.
+        outImage.setBeingUsed(true);
+        if (tj_stat != 0)
+        {
+            common::errno_log("JPEGDecoder::decodeImage - Failed to decode image");
+            common::errno_log((const char*) tjGetErrorStr2(d_handle_));
+            return false;
+        }
+        return true;
     }
 
-    bool decode(const Image& srcImage, Image& outImage) const
+    bool decodeHeader(Image& srcImage, unsigned long& raw_needed_size) override
     {
-        return decoder_ && decoder_->decode(srcImage, outImage);
+        if (!getJPEGHeaderInfo(srcImage))
+        {
+            return false;
+        }
+
+        srcImage.info.pixelSizeBytes = tjPixelSize[static_cast<int>(srcImage.info.TJPixelFormat)];
+        raw_needed_size = rawSizeInBytes(srcImage);
+        return true;
     }
-
-    bool hasEncoder() const noexcept { return encoder_ != nullptr; }
-    bool hasDecoder() const noexcept { return decoder_ != nullptr; }
-
-    // Convenience method to check if codec is valid
-    bool isValid() const noexcept { return hasEncoder() && hasDecoder(); }
-
-    // Add move constructor and assignment for better performance
-    Codec(Codec&& other) noexcept = default;
-    Codec& operator=(Codec&& other) noexcept = default;
-
-    // Delete copy constructor and assignment
-    Codec(const Codec&) = delete;
-    Codec& operator=(const Codec&) = delete;
 
   private:
-    static std::unique_ptr<Encoder> createEncoder(const EncoderConfig& config)
+    bool getJPEGHeaderInfo(Image& image)
     {
-        if constexpr (std::is_same_v<EncoderConfig, JpegEncoderConfig>)
+        int sample_format{TJSAMP_UNKNOWN};
+        int color_space{-1};
+        int width{-1};
+        int height{-1};
+
+        int tj_stat =
+            tjDecompressHeader3(d_handle_, image.data(), image.size(), &width, &height, &sample_format, &color_space);
+
+        if (tj_stat != 0 || sample_format == -1 || color_space == -1)
         {
-            return std::make_unique<JpegEncoder>(config);
+            common::errno_log("JPEGDecoder::getJPEGHeaderInfo - Failed to decompress image header");
+            common::log_error("JPEGDecoder::getJPEGHeaderInfo - stat %d cs %d sf%d", tj_stat, color_space,
+                              sample_format);
+            common::errno_log((const char*) tjGetErrorStr2(d_handle_));
+            return false;
         }
-        else if constexpr (std::is_same_v<EncoderConfig, DoNothingEncoderConfig>)
-        {
-            return std::make_unique<DoNothingEncoder>();
-        }
-        else
-        {
-            static_assert(!std::is_same_v<EncoderConfig, EncoderConfig>, "Unsupported encoder config type");
-        }
-        return nullptr; // Fallback for unsupported types
+
+        image.info.width = static_cast<unsigned long>(width);
+        image.info.height = static_cast<unsigned long>(height);
+        image.info.TJSampleFormat = static_cast<TJSAMP>(sample_format);
+        image.info.TJColorSpace = static_cast<TJCS>(color_space);
+        return true;
     }
 
-    static std::unique_ptr<Decoder> createDecoder(const DecoderConfig& config)
+    unsigned long rawSizeInBytes(const Image& image)
     {
-        if constexpr (std::is_same_v<DecoderConfig, JpegDecoderConfig>)
-        {
-            return std::make_unique<JpegDecoder>(config);
-        }
-        else if constexpr (std::is_same_v<DecoderConfig, DoNothingDecoderConfig>)
-        {
-            return std::make_unique<DoNothingDecoder>();
-        }
-        else
-        {
-            static_assert(!std::is_same_v<DecoderConfig, DecoderConfig>, "Unsupported decoder config type");
-        }
-        return nullptr; // Fallback for unsupported types
+        // Compute image size from image info and pixel data.
+        int pixelSizeBytes = tjPixelSize[static_cast<int>(image.info.TJPixelFormat)];
+        return image.info.width * image.info.height * pixelSizeBytes;
     }
-
-    std::unique_ptr<Encoder> encoder_;
-    std::unique_ptr<Decoder> decoder_;
+    // Decompress handler
+    tjhandle d_handle_;
 };
 
-// Type aliases for common codec combinations
-using JpegCodec = Codec<JpegEncoderConfig, JpegDecoderConfig>;
+class JPEGEncoder : public Encoder
+{
+
+  public:
+    JPEGEncoder(const ConfigBuilder& config)
+    {
+        if ((c_handle_ = tjInitCompress()) == nullptr)
+        {
+            common::errno_log("JPEGManager::JPEGManager Constructor failed to init compressor");
+            common::errno_log((const char*) tjGetErrorStr2(c_handle_));
+            return;
+        }
+
+        if (!config.get("quality", quality))
+        {
+            common::log_error("JPEGEncoder - Unable to load parameter quality");
+        }
+
+        if (!config.get("width", width))
+        {
+            common::log_error("JPEGEncoder - Unable to load parameter width");
+        }
+
+        if (!config.get("height", height))
+        {
+            common::log_error("JPEGEncoder - Unable to load parameter height");
+        }
+
+        if (!config.get("pixelFormat", pixelFormat))
+        {
+            common::log_error("JPEGEncoder - Unable to load parameter pixelFormat");
+        }
+
+        if (!config.get("chrominance_subsampling", chrominance_subsampling))
+        {
+            common::log_error("JPEGEncoder - Unable to load parameter chrominance_subsampling");
+        }
+
+        // Print the configured values
+        common::log_info("JPEGEncoder - Configured values:");
+        common::log_info("JPEGEncoder - Width: %dx%d", width, height);
+        common::log_info("JPEGEncoder - Pixel Format: %d", static_cast<int>(pixelFormat));
+        common::log_info("JPEGEncoder - Chrominance Subsampling: %d", static_cast<int>(chrominance_subsampling));
+        
+    }
+
+    ~JPEGEncoder()
+    {
+        if (c_handle_ != nullptr)
+        {
+            // Deallocate data buffer
+            int tj_stat = tjDestroy(c_handle_);
+
+            if (tj_stat != 0)
+            {
+                common::errno_log("JPEGManager::~JPEGManager Deconstructor failed to deinit compressor");
+                common::errno_log((const char*) tjGetErrorStr2(c_handle_));
+            }
+        }
+    }
+
+    bool encode(const Image& srcImage, Image& outImage, unsigned long& compressedSize) override
+    {
+        unsigned char* outImageData = outImage.data();
+        unsigned long outImageSize = outImage.size();
+
+        int tj_stat = tjCompress2(c_handle_, srcImage.data(), width, 0, height, pixelFormat, &outImageData,
+                                  &outImageSize, chrominance_subsampling, quality, TJFLAG_NOREALLOC);
+
+        if (tj_stat != 0)
+        {
+            common::errno_log("JPEGEncoder::encode - Compressor failed to compress!");
+            common::errno_log((const char*) tjGetErrorStr2(c_handle_));
+            return false;
+        }
+
+        compressedSize = outImageSize;
+        return true;
+    }
+
+    unsigned long encodeSizeInBytes() override
+    {
+        return tjBufSize(width, height, chrominance_subsampling);
+    }
+
+
+
+  private:
+    // Compress handler
+    tjhandle c_handle_;
+
+    int quality;
+    int width;
+    int height;
+    TJPF pixelFormat;
+    TJSAMP chrominance_subsampling;
+};
+class RAWEncoder
+{
+};
+class RAWDecoder
+{
+};
 
 } // namespace funnyface
 #endif // CODEC_H

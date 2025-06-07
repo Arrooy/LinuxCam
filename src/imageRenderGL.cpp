@@ -97,9 +97,9 @@ bool ImageRenderGL::initialize()
     return true;
 }
 
-bool ImageRenderGL::uploadImage(const Image& image)
+bool ImageRenderGL::uploadImage(std::unique_ptr<Image>& image)
 {
-    if (!image.data() || image.info.width <= 0 || image.info.height <= 0)
+    if ((!image && image->data()) || image->info.width <= 0 || image->info.height <= 0)
     {
         common::log_error("Invalid image data");
         return false;
@@ -108,22 +108,22 @@ bool ImageRenderGL::uploadImage(const Image& image)
     glBindTexture(GL_TEXTURE_2D, textureId_);
 
     // Determine format
-    GLenum format = (image.info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
+    GLenum format = (image->info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
 
     // Only reallocate texture if size changed (avoids unnecessary GPU memory allocation)
-    if (currentWidth_ != image.info.width || currentHeight_ != image.info.height)
+    if (currentWidth_ != image->info.width || currentHeight_ != image->info.height)
     {
-        glTexImage2D(GL_TEXTURE_2D, 0, format, image.info.width, image.info.height, 0, format, GL_UNSIGNED_BYTE,
-                     image.data());
-        currentWidth_ = image.info.width;
-        currentHeight_ = image.info.height;
-        common::log_info("Texture reallocated: %d - %d", image.info.width, image.info.height);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, image->info.width, image->info.height, 0, format, GL_UNSIGNED_BYTE,
+                     image->data());
+        currentWidth_ = image->info.width;
+        currentHeight_ = image->info.height;
+        common::log_info("Texture reallocated: %d - %d", image->info.width, image->info.height);
     }
     else
     {
         // Just update the existing texture data (faster!)
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.info.width, image.info.height, format, GL_UNSIGNED_BYTE,
-                        image.data());
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image->info.width, image->info.height, format, GL_UNSIGNED_BYTE,
+                        image->data());
     }
 
     // Set texture parameters for optimal performance
@@ -143,7 +143,7 @@ void ImageRenderGL::renderBackground(int windowWidth, int windowHeight)
         return; // No texture or shader available
     }
 
-    // TODO: Fix error black image. At start.
+    // TODO: Fix error black image At start.
     // Disable depth testing for background
     glDisable(GL_DEPTH_TEST);
 

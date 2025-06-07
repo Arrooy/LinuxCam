@@ -3,8 +3,8 @@ project(FunnyFace)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_BUILD_TYPE "Release")
-# set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE Debug)
 
 set(USE_AVX_INSTRUCTIONS ON CACHE BOOL "Use AVX instructions for Dlib")
 set(DLIB_NO_GUI_SUPPORT OFF CACHE BOOL "Disable GUI support for Dlib")
@@ -26,6 +26,7 @@ include(FetchContent)
 FetchContent_Declare(dlib
     GIT_REPOSITORY https://github.com/davisking/dlib.git
     GIT_TAG        v19.24.8
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(dlib)
 
@@ -68,8 +69,9 @@ add_dependencies(turbojpeg libjpeg_include_dir)
 include(FetchContent)
 
 FetchContent_Declare(
-  onnxruntime
-  URL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz
+    onnxruntime
+    URL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_MakeAvailable(onnxruntime)
@@ -139,9 +141,11 @@ ExternalProject_Add(
   v4l2loopback
   SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/v4l2loopback
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND make
+  BUILD_COMMAND ${MAKE_COMMAND} 
   BUILD_IN_SOURCE 1
   INSTALL_COMMAND ""
+  LOG_CONFIGURE 1
+  LOG_BUILD 1
 )
 
 # Function to check if v4l2loopback module file exists
@@ -190,6 +194,7 @@ FetchContent_Declare(
   yaml-cpp
   GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
   GIT_TAG        2f86d13775d119edbb69af52e5f566fd65c6953b
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
@@ -229,4 +234,4 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # target_link_libraries(${PROJECT_NAME} PRIVATE GL)
 
 # Strip symbols in Release mode
-target_link_options(FunnyFace PRIVATE $<$<CONFIG:RELEASE>:-s>)
+# target_link_options(FunnyFace PRIVATE $<$<CONFIG:RELEASE>:-s>)

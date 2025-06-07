@@ -19,7 +19,7 @@ class ImageRenderGL
     bool initialize();
 
     // Upload image data to GPU (minimal copy, reuses texture if possible)
-    bool uploadImage(const Image& image);
+    bool uploadImage(std::unique_ptr<Image>& image);
 
     // Render the current image as background
     void renderBackground(int windowWidth, int windowHeight);

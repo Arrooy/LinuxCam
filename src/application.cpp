@@ -1,12 +1,28 @@
 #include "FunnyFace/application.h"
 
 #include <iostream>
+#include <memory>
 
 #include "FunnyFace/common.h"
-#include "config.hpp"
 #include "FunnyFace/dlibDetectors.h"
-
+#include "FunnyFace/inputWebcam.h"
+#include "FunnyFace/outputWebcam.h"
+#include "config.hpp"
+#include <csignal>
 using namespace funnyface;
+
+
+std::atomic<bool> g_should_exit{false};
+
+void signalHandler(int signal)
+{
+    if (signal == SIGINT)
+    {
+        common::log_warn("Received SIGINT, exiting...");
+        g_should_exit = true;
+    }
+}
+
 Application::Application() : profiler_(Profiler::getInstance())
 {
 }
@@ -18,6 +34,8 @@ Application::~Application()
 
 bool Application::initialize()
 {
+    std::signal(SIGINT, signalHandler);
+
     // Initialize window
     if (!window_.initialize())
     {
@@ -32,17 +50,32 @@ bool Application::initialize()
         return false;
     }
 
-    cameraManager_ = std::make_unique<CameraManager>();
+    cameraManager_ = std::make_shared<CameraManager>();
 
-    // Load configuration for cameraManager
-    cameraManager_->setInputDevice(Config::getInstance().getInputCamera());
-    cameraManager_->setOutputDevice(Config::getInstance().getOutputCamera());
-
-    // Initialize camera manager
-    if (!cameraManager_->initialize())
+    auto webcams = Config::getInstance().getWebcams();
+    for (const auto& wc : webcams)
     {
-        common::log_error("Failed to initialize Camera Manager");
-        return false;
+        std::shared_ptr<Webcam> webcam;
+
+        if (wc.is_input)
+        {
+            webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height, wc.buffer_count);
+        }
+        else
+        {
+            webcam = std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height, wc.subsampling);
+        }
+        if (!webcam->setupDevice())
+        {
+            common::log_error("Failed to setup webcam: %s", wc.name.c_str());
+            return false;
+        }
+
+        if (!cameraManager_->addCamera(std::move(webcam)))
+        {
+            common::log_error("Failed to add webcam: %s", wc.name.c_str());
+            return false;
+        }
     }
 
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << "\n";
@@ -57,7 +90,7 @@ bool Application::initialize()
     faceDetector_ = std::make_unique<DlibFaceDetector>();
 
     // Pass pointer instead of reference
-    ui_.connect(cameraManager_.get());
+    ui_.connect(cameraManager_);
 
     common::log_info("Application initialized successfully");
     return true;
@@ -68,7 +101,7 @@ void Application::run()
     common::log_info("Starting main loop...");
 
     // Main loop
-    while (!window_.shouldClose() && cameraManager_->is_alive())
+    while (!window_.shouldClose() && !g_should_exit)
     {
         update();
         // TODO: FIXME:
@@ -91,10 +124,15 @@ void Application::update()
     // Poll events
     window_.pollEvents();
 
-    // TODO: FIXME: This lambda has a Slight performance hit due to heap allocation and type-erasure (especially for
-    // small, frequently called callbacks). also: Not inlineable across translation units. GPT suggests using Template
-    // based approach (has zero overhead.)
-    cameraManager_->update([this](Image& img) { process(img); });
+    std::unique_ptr<Image> image;
+    if (cameraManager_->updateInput(image))
+    {
+        process(image);
+        if (!cameraManager_->updateOutput(image))
+        {
+            common::log_error("Failed to update output cameras");
+        }
+    }
 
     // Start new UI frame
     ui_.newFrame();
@@ -124,7 +162,7 @@ void Application::render()
     window_.swapBuffers();
 }
 
-void Application::process(Image& image)
+void Application::process(std::unique_ptr<Image>& image)
 {
     // if (faceDetector_ptr_ != nullptr)
     // {
@@ -143,5 +181,7 @@ void Application::process(Image& image)
     //         profiler_.stop("Face painting");
     //     }
     // }
+    Profiler::getInstance().start("1", "Processing time");
     imageRender_.uploadImage(image);
+    Profiler::getInstance().stop("1", "Processing time");
 }

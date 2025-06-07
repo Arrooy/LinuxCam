@@ -1,7 +1,7 @@
 #ifndef APP_H
 #define APP_H
 
-#include "FunnyFace/camera.h"
+#include "FunnyFace/cameraManager.h"
 #include "FunnyFace/imageRenderGL.h"
 #include "FunnyFace/ui.h"
 #include "FunnyFace/window.h"
@@ -31,7 +31,7 @@ class Application
     Window window_;
     UI ui_;
 
-    std::unique_ptr<CameraManager> cameraManager_;
+    std::shared_ptr<CameraManager> cameraManager_;
     ImageRenderGL imageRender_;
 
     Profiler& profiler_;
@@ -40,7 +40,7 @@ class Application
 
     // Main loop methods
     void update();
-    void process(Image& image);
+    void process(std::unique_ptr<Image>& image);
     void render();
 };
 

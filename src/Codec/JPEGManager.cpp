@@ -1,3 +1,4 @@
+#if 0
 #include "FunnyFace/JPEGManager.h"
 
 #include <fcntl.h>
@@ -55,7 +56,7 @@ JPEGManager::~JPEGManager()
 bool JPEGManager::getJPEGHeaderInfo(Image& image)
 {
     int sample_format{TJSAMP_UNKNOWN};
-    int color_space{-1};
+    int color_space{-1}; 
     int width{-1};
     int height{-1};
 
@@ -82,7 +83,7 @@ bool JPEGManager::decodeImage(const Image& srcImage, Image& destImage)
     int tj_stat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), destImage.data(), 0, 0, 0,
                                 srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
 
-    destImage.beingUsed_ = true;
+    destImage.setBeingUsed(true);
     if (tj_stat != 0)
     {
         common::errno_log("JPEGManager::decodeImage - Failed to decode image");
@@ -224,3 +225,4 @@ bool JPEGManager::encodeAndWriteToOutput(const Image& srcImage, int quality, TJP
     }
     return true;
 }
+#endif
