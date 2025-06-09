@@ -404,7 +404,7 @@ void UI::paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera)
                     }
 
                     // Use CameraManager to update the camera
-                    success |= cameraManager_->updateCamera(inputCam); // TODO: maybe this is not necessary!
+                    success |= cameraManager_->updateCamera(inputCam); //TODO: maybe this is not necessary!
 
                     if (success)
                     {
@@ -457,29 +457,28 @@ void UI::paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera)
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Click to apply format and resolution changes");
     }
     ImGui::Separator();
-    std::string key = camera->getDevicePath();
-    if (cameraDesiredStates.find(key) == cameraDesiredStates.end())
+
+    // Enable capturing
+    bool enabled = camera->isRunning();
+    if (ImGui::Checkbox("Device active", &enabled))
     {
-        cameraDesiredStates[key] = camera->isRunning();
-    }
-    bool& desired = cameraDesiredStates[key];
-    if (ImGui::Checkbox("Device active", &desired))
-    {
-        common::log_info("Camera active changed to %s for %s", desired ? "true" : "false", key.c_str());
-        common::log_info("Camera is running to %s", camera->isRunning() ? "true" : "false");
-        if (desired != camera->isRunning())
+        if (enabled)
         {
-            if (desired)
-            {
-                camera->start();
-            }
-            else
-            {
-                camera->stop();
-            }
-            cameraDesiredStates[key] = camera->isRunning();
-            auto cameraPtr = getCurrentCameraSharedPtr(key);
-            if (cameraPtr && !cameraManager_->updateCamera(cameraPtr))
+            common::log_info("Starting camera");
+            camera->start();
+        }
+        else
+        {
+            common::log_info("Stopping camera");
+            camera->stop();
+        }
+
+        std::shared_ptr<Webcam> cameraPtr = getCurrentCameraSharedPtr(camera->getDevicePath());
+        if (cameraPtr)
+        {
+            common::log_info("Updating camera %s active: %s isRunning %s", camera->getDevicePath().c_str(),
+                             enabled ? "true" : "false", cameraPtr->isRunning() ? "true" : "false");
+            if (!cameraManager_->updateCamera(cameraPtr))
             {
                 common::log_error("Failed to update camera");
             }
@@ -827,8 +826,6 @@ std::shared_ptr<Webcam> UI::getCurrentCameraSharedPtr(const std::string& camera_
         if (webcam->getDevicePath() == camera_key)
         {
             cameraPtr = webcam;
-            common::log_info("Found camera %s in manager", camera_key.c_str());
-            common::log_info("Webcam is running %s vs ptr is running %s", webcam->isRunning() ? "true" : "false", cameraPtr->isRunning() ? "true" : "false");
             break;
         }
     }

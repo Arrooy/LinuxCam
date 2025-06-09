@@ -90,7 +90,7 @@ bool InputWebcam::stop()
     }
 
     stopRecording();
-    if(!queueAllBuffersAgain())
+    if (!queueAllBuffersAgain(bufrequest_.count, bufrequest_.type))
     {
         common::log_error("InputWebcam::stop - Failed to queue all buffers again");
         return false;
@@ -225,7 +225,7 @@ bool InputWebcam::startRecording()
 
 void InputWebcam::stopRecording()
 {
-    if(!stopStreaming())
+    if (!stopStreaming())
     {
         common::log_error("InputWebcam::stopRecording - Failed to stop streaming");
         return;
@@ -265,7 +265,7 @@ void InputWebcam::imageAcquisitionLoop()
     unsigned int decodingFailureCount{0u};
     unsigned int totalTimeouts{0u};
     const unsigned int warmupDiscardCount{2u};
-    
+
     bool readImageHeader{true};
     image_.setBeingUsed(false);
 
@@ -471,36 +471,6 @@ void InputWebcam::cleanupBuffers()
         free(buffers_);
         buffers_ = nullptr;
     }
-}
-
-bool InputWebcam::queueAllBuffersAgain()
-{
-    struct v4l2_buffer buf;
-
-    // Allocate and configure buffers_
-    for (unsigned int i = 0; i < bufrequest_.count; i++)
-    {
-        CLEAR(buf);
-        buf.type = bufrequest_.type;
-        buf.memory = V4L2_MEMORY_MMAP;
-        buf.index = i;
-        if(!requeueFrame(buf))
-        {
-            common::errno_log("InputWebcam::queueAllBuffersAgain - VIDIOC_QBUF");
-            return false;
-        }
-    }
-    return true;
-}
-
-bool InputWebcam::requeueFrame(struct v4l2_buffer& buf)
-{
-    if (ioctl(fd_, VIDIOC_QBUF, &buf) == -1)
-    {
-        common::errno_log("InputWebcam::requeueFrame - VIDIOC_QBUF");
-        return false;
-    }
-    return true;
 }
 
 bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)

@@ -1,6 +1,7 @@
 #ifndef WEBCAM_H
 #define WEBCAM_H
 
+#include <linux/videodev2.h>
 #include <turbojpeg.h>
 
 #include <memory>
@@ -87,9 +88,14 @@ class Webcam
     bool configureDeviceFormat();
     bool updateDeviceCapabilities();
 
+    bool requeueFrame(struct v4l2_buffer& buf);
+    bool queueAllBuffersAgain(int numBuffers, int bufferType);
+
+
     void selectBestFormat();
     std::pair<unsigned int, double> findBestFrameSize(const Format& fmt) const;
-    double calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const;
+    double
+    calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const;
 
     std::string name_;
     std::string device_path_;

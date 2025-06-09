@@ -16,7 +16,7 @@ V4L2LoopbackWriter::~V4L2LoopbackWriter()
 {
     cleanup();
 }
-
+//TODO: FIXME: Unable to open a device that is being used already! Is there a solution?
 bool V4L2LoopbackWriter::setupDevice()
 {
     // 1. Open device
@@ -141,6 +141,12 @@ bool V4L2LoopbackWriter::stop()
         {
             common::errno_log("V4L2LoopbackWriter::stop - VIDIOC_STREAMOFF");
             cleanup();
+            return false;
+        }
+
+        if (!queueAllBuffersAgain(buffers_.size(), type))
+        {
+            common::log_error("V4L2LoopbackWriter::stop - Failed to queue all buffers again");
             return false;
         }
     }
