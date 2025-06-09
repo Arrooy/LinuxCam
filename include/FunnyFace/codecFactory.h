@@ -10,17 +10,13 @@
 
 namespace funnyface
 {
-
-class JPEGDecoder;
-class JPEGEncoder;
-// class RAWEncoder;
-// class RAWDecoder;
-
+    
 enum class ImageFormat
 {
     UNKNOWN,
     JPEG,
-    PNG,
+    SGBRG8, // Bayer format
+    YUV420, // YUV 4:2:0 format
     RAW,
 };
 
@@ -28,14 +24,16 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
 {
     switch (format)
     {
-    case ImageFormat::JPEG:
-        return "JPEG";
-    case ImageFormat::PNG:
-        return "PNG";
-    case ImageFormat::RAW:
-        return "RAW";
-    default:
-        return "UNKNOWN";
+        case ImageFormat::JPEG:
+            return "JPEG";
+        case ImageFormat::SGBRG8:
+            return "SGBRG8";
+        case ImageFormat::YUV420:
+            return "YUV420";
+        case ImageFormat::RAW:
+            return "RAW";
+        default:
+            return "UNKNOWN";
     }
 }
 

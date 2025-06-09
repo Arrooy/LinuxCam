@@ -99,36 +99,64 @@ bool ImageRenderGL::initialize()
 
 bool ImageRenderGL::uploadImage(std::unique_ptr<Image>& image)
 {
-    if ((!image && image->data()) || image->info.width <= 0 || image->info.height <= 0)
+    if (!image || !image->data() || image->info.width <= 0 || image->info.height <= 0)
     {
         common::log_error("Invalid image data");
         return false;
     }
-    // TODO: FIXME: If input and output config sizes are different, this breaks. (core dumped)
+
+    // Validate image size matches expected byte count
+    size_t expectedSize = image->info.width * image->info.height * image->info.pixelSizeBytes;
+    if (image->size() < expectedSize)
+    {
+        common::log_error("Image size mismatch: expected %zu, got %zu", expectedSize, image->size());
+        return false;
+    }
+
     glBindTexture(GL_TEXTURE_2D, textureId_);
 
     // Determine format
     GLenum format = (image->info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
 
-    // Only reallocate texture if size changed (avoids unnecessary GPU memory allocation)
+    // Always reallocate texture when dimensions change, even if scaling is involved
     if (currentWidth_ != image->info.width || currentHeight_ != image->info.height)
     {
         glTexImage2D(GL_TEXTURE_2D, 0, format, image->info.width, image->info.height, 0, format, GL_UNSIGNED_BYTE,
                      image->data());
+
+        GLenum error = glGetError();
+        if (error != GL_NO_ERROR)
+        {
+            common::log_error("OpenGL texture allocation error: 0x%x", error);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            return false;
+        }
+
         currentWidth_ = image->info.width;
         currentHeight_ = image->info.height;
-        common::log_info("Texture reallocated: %d - %d", image->info.width, image->info.height);
+        common::log_info("Texture reallocated: %lu x %lu (format: %s)", image->info.width, image->info.height,
+                         (format == GL_RGBA) ? "RGBA" : "RGB");
     }
     else
     {
         // Just update the existing texture data (faster!)
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image->info.width, image->info.height, format, GL_UNSIGNED_BYTE,
                         image->data());
+
+        // Check for errors in texture update
+        GLenum error = glGetError();
+        if (error != GL_NO_ERROR)
+        {
+            common::log_error("OpenGL texture update error: 0x%x", error);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            return false;
+        }
     }
 
-    // Set texture parameters for optimal performance
+    // Set texture parameters for optimal performance and scaling
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // Use GL_LINEAR for automatic scaling (bilinear interpolation)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -143,14 +171,26 @@ void ImageRenderGL::renderBackground(int windowWidth, int windowHeight)
         return; // No texture or shader available
     }
 
-    // TODO: Fix error black image At start.
+    // Set viewport to match window dimensions
+    glViewport(0, 0, windowWidth, windowHeight);
+
+    // Clear the background
+    glClear(GL_COLOR_BUFFER_BIT);
+
     // Disable depth testing for background
     glDisable(GL_DEPTH_TEST);
 
     // Use our shader program
     glUseProgram(shaderProgram_);
 
-    // Bind texture
+    // Set the texture uniform (sampler2D defaults to texture unit 0)
+    GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
+    if (textureLocation >= 0)
+    {
+        glUniform1i(textureLocation, 0);
+    }
+
+    // Bind texture to unit 0
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureId_);
 
@@ -158,6 +198,10 @@ void ImageRenderGL::renderBackground(int windowWidth, int windowHeight)
     glBindVertexArray(vao_);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
+
+    // Cleanup
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
 
     // Re-enable depth testing for UI
     glEnable(GL_DEPTH_TEST);

@@ -10,7 +10,6 @@
 #include <thread>
 #include <unordered_map>
 
-#include "FunnyFace/InputDeviceContext.h"
 #include "FunnyFace/JPEGManager.h"
 #include "FunnyFace/inputWebcam.h"
 #include "FunnyFace/v4l2loopbackWritter.h"

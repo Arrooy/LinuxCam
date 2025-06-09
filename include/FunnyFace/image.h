@@ -57,7 +57,13 @@ class Image
     }
 
     // Constructor that adopts existing buffer without copying
-    Image(unsigned char* buffer, size_t size) : size_(size) { Image(buffer, size, true); }
+    Image(unsigned char* buffer, size_t size) : size_(size)
+    {
+        if (buffer && size > 0)
+        {
+            data_ = std::shared_ptr<unsigned char>(buffer, std::default_delete<unsigned char[]>());
+        }
+    }
 
     // Constructor for non-owning reference (for V4L2 buffers)
     Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(size)
@@ -222,6 +228,21 @@ class Image
 
     TJImageDescription info;
 
+    void copyFrom(const Image& other)
+    {
+        if (this != &other)
+        {
+            if (data_ && other.data() && size_ > 0)
+            {
+                std::memcpy(data_.get(), other.data(), size_);
+            }
+            size_ = other.size_;
+            info = other.info;
+            std::lock_guard<std::recursive_mutex> lock(beingUsedMutex_);
+            beingUsed_ = other.beingUsed_;
+        }
+    }
+
     std::unique_ptr<Image> deepCopy()
     {
         auto copy = std::make_unique<Image>(size_);
@@ -246,6 +267,117 @@ class Image
         std::lock_guard<std::recursive_mutex> lock(beingUsedMutex_);
         beingUsed_ = val;
     }
+
+    // Fast bilinear scaling - creates a new scaled image
+    std::unique_ptr<Image> scale(unsigned long newWidth, unsigned long newHeight)
+    {
+        if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
+        {
+            common::log_error("Image::scale - Invalid source image");
+            return nullptr;
+        }
+
+        if (newWidth == 0 || newHeight == 0)
+        {
+            common::log_error("Image::scale - Invalid target dimensions: %lux%lu", newWidth, newHeight);
+            return nullptr;
+        }
+
+        if (newWidth == info.width && newHeight == info.height)
+        {
+            // No scaling needed, return a deep copy
+            return deepCopy();
+        }
+
+        // Create scaled image
+        size_t scaledSize = newWidth * newHeight * info.pixelSizeBytes;
+        auto scaledImage = std::make_unique<Image>(scaledSize);
+
+        // Copy image info and update dimensions
+        scaledImage->info = this->info;
+        scaledImage->info.width = newWidth;
+        scaledImage->info.height = newHeight;
+
+        // Ensure the scaled image is marked as being used
+        scaledImage->setBeingUsed(true);
+
+        // Perform bilinear scaling
+        const unsigned char* src = data_.get();
+        unsigned char* dst = scaledImage->data();
+
+        // Handle single pixel edge case
+        if (info.width == 1 && info.height == 1)
+        {
+            // Fill entire scaled image with the single source pixel
+            for (unsigned long i = 0; i < newWidth * newHeight; i++)
+            {
+                for (unsigned char ch = 0; ch < info.pixelSizeBytes; ch++)
+                {
+                    dst[i * info.pixelSizeBytes + ch] = src[ch];
+                }
+            }
+            return scaledImage;
+        }
+
+        const double xRatio = (info.width > 1) ? static_cast<double>(info.width - 1) / (newWidth - 1) : 0.0;
+        const double yRatio = (info.height > 1) ? static_cast<double>(info.height - 1) / (newHeight - 1) : 0.0;
+
+        for (unsigned long y = 0; y < newHeight; y++)
+        {
+            for (unsigned long x = 0; x < newWidth; x++)
+            {
+                // Calculate source coordinates
+                double srcX = (newWidth > 1) ? x * xRatio : 0.0;
+                double srcY = (newHeight > 1) ? y * yRatio : 0.0;
+
+                // Get integer and fractional parts
+                unsigned long x1 = static_cast<unsigned long>(srcX);
+                unsigned long y1 = static_cast<unsigned long>(srcY);
+                // Ensure we don't go out of bounds
+                unsigned long x2 = std::min(x1 + 1, info.width - 1);
+                unsigned long y2 = std::min(y1 + 1, info.height - 1);
+
+                double fracX = srcX - x1;
+                double fracY = srcY - y1;
+
+                // Calculate destination index
+                unsigned long dstIdx = (y * newWidth + x) * info.pixelSizeBytes;
+
+                // Interpolate each channel (works for pixelSizeBytes = 1, 3, 4, etc.)
+                for (unsigned char ch = 0; ch < info.pixelSizeBytes; ch++)
+                {
+                    // Get source pixel values with bounds checking
+                    unsigned long idx1 = (y1 * info.width + x1) * info.pixelSizeBytes + ch;
+                    unsigned long idx2 = (y1 * info.width + x2) * info.pixelSizeBytes + ch;
+                    unsigned long idx3 = (y2 * info.width + x1) * info.pixelSizeBytes + ch;
+                    unsigned long idx4 = (y2 * info.width + x2) * info.pixelSizeBytes + ch;
+
+                    // Additional safety check (should not be needed with proper x2/y2 calculation)
+                    if (idx1 >= size_ || idx2 >= size_ || idx3 >= size_ || idx4 >= size_)
+                    {
+                        common::log_error("Image::scale - Source index out of bounds: idx1=%lu idx2=%lu idx3=%lu idx4=%lu size=%zu", 
+                                         idx1, idx2, idx3, idx4, size_);
+                        return nullptr;
+                    }
+
+                    double p1 = src[idx1];
+                    double p2 = src[idx2];
+                    double p3 = src[idx3];
+                    double p4 = src[idx4];
+
+                    // Bilinear interpolation
+                    double top = p1 * (1.0 - fracX) + p2 * fracX;
+                    double bottom = p3 * (1.0 - fracX) + p4 * fracX;
+                    double result = top * (1.0 - fracY) + bottom * fracY;
+
+                    dst[dstIdx + ch] = static_cast<unsigned char>(result + 0.5);
+                }
+            }
+        }
+
+        return scaledImage;
+    }
+
   private:
     inline unsigned long index(unsigned long col, unsigned long row) const
     {

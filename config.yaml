@@ -1,9 +1,14 @@
 input_cameras:
     - name: "Logitech"
       path: "/dev/video0"
-      width: 640
-      height: 480
+      width: 176
+      height: 144
       buffer_count: 2
+    # - name: "Old"
+    #   path: "/dev/video2"
+    #   width: 176
+    #   height: 144
+    #   buffer_count: 2
 
 output_cameras:
     - name: "VirtualCamera"

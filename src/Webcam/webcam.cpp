@@ -85,10 +85,39 @@ bool Webcam::updateDeviceCapabilities()
         Format fmt;
         fmt.description = std::string(reinterpret_cast<char*>(fmtdesc.description));
         common::log_info("Webcam::updateDeviceCapabilities - Camera supports format: %s", fmt.description.c_str());
-        // TODO: Update format_ with description.
-        fmt.format = ImageFormat::JPEG;
-        // TODO: conversion from fourcc to generic
-        fmt.pixelformat = fmtdesc.pixelformat;
+        if (fmtdesc.pixelformat == V4L2_PIX_FMT_JPEG || fmtdesc.pixelformat == V4L2_PIX_FMT_MJPEG)
+        {
+            fmt.format = ImageFormat::JPEG;
+            // TODO: Update format_ with description.
+            // TODO: conversion from fourcc to generic
+            fmt.pixelformat = fmtdesc.pixelformat;
+            common::log_info("Webcam::updateDeviceCapabilities - Camera supports MJPEG format");
+        }
+        else if(fmtdesc.pixelformat == V4L2_PIX_FMT_SGBRG8)
+        {
+            fmt.format = ImageFormat::SGBRG8;
+            fmt.pixelformat = fmtdesc.pixelformat;
+            common::log_info("Webcam::updateDeviceCapabilities - Camera supports Bayer format");
+        }
+        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUV420 || fmtdesc.pixelformat == V4L2_PIX_FMT_YVU420)
+        {
+            fmt.format = ImageFormat::YUV420;
+            fmt.pixelformat = fmtdesc.pixelformat;
+            common::log_info("Webcam::updateDeviceCapabilities - Camera supports YUV420 format");
+        }
+        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUYV)
+        {
+            common::log_warn("Webcam::updateDeviceCapabilities - Camera supports YUYV format");
+            continue;
+        }
+        else
+        {
+            common::log_warn("Webcam::updateDeviceCapabilities - Camera supports unknown format: %s",
+                             fmt.description.c_str());
+            continue; // Skip unsupported formats
+        }
+
+
         struct v4l2_frmsizeenum frmsize;
         CLEAR(frmsize);
         frmsize.pixel_format = fmtdesc.pixelformat;

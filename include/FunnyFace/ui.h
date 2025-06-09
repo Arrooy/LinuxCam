@@ -9,7 +9,6 @@
 #include <memory>
 #include <queue>
 
-#include "FunnyFace/InputDeviceContext.h"
 #include "FunnyFace/cameraManager.h"
 #include "imgui.h"
 

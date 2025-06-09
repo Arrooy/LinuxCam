@@ -158,6 +158,23 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
 
     Profiler::getInstance().start(name_.c_str(), "Encode and write output image");
 
+    // Check if we need to scale the image
+    std::unique_ptr<Image> scaledImage = nullptr;
+
+    if (image.info.width != desiredWidth_ || image.info.height != desiredHeight_)
+    {
+        scaledImage = image.scale(desiredWidth_, desiredHeight_);
+        if (!scaledImage)
+        {
+            common::log_error("V4L2LoopbackWriter::writeFrame - Failed to scale image");
+            Profiler::getInstance().stop(name_.c_str(), "Encode and write output image");
+            return false;
+        }
+    }
+
+    // Use scaled image if available, otherwise use original
+    Image& imageToEncode = scaledImage ? *scaledImage : image;
+
     // 1. Dequeue a buffer (get an available buffer)
     struct v4l2_buffer buf = {0};
     buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -176,7 +193,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
 
     // Encode image and store it into v4l2 buffer
     unsigned long actualCompressedSize{0u};
-    if (!encoder_->encode(image, v4l2Image, actualCompressedSize))
+    if (!encoder_->encode(imageToEncode, v4l2Image, actualCompressedSize))
     {
         common::log_error("Failed to encode image");
         // Re-queue buffer

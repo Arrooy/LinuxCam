@@ -6,7 +6,6 @@
 #include "FunnyFace/common.h"
 #include "FunnyFace/dlibDetectors.h"
 #include "FunnyFace/inputWebcam.h"
-#include "FunnyFace/outputWebcam.h"
 #include "config.hpp"
 #include <csignal>
 using namespace funnyface;
