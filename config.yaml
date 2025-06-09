@@ -1,11 +1,11 @@
 input_cameras:
-    - name: "Logitech"
-      path: "/dev/video0"
-      width: 176
-      height: 144
-      buffer_count: 2
-    # - name: "Old"
-    #   path: "/dev/video2"
+    - name: "GSPCACamera"
+      path: "/dev/video3"
+      width: 320
+      height: 240
+      buffer_count: 4
+    # - name: "Logitech"
+    #   path: "/dev/video0"
     #   width: 176
     #   height: 144
     #   buffer_count: 2
