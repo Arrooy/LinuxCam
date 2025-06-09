@@ -93,7 +93,7 @@ bool Webcam::updateDeviceCapabilities()
             fmt.pixelformat = fmtdesc.pixelformat;
             common::log_info("Webcam::updateDeviceCapabilities - Camera supports MJPEG format");
         }
-        else if(fmtdesc.pixelformat == V4L2_PIX_FMT_SGBRG8)
+        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_SGBRG8)
         {
             fmt.format = ImageFormat::SGBRG8;
             fmt.pixelformat = fmtdesc.pixelformat;
@@ -144,33 +144,84 @@ bool Webcam::updateDeviceCapabilities()
     }
 
     // Select the format that best adapts to user requirements.
-    for (auto& fmt : capabilities_.formats)
-    {
-        unsigned int index{0u};
-        for (const auto& size : fmt.sizes)
-        {
-            if (size.width == desiredWidth_ && size.height == desiredHeight_)
-            {
-                common::log_info("Webcam: Selected format is %s with frame size of %dx%d", fmt.description.c_str(),
-                                 size.width, size.height);
-                fmt.selectedFrameSize = index;
-                selectedFormat_ = std::make_unique<Format>(fmt);
-                return true;
-            }
-            index++;
-        }
-    }
-    // If no format is found, select the first one.
-    capabilities_.formats[0].selectedFrameSize = 0u;
-    auto elected_size = capabilities_.formats[0].sizes[0];
-    common::log_error("Webcam: No format found for %dx%d, selecting first one of %dx%d", desiredWidth_, desiredHeight_,
-                      elected_size.width, elected_size.height);
-    selectedFormat_ = std::make_unique<Format>(capabilities_.formats[0]);
-
+    selectBestFormat();
 
     return true;
 }
 
+void Webcam::selectBestFormat()
+{
+    Format* bestFormat = nullptr;
+    unsigned int bestIndex = 0;
+    double bestDistance = std::numeric_limits<double>::max();
+
+    for (auto& fmt : capabilities_.formats)
+    {
+        if (fmt.sizes.empty())
+        {
+            continue;
+        }
+
+        auto [targetIndex, targetDistance] = findBestFrameSize(fmt);
+
+        if (targetDistance < bestDistance)
+        {
+            bestDistance = targetDistance;
+            bestFormat = &fmt;
+            bestIndex = targetIndex;
+        }
+    }
+
+    if (bestFormat != nullptr)
+    {
+        bestFormat->selectedFrameSize = bestIndex;
+        const auto& selectedSize = bestFormat->sizes[bestIndex];
+        common::log_info("Webcam: Selected format is %s with frame size of %dx%d", bestFormat->description.c_str(),
+                         selectedSize.width, selectedSize.height);
+        selectedFormat_ = std::make_unique<Format>(*bestFormat);
+    }
+    else
+    {
+        // Fallback: select the first format if nothing else works
+        capabilities_.formats[0].selectedFrameSize = 0u;
+        const auto& electedSize = capabilities_.formats[0].sizes[0];
+        common::log_error("Webcam: No suitable format found, selecting first one of %dx%d", electedSize.width,
+                          electedSize.height);
+        selectedFormat_ = std::make_unique<Format>(capabilities_.formats[0]);
+    }
+}
+
+std::pair<unsigned int, double> Webcam::findBestFrameSize(const Format& fmt) const
+{
+    if (desiredWidth_ == 0 || desiredHeight_ == 0)
+    {
+        return {fmt.sizes.size() / 2, 0.0}; // Central size, highest priority
+    }
+
+    unsigned int bestIndex = 0;
+    double bestDistance = std::numeric_limits<double>::max();
+
+    for (unsigned int i = 0; i < fmt.sizes.size(); ++i)
+    {
+        const auto& size = fmt.sizes[i];
+        double distance = calculateDistance(size.width, size.height, desiredWidth_, desiredHeight_);
+
+        if (distance < bestDistance)
+        {
+            bestDistance = distance;
+            bestIndex = i;
+        }
+    }
+
+    return {bestIndex, bestDistance};
+}
+
+double Webcam::calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const
+{
+    double dx = static_cast<double>(width1) - static_cast<double>(width2);
+    double dy = static_cast<double>(height1) - static_cast<double>(height2);
+    return std::sqrt(dx * dx + dy * dy);
+}
 
 bool Webcam::configureDeviceFormat()
 {

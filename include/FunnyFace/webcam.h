@@ -83,8 +83,11 @@ class Webcam
   protected:
     bool open();
     bool configureDeviceFormat();
-
     bool updateDeviceCapabilities();
+
+    void selectBestFormat();
+    std::pair<unsigned int, double> findBestFrameSize(const Format& fmt) const;
+    double calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const;
 
     std::string name_;
     std::string device_path_;
