@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <queue>
+#include <map>
 
 #include "FunnyFace/cameraManager.h"
 #include "imgui.h"
@@ -69,6 +70,9 @@ class UI
     bool show_output_config_{true};
     bool maintain_aspect_ratio_{false};
 
+    bool was_plus_tab_active_ = false;
+    std::unordered_map<std::string, std::shared_ptr<InputWebcam>> temp_modal_webcams_;
+
     // Window positioning tracking
     float current_y_{0.0f};
 
@@ -84,7 +88,11 @@ class UI
     std::vector<std::string> available_video_devices_;
     int selected_video_device_ = -1;
     char device_name_buffer_[256] = "";
-    bool is_output_device_{false};
+
+    // Device configuration tracking
+    std::map<std::string, int> selected_format_indices_;
+    std::map<std::string, int> selected_size_indices_;
+    std::map<std::string, int> selected_subsampling_;
 
     // UI drawing functions
     void paintMainWindow();

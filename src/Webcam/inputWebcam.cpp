@@ -453,3 +453,64 @@ bool InputWebcam::requeueFrame(struct v4l2_buffer& buf)
     }
     return true;
 }
+
+bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
+{
+    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format %d, size %d", 
+                     name_.c_str(), formatIndex, sizeIndex);
+    
+    // Stop current operation
+    bool wasRunning = isRunning();
+    if (wasRunning)
+    {
+        if (!stop())
+        {
+            common::log_error("InputWebcam::reconfigureFormat - Failed to stop device");
+            return false;
+        }
+    }
+    
+    // Validate indices
+    if (formatIndex < 0 || formatIndex >= static_cast<int>(capabilities_.formats.size()) ||
+        sizeIndex < 0 || sizeIndex >= static_cast<int>(capabilities_.formats[formatIndex].sizes.size()))
+    {
+        common::log_error("InputWebcam::reconfigureFormat - Invalid format/size indices");
+        if (wasRunning) start(); // Try to restart with old config
+        return false;
+    }
+    
+    // Update desired format and size
+    const auto& selectedFormat = capabilities_.formats[formatIndex];
+    const auto& selectedSize = selectedFormat.sizes[sizeIndex];
+    
+    desiredWidth_ = selectedSize.width;
+    desiredHeight_ = selectedSize.height;
+    
+    // Cleanup current setup
+    cleanup();
+    
+    // Set new selected format
+    selectedFormat_ = std::make_unique<Format>(selectedFormat);
+    selectedFormat_->selectedFrameSize = sizeIndex;
+    
+    // Reinitialize device
+    if (!setupDevice())
+    {
+        common::log_error("InputWebcam::reconfigureFormat - Failed to setup device with new configuration");
+        return false;
+    }
+    
+    // Restart if it was running before
+    if (wasRunning)
+    {
+        if (!start())
+        {
+            common::log_error("InputWebcam::reconfigureFormat - Failed to restart device");
+            return false;
+        }
+    }
+    
+    common::log_info("InputWebcam::reconfigureFormat - Successfully reconfigured device to %ux%u", 
+                     desiredWidth_, desiredHeight_);
+    return true;
+}

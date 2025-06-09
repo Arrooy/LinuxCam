@@ -276,3 +276,58 @@ void V4L2LoopbackWriter::cleanup()
 
     common::log_info("v4l2LoopbackWritter - Cleanup finished!");
 }
+
+bool V4L2LoopbackWriter::reconfigureSubsampling(TJSAMP subsampling)
+{
+    common::log_info("V4L2LoopbackWriter::reconfigureSubsampling - Reconfiguring device %s with subsampling %d", 
+                     name_.c_str(), static_cast<int>(subsampling));
+    
+    // Stop current operation
+    bool wasStreaming = streaming_;
+    if (wasStreaming)
+    {
+        if (!stop())
+        {
+            common::log_error("V4L2LoopbackWriter::reconfigureSubsampling - Failed to stop streaming");
+            return false;
+        }
+    }
+    
+    // Update subsampling
+    chrominance_subsampling_ = subsampling;
+    
+    // Recreate encoder with new subsampling
+    if (encoder_)
+    {
+        encoder_.reset();
+        
+        auto pixelFormat = TJPF_RGB;
+        ConfigBuilder configBuilder;
+        configBuilder.imageFormat(selectedFormat_->format)
+            .pixelFormat(pixelFormat)
+            .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
+            .height(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height)
+            .quality(100)
+            .chrominance_subsampling(chrominance_subsampling_);
+
+        encoder_ = CodecFactory::create<Encoder>(configBuilder);
+        if (encoder_ == nullptr)
+        {
+            common::log_error("V4L2LoopbackWriter::reconfigureSubsampling - Failed to create encoder");
+            return false;
+        }
+    }
+    
+    // Restart streaming if it was active before
+    if (wasStreaming)
+    {
+        if (!start())
+        {
+            common::log_error("V4L2LoopbackWriter::reconfigureSubsampling - Failed to restart streaming");
+            return false;
+        }
+    }
+    
+    common::log_info("V4L2LoopbackWriter::reconfigureSubsampling - Successfully reconfigured subsampling");
+    return true;
+}

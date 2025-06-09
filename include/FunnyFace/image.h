@@ -31,6 +31,8 @@ struct Pixel
 
 struct TJImageDescription
 {
+    unsigned long x{0u};
+    unsigned long y{0u};
     unsigned long width;
     unsigned long height;
     unsigned char pixelSizeBytes;
@@ -268,6 +270,33 @@ class Image
         beingUsed_ = val;
     }
 
+    // Scale image by percentage while maintaining aspect ratio
+    std::unique_ptr<Image> scaleByPercentage(double percentage)
+    {
+        if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
+        {
+            common::log_error("Image::scaleByPercentage - Invalid source image");
+            return nullptr;
+        }
+
+        if (percentage <= 0.0)
+        {
+            common::log_error("Image::scaleByPercentage - Invalid percentage: %f", percentage);
+            return nullptr;
+        }
+
+        // Calculate new dimensions maintaining aspect ratio
+        unsigned long newWidth = static_cast<unsigned long>(info.width * percentage + 0.5);
+        unsigned long newHeight = static_cast<unsigned long>(info.height * percentage + 0.5);
+
+        // Ensure minimum size of 1x1
+        if (newWidth == 0) newWidth = 1;
+        if (newHeight == 0) newHeight = 1;
+
+        // Use existing scale method
+        return scale(newWidth, newHeight);
+    }
+
     // Fast bilinear scaling - creates a new scaled image
     std::unique_ptr<Image> scale(unsigned long newWidth, unsigned long newHeight)
     {
@@ -376,6 +405,12 @@ class Image
         }
 
         return scaledImage;
+    }
+
+    void move(unsigned long new_x, unsigned long new_y)
+    {
+        info.x = new_x;
+        info.y = new_y;
     }
 
   private:

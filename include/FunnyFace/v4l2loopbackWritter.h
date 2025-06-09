@@ -30,15 +30,15 @@ class V4L2LoopbackWriter : public Webcam
     bool setupDevice() override;
     bool start() override;
     bool stop() override;
-    bool isRunning() override { return streaming_;}
+    bool isRunning() override { return streaming_; }
 
 
     bool writeFrame(Image& image);
     void cleanup();
-    
 
 
     TJSAMP getChrominanceSubsampling() const override { return chrominance_subsampling_; };
+    bool reconfigureSubsampling(TJSAMP subsampling);
   private:
     int fd_;
     std::vector<Buffer> buffers_;

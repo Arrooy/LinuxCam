@@ -12,8 +12,8 @@
 
 #include "FunnyFace/JPEGManager.h"
 #include "FunnyFace/inputWebcam.h"
-#include "FunnyFace/v4l2loopbackWritter.h"
 #include "FunnyFace/profiler.h"
+#include "FunnyFace/v4l2loopbackWritter.h"
 #include "FunnyFace/webcam.h"
 
 namespace funnyface
@@ -32,19 +32,13 @@ class CameraManager
 
     bool updateInput(std::unique_ptr<Image>& image);
     bool updateOutput(std::unique_ptr<Image>& outputImage);
-
-    // TODO: Move to cpp.
-    std::vector<std::shared_ptr<Webcam>> getWebcams() const
-    {
-        std::vector<std::shared_ptr<Webcam>> result;
-        result.reserve(inWebcam_.size() + outWebcam_.size()); // Optional, improves performance
-        result.insert(result.end(), inWebcam_.begin(), inWebcam_.end());
-        result.insert(result.end(), outWebcam_.begin(), outWebcam_.end());
-        return result;
-    }
+    std::vector<std::shared_ptr<Webcam>> getWebcams() const;
 
     void shutdown();
+
+    std::vector<std::string> discoverAvailableInputDevices();
   private:
+    bool isDeviceUsable(const std::string& devicePath);
     std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
     std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
     // std::unordered_map<int, int> connections_;

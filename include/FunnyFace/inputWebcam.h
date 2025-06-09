@@ -29,6 +29,8 @@ class InputWebcam : public Webcam
 
     bool getImage(Image*& outImage);
 
+    bool reconfigureFormat(int formatIndex, int sizeIndex);
+
   private:
     bool startRecording();
     void stopRecording();

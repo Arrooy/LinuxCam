@@ -80,6 +80,8 @@ class Webcam
         }
         return Format{};
     }
+    unsigned int getDesiredWidth() const { return desiredWidth_; }
+    unsigned int getDesiredHeight() const { return desiredHeight_; }
   protected:
     bool open();
     bool configureDeviceFormat();
