@@ -279,9 +279,9 @@ void V4L2LoopbackWriter::cleanup()
 
 bool V4L2LoopbackWriter::reconfigureSubsampling(TJSAMP subsampling)
 {
-    common::log_info("V4L2LoopbackWriter::reconfigureSubsampling - Reconfiguring device %s with subsampling %d", 
+    common::log_info("V4L2LoopbackWriter::reconfigureSubsampling - Reconfiguring device %s with subsampling %d",
                      name_.c_str(), static_cast<int>(subsampling));
-    
+
     // Stop current operation
     bool wasStreaming = streaming_;
     if (wasStreaming)
@@ -292,15 +292,15 @@ bool V4L2LoopbackWriter::reconfigureSubsampling(TJSAMP subsampling)
             return false;
         }
     }
-    
+
     // Update subsampling
     chrominance_subsampling_ = subsampling;
-    
+
     // Recreate encoder with new subsampling
     if (encoder_)
     {
         encoder_.reset();
-        
+
         auto pixelFormat = TJPF_RGB;
         ConfigBuilder configBuilder;
         configBuilder.imageFormat(selectedFormat_->format)
@@ -317,7 +317,7 @@ bool V4L2LoopbackWriter::reconfigureSubsampling(TJSAMP subsampling)
             return false;
         }
     }
-    
+
     // Restart streaming if it was active before
     if (wasStreaming)
     {
@@ -327,7 +327,7 @@ bool V4L2LoopbackWriter::reconfigureSubsampling(TJSAMP subsampling)
             return false;
         }
     }
-    
+
     common::log_info("V4L2LoopbackWriter::reconfigureSubsampling - Successfully reconfigured subsampling");
     return true;
 }

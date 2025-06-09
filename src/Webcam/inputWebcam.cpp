@@ -228,7 +228,7 @@ bool InputWebcam::getImage(Image*& outImage)
     std::lock_guard<std::mutex> lock(imageMutex_);
     if (image_.getBeingUsed())
     {
-        outImage = &image_;  // Just pass a pointer to the internal image
+        outImage = &image_;
         return true;
     }
     return false;
@@ -241,6 +241,7 @@ void InputWebcam::imageAcquisitionLoop()
     unsigned int totalDiscarded{0u};
     unsigned int totalDiscardedHeader{0u};
     unsigned int decodingFailureCount{0u};
+    unsigned int totalTimeouts{0u};
     const unsigned int warmupDiscardCount{2u};
     bool readImageHeader{true};
 
@@ -272,8 +273,14 @@ void InputWebcam::imageAcquisitionLoop()
 
         if (r == 0)
         {
-            common::errno_log("InputWebcam::imageAcquisitionLoop - Select timeout");
-            break;
+            common::log_warn("InputWebcam::imageAcquisitionLoop - Select timeout");
+            totalTimeouts++;
+            if(totalTimeouts > 10)
+            {
+                common::log_warn("InputWebcam::imageAcquisitionLoop - Select timeout reached, exiting loop");
+                break;
+            }
+            continue;
         }
 
         if (isRecording_ == false)
@@ -456,9 +463,9 @@ bool InputWebcam::requeueFrame(struct v4l2_buffer& buf)
 
 bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
 {
-    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format %d, size %d", 
-                     name_.c_str(), formatIndex, sizeIndex);
-    
+    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format %d, size %d", name_.c_str(),
+                     formatIndex, sizeIndex);
+
     // Stop current operation
     bool wasRunning = isRunning();
     if (wasRunning)
@@ -469,37 +476,40 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
             return false;
         }
     }
-    
+
     // Validate indices
-    if (formatIndex < 0 || formatIndex >= static_cast<int>(capabilities_.formats.size()) ||
-        sizeIndex < 0 || sizeIndex >= static_cast<int>(capabilities_.formats[formatIndex].sizes.size()))
+    if (formatIndex < 0 || formatIndex >= static_cast<int>(capabilities_.formats.size()) || sizeIndex < 0
+        || sizeIndex >= static_cast<int>(capabilities_.formats[formatIndex].sizes.size()))
     {
         common::log_error("InputWebcam::reconfigureFormat - Invalid format/size indices");
-        if (wasRunning) start(); // Try to restart with old config
+        if (wasRunning)
+        {
+            start(); // Try to restart with old config
+        }
         return false;
     }
-    
+
     // Update desired format and size
     const auto& selectedFormat = capabilities_.formats[formatIndex];
     const auto& selectedSize = selectedFormat.sizes[sizeIndex];
-    
+
     desiredWidth_ = selectedSize.width;
     desiredHeight_ = selectedSize.height;
-    
+
     // Cleanup current setup
     cleanup();
-    
+
     // Set new selected format
     selectedFormat_ = std::make_unique<Format>(selectedFormat);
     selectedFormat_->selectedFrameSize = sizeIndex;
-    
+
     // Reinitialize device
     if (!setupDevice())
     {
         common::log_error("InputWebcam::reconfigureFormat - Failed to setup device with new configuration");
         return false;
     }
-    
+
     // Restart if it was running before
     if (wasRunning)
     {
@@ -509,8 +519,8 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
             return false;
         }
     }
-    
-    common::log_info("InputWebcam::reconfigureFormat - Successfully reconfigured device to %ux%u", 
-                     desiredWidth_, desiredHeight_);
+
+    common::log_info("InputWebcam::reconfigureFormat - Successfully reconfigured device to %ux%u", desiredWidth_,
+                     desiredHeight_);
     return true;
 }

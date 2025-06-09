@@ -6,9 +6,9 @@
 #include <GLFW/glfw3.h>
 // clang-format on
 
+#include <map>
 #include <memory>
 #include <queue>
-#include <map>
 
 #include "FunnyFace/cameraManager.h"
 #include "imgui.h"
@@ -71,6 +71,8 @@ class UI
     bool maintain_aspect_ratio_{false};
 
     bool was_plus_tab_active_ = false;
+    bool go_back_to_last_device_ = false;
+    unsigned int last_device_tab_index_ = 0;
     std::unordered_map<std::string, std::shared_ptr<InputWebcam>> temp_modal_webcams_;
 
     // Window positioning tracking
@@ -82,10 +84,9 @@ class UI
     // Device management
     bool show_device_config_ = false;
     int active_device_tab_ = 0;
-    bool show_add_device_modal_ = false;
 
     // Add device modal state
-    std::vector<std::string> available_video_devices_;
+    bool show_add_device_modal_ = false;
     int selected_video_device_ = -1;
     char device_name_buffer_[256] = "";
 
@@ -100,7 +101,6 @@ class UI
     void paintDeviceConfigurationTabs();
 
     void paintGeneralizedDeviceConfig(Webcam& camera);
-
 };
 } // namespace funnyface
 

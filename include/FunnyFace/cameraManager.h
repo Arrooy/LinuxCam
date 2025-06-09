@@ -90,17 +90,17 @@ bool updateCameraImpl(std::vector<std::shared_ptr<T>>& container, std::shared_pt
     {
         container.erase(it);
 
-        if (!camera->setupDevice())
-        {
-            common::log_error("Failed to setup camera device: %s", devicePath.c_str());
-            return false;
-        }
+        // if (!camera->setupDevice())
+        // {
+        //     common::log_error("Failed to setup camera device: %s", devicePath.c_str());
+        //     return false;
+        // }
 
-        if (!camera->start())
-        {
-            common::log_error("Failed to start camera device: %s", devicePath.c_str());
-            return false;
-        }
+        // if (!camera->start())
+        // {
+        //     common::log_error("Failed to start camera device: %s", devicePath.c_str());
+        //     return false;
+        // }
 
         container.push_back(std::move(camera));
         return true;
