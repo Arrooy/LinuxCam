@@ -64,6 +64,8 @@ class UI
     // Render the final UI (call this after paint(), before swapping buffers)
     void render();
 
+    void handleKeyboard();
+
   private:
     bool show_profiler_{true};
     bool show_input_config_{true};
@@ -84,6 +86,7 @@ class UI
     // Device management
     bool show_device_config_ = false;
     int active_device_tab_ = 0;
+    int requestedTab_ = 0;
 
     // Add device modal state
     bool show_add_device_modal_ = false;
@@ -95,12 +98,17 @@ class UI
     std::map<std::string, int> selected_size_indices_;
     std::map<std::string, int> selected_subsampling_;
 
+    // Tracked camera state On/Off
+    std::unordered_map<std::string, bool> cameraDesiredStates;
+
     // UI drawing functions
     void paintMainWindow();
     void paintAddDeviceModal();
     void paintDeviceConfigurationTabs();
 
-    void paintGeneralizedDeviceConfig(Webcam& camera);
+
+    void paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera);
+    std::shared_ptr<Webcam> getCurrentCameraSharedPtr(const std::string& camera_key);
 };
 } // namespace funnyface
 

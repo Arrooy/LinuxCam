@@ -40,44 +40,37 @@ bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
 {
     for (auto& input : inWebcam_)
     {
-        if (!input->isRunning())
+        if (input->isRunning())
         {
-            if (!input->start())
+            Image* inImage = nullptr;
+
+            if (!input->getImage(inImage))
             {
-                common::log_error("CameraManager::updateInput - Failed to start input device %s",
-                                  input->getDevicePath().c_str());
+                // Input device doesn't have an image for us yet.
+                continue;
+            }
+            else if (inImage == nullptr)
+            {
+                common::log_error("CameraManager::updateInput - Input image is null");
                 return false;
             }
-        }
+            else if (inImage->info.width == 0 || inImage->info.height == 0)
+            {
+                common::log_error("CameraManager::updateInput - Input image invalid size size: %d x %d",
+                                  inImage->info.width, inImage->info.height);
+                inImage->setBeingUsed(false);
+                continue;
+            }
 
-        Image* inImage = nullptr;
-
-        if (!input->getImage(inImage))
-        {
-            // Input device doesn't have an image for us yet.
-            continue;
-        }
-        else if (inImage == nullptr)
-        {
-            common::log_error("CameraManager::updateInput - Input image is null");
-            return false;
-        }
-        else if (inImage->info.width == 0 || inImage->info.height == 0)
-        {
-            common::log_error("CameraManager::updateInput - Input image invalid size size: %d x %d",
-                              inImage->info.width, inImage->info.height);
+            // Valid image, copy it to output image
+            outputImage = inImage->deepCopy(); // TODO: Instead of coping, we would need to merge them.
             inImage->setBeingUsed(false);
-            continue;
-        }
 
-        // Valid image, copy it to output image
-        outputImage = inImage->deepCopy(); // TODO: Instead of coping, we would need to merge them.
-        inImage->setBeingUsed(false);
-
-        if (outputImage == nullptr)
-        {
-            common::log_error("CameraManager::updateInput - Failed to create outputImage");
-            continue;
+            if (outputImage == nullptr)
+            {
+                common::log_error("CameraManager::updateInput - Failed to create outputImage");
+                continue;
+            }
         }
 
         break;
@@ -98,19 +91,13 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
     bool success = true;
     for (auto& output : outWebcam_)
     {
-        if (!output->isRunning())
+        if (output->isRunning())
         {
-            if (!output->start())
+            if (!output->writeFrame(*image))
             {
-                common::log_error("Failed to start output device %s", output->getDevicePath().c_str());
+                common::log_error("Failed to write frame to output device %s", output->getDevicePath().c_str());
                 success = false;
-                break;
             }
-        }
-        if (!output->writeFrame(*image))
-        {
-            common::log_error("Failed to write frame to output device %s", output->getDevicePath().c_str());
-            success = false;
         }
         break;
     }

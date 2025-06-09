@@ -90,7 +90,11 @@ bool InputWebcam::stop()
     }
 
     stopRecording();
-
+    if(!queueAllBuffersAgain())
+    {
+        common::log_error("InputWebcam::stop - Failed to queue all buffers again");
+        return false;
+    }
     return true;
 }
 
@@ -162,13 +166,20 @@ bool InputWebcam::configureBuffers()
 
 bool InputWebcam::startStreaming()
 {
-    if (ioctl(fd_, VIDIOC_STREAMON, &bufrequest_.type) < 0)
+    if (fd_ >= 0)
     {
-        common::errno_log("InputWebcam::startStreaming - VIDIOC_STREAMON");
-        cleanup();
+        if (ioctl(fd_, VIDIOC_STREAMON, &bufrequest_.type) < 0)
+        {
+            common::errno_log("InputWebcam::startStreaming - VIDIOC_STREAMON");
+            cleanup();
+            return false;
+        }
+    }
+    else
+    {
+        common::log_error("InputWebcam::startStreaming - fd_ < 0");
         return false;
     }
-
     return true;
 }
 
@@ -182,6 +193,11 @@ bool InputWebcam::stopStreaming()
             common::errno_log("InputWebcam::stopStreaming - VIDIOC_STREAMOFF");
             return false;
         }
+    }
+    else
+    {
+        common::log_error("InputWebcam::stopStreaming - fd_ < 0");
+        return false;
     }
     return true;
 }
@@ -209,13 +225,19 @@ bool InputWebcam::startRecording()
 
 void InputWebcam::stopRecording()
 {
-    stopStreaming();
+    if(!stopStreaming())
+    {
+        common::log_error("InputWebcam::stopRecording - Failed to stop streaming");
+        return;
+    }
+
     isRecording_ = false;
 
     if (recordThread_.joinable())
     {
         recordThread_.join();
     }
+    common::log_info("InputWebcam::stopRecording - Stopped recording");
 }
 
 bool InputWebcam::isRunning()
@@ -243,8 +265,8 @@ void InputWebcam::imageAcquisitionLoop()
     unsigned int decodingFailureCount{0u};
     unsigned int totalTimeouts{0u};
     const unsigned int warmupDiscardCount{2u};
+    
     bool readImageHeader{true};
-
     image_.setBeingUsed(false);
 
     while (isRecording_.load())
@@ -275,7 +297,7 @@ void InputWebcam::imageAcquisitionLoop()
         {
             common::log_warn("InputWebcam::imageAcquisitionLoop - Select timeout");
             totalTimeouts++;
-            if(totalTimeouts > 10)
+            if (totalTimeouts > 10)
             {
                 common::log_warn("InputWebcam::imageAcquisitionLoop - Select timeout reached, exiting loop");
                 break;
@@ -404,8 +426,8 @@ void InputWebcam::imageAcquisitionLoop()
         }
     }
 
+    image_.setBeingUsed(false);
     common::log_warn("InputWebcam::imageAcquisitionLoop thread dead for device: %s", device_path_.c_str());
-    image_.setBeingUsed(true);
 }
 
 InputWebcam::~InputWebcam()
@@ -420,6 +442,7 @@ void InputWebcam::cleanup()
 
     if (fd_ >= 0)
     {
+        common::log_info("Closing fd: %d", fd_);
         close(fd_);
         fd_ = -1;
     }
@@ -450,6 +473,25 @@ void InputWebcam::cleanupBuffers()
     }
 }
 
+bool InputWebcam::queueAllBuffersAgain()
+{
+    struct v4l2_buffer buf;
+
+    // Allocate and configure buffers_
+    for (unsigned int i = 0; i < bufrequest_.count; i++)
+    {
+        CLEAR(buf);
+        buf.type = bufrequest_.type;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.index = i;
+        if(!requeueFrame(buf))
+        {
+            common::errno_log("InputWebcam::queueAllBuffersAgain - VIDIOC_QBUF");
+            return false;
+        }
+    }
+    return true;
+}
 
 bool InputWebcam::requeueFrame(struct v4l2_buffer& buf)
 {

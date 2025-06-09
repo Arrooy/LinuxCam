@@ -41,11 +41,11 @@ bool Window::initialize()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // Remove title bar    
+    // Remove title bar
     // glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
     int width, height;
-    Config::getInstance().getWindowSize(width,height);
+    Config::getInstance().getWindowSize(width, height);
     std::string title = Config::getInstance().getWindowTitle();
 
     // Create window with graphics context
@@ -61,7 +61,8 @@ bool Window::initialize()
     glfwSwapInterval(1); // Enable vsync
 
     // Initialize GLAD
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
+    {
         common::log_error("Failed to initialize GLAD");
         return false;
     }

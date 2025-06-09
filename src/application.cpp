@@ -70,6 +70,12 @@ bool Application::initialize()
             return false;
         }
 
+        if(!webcam->start())
+        {
+            common::log_error("Failed to start webcam: %s", wc.name.c_str());
+            return false;
+        }
+
         if (!cameraManager_->addCamera(std::move(webcam)))
         {
             common::log_error("Failed to add webcam: %s", wc.name.c_str());
@@ -132,6 +138,8 @@ void Application::update()
             common::log_error("Failed to update output cameras");
         }
     }
+
+    ui_.handleKeyboard();
 
     // Start new UI frame
     ui_.newFrame();

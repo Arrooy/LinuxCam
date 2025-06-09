@@ -39,6 +39,7 @@ class InputWebcam : public Webcam
     void cleanup();
 
     void cleanupBuffers();
+    bool queueAllBuffersAgain();
 
     bool requeueFrame(struct v4l2_buffer& buf);
     void imageAcquisitionLoop();

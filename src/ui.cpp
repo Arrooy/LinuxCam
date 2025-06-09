@@ -42,9 +42,12 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
         return false;
     }
 
+    // glfwSetKeyCallback(window, KeyCallback);
+
     common::log_info("UI initialized successfully");
     return true;
 }
+
 
 void UI::shutdown()
 {
@@ -158,15 +161,24 @@ void UI::paintDeviceConfigurationTabs()
         for (const auto& webcam : managed_webcams)
         {
             std::string tab_name = webcam->getName();
+            ImGuiTabItemFlags flags = 0;
+
+            // Check if we need to programmatically select this tab
+            if (requestedTab_ == static_cast<int>(tab_index))
+            {
+                flags |= ImGuiTabItemFlags_SetSelected;
+                requestedTab_ = -1; // Clear the request
+                active_device_tab_ = tab_index;
+            }
 
             // Add webcam type indicator
             tab_name += webcam->getType() == WebcamType::PhysicalInput ? " (IN)" : " (OUT)";
 
             // Add close button to tab
             bool tab_open = true;
-            if (ImGui::BeginTabItem((tab_name + "###tab" + std::to_string(tab_index++)).c_str(), &tab_open))
+            if (ImGui::BeginTabItem((tab_name + "###tab" + std::to_string(tab_index++)).c_str(), &tab_open, flags))
             {
-                paintGeneralizedDeviceConfig(*webcam);
+                paintGeneralizedDeviceConfig(webcam);
                 last_device_tab_index_ = tab_index; // Save last active tab
                 ImGui::EndTabItem();
             }
@@ -233,14 +245,14 @@ void UI::paintDeviceConfigurationTabs()
 }
 
 
-void UI::paintGeneralizedDeviceConfig(Webcam& camera)
+void UI::paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera)
 {
     // Device Information
     if (ImGui::CollapsingHeader("Device Information"))
     {
-        ImGui::Text("Name: %s", camera.getName().c_str());
-        ImGui::Text("Path: %s", camera.getDevicePath().c_str());
-        CameraCapabilities capabilities = camera.getCapabilities();
+        ImGui::Text("Name: %s", camera->getName().c_str());
+        ImGui::Text("Path: %s", camera->getDevicePath().c_str());
+        CameraCapabilities capabilities = camera->getCapabilities();
         if (!capabilities.driver.empty())
         {
             ImGui::Text("Driver: %s", capabilities.driver.c_str());
@@ -252,7 +264,7 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
     // Current Settings
     if (ImGui::CollapsingHeader("Current Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        Format usedFormat = camera.getSelectedFormat();
+        Format usedFormat = camera->getSelectedFormat();
         FrameSize selectedFrameSize = usedFormat.sizes[usedFormat.selectedFrameSize];
         ImGui::Text("Format: %s", usedFormat.description.c_str());
         ImGui::Text("Resolution: %ux%u", selectedFrameSize.width, selectedFrameSize.height);
@@ -260,22 +272,22 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
         ImGui::Text("Image format %s", fromImageFormatToString(usedFormat.format).c_str());
 
         // Show subsampling for output devices
-        if (camera.getType() == WebcamType::VirtualOutput)
+        if (camera->getType() == WebcamType::VirtualOutput)
         {
             const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};
 
             // Get camera name as key for tracking selections
-            std::string camera_key = camera.getDevicePath();
+            std::string camera_key = camera->getDevicePath();
 
             // Initialize if not exists
             if (selected_subsampling_.find(camera_key) == selected_subsampling_.end())
             {
-                selected_subsampling_[camera_key] = static_cast<int>(camera.getChrominanceSubsampling());
+                selected_subsampling_[camera_key] = static_cast<int>(camera->getChrominanceSubsampling());
             }
 
             int current_subsampling = selected_subsampling_[camera_key];
 
-            ImGui::Text("Current: %s", subsampling_options[static_cast<int>(camera.getChrominanceSubsampling())]);
+            ImGui::Text("Current: %s", subsampling_options[static_cast<int>(camera->getChrominanceSubsampling())]);
             if (ImGui::Combo("Subsampling", &current_subsampling, subsampling_options,
                              IM_ARRAYSIZE(subsampling_options)))
             {
@@ -286,17 +298,17 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
     }
 
     // Available Formats (for input devices)
-    if (camera.getType() == WebcamType::PhysicalInput
+    if (camera->getType() == WebcamType::PhysicalInput
         && ImGui::CollapsingHeader("Available Formats", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        std::string camera_key = camera.getDevicePath();
+        std::string camera_key = camera->getDevicePath();
 
         // Initialize if not exists
         if (selected_format_indices_.find(camera_key) == selected_format_indices_.end())
         {
-            auto current_format = camera.getSelectedFormat();
+            auto current_format = camera->getSelectedFormat();
             selected_format_indices_[camera_key] = 0;
-            for (auto& format : camera.getCapabilities().formats)
+            for (auto& format : camera->getCapabilities().formats)
             {
                 if (current_format.pixelformat == format.pixelformat)
                 {
@@ -310,7 +322,7 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
         int& selected_format = selected_format_indices_[camera_key];
         int& selected_size = selected_size_indices_[camera_key];
 
-        CameraCapabilities capabilities = camera.getCapabilities();
+        CameraCapabilities capabilities = camera->getCapabilities();
         for (std::size_t fmt_idx = 0; fmt_idx < capabilities.formats.size(); fmt_idx++)
         {
             const auto& format = capabilities.formats[fmt_idx];
@@ -368,31 +380,14 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
     if (ImGui::Button("Apply Changes"))
     {
         common::log_info("UI::paintGeneralizedDeviceConfig - Applying device configuration changes for %s",
-                         camera.getDevicePath().c_str());
+                         camera->getDevicePath().c_str());
 
-        std::string camera_key = camera.getDevicePath();
+        std::string camera_key = camera->getDevicePath();
         bool success = false;
 
-        // Find the shared_ptr for this camera from the manager
-        auto webcams = cameraManager_->getWebcams();
-        std::shared_ptr<Webcam> cameraPtr = nullptr;
+        std::shared_ptr<Webcam> cameraPtr = getCurrentCameraSharedPtr(camera_key);
 
-        for (const auto& webcam : webcams)
-        {
-            if (webcam->getDevicePath() == camera_key)
-            {
-                cameraPtr = webcam;
-                break;
-            }
-        }
-
-        if (!cameraPtr)
-        {
-            common::log_error("Could not find camera %s in manager", camera_key.c_str());
-            return;
-        }
-
-        if (camera.getType() == WebcamType::PhysicalInput)
+        if (camera->getType() == WebcamType::PhysicalInput)
         {
             // Apply format/size changes for input camera
             if (selected_format_indices_.find(camera_key) != selected_format_indices_.end()
@@ -409,7 +404,7 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
                     }
 
                     // Use CameraManager to update the camera
-                    success |= cameraManager_->updateCamera(inputCam);
+                    success |= cameraManager_->updateCamera(inputCam); // TODO: maybe this is not necessary!
 
                     if (success)
                     {
@@ -424,7 +419,7 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
                 common::log_warn("No format/size selected for input camera %s", camera_key.c_str());
             }
         }
-        else if (camera.getType() == WebcamType::VirtualOutput)
+        else if (camera->getType() == WebcamType::VirtualOutput)
         {
             // Apply subsampling changes for output camera
             if (selected_subsampling_.find(camera_key) != selected_subsampling_.end())
@@ -453,13 +448,42 @@ void UI::paintGeneralizedDeviceConfig(Webcam& camera)
     }
 
     ImGui::SameLine();
-    if (camera.getType() == WebcamType::VirtualOutput)
+    if (camera->getType() == WebcamType::VirtualOutput)
     {
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Click to apply subsampling changes");
     }
     else
     {
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Click to apply format and resolution changes");
+    }
+    ImGui::Separator();
+    std::string key = camera->getDevicePath();
+    if (cameraDesiredStates.find(key) == cameraDesiredStates.end())
+    {
+        cameraDesiredStates[key] = camera->isRunning();
+    }
+    bool& desired = cameraDesiredStates[key];
+    if (ImGui::Checkbox("Device active", &desired))
+    {
+        common::log_info("Camera active changed to %s for %s", desired ? "true" : "false", key.c_str());
+        common::log_info("Camera is running to %s", camera->isRunning() ? "true" : "false");
+        if (desired != camera->isRunning())
+        {
+            if (desired)
+            {
+                camera->start();
+            }
+            else
+            {
+                camera->stop();
+            }
+            cameraDesiredStates[key] = camera->isRunning();
+            auto cameraPtr = getCurrentCameraSharedPtr(key);
+            if (cameraPtr && !cameraManager_->updateCamera(cameraPtr))
+            {
+                common::log_error("Failed to update camera");
+            }
+        }
     }
 }
 
@@ -740,6 +764,12 @@ void UI::paintAddDeviceModal()
             }
         }
 
+
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
         ImGui::EndPopup();
     }
     // Handle modal being closed by X button or ESC key
@@ -754,6 +784,7 @@ void UI::paintAddDeviceModal()
         show_add_device_modal_ = false;
         was_plus_tab_active_ = false;
         go_back_to_last_device_ = true;
+
         // Force tab selection back to a valid device tab
         if (last_device_tab_index_ > 0)
         {
@@ -761,4 +792,51 @@ void UI::paintAddDeviceModal()
             active_device_tab_ = last_device_tab_index_ - 1;
         }
     }
+}
+
+
+void UI::handleKeyboard()
+{
+    // Ignore keyboard shortcuts if ImGui has an active item
+    // This is to prevent the user from accidentally switching tabs while typing in the camera settings
+    if (!ImGui::IsAnyItemActive())
+    {
+        const auto& managed_webcams = cameraManager_->getWebcams();
+        int size = managed_webcams.size();
+
+        // Ctrl+1-9: Switch to specific tab
+        for (int i = 0; i < 9 && i < size; ++i)
+        {
+            ImGuiKey key = (ImGuiKey) (ImGuiKey_1 + i);
+            if (ImGui::IsKeyPressed(key) && active_device_tab_ != i)
+            {
+                requestedTab_ = i;
+            }
+        }
+    }
+}
+
+std::shared_ptr<Webcam> UI::getCurrentCameraSharedPtr(const std::string& camera_key)
+{
+    // Find the shared_ptr for this camera from the manager
+    auto webcams = cameraManager_->getWebcams();
+    std::shared_ptr<Webcam> cameraPtr = nullptr;
+
+    for (const auto& webcam : webcams)
+    {
+        if (webcam->getDevicePath() == camera_key)
+        {
+            cameraPtr = webcam;
+            common::log_info("Found camera %s in manager", camera_key.c_str());
+            common::log_info("Webcam is running %s vs ptr is running %s", webcam->isRunning() ? "true" : "false", cameraPtr->isRunning() ? "true" : "false");
+            break;
+        }
+    }
+
+    if (!cameraPtr)
+    {
+        common::log_error("Could not find camera %s in manager", camera_key.c_str());
+        return nullptr;
+    }
+    return cameraPtr;
 }
