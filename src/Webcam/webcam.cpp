@@ -4,6 +4,8 @@
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 
+#include <cmath>
+
 #include "FunnyFace/common.h"
 
 using namespace funnyface;
@@ -216,7 +218,8 @@ std::pair<unsigned int, double> Webcam::findBestFrameSize(const Format& fmt) con
     return {bestIndex, bestDistance};
 }
 
-double Webcam::calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const
+double
+Webcam::calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const
 {
     double dx = static_cast<double>(width1) - static_cast<double>(width2);
     double dy = static_cast<double>(height1) - static_cast<double>(height2);
