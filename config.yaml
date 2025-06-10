@@ -5,9 +5,9 @@ input_cameras:
     #   height: 480
     #   buffer_count: 2
     - name: "Old"
-      path: "/dev/video3"
-      width: 176
-      height: 144
+      path: "/dev/video5"
+      width: 1500
+      height: 1000
       buffer_count: 4
 
 output_cameras:

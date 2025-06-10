@@ -69,6 +69,22 @@ bool Application::initialize()
         }
     }
 
+    // auto available_device_paths = cameraManager_->discoverAvailableInputDevices();
+    // for (const auto& device_path : available_device_paths)
+    // {
+    //     std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", device_path, 0, 0, 2);
+    //     if (!webcam->setupDevice())
+    //     {
+    //         common::log_error("Failed to setup webcam: %s", device_path.c_str());
+    //         continue;
+    //     }
+    //     if (!cameraManager_->addCamera(std::move(webcam)))
+    //     {
+    //         common::log_error("Failed to add webcam: %s", device_path.c_str());
+    //         return false;
+    //     }
+    // }
+
     // Initialize window
     if (!window_.initialize())
     {
@@ -89,12 +105,12 @@ bool Application::initialize()
     ui_.connect(cameraManager_);
 
 
-    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/FunnyFace/first.gif");
-    if (!gif_->decodeAllFrames())
-    {
-        common::log_error("Failed to decode giff frames.");
-        return false;
-    }
+    gif_ = std::make_shared<GifReader>("/home/arroyoa/LinuxCam/first.gif");
+    // if (!gif_->decodeAllFrames())
+    // {
+    //     common::log_error("Failed to decode giff frames.");
+    //     return false;
+    // }
     ui_.connect(gif_);
 
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << "\n";
@@ -141,10 +157,13 @@ void Application::update()
     std::unique_ptr<Image> image;
     if (cameraManager_->updateInput(image))
     {
-        if (gif_->isOpen())
+        if (gif_->isOpen() && gif_->hasNext())
         {
             auto& gif_image = gif_->next();
-            image->paste(*gif_image);
+            if (gif_image != nullptr)
+            {
+                image->paste(*gif_image);
+            }
         }
         process(image);
         if (!cameraManager_->updateOutput(image))

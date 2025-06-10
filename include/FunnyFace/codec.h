@@ -171,11 +171,10 @@ class JPEGEncoder : public Encoder
         }
 
         // Validate that the source image matches our configured parameters
-        if (static_cast<int>(srcImage.info.width) != width || 
-            static_cast<int>(srcImage.info.height) != height)
+        if (static_cast<int>(srcImage.info.width) != width || static_cast<int>(srcImage.info.height) != height)
         {
-            common::log_error("JPEGEncoder::encode - Image size mismatch: expected %dx%d, got %lux%lu", 
-                             width, height, srcImage.info.width, srcImage.info.height);
+            common::log_error("JPEGEncoder::encode - Image size mismatch: expected %dx%d, got %lux%lu", width, height,
+                              srcImage.info.width, srcImage.info.height);
             return false;
         }
 
@@ -183,8 +182,8 @@ class JPEGEncoder : public Encoder
         TJPF sourcePixelFormat = srcImage.info.TJPixelFormat;
         if (sourcePixelFormat != pixelFormat)
         {
-            common::log_warn("JPEGEncoder::encode - Pixel format mismatch: expected %d, got %d", 
-                            static_cast<int>(pixelFormat), static_cast<int>(sourcePixelFormat));
+            common::log_warn("JPEGEncoder::encode - Pixel format mismatch: expected %d, got %d",
+                             static_cast<int>(pixelFormat), static_cast<int>(sourcePixelFormat));
             // Use the source image pixel format for encoding
             sourcePixelFormat = srcImage.info.TJPixelFormat;
         }
@@ -193,8 +192,8 @@ class JPEGEncoder : public Encoder
         size_t expectedSize = width * height * tjPixelSize[sourcePixelFormat];
         if (srcImage.size() < expectedSize)
         {
-            common::log_error("JPEGEncoder::encode - Source buffer too small: expected %zu, got %zu", 
-                             expectedSize, srcImage.size());
+            common::log_error("JPEGEncoder::encode - Source buffer too small: expected %zu, got %zu", expectedSize,
+                              srcImage.size());
             return false;
         }
 
@@ -204,16 +203,16 @@ class JPEGEncoder : public Encoder
         // Ensure the pitch is properly calculated (width * pixel_size)
         int pitch = width * tjPixelSize[sourcePixelFormat];
 
-        int tj_stat = tjCompress2(c_handle_, srcImage.data(), width, pitch, height, sourcePixelFormat, 
-                                  &outImageData, &outImageSize, chrominance_subsampling, quality, TJFLAG_NOREALLOC);
+        int tj_stat = tjCompress2(c_handle_, srcImage.data(), width, pitch, height, sourcePixelFormat, &outImageData,
+                                  &outImageSize, chrominance_subsampling, quality, TJFLAG_NOREALLOC);
 
         if (tj_stat != 0)
         {
             common::errno_log("JPEGEncoder::encode - Compressor failed to compress!");
             common::errno_log((const char*) tjGetErrorStr2(c_handle_));
-            common::log_error("JPEGEncoder::encode - Parameters: w=%d h=%d pitch=%d pf=%d cs=%d q=%d", 
-                             width, height, pitch, static_cast<int>(sourcePixelFormat), 
-                             static_cast<int>(chrominance_subsampling), quality);
+            common::log_error("JPEGEncoder::encode - Parameters: w=%d h=%d pitch=%d pf=%d cs=%d q=%d", width, height,
+                              pitch, static_cast<int>(sourcePixelFormat), static_cast<int>(chrominance_subsampling),
+                              quality);
             return false;
         }
 
@@ -310,7 +309,7 @@ class BayerGBRGDecoder : public Decoder
         {
             common::log_error("BayerGBRGDecoder - Unable to load parameter height");
         }
-        
+
         common::log_info("BayerGBRGDecoder - Initialized with %dx%d", width_, height_);
     }
 
@@ -337,7 +336,7 @@ class BayerGBRGDecoder : public Decoder
         outImage.info.height = height_;
         outImage.info.pixelSizeBytes = 3; // RGB
         outImage.info.TJPixelFormat = TJPF_RGB;
-        
+
         // Demosaic the Bayer GBRG image to RGB
         bool result = demosaicGBRG(srcImage, outImage);
         if (result)
@@ -382,8 +381,8 @@ class BayerGBRGDecoder : public Decoder
         // Validate input size
         if (bayerImage.size() < static_cast<size_t>(width * height))
         {
-            common::log_error("BayerGBRGDecoder::demosaicGBRG - Input buffer too small: %zu < %d", 
-                             bayerImage.size(), width * height);
+            common::log_error("BayerGBRGDecoder::demosaicGBRG - Input buffer too small: %zu < %d", bayerImage.size(),
+                              width * height);
             return false;
         }
 
@@ -450,5 +449,211 @@ class BayerGBRGDecoder : public Decoder
     int height_{0};
 };
 
+class DepthZ16Decoder : public Decoder
+{
+  public:
+    DepthZ16Decoder(const ConfigBuilder& config)
+    {
+        // Load configuration parameters with defaults
+        if (!config.get("width", width_))
+        {
+            common::log_error("DepthZ16Decoder - Unable to load parameter width");
+        }
+
+        if (!config.get("height", height_))
+        {
+            common::log_error("DepthZ16Decoder - Unable to load parameter height");
+        }
+
+        if (!config.get("max_depth", max_depth_))
+        {
+            max_depth_ = 65535; // Default to 16-bit max value
+            common::log_warn("DepthZ16Decoder - Using default max_depth: %d", max_depth_);
+        }
+
+        if (!config.get("color_map", color_map_))
+        {
+            color_map_ = 3; // Default to grayscale
+            common::log_warn("DepthZ16Decoder - Using default color_map: grayscale");
+        }
+
+        common::log_info("DepthZ16Decoder - Initialized with %dx%d, max_depth: %d, color_map: %d", 
+                         width_, height_, max_depth_, color_map_);
+    }
+
+    bool decode(const Image& srcImage, Image& outImage) override
+    {
+        if (srcImage.size() == 0)
+        {
+            common::log_error("DepthZ16Decoder::decode - Source image is empty");
+            return false;
+        }
+
+        // Validate input buffer size
+        size_t expectedSize = width_ * height_ * 2; // 2 bytes per pixel for Z16
+        if (srcImage.size() < expectedSize)
+        {
+            common::log_error("DepthZ16Decoder::decode - Source buffer too small: %zu < %zu", 
+                              srcImage.size(), expectedSize);
+            return false;
+        }
+
+        // Calculate RGB output size and resize if needed
+        unsigned long rgbSize = width_ * height_ * 3;
+        if (outImage.size() != rgbSize)
+        {
+            outImage.resize(rgbSize);
+            common::log_warn("DepthZ16Decoder::decode - Resizing output image to %lu bytes", rgbSize);
+        }
+
+        // Set output image info
+        outImage.info = srcImage.info;
+        outImage.info.width = width_;
+        outImage.info.height = height_;
+        outImage.info.pixelSizeBytes = 3;
+        outImage.info.TJPixelFormat = TJPF_RGB;
+
+        // Convert depth data to RGB
+        const unsigned short* depthData = reinterpret_cast<const unsigned short*>(srcImage.data());
+        unsigned char* rgbData = outImage.data();
+        unsigned long width = static_cast<unsigned long>(width_);
+        unsigned long height = static_cast<unsigned long>(height_);
+        for (unsigned long row = 0; row < height; ++row)
+        {
+            for (unsigned long col = 0; col < width ; ++col)
+            {
+                unsigned long depthIdx = row * width_ + col;
+                unsigned long rgbIdx = depthIdx * 3;
+
+                unsigned short depthValue = depthData[depthIdx];
+
+                // Convert depth to RGB based on color map
+                unsigned char r, g, b;
+                depthToRGB(depthValue, r, g, b);
+
+                rgbData[rgbIdx] = r;
+                rgbData[rgbIdx + 1] = g;
+                rgbData[rgbIdx + 2] = b;
+            }
+        }
+
+        outImage.setBeingUsed(true);
+        return true;
+    }
+
+    bool decodeHeader(Image& srcImage, unsigned long& raw_needed_size) override
+    {
+        srcImage.info.width = width_;
+        srcImage.info.height = height_;
+        srcImage.info.pixelSizeBytes = 3; // RGB output
+        srcImage.info.TJPixelFormat = TJPF_RGB;
+
+        // RGB output needs 3 bytes per pixel
+        raw_needed_size = width_ * height_ * 3;
+        return true;
+    }
+
+  private:
+    void depthToRGB(unsigned short depth, unsigned char& r, unsigned char& g, unsigned char& b)
+    {
+        if (depth == 0)
+        {
+            // Invalid depth (no measurement)
+            r = g = b = 0;
+            return;
+        }
+
+        switch (color_map_)
+        {
+            case 0: // Grayscale
+            {
+                float normalized = static_cast<float>(depth) / max_depth_;
+                unsigned char intensity = static_cast<unsigned char>(normalized * 255);
+                r = g = b = intensity;
+                break;
+            }
+            case 1: // Jet colormap (blue to red)
+            {
+                float normalized = static_cast<float>(depth) / max_depth_;
+                jetColorMap(normalized, r, g, b);
+                break;
+            }
+            case 2: // Hot colormap (black to red to yellow to white)
+            {
+                float normalized = static_cast<float>(depth) / max_depth_;
+                hotColorMap(normalized, r, g, b);
+                break;
+            }
+            default: // Simple RGB split
+            {
+                r = static_cast<unsigned char>(depth & 0xFF);
+                g = static_cast<unsigned char>((depth >> 8) & 0xFF);
+                b = 0;
+                break;
+            }
+        }
+    }
+
+    void jetColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b)
+    {
+        // Clamp value to [0, 1]
+        value = std::max(0.0f, std::min(1.0f, value));
+
+        if (value < 0.25f)
+        {
+            r = 0;
+            g = static_cast<unsigned char>(255 * 4 * value);
+            b = 255;
+        }
+        else if (value < 0.5f)
+        {
+            r = 0;
+            g = 255;
+            b = static_cast<unsigned char>(255 * (1 - 4 * (value - 0.25f)));
+        }
+        else if (value < 0.75f)
+        {
+            r = static_cast<unsigned char>(255 * 4 * (value - 0.5f));
+            g = 255;
+            b = 0;
+        }
+        else
+        {
+            r = 255;
+            g = static_cast<unsigned char>(255 * (1 - 4 * (value - 0.75f)));
+            b = 0;
+        }
+    }
+
+    void hotColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b)
+    {
+        // Clamp value to [0, 1]
+        value = std::max(0.0f, std::min(1.0f, value));
+
+        if (value < 0.33f)
+        {
+            r = static_cast<unsigned char>(255 * 3 * value);
+            g = 0;
+            b = 0;
+        }
+        else if (value < 0.66f)
+        {
+            r = 255;
+            g = static_cast<unsigned char>(255 * 3 * (value - 0.33f));
+            b = 0;
+        }
+        else
+        {
+            r = 255;
+            g = 255;
+            b = static_cast<unsigned char>(255 * 3 * (value - 0.66f));
+        }
+    }
+
+    int width_{0};
+    int height_{0};
+    int max_depth_{65535};
+    int color_map_{0}; // 0=grayscale, 1=jet, 2=hot, 3=simple RGB split
+};
 } // namespace funnyface
 #endif // CODEC_H

@@ -41,6 +41,8 @@ std::unique_ptr<T> CodecFactory::createDecoder(ImageFormat format, const ConfigB
             return std::unique_ptr<T>(new JPEGDecoder(config));
         case ImageFormat::SGBRG8:
             return std::unique_ptr<T>(new BayerGBRGDecoder(config));
+        case ImageFormat::DEPTH_Z16:
+            return std::unique_ptr<T>(new DepthZ16Decoder(config));
         // case ImageFormat::YUV420:
         //     return std::unique_ptr<T>(new YUV420Decoder(config));
         // Add more decoders as needed

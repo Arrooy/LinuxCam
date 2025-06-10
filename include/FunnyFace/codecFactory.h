@@ -17,6 +17,7 @@ enum class ImageFormat
     JPEG,
     SGBRG8, // Bayer format
     YUV420, // YUV 4:2:0 format
+    DEPTH_Z16, // Depth image format
     RAW,
 };
 
@@ -30,6 +31,8 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
             return "SGBRG8";
         case ImageFormat::YUV420:
             return "YUV420";
+        case ImageFormat::DEPTH_Z16:
+            return "DEPTH_Z16";
         case ImageFormat::RAW:
             return "RAW";
         default:

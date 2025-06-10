@@ -29,7 +29,9 @@ class GifReader
     // Access individual frames
     std::vector<std::unique_ptr<Image>>& frames();
 
+    bool hasNext() const;
     std::unique_ptr<Image>& next();
+
     inline void move(long x, long y)
     {
         x_ = x;

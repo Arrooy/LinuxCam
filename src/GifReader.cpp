@@ -1,4 +1,5 @@
 #include "FunnyFace/GifReader.h"
+
 #include "FunnyFace/common.h"
 namespace funnyface
 {
@@ -59,6 +60,12 @@ std::vector<std::unique_ptr<Image>>& GifReader::frames()
     return frameImages_;
 }
 
+
+bool GifReader::hasNext() const
+{
+    return !frameImages_.empty();
+}
+
 std::unique_ptr<Image>& GifReader::next()
 {
     index_++;
@@ -67,7 +74,14 @@ std::unique_ptr<Image>& GifReader::next()
         index_ = 0;
     }
     auto& img = frameImages_[index_];
-    img->move(x_,y_);
+    if (img)
+    {
+        img->move(x_, y_);
+    }
+    else
+    {
+        common::log_error("GifReader::next - No image found at index %zu", index_);
+    }
     return img;
 }
 

@@ -12,6 +12,7 @@
 #include <string>
 #include <ctime>
 
+#include <sys/stat.h>
 // Macro to clear a buffer
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
@@ -21,6 +22,14 @@ namespace funnyface
 {
 namespace common
 {
+
+
+inline bool file_exists(const std::string& port)
+{
+	struct stat sb;
+	return stat(port.c_str(), &sb) == 0;
+}
+
 
 enum class LogLevel
 {

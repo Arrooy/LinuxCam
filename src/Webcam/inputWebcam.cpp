@@ -351,6 +351,16 @@ void InputWebcam::imageAcquisitionLoop()
         Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
         srcImage.info.TJPixelFormat = TJPF_RGB;
 
+        if( buf.bytesused == 0)
+        {
+            common::log_info("InputWebcam::imageAcquisitionLoop - Empty frame received, requeuing");
+            if (!requeueFrame(buf))
+            {
+                break;
+            }
+            continue;
+        }
+
         if (readImageHeader)
         {
             unsigned long raw_needed_size;
@@ -380,7 +390,7 @@ void InputWebcam::imageAcquisitionLoop()
 
         if (image_.getBeingUsed())
         {
-            common::log_warn("InputWebcam::imageAcquisitionLoop - Image buffer is being used, skipping frame");
+            // common::log_warn("InputWebcam::imageAcquisitionLoop - Image buffer is being used, skipping frame");
             if (!requeueFrame(buf))
             {
                 break;

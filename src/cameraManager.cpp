@@ -5,7 +5,6 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include <filesystem>
 #include <set>
 
 #include "FunnyFace/common.h"
@@ -61,9 +60,16 @@ bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
                 inImage->setBeingUsed(false);
                 continue;
             }
-
+            // inImage->scaleByPercentage(35.0f);
             // Valid image, copy it to output image
-            outputImage = inImage->deepCopy(); // TODO: Instead of coping, we would need to merge them.
+            if (!outputImage)
+            {
+                outputImage = inImage->deepCopy();
+            }
+            else
+            {
+                outputImage->paste(*inImage);
+            }
             inImage->setBeingUsed(false);
 
             if (outputImage == nullptr)
@@ -165,7 +171,6 @@ std::vector<std::shared_ptr<Webcam>> CameraManager::getWebcams() const
     return result;
 }
 
-
 std::vector<std::string> CameraManager::discoverAvailableInputDevices()
 {
     std::vector<std::string> availableDevices;
@@ -192,7 +197,7 @@ std::vector<std::string> CameraManager::discoverAvailableInputDevices()
             continue;
         }
 
-        if (std::filesystem::exists(devicePath) && isDeviceUsable(devicePath))
+        if (common::file_exists(devicePath) && isDeviceUsable(devicePath))
         {
             availableDevices.push_back(devicePath);
             common::log_info("CameraManager::discoverAvailableInputDevices - Found unmanaged usable device: %s",

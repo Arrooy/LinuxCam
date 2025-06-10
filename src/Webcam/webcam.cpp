@@ -107,10 +107,11 @@ bool Webcam::updateDeviceCapabilities()
             fmt.pixelformat = fmtdesc.pixelformat;
             common::log_info("Webcam::updateDeviceCapabilities - Camera supports YUV420 format");
         }
-        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUYV)
+        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_Z16)
         {
-            common::log_warn("Webcam::updateDeviceCapabilities - Camera supports YUYV format");
-            continue;
+            fmt.format = ImageFormat::DEPTH_Z16;
+            fmt.pixelformat = fmtdesc.pixelformat;
+            common::log_warn("Webcam::updateDeviceCapabilities - Camera supports Z16 format");
         }
         else
         {
