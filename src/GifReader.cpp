@@ -1,0 +1,72 @@
+#include "FunnyFace/GifReader.h"
+#include "FunnyFace/common.h"
+namespace funnyface
+{
+
+GifReader::GifReader(const std::string& filename)
+{
+    gif_ = gd_open_gif(filename.c_str());
+}
+
+GifReader::~GifReader()
+{
+    if (gif_)
+    {
+        gd_close_gif(gif_);
+    }
+}
+
+bool GifReader::isOpen() const
+{
+    return gif_ != nullptr;
+}
+
+bool GifReader::decodeAllFrames()
+{
+    if (!gif_)
+    {
+        return false;
+    }
+    // Gif library only works with RGB
+    const size_t frameSize = gif_->width * gif_->height * 3;
+    auto buffer = std::make_unique<uint8_t[]>(frameSize);
+
+    do
+    {
+        gd_render_frame(gif_, buffer.get());
+
+        auto img = std::make_unique<Image>(frameSize);
+        std::memcpy(img->data(), buffer.get(), frameSize);
+
+        img->info.width = gif_->width;
+
+        img->info.height = gif_->height;
+        img->info.x = 0;
+        img->info.y = 0;
+        img->info.pixelSizeBytes = 3;
+        img->info.TJSampleFormat = TJSAMP_444;
+        img->info.TJColorSpace = TJCS_RGB;
+        img->info.TJPixelFormat = TJPF_RGB;
+
+        frameImages_.push_back(std::move(img));
+    } while (gd_get_frame(gif_));
+
+    return true;
+}
+
+std::vector<std::unique_ptr<Image>>& GifReader::frames()
+{
+    return frameImages_;
+}
+
+std::unique_ptr<Image>& GifReader::next()
+{
+    index_++;
+    if (index_ >= frameImages_.size())
+    {
+        index_ = 0;
+    }
+    return frameImages_[index_];
+}
+
+} // namespace funnyface

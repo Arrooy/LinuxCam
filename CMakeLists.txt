@@ -198,6 +198,28 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
+include(FetchContent)
+
+# Fetch gifdec from GitHub
+FetchContent_Declare(
+    gifdec
+    GIT_REPOSITORY https://github.com/lecram/gifdec.git
+    GIT_TAG master
+)
+
+# Clone & populate if not already fetched
+FetchContent_GetProperties(gifdec)
+if(NOT gifdec_POPULATED)
+    FetchContent_Populate(gifdec)
+
+    # Create a static library target
+    add_library(gifdec STATIC ${gifdec_SOURCE_DIR}/gifdec.c)
+
+    # Make headers available to users of gifdec
+    target_include_directories(gifdec PUBLIC ${gifdec_SOURCE_DIR})
+endif()
+
+
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 
 # Define the main executable
@@ -217,6 +239,7 @@ target_link_libraries(FunnyFace
     GL
     glad
     yaml-cpp::yaml-cpp
+    gifdec
 )
 
 # Ensure include directory is set *after* it exists
@@ -230,8 +253,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/include
 )
 
-
-# target_link_libraries(${PROJECT_NAME} PRIVATE GL)
 
 # Strip symbols in Release mode
 # target_link_options(FunnyFace PRIVATE $<$<CONFIG:RELEASE>:-s>)

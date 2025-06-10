@@ -1,5 +1,6 @@
 #include "FunnyFace/application.h"
 
+#include <csignal>
 #include <iostream>
 #include <memory>
 
@@ -7,7 +8,6 @@
 #include "FunnyFace/dlibDetectors.h"
 #include "FunnyFace/inputWebcam.h"
 #include "config.hpp"
-#include <csignal>
 using namespace funnyface;
 
 
@@ -35,20 +35,6 @@ bool Application::initialize()
 {
     std::signal(SIGINT, signalHandler);
 
-    // Initialize window
-    if (!window_.initialize())
-    {
-        common::log_error("Failed to initialize window");
-        return false;
-    }
-
-    // Initialize UI
-    if (!ui_.initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
-    {
-        common::log_error("Failed to initialize UI");
-        return false;
-    }
-
     cameraManager_ = std::make_shared<CameraManager>();
 
     auto webcams = Config::getInstance().getWebcams();
@@ -70,7 +56,7 @@ bool Application::initialize()
             return false;
         }
 
-        if(!webcam->start())
+        if (!webcam->start())
         {
             common::log_error("Failed to start webcam: %s", wc.name.c_str());
             return false;
@@ -83,6 +69,32 @@ bool Application::initialize()
         }
     }
 
+    // Initialize window
+    if (!window_.initialize())
+    {
+        common::log_error("Failed to initialize window");
+        return false;
+    }
+
+    // Initialize UI
+    if (!ui_.initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
+    {
+        common::log_error("Failed to initialize UI");
+        return false;
+    }
+
+    faceDetector_ = std::make_unique<DlibFaceDetector>();
+
+    // Pass pointer instead of reference
+    ui_.connect(cameraManager_);
+
+    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/FunnyFace/transparent1.gif");
+    if (!gif_->decodeAllFrames())
+    {
+        common::log_error("Failed to decode giff frames.");
+        return false;
+    }
+
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << "\n";
 
     // Initialize image renderer
@@ -91,11 +103,6 @@ bool Application::initialize()
         common::log_error("Failed to initialize image renderer");
         return false;
     }
-
-    faceDetector_ = std::make_unique<DlibFaceDetector>();
-
-    // Pass pointer instead of reference
-    ui_.connect(cameraManager_);
 
     common::log_info("Application initialized successfully");
     return true;
@@ -189,6 +196,11 @@ void Application::process(std::unique_ptr<Image>& image)
     //     }
     // }
     Profiler::getInstance().start("1", "Processing time");
-    imageRender_.uploadImage(image);
+    if (gif_->isOpen())
+    {
+        auto& gif_image = gif_->next();
+        image.paste(gif_image);
+    }
+    // imageRender_.uploadImage(image);
     Profiler::getInstance().stop("1", "Processing time");
 }

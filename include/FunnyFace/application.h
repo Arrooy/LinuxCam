@@ -1,14 +1,15 @@
 #ifndef APP_H
 #define APP_H
 
-#include "FunnyFace/cameraManager.h"
-#include "FunnyFace/imageRenderGL.h"
-#include "FunnyFace/ui.h"
-#include "FunnyFace/window.h"
-#include "FunnyFace/detectors.h"
-#include "FunnyFace/profiler.h"
 #include <memory>
 
+#include "FunnyFace/GifReader.h"
+#include "FunnyFace/cameraManager.h"
+#include "FunnyFace/detectors.h"
+#include "FunnyFace/imageRenderGL.h"
+#include "FunnyFace/profiler.h"
+#include "FunnyFace/ui.h"
+#include "FunnyFace/window.h"
 namespace funnyface
 {
 
@@ -37,6 +38,8 @@ class Application
     Profiler& profiler_;
 
     std::unique_ptr<FaceDetector> faceDetector_;
+
+    std::shared_ptr<GifReader> gif_;
 
     // Main loop methods
     void update();
