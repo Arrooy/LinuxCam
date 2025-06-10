@@ -88,12 +88,14 @@ bool Application::initialize()
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
 
-    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/FunnyFace/transparent1.gif");
+
+    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/FunnyFace/first.gif");
     if (!gif_->decodeAllFrames())
     {
         common::log_error("Failed to decode giff frames.");
         return false;
     }
+    ui_.connect(gif_);
 
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << "\n";
 
@@ -139,6 +141,11 @@ void Application::update()
     std::unique_ptr<Image> image;
     if (cameraManager_->updateInput(image))
     {
+        if (gif_->isOpen())
+        {
+            auto& gif_image = gif_->next();
+            image->paste(*gif_image);
+        }
         process(image);
         if (!cameraManager_->updateOutput(image))
         {
@@ -196,11 +203,6 @@ void Application::process(std::unique_ptr<Image>& image)
     //     }
     // }
     Profiler::getInstance().start("1", "Processing time");
-    if (gif_->isOpen())
-    {
-        auto& gif_image = gif_->next();
-        image.paste(gif_image);
-    }
-    // imageRender_.uploadImage(image);
+    imageRender_.uploadImage(image);
     Profiler::getInstance().stop("1", "Processing time");
 }

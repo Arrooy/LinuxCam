@@ -10,6 +10,7 @@
 #include <memory>
 #include <queue>
 
+#include "FunnyFace/GifReader.h"
 #include "FunnyFace/cameraManager.h"
 #include "imgui.h"
 
@@ -51,6 +52,7 @@ class UI
     bool initialize(GLFWwindow* window, const char* glsl_version = "#version 130");
 
     inline void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = newCameraManager; }
+    inline void connect(std::shared_ptr<GifReader> newGifReader) { gifReader_ = newGifReader; }
 
     // Cleanup the UI system
     void shutdown();
@@ -81,6 +83,7 @@ class UI
     float current_y_{0.0f};
 
     std::shared_ptr<CameraManager> cameraManager_;
+    std::shared_ptr<GifReader> gifReader_;
 
 
     // Device management
@@ -109,6 +112,18 @@ class UI
 
     void paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera);
     std::shared_ptr<Webcam> getCurrentCameraSharedPtr(const std::string& camera_key);
+    // static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
+
+    static void mouseCallback(GLFWwindow* window, double xpos, double ypos)
+    {
+        UI* self = static_cast<UI*>(glfwGetWindowUserPointer(window));
+        if (self)
+        {
+            // TODO: FIXME: adding the callback, we lost IMGUI interaction
+            // common::log_error("Xpos %f.2 %f.2", xpos, ypos);
+            self->gifReader_->move(xpos, ypos);
+        }
+    }
 };
 } // namespace funnyface
 

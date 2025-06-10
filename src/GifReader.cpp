@@ -66,7 +66,9 @@ std::unique_ptr<Image>& GifReader::next()
     {
         index_ = 0;
     }
-    return frameImages_[index_];
+    auto& img = frameImages_[index_];
+    img->move(x_,y_);
+    return img;
 }
 
 } // namespace funnyface

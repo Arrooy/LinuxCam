@@ -290,8 +290,14 @@ class Image
         unsigned long newHeight = static_cast<unsigned long>(info.height * percentage + 0.5);
 
         // Ensure minimum size of 1x1
-        if (newWidth == 0) newWidth = 1;
-        if (newHeight == 0) newHeight = 1;
+        if (newWidth == 0)
+        {
+            newWidth = 1;
+        }
+        if (newHeight == 0)
+        {
+            newHeight = 1;
+        }
 
         // Use existing scale method
         return scale(newWidth, newHeight);
@@ -327,8 +333,8 @@ class Image
         scaledImage->info.width = newWidth;
         scaledImage->info.height = newHeight;
 
-        // Ensure the scaled image is marked as being used
-        scaledImage->setBeingUsed(true);
+        // Ensure the scaled image is marked as it was
+        scaledImage->setBeingUsed(getBeingUsed());
 
         // Perform bilinear scaling
         const unsigned char* src = data_.get();
@@ -384,8 +390,9 @@ class Image
                     // Additional safety check (should not be needed with proper x2/y2 calculation)
                     if (idx1 >= size_ || idx2 >= size_ || idx3 >= size_ || idx4 >= size_)
                     {
-                        common::log_error("Image::scale - Source index out of bounds: idx1=%lu idx2=%lu idx3=%lu idx4=%lu size=%zu", 
-                                         idx1, idx2, idx3, idx4, size_);
+                        common::log_error(
+                            "Image::scale - Source index out of bounds: idx1=%lu idx2=%lu idx3=%lu idx4=%lu size=%zu",
+                            idx1, idx2, idx3, idx4, size_);
                         return nullptr;
                     }
 
@@ -413,10 +420,215 @@ class Image
         info.y = new_y;
     }
 
+    // Paste another image using its stored coordinates
+    Image& paste(const Image& other, bool expandCanvas = false)
+    {
+        pasteImpl(other, static_cast<long>(other.info.x), static_cast<long>(other.info.y), expandCanvas);
+        return *this;
+    }
+
+    // Paste another image at specific coordinates
+    Image& pasteAt(const Image& other, long x, long y, bool expandCanvas = false)
+    {
+        if (x < 0 || y < 0)
+        {
+            common::log_error("Image::pasteAt - Negative coordinates not supported: %ld, %ld", x, y);
+            return *this;
+        }
+        pasteImpl(other, x, y, expandCanvas);
+        return *this;
+    }
+
   private:
     inline unsigned long index(unsigned long col, unsigned long row) const
     {
         return (row * info.width + col) * info.pixelSizeBytes;
+    }
+
+    // Helper method to copy pixels from source to destination with alpha blending
+    void copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGlobalY, long canvasX, long canvasY,
+                                unsigned long canvasWidth, unsigned long canvasHeight)
+    {
+        if (!src.data() || !data_)
+        {
+            common::log_error("copyPixelsWithBlending - Aborting no data");
+            return;
+        }
+
+        // Calculate intersection with canvas
+        long srcLeft = srcGlobalX;
+        long srcTop = srcGlobalY;
+        long srcRight = srcLeft + static_cast<long>(src.info.width);
+        long srcBottom = srcTop + static_cast<long>(src.info.height);
+
+        long clipLeft = std::max(srcLeft, canvasX);
+        long clipTop = std::max(srcTop, canvasY);
+        long clipRight = std::min(srcRight, canvasX + static_cast<long>(canvasWidth));
+        long clipBottom = std::min(srcBottom, canvasY + static_cast<long>(canvasHeight));
+
+        // Skip if no intersection
+        if (clipLeft >= clipRight || clipTop >= clipBottom)
+        {
+            common::log_error("copyPixelsWithBlending - Aborting no intersection");
+            return;
+        }
+
+        const unsigned char* srcData = src.data();
+        unsigned char* dstData = data_.get();
+        const unsigned char pixelSize = info.pixelSizeBytes;
+
+        // Copy pixels row by row
+        for (long y = clipTop; y < clipBottom; y++)
+        {
+            // Calculate row start indices for optimization
+            long srcRowStart = (y - srcTop) * src.info.width;
+            long dstRowStart = (y - canvasY) * canvasWidth;
+
+            for (long x = clipLeft; x < clipRight; x++)
+            {
+                // Calculate column offsets
+                unsigned long srcCol = static_cast<unsigned long>(x - srcLeft);
+                unsigned long dstCol = static_cast<unsigned long>(x - canvasX);
+
+                // Calculate final indices
+                unsigned long srcIdx = (srcRowStart + srcCol) * pixelSize;
+                unsigned long dstIdx = (dstRowStart + dstCol) * pixelSize;
+
+                // Bounds checking
+                if (srcIdx + pixelSize > src.size() || dstIdx + pixelSize > size_)
+                {
+                    common::log_error("Image::copyPixelsWithBlending - Index out of bounds");
+                    continue;
+                }
+           
+
+                // Handle different pixel formats
+                if (pixelSize == 4) // RGBA
+                {
+                    unsigned char srcAlpha = srcData[srcIdx + 3];
+                    if (srcAlpha == 255)
+                    {
+                        // Fully opaque - direct assignment is faster than memcpy for 4 bytes
+                        dstData[dstIdx] = srcData[srcIdx];
+                        dstData[dstIdx + 1] = srcData[srcIdx + 1];
+                        dstData[dstIdx + 2] = srcData[srcIdx + 2];
+                        dstData[dstIdx + 3] = srcData[srcIdx + 3];
+                    }
+                    else if (srcAlpha > 0)
+                    {
+                        // Alpha blend
+                        float alpha = srcAlpha / 255.0f;
+                        float invAlpha = 1.0f - alpha;
+
+                        dstData[dstIdx] =
+                            static_cast<unsigned char>(srcData[srcIdx] * alpha + dstData[dstIdx] * invAlpha);
+                        dstData[dstIdx + 1] =
+                            static_cast<unsigned char>(srcData[srcIdx + 1] * alpha + dstData[dstIdx + 1] * invAlpha);
+                        dstData[dstIdx + 2] =
+                            static_cast<unsigned char>(srcData[srcIdx + 2] * alpha + dstData[dstIdx + 2] * invAlpha);
+                        dstData[dstIdx + 3] = std::max(dstData[dstIdx + 3], srcAlpha);
+                    }
+                    // srcAlpha == 0: skip (transparent pixel)
+                }
+                else if (pixelSize == 3) // RGB
+                {
+                    // Direct assignment for 3 bytes
+                    dstData[dstIdx] = srcData[srcIdx];
+                    dstData[dstIdx + 1] = srcData[srcIdx + 1];
+                    dstData[dstIdx + 2] = srcData[srcIdx + 2];
+                }
+                else if (pixelSize == 1) // Grayscale
+                {
+                    dstData[dstIdx] = srcData[srcIdx];
+                }
+                else
+                {
+                    // Fallback to memcpy for other formats
+                    std::memcpy(dstData + dstIdx, srcData + srcIdx, pixelSize);
+                }
+            }
+        }
+    }
+
+    // Core paste implementation - all paste methods delegate to this
+    Image& pasteImpl(const Image& other, long otherX, long otherY, bool expandCanvas)
+    {
+        // Validation
+        if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
+        {
+            common::log_error("Image::paste - Invalid base image");
+            return *this;
+        }
+
+        if (!other.data() || other.size() == 0 || other.info.width == 0 || other.info.height == 0)
+        {
+            common::log_error("Image::paste - Invalid source image to paste");
+            return *this;
+        }
+
+        if (info.pixelSizeBytes != other.info.pixelSizeBytes)
+        {
+            common::log_error("Image::paste - Pixel format mismatch: %d vs %d", info.pixelSizeBytes,
+                              other.info.pixelSizeBytes);
+            return *this;
+        }
+
+        // Calculate bounds for both images
+        long baseLeft = static_cast<long>(info.x);
+        long baseTop = static_cast<long>(info.y);
+        long baseRight = baseLeft + static_cast<long>(info.width);
+        long baseBottom = baseTop + static_cast<long>(info.height);
+
+        long otherLeft = otherX;
+        long otherTop = otherY;
+        long otherRight = otherLeft + static_cast<long>(other.info.width);
+        long otherBottom = otherTop + static_cast<long>(other.info.height);
+
+
+        // Calculate new dimensions
+        long minX = std::min(baseLeft, otherLeft);
+        long minY = std::min(baseTop, otherTop);
+        long maxX = std::max(baseRight, otherRight);
+        long maxY = std::max(baseBottom, otherBottom);
+
+        unsigned long newWidth = static_cast<unsigned long>(maxX - minX);
+        unsigned long newHeight = static_cast<unsigned long>(maxY - minY);
+
+        bool sameCanvasSize = newWidth == info.width && newHeight == info.height && minX == baseLeft && minY == baseTop;
+        if (!expandCanvas || sameCanvasSize)
+        {
+            // No actual expansion needed, just paste normally
+            copyPixelsWithBlending(other, otherLeft, otherTop, 0, 0, info.width, info.height);
+            return *this;
+        }
+
+        // Create backup of current image before resizing
+        Image backup;
+        backup.copyFrom(*this);
+
+        // Resize this image using existing method
+        size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
+        this->resize(newSize);
+
+        // Update dimensions and position
+        info.x = static_cast<unsigned long>(minX);
+        info.y = static_cast<unsigned long>(minY);
+        info.width = newWidth;
+        info.height = newHeight;
+
+        // Clear the new buffer
+        if (data_)
+        {
+            std::memset(data_.get(), 0, size_);
+        }
+
+        // Copy original image to new position
+        copyPixelsWithBlending(backup, baseLeft, baseTop, minX, minY, newWidth, newHeight);
+
+        // Copy other image
+        copyPixelsWithBlending(other, otherLeft, otherTop, minX, minY, newWidth, newHeight);
+
+        return *this;
     }
 
     mutable std::recursive_mutex beingUsedMutex_;

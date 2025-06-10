@@ -43,7 +43,8 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
     }
 
     // glfwSetKeyCallback(window, KeyCallback);
-
+    glfwSetWindowUserPointer(window, this);
+    glfwSetCursorPosCallback(window, UI::mouseCallback);
     common::log_info("UI initialized successfully");
     return true;
 }
@@ -66,7 +67,7 @@ void UI::newFrame()
 
 void UI::paint()
 {
-    ImGui::ShowDemoWindow();
+    // ImGui::ShowDemoWindow();
 
     // Paint all UI windows
     paintMainWindow();
@@ -91,7 +92,6 @@ void UI::paintMainWindow()
         }
         ImGui::EndMainMenuBar();
     }
-
     // Calculate base position for window stacking
     float menu_bar_height = ImGui::GetFrameHeight();
     current_y_ = menu_bar_height;
@@ -404,7 +404,7 @@ void UI::paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera)
                     }
 
                     // Use CameraManager to update the camera
-                    success |= cameraManager_->updateCamera(inputCam); //TODO: maybe this is not necessary!
+                    success |= cameraManager_->updateCamera(inputCam); // TODO: maybe this is not necessary!
 
                     if (success)
                     {

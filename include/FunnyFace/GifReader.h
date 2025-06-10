@@ -30,11 +30,17 @@ class GifReader
     std::vector<std::unique_ptr<Image>>& frames();
 
     std::unique_ptr<Image>& next();
-
+    inline void move(long x, long y)
+    {
+        x_ = x;
+        y_ = y;
+    }
   private:
     gd_GIF* gif_ = nullptr;
     std::vector<std::unique_ptr<Image>> frameImages_;
     size_t index_{0};
+
+    long x_{0}, y_{0};
 };
 
 } // namespace funnyface
