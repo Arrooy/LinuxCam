@@ -5,6 +5,7 @@
 #include <sys/ioctl.h>
 
 #include <cmath>
+
 #include "FunnyFace/common.h"
 
 using namespace funnyface;
@@ -275,7 +276,7 @@ bool Webcam::queueAllBuffersAgain(int numBuffers, int bufferType)
         if (!requeueFrame(buf))
         {
             common::errno_log("Webcam::queueAllBuffersAgain - VIDIOC_QBUF");
-            return false;
+            continue;
         }
     }
     return true;
@@ -283,9 +284,16 @@ bool Webcam::queueAllBuffersAgain(int numBuffers, int bufferType)
 
 bool Webcam::requeueFrame(struct v4l2_buffer& buf)
 {
-    if (ioctl(fd_, VIDIOC_QBUF, &buf) == -1)
+    if (fd_ > 0)
     {
-        common::errno_log("Webcam::requeueFrame - VIDIOC_QBUF");
+        if (ioctl(fd_, VIDIOC_QBUF, &buf) == -1)
+        {
+            common::errno_log("Webcam::requeueFrame - VIDIOC_QBUF");
+            return false;
+        }
+    }
+    else
+    {
         return false;
     }
     return true;

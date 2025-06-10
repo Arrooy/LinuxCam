@@ -43,8 +43,8 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
     }
 
     // glfwSetKeyCallback(window, KeyCallback);
-    glfwSetWindowUserPointer(window, this);
-    glfwSetCursorPosCallback(window, UI::mouseCallback);
+    // glfwSetWindowUserPointer(window, this);
+    // glfwSetCursorPosCallback(window, UI::mouseCallback);
     common::log_info("UI initialized successfully");
     return true;
 }
