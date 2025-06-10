@@ -10,14 +10,16 @@
 
 namespace funnyface
 {
-    
+
 enum class ImageFormat
 {
     UNKNOWN,
     JPEG,
-    SGBRG8, // Bayer format
-    YUV420, // YUV 4:2:0 format
+    SGBRG8,    // Bayer format
+    YUV420,    // YUV 4:2:0 format
     DEPTH_Z16, // Depth image format
+    UYUV422,   // UYVY 4:2:2 format
+    YUYV422,   // YUYV 4:2:2 format
     RAW,
 };
 
@@ -33,6 +35,10 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
             return "YUV420";
         case ImageFormat::DEPTH_Z16:
             return "DEPTH_Z16";
+        case ImageFormat::UYUV422:
+            return "UYUV422";
+        case ImageFormat::YUYV422:
+            return "YUYV422";
         case ImageFormat::RAW:
             return "RAW";
         default:

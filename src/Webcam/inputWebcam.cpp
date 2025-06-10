@@ -188,6 +188,12 @@ bool InputWebcam::stopStreaming()
 {
     if (fd_ >= 0)
     {
+        if (!isRecording_.load())
+        {
+            common::log_info("InputWebcam::stopStreaming - not recording, nothing to stop");
+            return true;
+        }
+
         if (ioctl(fd_, VIDIOC_STREAMOFF, &bufrequest_.type) < 0)
         {
             common::errno_log("InputWebcam::stopStreaming - VIDIOC_STREAMOFF");
@@ -208,7 +214,7 @@ bool InputWebcam::startRecording()
     if (isRecording_.load())
     {
         common::log_info("InputWebcam::startRecording - already recording");
-        return false;
+        return true;
     }
 
     if (!startStreaming())
@@ -351,7 +357,7 @@ void InputWebcam::imageAcquisitionLoop()
         Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
         srcImage.info.TJPixelFormat = TJPF_RGB;
 
-        if( buf.bytesused == 0)
+        if (buf.bytesused == 0)
         {
             common::log_info("InputWebcam::imageAcquisitionLoop - Empty frame received, requeuing");
             if (!requeueFrame(buf))

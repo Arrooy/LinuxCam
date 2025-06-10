@@ -1,6 +1,9 @@
 #ifndef CODEC_H
 #define CODEC_H
 
+#include <algorithm>
+#include <functional>
+
 #include "FunnyFace/codecFactory.h"
 #include "FunnyFace/image.h"
 
@@ -477,8 +480,8 @@ class DepthZ16Decoder : public Decoder
             common::log_warn("DepthZ16Decoder - Using default color_map: grayscale");
         }
 
-        common::log_info("DepthZ16Decoder - Initialized with %dx%d, max_depth: %d, color_map: %d", 
-                         width_, height_, max_depth_, color_map_);
+        common::log_info("DepthZ16Decoder - Initialized with %dx%d, max_depth: %d, color_map: %d", width_, height_,
+                         max_depth_, color_map_);
     }
 
     bool decode(const Image& srcImage, Image& outImage) override
@@ -493,8 +496,8 @@ class DepthZ16Decoder : public Decoder
         size_t expectedSize = width_ * height_ * 2; // 2 bytes per pixel for Z16
         if (srcImage.size() < expectedSize)
         {
-            common::log_error("DepthZ16Decoder::decode - Source buffer too small: %zu < %zu", 
-                              srcImage.size(), expectedSize);
+            common::log_error("DepthZ16Decoder::decode - Source buffer too small: %zu < %zu", srcImage.size(),
+                              expectedSize);
             return false;
         }
 
@@ -520,7 +523,7 @@ class DepthZ16Decoder : public Decoder
         unsigned long height = static_cast<unsigned long>(height_);
         for (unsigned long row = 0; row < height; ++row)
         {
-            for (unsigned long col = 0; col < width ; ++col)
+            for (unsigned long col = 0; col < width; ++col)
             {
                 unsigned long depthIdx = row * width_ + col;
                 unsigned long rgbIdx = depthIdx * 3;
@@ -548,8 +551,7 @@ class DepthZ16Decoder : public Decoder
         srcImage.info.pixelSizeBytes = 3; // RGB output
         srcImage.info.TJPixelFormat = TJPF_RGB;
 
-        // RGB output needs 3 bytes per pixel
-        raw_needed_size = width_ * height_ * 3;
+        raw_needed_size = width_ * height_ * 2;
         return true;
     }
 
@@ -654,6 +656,149 @@ class DepthZ16Decoder : public Decoder
     int height_{0};
     int max_depth_{65535};
     int color_map_{0}; // 0=grayscale, 1=jet, 2=hot, 3=simple RGB split
+};
+class YUV422 : public Decoder
+{
+  public:
+    struct YUV422Block
+    {
+        uint8_t y0;
+        uint8_t u;
+        uint8_t v;
+        uint8_t y1;
+    };
+    using ConversionFunct = std::function<YUV422Block(const uint8_t* block)>;
+
+    YUV422(const ConfigBuilder& config)
+    {
+        if (!config.get("width", width_))
+        {
+            common::log_error("YUV422 - Unable to load parameter width");
+        }
+
+        if (!config.get("height", height_))
+        {
+            common::log_error("YUV422 - Unable to load parameter height");
+        }
+
+        common::log_info("YUV422 - Initialized with %dx%d", width_, height_);
+    }
+
+    bool genericDecode(const Image& srcImage, Image& outImage, ConversionFunct pxConvert)
+    {
+        if (srcImage.size() == 0)
+        {
+            common::log_error("YUV422::decode - Source image is empty");
+            return false;
+        }
+
+        const size_t expectedSize = width_ * height_ * 2;
+        if (srcImage.size() < expectedSize)
+        {
+            common::log_error("YUV422::decode - Input buffer too small: %zu < %zu", srcImage.size(), expectedSize);
+            return false;
+        }
+
+        const size_t rgbSize = width_ * height_ * 3;
+        if (outImage.size() != rgbSize)
+        {
+            outImage.resize(rgbSize);
+            common::log_warn("YUV422::decode - Resizing output image to %lu bytes", rgbSize);
+        }
+
+        outImage.info = srcImage.info;
+        outImage.info.width = width_;
+        outImage.info.height = height_;
+        outImage.info.pixelSizeBytes = 3;
+        outImage.info.TJPixelFormat = TJPF_RGB;
+
+        bool result = decodeYUV(srcImage, outImage, pxConvert);
+        outImage.setBeingUsed(result);
+        return result;
+    }
+
+    bool decodeHeader(Image& srcImage, unsigned long& raw_needed_size) override
+    {
+        srcImage.info.width = width_;
+        srcImage.info.height = height_;
+        srcImage.info.pixelSizeBytes = 3;
+        srcImage.info.TJPixelFormat = TJPF_RGB;
+
+        raw_needed_size = width_ * height_ * 2;
+        return true;
+    }
+
+  private:
+    bool decodeYUV(const Image& yuvImage, Image& rgbImage, ConversionFunct funct)
+    {
+        const uint8_t* yuv = yuvImage.data();
+        uint8_t* rgb = rgbImage.data();
+
+        if (!yuv || !rgb)
+        {
+            common::log_error("YUV422::decodeYUV - Invalid data pointers");
+            return false;
+        }
+
+        const int pixels = width_ * height_;
+        for (int i = 0, j = 0; i < pixels; i += 2, j += 4)
+        {
+            YUV422Block block = funct(yuv + j);
+
+            convertYUVtoRGB(block.y0, block.u, block.v, rgb + i * 3);
+            convertYUVtoRGB(block.y1, block.u, block.v, rgb + (i + 1) * 3);
+        }
+
+        return true;
+    }
+
+    void convertYUVtoRGB(uint8_t y, uint8_t u, uint8_t v, uint8_t* rgb)
+    {
+        int C = y - 16;
+        int D = u - 128;
+        int E = v - 128;
+
+        int R = (298 * C + 409 * E + 128) >> 8;
+        int G = (298 * C - 100 * D - 208 * E + 128) >> 8;
+        int B = (298 * C + 516 * D + 128) >> 8;
+
+        rgb[0] = static_cast<uint8_t>(common::clamp(R, 0, 255));
+        rgb[1] = static_cast<uint8_t>(common::clamp(G, 0, 255));
+        rgb[2] = static_cast<uint8_t>(common::clamp(B, 0, 255));
+    }
+    int width_{0};
+    int height_{0};
+};
+
+class UYVY422Decoder : public YUV422
+{
+  public:
+    UYVY422Decoder(const ConfigBuilder& config) : YUV422(config) {}
+
+    bool decode(const Image& srcImage, Image& outImage) override
+    {
+        return genericDecode(srcImage, outImage, UYVY422BlockOrder);
+    }
+
+    static YUV422Block UYVY422BlockOrder(const uint8_t* block)
+    {
+        return {.y0 = block[1], .u = block[0], .v = block[2], .y1 = block[3]};
+    }
+};
+class YUYV422Decoder : public YUV422
+{
+  public:
+    YUYV422Decoder(const ConfigBuilder& config) : YUV422(config) {}
+
+    bool decode(const Image& srcImage, Image& outImage) override
+    {
+        return genericDecode(srcImage, outImage, YUYV422BlockOrder);
+    }
+
+    static YUV422Block YUYV422BlockOrder(const uint8_t* block)
+    {
+        return {.y0 = block[0], .u = block[1], .v = block[3], .y1 = block[2]};
+    }
 };
 } // namespace funnyface
 #endif // CODEC_H

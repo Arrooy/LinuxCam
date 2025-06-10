@@ -30,6 +30,11 @@ inline bool file_exists(const std::string& port)
 	return stat(port.c_str(), &sb) == 0;
 }
 
+template <typename T>
+const T& clamp(const T& v, const T& lo, const T& hi)
+{
+    return (v < lo) ? lo : (hi < v) ? hi : v;
+}
 
 enum class LogLevel
 {

@@ -69,21 +69,21 @@ bool Application::initialize()
         }
     }
 
-    // auto available_device_paths = cameraManager_->discoverAvailableInputDevices();
-    // for (const auto& device_path : available_device_paths)
-    // {
-    //     std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", device_path, 0, 0, 2);
-    //     if (!webcam->setupDevice())
-    //     {
-    //         common::log_error("Failed to setup webcam: %s", device_path.c_str());
-    //         continue;
-    //     }
-    //     if (!cameraManager_->addCamera(std::move(webcam)))
-    //     {
-    //         common::log_error("Failed to add webcam: %s", device_path.c_str());
-    //         return false;
-    //     }
-    // }
+    auto available_device_paths = cameraManager_->discoverAvailableInputDevices();
+    for (const auto& device_path : available_device_paths)
+    {
+        std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", device_path, 0, 0, 2);
+        if (!webcam->setupDevice())
+        {
+            common::log_error("Failed to setup webcam: %s", device_path.c_str());
+            continue;
+        }
+        if (!cameraManager_->addCamera(std::move(webcam)))
+        {
+            common::log_error("Failed to add webcam: %s", device_path.c_str());
+            return false;
+        }
+    }
 
     // Initialize window
     if (!window_.initialize())

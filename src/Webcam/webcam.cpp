@@ -113,6 +113,19 @@ bool Webcam::updateDeviceCapabilities()
             fmt.pixelformat = fmtdesc.pixelformat;
             common::log_warn("Webcam::updateDeviceCapabilities - Camera supports Z16 format");
         }
+        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_UYVY)
+        {
+            fmt.format = ImageFormat::UYUV422;
+            fmt.pixelformat = fmtdesc.pixelformat;
+            common::log_warn("Webcam::updateDeviceCapabilities - Camera supports Z16 format");
+        }
+        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUYV)
+        {
+            fmt.format = ImageFormat::YUYV422;
+            fmt.pixelformat = fmtdesc.pixelformat;
+            common::log_info("Webcam::updateDeviceCapabilities - Camera supports RAW format");
+        }
+
         else
         {
             common::log_warn("Webcam::updateDeviceCapabilities - Camera supports unknown format: %s",
@@ -241,6 +254,8 @@ bool Webcam::configureDeviceFormat()
         format.fmt.pix.width = frameSize.width;
         format.fmt.pix.height = frameSize.height;
         format.fmt.pix.field = V4L2_FIELD_NONE;
+        common::log_info("%s - Trying to set format: pixfmt=0x%x, width=%d, height=%d", name_.c_str(), format.fmt.pix.pixelformat,
+                         format.fmt.pix.width, format.fmt.pix.height);
 
         if (ioctl(fd_, VIDIOC_S_FMT, &format) < 0)
         {

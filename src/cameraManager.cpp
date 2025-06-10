@@ -37,6 +37,8 @@ void CameraManager::shutdown()
 
 bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
 {
+    static int turn = 0;
+    static int turnCount = 0;
     for (auto& input : inWebcam_)
     {
         if (input->isRunning())

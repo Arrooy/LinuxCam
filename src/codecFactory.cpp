@@ -43,6 +43,10 @@ std::unique_ptr<T> CodecFactory::createDecoder(ImageFormat format, const ConfigB
             return std::unique_ptr<T>(new BayerGBRGDecoder(config));
         case ImageFormat::DEPTH_Z16:
             return std::unique_ptr<T>(new DepthZ16Decoder(config));
+        case ImageFormat::UYUV422:
+            return std::unique_ptr<T>(new UYVY422Decoder(config));
+        case ImageFormat::YUYV422:
+            return std::unique_ptr<T>(new YUYV422Decoder(config));
         // case ImageFormat::YUV420:
         //     return std::unique_ptr<T>(new YUV420Decoder(config));
         // Add more decoders as needed
@@ -60,12 +64,12 @@ std::unique_ptr<T> CodecFactory::createEncoder(ImageFormat format, const ConfigB
             return std::unique_ptr<T>(new RAWEncoder(config));
         case ImageFormat::JPEG:
             return std::unique_ptr<T>(new JPEGEncoder(config));
-        // case ImageFormat::SGBRG8:
-        //     return std::unique_ptr<T>(new BayerGBRGEncoder(config));
-        // case ImageFormat::YUV420:
-        //     return std::unique_ptr<T>(new YUV420Decoder(config));
-        // Add more encoders as needed
-            default:
+            // case ImageFormat::SGBRG8:
+            //     return std::unique_ptr<T>(new BayerGBRGEncoder(config));
+            // case ImageFormat::YUV420:
+            //     return std::unique_ptr<T>(new YUV420Decoder(config));
+            // Add more encoders as needed
+        default:
             return nullptr;
     }
 }
