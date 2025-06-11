@@ -39,6 +39,7 @@ class CameraManager
     std::vector<std::string> discoverAvailableInputDevices();
   private:
     bool isDeviceUsable(const std::string& devicePath);
+    bool processCameraInput(std::unique_ptr<Image>& outputImage, std::unique_ptr<Image>& newFrame);
     std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
     std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
     // std::unordered_map<int, int> connections_;

@@ -37,21 +37,22 @@ void CameraManager::shutdown()
 
 bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
 {
-    static int i = 0;
-    static int max_i = 3;
     for (auto& input : inWebcam_)
     {
         if (input->isRunning())
         {
+            // Skip if the input is not currently selected
+            if (!input->isCurrentlySelected())
+            {
+                continue;
+            }
+
             std::unique_ptr<Image> newFrame;
 
             if (!input->getImage(newFrame))
             {
-                common::log_error("CameraManager::updateInput - Failed to get image from input device %s",
-                                  input->getDevicePath().c_str());
                 continue;
             }
-
             else if (newFrame == nullptr)
             {
                 common::log_error("CameraManager::updateInput - Input image is null");
@@ -61,28 +62,32 @@ bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
             {
                 common::log_error("CameraManager::updateInput - Input image invalid size size: %d x %d",
                                   newFrame->info.width, newFrame->info.height);
-
-                newFrame.reset(); // Reset the image
                 continue;
             }
 
-            // Valid image, copy it to output image
-            if (!outputImage)
+            if (!processCameraInput(outputImage, newFrame))
             {
-                outputImage = std::move(newFrame);
-            }
-            else
-            {
-                // More than 1 image, past it next to the previous one
-                outputImage->paste(*newFrame, true);
-            }
-
-            if (outputImage == nullptr)
-            {
-                common::log_error("CameraManager::updateInput - Failed to create outputImage");
-                continue;
+                common::log_error("CameraManager::updateInput - Failed to process camera input");
+                return false;
             }
         }
+    }
+
+    return outputImage != nullptr;
+}
+
+bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage, std::unique_ptr<Image>& newFrame)
+{
+    // Valid image, copy it to output image
+    if (!outputImage)
+    {
+        outputImage = std::move(newFrame);
+        outputImage->move(0, 0);
+    }
+    else
+    {
+        // If outputImage already exists, paste the new frame next to the previous one
+        outputImage->paste(*newFrame, true);
     }
 
     return outputImage != nullptr;

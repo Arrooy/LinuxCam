@@ -31,7 +31,7 @@ void main() {
 using namespace funnyface;
 
 ImageRenderGL::ImageRenderGL()
-    : textureId_(0), vao_(0), vbo_(0), ebo_(0), shaderProgram_(0), currentWidth_(0), currentHeight_(0)
+    : textureId_(0), noImageTextureId_(0), previousTextureId_(0), vao_(0), vbo_(0), ebo_(0), shaderProgram_(0), currentWidth_(0), currentHeight_(0)
 {
 }
 
@@ -90,11 +90,44 @@ bool ImageRenderGL::initialize()
     // Generate texture
     glGenTextures(1, &textureId_);
 
+    // Create pre-allocated "no image" texture
+    glGenTextures(1, &noImageTextureId_);
+    glBindTexture(GL_TEXTURE_2D, noImageTextureId_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
     // Unbind
     glBindVertexArray(0);
 
     common::log_info("ImageRenderGL initialized successfully");
     return true;
+}
+
+void ImageRenderGL::noImage()
+{
+    // Store current texture as previous (don't delete it)
+    if (textureId_ != 0 && textureId_ != noImageTextureId_)
+    {
+        // Clean up any existing previous texture first
+        if (previousTextureId_ != 0)
+        {
+            glDeleteTextures(1, &previousTextureId_);
+        }
+        previousTextureId_ = textureId_;
+    }
+
+    // Switch to using the pre-created "no image" texture
+    textureId_ = noImageTextureId_;
+
+    // Reset dimensions
+    currentWidth_ = 0;
+    currentHeight_ = 0;
+
+    common::log_info("Switched to no image texture (previous texture preserved)");
 }
 
 bool ImageRenderGL::uploadImage(std::unique_ptr<Image>& image)
@@ -209,10 +242,22 @@ void ImageRenderGL::renderBackground(int windowWidth, int windowHeight)
 
 void ImageRenderGL::shutdown()
 {
-    if (textureId_)
+    if (textureId_ != 0 && textureId_ != noImageTextureId_)
     {
         glDeleteTextures(1, &textureId_);
         textureId_ = 0;
+    }
+
+    if (previousTextureId_ != 0)
+    {
+        glDeleteTextures(1, &previousTextureId_);
+        previousTextureId_ = 0;
+    }
+
+    if (noImageTextureId_)
+    {
+        glDeleteTextures(1, &noImageTextureId_);
+        noImageTextureId_ = 0;
     }
 
     if (vao_)

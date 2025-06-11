@@ -83,6 +83,10 @@ class Webcam
     }
     unsigned int getDesiredWidth() const { return desiredWidth_; }
     unsigned int getDesiredHeight() const { return desiredHeight_; }
+
+    bool isCurrentlySelected() const { return currentlySelected_; }
+    void setCurrentlySelected(bool selected) { currentlySelected_ = selected; }
+
   protected:
     bool open();
     bool configureDeviceFormat();
@@ -108,6 +112,8 @@ class Webcam
 
     CameraCapabilities capabilities_;
     std::unique_ptr<Format> selectedFormat_;
+
+    bool currentlySelected_{false}; // True if the user has selected this webcam in the UI
 };
 
 } // namespace funnyface

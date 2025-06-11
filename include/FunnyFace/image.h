@@ -84,47 +84,6 @@ class Image
         }
     }
 
-    // Copy constructor - properly handle mutex
-    Image(const Image& other) : info(other.info), size_(other.size_)
-    {
-        data_ = other.data_; // shared_ptr copy
-    }
-
-    // Move constructor
-    Image(Image&& other) noexcept : info(other.info), size_(other.size_)
-    {
-        data_ = std::move(other.data_);
-        other.size_ = 0;
-    }
-
-    // Copy assignment operator - properly handle mutex
-    Image& operator=(const Image& other)
-    {
-        if (this != &other)
-        {
-            // Copy basic data
-            data_ = other.data_; // shared_ptr copy
-            size_ = other.size_;
-            info = other.info;
-            // TODO: MAYBE ALL THIS CONSTRUCTORS CAN BE DEFAULT NOW
-        }
-        return *this;
-    }
-
-    // Move assignment operator
-    Image& operator=(Image&& other) noexcept
-    {
-        if (this != &other)
-        {
-            // Move basic data
-            data_ = std::move(other.data_);
-            size_ = other.size_;
-            info = other.info;
-            other.size_ = 0;
-        }
-        return *this;
-    }
-
     // Resize the image data
     void resize(size_t newSize)
     {
@@ -138,6 +97,8 @@ class Image
         if (size_ != newSize)
         {
             std::shared_ptr<unsigned char> newData(new unsigned char[newSize], std::default_delete<unsigned char[]>());
+            // Initialize new data to zero
+            memset(newData.get(), 0, newSize);
 
             if (data_ && newData)
             {
@@ -211,6 +172,9 @@ class Image
     {
         if (this != &other)
         {
+            this->resize(other.size_);
+
+            // Copy data if both images have valid data pointers and size > 0
             if (data_ && other.data() && size_ > 0)
             {
                 std::memcpy(data_.get(), other.data(), size_);
@@ -563,9 +527,11 @@ class Image
         }
 
         // Create backup of current image before resizing
-        Image backup;
+        Image backup; //TODO: FIXME: THIS IS WRONG: MAYBE .
         backup.copyFrom(*this);
 
+        common::log_info("Image::paste - Resizing canvas from %lux%lu to %lux%lu", info.width, info.height, newWidth,
+                        newHeight);
         // Resize this image using existing method
         size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
         this->resize(newSize);
@@ -576,16 +542,18 @@ class Image
         info.width = newWidth;
         info.height = newHeight;
 
-        // Clear the new buffer
-        if (data_)
-        {
-            std::memset(data_.get(), 0, size_);
-        }
+        // // Clear the new buffer
+        // if (data_)
+        // {
+        //     std::memset(data_.get(), 0, size_);
+        // }
 
         // Copy original image to new position
+        common::log_info("Image::paste - Copying backup image to new position");
         copyPixelsWithBlending(backup, baseLeft, baseTop, minX, minY, newWidth, newHeight);
 
         // Copy other image
+        common::log_info("Image::paste - Copying other image to new position");
         copyPixelsWithBlending(other, otherLeft, otherTop, minX, minY, newWidth, newHeight);
 
         return *this;

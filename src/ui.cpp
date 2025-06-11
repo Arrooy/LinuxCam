@@ -53,7 +53,7 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
 
 void UI::shutdown()
 {
-    if(!ready_)
+    if (!ready_)
     {
         common::log_error("UI is not initialized, cannot shutdown.");
         return;
@@ -408,12 +408,9 @@ void UI::paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera)
                         common::log_error("Apply Changes: Failed to reconfigure format.");
                         success = false;
                     }
-
-                    // Use CameraManager to update the camera
-                    success |= cameraManager_->updateCamera(inputCam); // TODO: maybe this is not necessary!
-
-                    if (success)
+                    else
                     {
+                        success = true;
                         // Reset selections after successful apply
                         selected_format_indices_[camera_key] = -1;
                         selected_size_indices_[camera_key] = -1;
@@ -434,11 +431,7 @@ void UI::paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera)
                 if (outputCam)
                 {
                     TJSAMP new_subsampling = static_cast<TJSAMP>(selected_subsampling_[camera_key]);
-
                     success = outputCam->reconfigureSubsampling(new_subsampling);
-
-                    // Use CameraManager to update the camera
-                    success |= cameraManager_->updateCamera(outputCam);
                 }
             }
         }
@@ -470,24 +463,23 @@ void UI::paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera)
     {
         if (enabled)
         {
-            common::log_info("Starting camera");
             camera->start();
         }
         else
         {
-            common::log_info("Stopping camera");
             camera->stop();
         }
+    }
 
-        std::shared_ptr<Webcam> cameraPtr = getCurrentCameraSharedPtr(camera->getDevicePath());
-        if (cameraPtr)
+    if (camera->getType() == WebcamType::PhysicalInput)
+    {
+        ImGui::SameLine();
+        ImGui::Separator();
+        // Enable capturing
+        bool selected = camera->isCurrentlySelected();
+        if (ImGui::Checkbox("Device selected ?", &selected))
         {
-            common::log_info("Updating camera %s active: %s isRunning %s", camera->getDevicePath().c_str(),
-                             enabled ? "true" : "false", cameraPtr->isRunning() ? "true" : "false");
-            if (!cameraManager_->updateCamera(cameraPtr))
-            {
-                common::log_error("Failed to update camera");
-            }
+            camera->setCurrentlySelected(selected);
         }
     }
 }
@@ -816,6 +808,14 @@ void UI::handleKeyboard()
             if (ImGui::IsKeyPressed(key) && active_device_tab_ != i)
             {
                 requestedTab_ = i;
+                managed_webcams[i]->setCurrentlySelected(true);
+                for (const auto& webcam : managed_webcams)
+                {
+                    if (webcam->getDevicePath() != managed_webcams[i]->getDevicePath())
+                    {
+                        webcam->setCurrentlySelected(false);
+                    }
+                }
             }
         }
     }

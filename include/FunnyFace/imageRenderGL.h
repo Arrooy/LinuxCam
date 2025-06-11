@@ -21,6 +21,9 @@ class ImageRenderGL
     // Upload image data to GPU (minimal copy, reuses texture if possible)
     bool uploadImage(std::unique_ptr<Image>& image);
 
+
+    void noImage();
+
     // Render the current image as background
     void renderBackground(int windowWidth, int windowHeight);
 
@@ -34,6 +37,8 @@ class ImageRenderGL
     GLuint createShaderProgram(const char* vertexSource, const char* fragmentSource);
 
     GLuint textureId_;
+    GLuint noImageTextureId_;  // Pre-created texture for "no image" state
+    GLuint previousTextureId_; // Store previous texture for potential reuse
     GLuint vao_, vbo_, ebo_;
     GLuint shaderProgram_;
 
