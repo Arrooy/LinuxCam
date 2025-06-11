@@ -61,7 +61,7 @@ bool Application::initialize()
             common::log_error("Failed to start webcam: %s", wc.name.c_str());
             return false;
         }
-
+        webcam->setCurrentlySelected(true);
         if (!cameraManager_->addCamera(std::move(webcam)))
         {
             common::log_error("Failed to add webcam: %s", wc.name.c_str());

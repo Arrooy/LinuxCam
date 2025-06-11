@@ -1,8 +1,9 @@
 #include "FunnyFace/UI/PaintWebcam.h"
-#include "FunnyFace/webcam.h"
+
+#include "FunnyFace/common.h"
 #include "FunnyFace/inputWebcam.h"
 #include "FunnyFace/v4l2loopbackWritter.h"
-#include "FunnyFace/common.h"
+#include "FunnyFace/webcam.h"
 #include "imgui.h"
 
 using namespace funnyface;
@@ -45,6 +46,7 @@ void PaintWebcam::paintDevice()
         Format usedFormat = webcam_->getSelectedFormat();
         FrameSize selectedFrameSize = usedFormat.sizes[usedFormat.selectedFrameSize];
         ImGui::Text("Format: %s", usedFormat.description.c_str());
+        ImGui::Text("FPS: %d", selectedFrameSize.fps[selectedFrameSize.selectedFPS]);
         ImGui::Text("Resolution: %ux%u", selectedFrameSize.width, selectedFrameSize.height);
         ImGui::Text("Pixel format %u", usedFormat.pixelformat);
         ImGui::Text("Image format %s", fromImageFormatToString(usedFormat.format).c_str());
@@ -81,7 +83,7 @@ void PaintWebcam::paintDevice()
     {
         std::string camera_key = webcam_->getDevicePath();
 
-        // Initialize if not exists
+        // Initialize if not exists. Search for the current format
         if (selected_format_indices_.find(camera_key) == selected_format_indices_.end())
         {
             auto current_format = webcam_->getSelectedFormat();
@@ -95,48 +97,61 @@ void PaintWebcam::paintDevice()
                 selected_format_indices_[camera_key]++;
             }
             selected_size_indices_[camera_key] = current_format.selectedFrameSize;
+            selected_fps_indices_[camera_key] = current_format.sizes[current_format.selectedFrameSize].selectedFPS;
         }
 
         int& selected_format = selected_format_indices_[camera_key];
         int& selected_size = selected_size_indices_[camera_key];
+        int& selected_fps = selected_fps_indices_[camera_key];
 
         CameraCapabilities capabilities = webcam_->getCapabilities();
         for (std::size_t fmt_idx = 0; fmt_idx < capabilities.formats.size(); fmt_idx++)
         {
             const auto& format = capabilities.formats[fmt_idx];
-
+            // TODO: This tree node suggests that there are other ways of selecting an available format for a camera.
+            // I suggest removing one level.
             if (ImGui::TreeNode(("Format " + std::to_string(fmt_idx) + ": " + format.description).c_str()))
             {
                 ImGui::Text("Pixel Format: 0x%08X", format.pixelformat);
-
+                // TODO: FIXME: Make sure device format selection works.
+                //ImGui::SetNextItemOpen(true, ImGuiCond_Always);
                 if (ImGui::TreeNode("Available Sizes"))
                 {
                     for (std::size_t size_idx = 0; size_idx < format.sizes.size(); size_idx++)
                     {
                         const auto& size = format.sizes[size_idx];
-                        bool is_current = (selected_format == static_cast<int>(fmt_idx)
-                                           && selected_size == static_cast<int>(size_idx));
 
-                        ImGui::PushID(fmt_idx * 1000 + size_idx);
-                        if (ImGui::Selectable((std::to_string(size_idx) + " - " + std::to_string(size.width) + "x"
-                                               + std::to_string(size.height))
-                                                  .c_str(),
-                                              is_current))
+                        for (std::size_t fps_idx = 0; fps_idx < size.fps.size(); fps_idx++)
                         {
-                            if (is_current)
+                            const auto& fps = size.fps[fps_idx];
+                            // common::log_error("User selected  fps amount %d in indx %d", fps, fps_idx);
+                            bool is_current = (selected_format == static_cast<int>(fmt_idx)
+                                               && selected_size == static_cast<int>(size_idx)
+                                               && selected_fps == static_cast<int>(fps_idx));
+
+                            ImGui::PushID(fmt_idx * 5000 + size_idx * 500 + fps_idx);
+                            std::string size_text = std::to_string(size_idx) + " - " + std::to_string(size.width) + "x"
+                                                    + std::to_string(size.height) + " - " + std::to_string(fps)+ " fps";
+                            if (ImGui::Selectable(size_text.c_str(), is_current))
                             {
-                                selected_format = -1;
-                                selected_size = -1;
+                                if (is_current)
+                                {
+                                    // Unselect the current format and size
+                                    selected_format = -1;
+                                    selected_size = -1;
+                                    selected_fps = -1;
+                                }
+                                else
+                                {
+                                    common::log_warn("User selected format %d, size %dx%d", fmt_idx, size.width,
+                                                     size.height);
+                                    selected_format = fmt_idx;
+                                    selected_size = size_idx;
+                                    selected_fps = fps_idx;
+                                }
                             }
-                            else
-                            {
-                                common::log_warn("User selected format %d, size %dx%d", fmt_idx, size.width,
-                                                 size.height);
-                                selected_format = fmt_idx;
-                                selected_size = size_idx;
-                            }
+                            ImGui::PopID();
                         }
-                        ImGui::PopID();
                     }
                     ImGui::TreePop();
                 }
@@ -144,12 +159,13 @@ void PaintWebcam::paintDevice()
             }
         }
 
-        if (selected_format >= 0 && selected_size >= 0)
+        if (selected_format >= 0 && selected_size >= 0 && selected_fps >= 0)
         {
             ImGui::Separator();
             const auto& sel_format = capabilities.formats[selected_format];
             const auto& sel_size = sel_format.sizes[selected_size];
-            ImGui::Text("Selected: %s - %ux%u", sel_format.description.c_str(), sel_size.width, sel_size.height);
+            const auto& sel_fps = sel_size.fps[selected_fps];
+            ImGui::Text("Selected: %s - %ux%u (%d FPS)", sel_format.description.c_str(), sel_size.width, sel_size.height, sel_fps);
         }
     }
 
@@ -167,23 +183,24 @@ void PaintWebcam::paintDevice()
         {
             // Apply format/size changes for input camera
             if (selected_format_indices_.find(camera_key) != selected_format_indices_.end()
-                && selected_format_indices_[camera_key] >= 0 && selected_size_indices_[camera_key] >= 0)
+                && selected_format_indices_[camera_key] >= 0 && selected_size_indices_[camera_key] >= 0 && selected_fps_indices_[camera_key] >= 0)
             {
                 auto inputCam = std::dynamic_pointer_cast<InputWebcam>(webcam_);
                 if (inputCam)
                 {
                     if (!inputCam->reconfigureFormat(selected_format_indices_[camera_key],
-                                                     selected_size_indices_[camera_key]))
+                                                     selected_size_indices_[camera_key], 0))
                     {
                         common::log_error("Apply Changes: Failed to reconfigure format.");
                         success = false;
                     }
                     else
                     {
-                        success = true;
                         // Reset selections after successful apply
                         selected_format_indices_[camera_key] = -1;
                         selected_size_indices_[camera_key] = -1;
+                        selected_fps_indices_[camera_key] = -1;
+                        success = true;
                     }
                 }
             }
@@ -208,11 +225,13 @@ void PaintWebcam::paintDevice()
 
         if (success)
         {
-            common::log_info("Successfully applied configuration changes to %s", camera_key.c_str());
+            common::log_info("PaintWebcam::paintDevice - Successfully applied configuration changes to %s",
+                             camera_key.c_str());
         }
         else
         {
-            common::log_error("Failed to apply configuration changes to %s", camera_key.c_str());
+            common::log_error("PaintWebcam::paintDevice - Failed to apply configuration changes to %s",
+                              camera_key.c_str());
         }
     }
 

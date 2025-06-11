@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <tuple>
 
 #include "FunnyFace/codecFactory.h"
 namespace funnyface
@@ -29,6 +30,8 @@ struct FrameSize
 {
     unsigned int width;
     unsigned int height;
+    unsigned int selectedFPS{0u};
+    std::vector<unsigned int> fps{0u};
 };
 
 struct Format
@@ -81,8 +84,8 @@ class Webcam
         }
         return Format{};
     }
-    unsigned int getDesiredWidth() const { return desiredWidth_; }
-    unsigned int getDesiredHeight() const { return desiredHeight_; }
+    unsigned int getDesiredWidth() const { return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width : 0; }
+    unsigned int getDesiredHeight() const { return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height : 0; }
 
     bool isCurrentlySelected() const { return currentlySelected_; }
     void setCurrentlySelected(bool selected) { currentlySelected_ = selected; }
@@ -97,16 +100,13 @@ class Webcam
 
 
     void selectBestFormat();
-    std::pair<unsigned int, double> findBestFrameSize(const Format& fmt) const;
-    double
-    calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const;
+    std::tuple<unsigned int, unsigned int, double> findBestFrameSize(const Format& fmt) const;
+        double calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2,
+                                 unsigned int height2) const;
 
     std::string name_;
     std::string device_path_;
     int fd_{-1};
-
-    unsigned int desiredWidth_{0u};
-    unsigned int desiredHeight_{0u};
 
     WebcamType type_{WebcamType::UNKNOWN};
 

@@ -28,7 +28,7 @@ class InputWebcam : public Webcam
 
     bool getImage(std::unique_ptr<Image>& outImage);
 
-    bool reconfigureFormat(int formatIndex, int sizeIndex);
+    bool reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex);
 
   private:
     bool startRecording();

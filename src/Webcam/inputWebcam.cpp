@@ -250,11 +250,15 @@ bool InputWebcam::isRunning()
 void InputWebcam::imageAcquisitionLoop()
 {
     struct v4l2_buffer buf;
-    unsigned int totalDiscarded{0u};
     unsigned int totalDiscardedHeader{0u};
     unsigned int decodingFailureCount{0u};
     unsigned int totalTimeouts{0u};
-    int maxDiscardCount{buffer_count_ * 3};
+
+    unsigned int totalDiscarded{0u};
+    unsigned int maxDiscardCount{buffer_count_ * 3};
+
+    unsigned int skipCounter{0u};
+    unsigned int amountOfSkipFrames = buffer_count_; // std::max(2u, buffer_count_ / 2u);
 
     bool readImageHeader{true};
 
@@ -344,13 +348,6 @@ void InputWebcam::imageAcquisitionLoop()
             continue;
         }
 
-        Profiler::getInstance().stop(name_.c_str(), "Waiting for OS camera frame");
-
-        Profiler::getInstance().start(name_.c_str(), "Input image decoding");
-
-        Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
-        srcImage.info.TJPixelFormat = TJPF_RGB;
-
         if (buf.bytesused == 0)
         {
             common::log_info("InputWebcam::imageAcquisitionLoop - Empty frame received, requeuing");
@@ -360,6 +357,27 @@ void InputWebcam::imageAcquisitionLoop()
             }
             continue;
         }
+
+        // Skip inital frames to get rid of initial camera warmup frames
+        if (skipCounter < amountOfSkipFrames)
+        {
+            common::log_info("InputWebcam::imageAcquisitionLoop - Skipping frame %d", buf.index);
+            if (!requeueFrame(buf))
+            {
+                common::log_error("InputWebcam::imageAcquisitionLoop - Failed to requeue frame %d", buf.index);
+                break;
+            }
+            skipCounter++;
+            continue;
+        }
+
+        Profiler::getInstance().stop(name_.c_str(), "Waiting for OS camera frame");
+
+        Profiler::getInstance().start(name_.c_str(), "Input image decoding");
+
+        Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
+        srcImage.info.TJPixelFormat = TJPF_RGB;
+
 
         if (readImageHeader)
         {
@@ -493,7 +511,7 @@ void InputWebcam::cleanupBuffers()
     }
 }
 
-bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
+bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex)
 {
     common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format %d, size %d", name_.c_str(),
                      formatIndex, sizeIndex);
@@ -509,7 +527,7 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
         }
     }
 
-    // Validate indices
+    // Validate indices provided
     if (formatIndex < 0 || formatIndex >= static_cast<int>(capabilities_.formats.size()) || sizeIndex < 0
         || sizeIndex >= static_cast<int>(capabilities_.formats[formatIndex].sizes.size()))
     {
@@ -521,12 +539,7 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
         return false;
     }
 
-    // Update desired format and size
     const auto& selectedFormat = capabilities_.formats[formatIndex];
-    const auto& selectedSize = selectedFormat.sizes[sizeIndex];
-
-    desiredWidth_ = selectedSize.width;
-    desiredHeight_ = selectedSize.height;
 
     // Cleanup current setup
     cleanup();
@@ -534,8 +547,9 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
     // Set new selected format
     selectedFormat_ = std::make_unique<Format>(selectedFormat);
     selectedFormat_->selectedFrameSize = sizeIndex;
+    selectedFormat_->sizes[sizeIndex].selectedFPS = fpsIndex;
 
-    // Reinitialize device
+    // Reinitialize device with new selected format
     if (!setupDevice())
     {
         common::log_error("InputWebcam::reconfigureFormat - Failed to setup device with new configuration");
@@ -551,8 +565,5 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex)
             return false;
         }
     }
-
-    common::log_info("InputWebcam::reconfigureFormat - Successfully reconfigured device to %ux%u", desiredWidth_,
-                     desiredHeight_);
     return true;
 }

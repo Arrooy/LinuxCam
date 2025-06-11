@@ -11,6 +11,39 @@
 namespace funnyface
 {
 
+
+enum class ImageFormat
+{
+    UNKNOWN,
+    JPEG,
+    SGBRG8,    // Bayer format
+    DEPTH_Z16, // Depth image format
+    UYUV422,   // UYVY 4:2:2 format
+    YUYV422,   // YUYV 4:2:2 format
+    RAW,
+};
+
+inline std::string fromImageFormatToString(const ImageFormat& format)
+{
+    switch (format)
+    {
+        case ImageFormat::JPEG:
+            return "JPEG";
+        case ImageFormat::SGBRG8:
+            return "SGBRG8";
+        case ImageFormat::DEPTH_Z16:
+            return "DEPTH_Z16";
+        case ImageFormat::UYUV422:
+            return "UYUV422";
+        case ImageFormat::YUYV422:
+            return "YUYV422";
+        case ImageFormat::RAW:
+            return "RAW";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 constexpr unsigned char DEFAULT_ALPHA = 255;
 
 struct Pixel
@@ -100,6 +133,7 @@ class Image
             // Initialize new data to zero
             memset(newData.get(), 0, newSize);
 
+            // TODO: FIXME: Can we remove this memcpy? do we need old data in any situation?
             if (data_ && newData)
             {
                 // Copy existing data if present
@@ -527,11 +561,11 @@ class Image
         }
 
         // Create backup of current image before resizing
-        Image backup; //TODO: FIXME: THIS IS WRONG: MAYBE .
+        Image backup; // TODO: FIXME: THIS IS WRONG: MAYBE .
         backup.copyFrom(*this);
 
         common::log_info("Image::paste - Resizing canvas from %lux%lu to %lux%lu", info.width, info.height, newWidth,
-                        newHeight);
+                         newHeight);
         // Resize this image using existing method
         size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
         this->resize(newSize);

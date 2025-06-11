@@ -16,7 +16,7 @@ V4L2LoopbackWriter::~V4L2LoopbackWriter()
 {
     cleanup();
 }
-//TODO: FIXME: Unable to open a device that is being used already! Is there a solution?
+
 bool V4L2LoopbackWriter::setupDevice()
 {
     // 1. Open device
@@ -30,8 +30,8 @@ bool V4L2LoopbackWriter::setupDevice()
     // 2. Set format
     struct v4l2_format fmt = {0};
     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-    fmt.fmt.pix.width = desiredWidth_;
-    fmt.fmt.pix.height = desiredHeight_;
+    fmt.fmt.pix.width = getDesiredWidth();
+    fmt.fmt.pix.height = getDesiredHeight();
     fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
     fmt.fmt.pix.field = V4L2_FIELD_NONE;
     fmt.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
@@ -43,13 +43,13 @@ bool V4L2LoopbackWriter::setupDevice()
         return false;
     }
 
-    // Store the selecte format in capabilities
+    // Store the selected format in capabilities
     Format selFmt;
     selFmt.description = "V4L2 custom device";
     selFmt.format = ImageFormat::JPEG;
     selFmt.pixelformat = V4L2_PIX_FMT_MJPEG;
     selFmt.selectedFrameSize = 0;
-    selFmt.sizes.push_back(FrameSize{desiredWidth_, desiredHeight_});
+    selFmt.sizes.push_back(FrameSize{getDesiredWidth(), getDesiredHeight()});
     selectedFormat_ = std::make_unique<Format>(selFmt);
 
     capabilities_.formats.push_back(selFmt);
@@ -166,10 +166,11 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
 
     // Check if we need to scale the image
     std::unique_ptr<Image> scaledImage = nullptr;
-
-    if (image.info.width != desiredWidth_ || image.info.height != desiredHeight_)
+    unsigned long desiredWidth = getDesiredWidth();
+    unsigned long desiredHeight = getDesiredHeight();
+    if (image.info.width != desiredWidth || image.info.height != desiredHeight)
     {
-        scaledImage = image.scale(desiredWidth_, desiredHeight_);
+        scaledImage = image.scale(desiredWidth, desiredHeight);
         if (!scaledImage)
         {
             common::log_error("V4L2LoopbackWriter::writeFrame - Failed to scale image");
