@@ -27,14 +27,12 @@ bool InputWebcam::setupDevice()
 
     if (!Webcam::updateDeviceCapabilities())
     {
-        common::errno_log("InputWebcam::setupDevice - Failed to get device capabilities");
         return false;
     }
 
     // Configure camera format
     if (!Webcam::configureDeviceFormat())
     {
-        common::log_error("InputWebcam::setupDevice - Failed to configure camera format");
         return false;
     }
 
@@ -190,7 +188,6 @@ bool InputWebcam::stopStreaming()
     {
         if (!isRecording_.load())
         {
-            common::log_info("InputWebcam::stopStreaming - not recording, nothing to stop");
             return true;
         }
 
@@ -202,7 +199,7 @@ bool InputWebcam::stopStreaming()
     }
     else
     {
-        common::log_error("InputWebcam::stopStreaming - fd_ < 0");
+        common::log_error("InputWebcam::stopStreaming - Unkown file descriptor");
         return false;
     }
     return true;
@@ -243,7 +240,6 @@ void InputWebcam::stopRecording()
     {
         recordThread_.join();
     }
-    common::log_info("InputWebcam::stopRecording - Stopped recording");
 }
 
 bool InputWebcam::isRunning()
@@ -258,7 +254,7 @@ void InputWebcam::imageAcquisitionLoop()
     unsigned int totalDiscardedHeader{0u};
     unsigned int decodingFailureCount{0u};
     unsigned int totalTimeouts{0u};
-    const unsigned int warmupDiscardCount{2u};
+    int maxDiscardCount{buffer_count_ * 3};
 
     bool readImageHeader{true};
 
@@ -304,7 +300,6 @@ void InputWebcam::imageAcquisitionLoop()
 
         if (isRecording_ == false)
         {
-            common::log_info("InputWebcam::imageAcquisitionLoop - Recording stopped, exiting loop");
             break;
         }
 
@@ -331,17 +326,25 @@ void InputWebcam::imageAcquisitionLoop()
             break;
         }
 
-        Profiler::getInstance().stop(name_.c_str(), "Waiting for OS camera frame");
-
-        if (totalDiscarded < warmupDiscardCount)
+        // Check if buffer is in error state
+        if (buf.flags & V4L2_BUF_FLAG_ERROR)
         {
-            totalDiscarded++;
             if (!requeueFrame(buf))
             {
+                common::log_error("InputWebcam::imageAcquisitionLoop - Failed to requeue frame %d", buf.index);
+                break;
+            }
+            totalDiscarded++;
+            if (totalDiscarded > maxDiscardCount)
+            {
+                common::log_error("InputWebcam::imageAcquisitionLoop - Too many discarded frames (%d), exiting loop",
+                                  totalDiscarded);
                 break;
             }
             continue;
         }
+
+        Profiler::getInstance().stop(name_.c_str(), "Waiting for OS camera frame");
 
         Profiler::getInstance().start(name_.c_str(), "Input image decoding");
 
@@ -438,7 +441,7 @@ bool InputWebcam::getImage(std::unique_ptr<Image>& outImage)
 {
     // Get the most recent frame from queue, discarding older ones
     std::unique_ptr<Image> latestFrame;
-    if(latestImage_)
+    if (latestImage_)
     {
         std::lock_guard<std::mutex> lock(imageMutex_);
         outImage = latestImage_->deepCopy();
@@ -460,7 +463,6 @@ void InputWebcam::cleanup()
 
     if (fd_ >= 0)
     {
-        common::log_info("Closing fd: %d", fd_);
         close(fd_);
         fd_ = -1;
     }

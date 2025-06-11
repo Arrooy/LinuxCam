@@ -48,7 +48,7 @@ bool Webcam::open()
 }
 
 
-//TODO: FIXME: When selecting a format, select highest framerate allways
+// TODO: FIXME: When selecting a format, select highest framerate allways
 bool Webcam::updateDeviceCapabilities()
 {
     struct v4l2_capability cap;
@@ -78,7 +78,7 @@ bool Webcam::updateDeviceCapabilities()
     capabilities_.card = reinterpret_cast<char*>(cap.card);
     capabilities_.bus_info = reinterpret_cast<char*>(cap.bus_info);
 
-    if(name_.empty())
+    if (name_.empty())
     {
         name_ = capabilities_.card + " - " + capabilities_.driver;
     }
@@ -155,7 +155,7 @@ bool Webcam::updateDeviceCapabilities()
 
     if (capabilities_.formats.empty())
     {
-        common::log_error("Webcam::UpdateDeviceCapabilities - This should never happen with an input device.");
+        common::log_warn("Webcam::UpdateDeviceCapabilities - This input device does not have any capabilities for V4L2_BUF_TYPE_VIDEO_CAPTURE.");
         return false;
     }
 
@@ -254,8 +254,8 @@ bool Webcam::configureDeviceFormat()
         format.fmt.pix.width = frameSize.width;
         format.fmt.pix.height = frameSize.height;
         format.fmt.pix.field = V4L2_FIELD_NONE;
-        common::log_info("%s - Trying to set format: pixfmt=0x%x, width=%d, height=%d", name_.c_str(), format.fmt.pix.pixelformat,
-                         format.fmt.pix.width, format.fmt.pix.height);
+        common::log_info("%s - Trying to set format: pixfmt=0x%x, width=%d, height=%d", name_.c_str(),
+                         format.fmt.pix.pixelformat, format.fmt.pix.width, format.fmt.pix.height);
 
         if (ioctl(fd_, VIDIOC_S_FMT, &format) < 0)
         {
@@ -282,36 +282,101 @@ bool Webcam::queueAllBuffersAgain(int numBuffers, int bufferType)
 {
     struct v4l2_buffer buf;
 
-    // Allocate and configure buffers_
+    if (fd_ <= 0)
+    {
+        common::log_info("Webcam::queueAllBuffersAgain - Device not open. Cannot queue buffers.");
+        return true;
+    }
+
+    // Queue all available buffers
     for (int i = 0; i < numBuffers; i++)
     {
         CLEAR(buf);
         buf.type = bufferType;
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
-        if (!requeueFrame(buf))
+
+        // Query buffer status first to check its state
+        if (ioctl(fd_, VIDIOC_QUERYBUF, &buf) == -1)
         {
-            common::errno_log("Webcam::queueAllBuffersAgain - VIDIOC_QBUF");
+            common::log_error("Webcam::queueAllBuffersAgain - VIDIOC_QUERYBUF failed for buffer %d", i);
+            common::errno_log("Webcam::queueAllBuffersAgain - VIDIOC_QUERYBUF failed");
             continue;
         }
+
+        // Check buffer flags to determine if it can be queued
+        if (buf.flags & V4L2_BUF_FLAG_QUEUED)
+        {
+            continue;
+        }
+
+        if (!(buf.flags & V4L2_BUF_FLAG_MAPPED))
+        {
+            common::log_error("Webcam::queueAllBuffersAgain - Buffer %d is not mapped, cannot queue", i);
+            return false;
+        }
+
+        // Reset buffer parameters for queueing
+        buf.type = bufferType;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.index = i;
+        buf.bytesused = 0;
+
+        if (!requeueFrame(buf))
+        {
+            return false; // If requeuing fails, return false immediately
+        }
     }
+
     return true;
 }
 
 bool Webcam::requeueFrame(struct v4l2_buffer& buf)
 {
-    if (fd_ > 0)
+    if (fd_ <= 0)
     {
-        if (ioctl(fd_, VIDIOC_QBUF, &buf) == -1)
-        {
-            common::log_error("Webcam::requeueFrame - Failed to requeue buffer %d", buf.index);
-            common::errno_log("Webcam::requeueFrame - VIDIOC_QBUF");
-            return false;
-        }
+        common::log_error("Webcam::requeueFrame - Device not open. Skipping requeue for buffer %d", buf.index);
+        return true;
     }
-    else
+
+    // Check if buffer is already queued
+    if (buf.flags & V4L2_BUF_FLAG_QUEUED)
     {
+        return true;
+    }
+
+    // Ensure buffer is mapped before queueing
+    if (!(buf.flags & V4L2_BUF_FLAG_MAPPED))
+    {
+        common::log_error("Webcam::requeueFrame - Buffer %d is not mapped, cannot queue", buf.index);
         return false;
     }
+
+    if (ioctl(fd_, VIDIOC_QBUF, &buf) == -1)
+    {
+        switch (errno)
+        {
+            case EINVAL:
+                common::log_error(
+                    "Webcam::requeueFrame - %s - Invalid argument for buffer %d (buffer may already be queued "
+                    "or parameters invalid)",
+                    name_.c_str(), buf.index);
+                break;
+            case ENOMEM:
+                common::log_error("Webcam::requeueFrame - %s - Not enough memory for buffer %d", name_.c_str(),
+                                  buf.index);
+                break;
+            case EIO:
+                common::log_error("Webcam::requeueFrame - %s - I/O error for buffer %d", name_.c_str(), buf.index);
+                break;
+            default:
+                common::log_error("Webcam::requeueFrame - %s - Unknown error %d for buffer %d (flags: 0x%x)",
+                                  name_.c_str(), errno, buf.index, buf.flags);
+                common::errno_log("Webcam::requeueFrame - VIDIOC_QBUF");
+                break;
+        }
+        return false;
+    }
+
     return true;
 }

@@ -12,6 +12,7 @@
 
 #include "FunnyFace/GifReader.h"
 #include "FunnyFace/cameraManager.h"
+#include "FunnyFace/UI/PaintWebcam.h"
 #include "imgui.h"
 
 namespace funnyface
@@ -86,7 +87,7 @@ class UI
 
     std::shared_ptr<CameraManager> cameraManager_;
     std::shared_ptr<GifReader> gifReader_;
-
+    std::unique_ptr<PaintWebcam> paintWebcam_;
 
     // Device management
     bool show_device_config_ = false;
@@ -98,11 +99,6 @@ class UI
     int selected_video_device_ = -1;
     char device_name_buffer_[256] = "";
 
-    // Device configuration tracking
-    std::map<std::string, int> selected_format_indices_;
-    std::map<std::string, int> selected_size_indices_;
-    std::map<std::string, int> selected_subsampling_;
-
     // Tracked camera state On/Off
     std::unordered_map<std::string, bool> cameraDesiredStates;
 
@@ -111,9 +107,7 @@ class UI
     void paintAddDeviceModal();
     void paintDeviceConfigurationTabs();
 
-
-    void paintGeneralizedDeviceConfig(std::shared_ptr<Webcam> camera);
-    std::shared_ptr<Webcam> getCurrentCameraSharedPtr(const std::string& camera_key);
+    
     // static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
 
     static void mouseCallback(GLFWwindow* window, double xpos, double ypos)
