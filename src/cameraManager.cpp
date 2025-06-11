@@ -66,7 +66,7 @@ bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
             // Valid image, copy it to output image
             if (!outputImage)
             {
-                outputImage = inImage->deepCopy();
+                outputImage = inImage->deepCopy(); // TODO: instead of using a copy of the inImage, we can create a new canvas of whatever size we want.
             }
             else
             {
@@ -80,8 +80,6 @@ bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
                 continue;
             }
         }
-
-        break;
     }
 
     return outputImage != nullptr;

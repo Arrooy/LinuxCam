@@ -46,12 +46,18 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
     // glfwSetWindowUserPointer(window, this);
     // glfwSetCursorPosCallback(window, UI::mouseCallback);
     common::log_info("UI initialized successfully");
+    ready_ = true;
     return true;
 }
 
 
 void UI::shutdown()
 {
+    if(!ready_)
+    {
+        common::log_error("UI is not initialized, cannot shutdown.");
+        return;
+    }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

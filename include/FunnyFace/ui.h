@@ -69,6 +69,8 @@ class UI
     void handleKeyboard();
 
   private:
+    bool ready_{false};
+
     bool show_profiler_{true};
     bool show_input_config_{true};
     bool show_output_config_{true};

@@ -333,7 +333,7 @@ void InputWebcam::imageAcquisitionLoop()
                 break;
             }
         }
-
+        
         if (buf.index >= bufrequest_.count)
         {
             common::errno_log("InputWebcam::imageAcquisitionLoop - INVALID INDEX in BUFF. Aborting.");
@@ -396,7 +396,7 @@ void InputWebcam::imageAcquisitionLoop()
 
         if (image_.getBeingUsed())
         {
-            // common::log_warn("InputWebcam::imageAcquisitionLoop - Image buffer is being used, skipping frame");
+            common::log_warn("InputWebcam::imageAcquisitionLoop - %s Image buffer is being used, skipping frame", name_.c_str());
             if (!requeueFrame(buf))
             {
                 break;

@@ -669,6 +669,27 @@ class YUV422 : public Decoder
     };
     using ConversionFunct = std::function<YUV422Block(const uint8_t* block)>;
 
+    struct YUVtoRGBLUT
+    {
+        std::array<int16_t, 256> Cr_r{};
+        std::array<int16_t, 256> Cb_b{};
+        std::array<int16_t, 256> Cr_g{};
+        std::array<int16_t, 256> Cb_g{};
+
+        YUVtoRGBLUT()
+        {
+            for (int i = 0; i < 256; i++)
+            {
+                int val = i - 128;
+                Cr_r[i] = static_cast<int16_t>(1.402 * val);
+                Cb_b[i] = static_cast<int16_t>(1.772 * val);
+                Cr_g[i] = static_cast<int16_t>(-0.71414 * val);
+                Cb_g[i] = static_cast<int16_t>(-0.34414 * val);
+            }
+        }
+    };
+
+
     YUV422(const ConfigBuilder& config)
     {
         if (!config.get("width", width_))
@@ -680,11 +701,12 @@ class YUV422 : public Decoder
         {
             common::log_error("YUV422 - Unable to load parameter height");
         }
-
+        lut_ = YUVtoRGBLUT();
         common::log_info("YUV422 - Initialized with %dx%d", width_, height_);
     }
 
-    bool genericDecode(const Image& srcImage, Image& outImage, ConversionFunct pxConvert)
+    template <typename F>
+    bool genericDecode(const Image& srcImage, Image& outImage, F pxConvert)
     {
         if (srcImage.size() == 0)
         {
@@ -741,33 +763,42 @@ class YUV422 : public Decoder
         }
 
         const int pixels = width_ * height_;
+        uint8_t* rgbPtr = rgb;
         for (int i = 0, j = 0; i < pixels; i += 2, j += 4)
         {
             YUV422Block block = funct(yuv + j);
 
-            convertYUVtoRGB(block.y0, block.u, block.v, rgb + i * 3);
-            convertYUVtoRGB(block.y1, block.u, block.v, rgb + (i + 1) * 3);
+            convertYUVtoRGB(block.y0, block.u, block.v, rgbPtr);
+            rgbPtr += 3;
+            convertYUVtoRGB(block.y1, block.u, block.v, rgbPtr);
+            rgbPtr += 3;
         }
 
         return true;
     }
 
-    void convertYUVtoRGB(uint8_t y, uint8_t u, uint8_t v, uint8_t* rgb)
+    __attribute__((always_inline)) inline void convertYUVtoRGB(uint8_t y, uint8_t u, uint8_t v, uint8_t* rgb)
     {
-        int C = y - 16;
-        int D = u - 128;
-        int E = v - 128;
+        // YUV to RGB conversion using the YUVtoRGBLUT
+        int C = static_cast<int>(y) - 16;
+        if (C < 0)
+        {
+            C = 0;
+        }
 
-        int R = (298 * C + 409 * E + 128) >> 8;
-        int G = (298 * C - 100 * D - 208 * E + 128) >> 8;
-        int B = (298 * C + 516 * D + 128) >> 8;
+        int R = C + lut_.Cr_r[v];
+        int G = C + lut_.Cb_g[u] + lut_.Cr_g[v];
+        int B = C + lut_.Cb_b[u];
 
+        // Clamp the results between 0 and 255
         rgb[0] = static_cast<uint8_t>(common::clamp(R, 0, 255));
         rgb[1] = static_cast<uint8_t>(common::clamp(G, 0, 255));
         rgb[2] = static_cast<uint8_t>(common::clamp(B, 0, 255));
     }
+
     int width_{0};
     int height_{0};
+    YUVtoRGBLUT lut_;
 };
 
 class UYVY422Decoder : public YUV422

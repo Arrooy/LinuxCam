@@ -48,6 +48,7 @@ bool Webcam::open()
 }
 
 
+//TODO: FIXME: When selecting a format, select highest framerate allways
 bool Webcam::updateDeviceCapabilities()
 {
     struct v4l2_capability cap;
@@ -77,6 +78,11 @@ bool Webcam::updateDeviceCapabilities()
     capabilities_.card = reinterpret_cast<char*>(cap.card);
     capabilities_.bus_info = reinterpret_cast<char*>(cap.bus_info);
 
+    if(name_.empty())
+    {
+        name_ = capabilities_.card + " - " + capabilities_.driver;
+    }
+
     struct v4l2_fmtdesc fmtdesc;
     CLEAR(fmtdesc);
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -100,12 +106,6 @@ bool Webcam::updateDeviceCapabilities()
             fmt.format = ImageFormat::SGBRG8;
             fmt.pixelformat = fmtdesc.pixelformat;
             common::log_info("Webcam::updateDeviceCapabilities - Camera supports Bayer format");
-        }
-        else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUV420 || fmtdesc.pixelformat == V4L2_PIX_FMT_YVU420)
-        {
-            fmt.format = ImageFormat::YUV420;
-            fmt.pixelformat = fmtdesc.pixelformat;
-            common::log_info("Webcam::updateDeviceCapabilities - Camera supports YUV420 format");
         }
         else if (fmtdesc.pixelformat == V4L2_PIX_FMT_Z16)
         {
@@ -304,6 +304,7 @@ bool Webcam::requeueFrame(struct v4l2_buffer& buf)
     {
         if (ioctl(fd_, VIDIOC_QBUF, &buf) == -1)
         {
+            common::log_error("Webcam::requeueFrame - Failed to requeue buffer %d", buf.index);
             common::errno_log("Webcam::requeueFrame - VIDIOC_QBUF");
             return false;
         }
