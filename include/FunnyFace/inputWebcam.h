@@ -8,7 +8,6 @@
 
 #include "FunnyFace/codec.h"
 #include "FunnyFace/webcam.h"
-
 namespace funnyface
 {
 
@@ -27,7 +26,7 @@ class InputWebcam : public Webcam
     TJSAMP getChrominanceSubsampling() const override { return TJSAMP::TJSAMP_444; };
 
 
-    bool getImage(Image*& outImage);
+    bool getImage(std::unique_ptr<Image>& outImage);
 
     bool reconfigureFormat(int formatIndex, int sizeIndex);
 
@@ -56,12 +55,8 @@ class InputWebcam : public Webcam
     // Decoder of input image
     std::unique_ptr<Decoder> decoder_;
 
-
-    // Image state
-    Image image_;
-    TJImageDescription cameraInputInfo;
-
     mutable std::mutex imageMutex_;
+    std::unique_ptr<Image> latestImage_;
 };
 } // namespace funnyface
 

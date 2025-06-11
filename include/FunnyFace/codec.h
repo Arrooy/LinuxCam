@@ -48,10 +48,8 @@ class JPEGDecoder : public Decoder
         {
             common::errno_log("JPEGDecoder::decodeImage - Failed to decode image");
             common::errno_log((const char*) tjGetErrorStr2(d_handle_));
-            outImage.setBeingUsed(false);
             return false;
         }
-        outImage.setBeingUsed(true);
         return true;
     }
 
@@ -70,7 +68,7 @@ class JPEGDecoder : public Decoder
   private:
     bool getJPEGHeaderInfo(Image& image)
     {
-        int sample_format{TJSAMP_UNKNOWN};
+        int sample_format{TJSAMP_444};
         int color_space{-1};
         int width{-1};
         int height{-1};
@@ -285,8 +283,6 @@ class RAWDecoder : public Decoder
 
         // For RAW decoding, we simply copy the data without decompression.
         outImage.copyFrom(srcImage);
-
-        outImage.setBeingUsed(true);
         return true;
     }
 
@@ -341,16 +337,7 @@ class BayerGBRGDecoder : public Decoder
         outImage.info.TJPixelFormat = TJPF_RGB;
 
         // Demosaic the Bayer GBRG image to RGB
-        bool result = demosaicGBRG(srcImage, outImage);
-        if (result)
-        {
-            outImage.setBeingUsed(true);
-        }
-        else
-        {
-            outImage.setBeingUsed(false);
-        }
-        return result;
+        return demosaicGBRG(srcImage, outImage);
     }
 
     bool decodeHeader(Image& srcImage, unsigned long& raw_needed_size) override
@@ -539,8 +526,6 @@ class DepthZ16Decoder : public Decoder
                 rgbData[rgbIdx + 2] = b;
             }
         }
-
-        outImage.setBeingUsed(true);
         return true;
     }
 
@@ -735,7 +720,6 @@ class YUV422 : public Decoder
         outImage.info.TJPixelFormat = TJPF_RGB;
 
         bool result = decodeYUV(srcImage, outImage, pxConvert);
-        outImage.setBeingUsed(result);
         return result;
     }
 

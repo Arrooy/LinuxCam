@@ -88,21 +88,12 @@ class Image
     Image(const Image& other) : info(other.info), size_(other.size_)
     {
         data_ = other.data_; // shared_ptr copy
-
-        // Copy the beingUsed state with proper locking
-        std::lock_guard<std::recursive_mutex> lock(other.beingUsedMutex_);
-        beingUsed_ = other.beingUsed_;
     }
 
     // Move constructor
     Image(Image&& other) noexcept : info(other.info), size_(other.size_)
     {
         data_ = std::move(other.data_);
-
-        // Move the beingUsed state with proper locking
-        std::lock_guard<std::recursive_mutex> lock(other.beingUsedMutex_);
-        beingUsed_ = other.beingUsed_;
-        other.setBeingUsed(false);
         other.size_ = 0;
     }
 
@@ -115,13 +106,7 @@ class Image
             data_ = other.data_; // shared_ptr copy
             size_ = other.size_;
             info = other.info;
-
-            // Copy beingUsed state with proper locking (lock both mutexes in consistent order)
-            std::lock(beingUsedMutex_, other.beingUsedMutex_);
-            std::lock_guard<std::recursive_mutex> lock1(beingUsedMutex_, std::adopt_lock);
-            std::lock_guard<std::recursive_mutex> lock2(other.beingUsedMutex_, std::adopt_lock);
-
-            beingUsed_ = other.beingUsed_;
+            // TODO: MAYBE ALL THIS CONSTRUCTORS CAN BE DEFAULT NOW
         }
         return *this;
     }
@@ -135,14 +120,6 @@ class Image
             data_ = std::move(other.data_);
             size_ = other.size_;
             info = other.info;
-
-            // Move beingUsed state with proper locking
-            std::lock(beingUsedMutex_, other.beingUsedMutex_);
-            std::lock_guard<std::recursive_mutex> lock1(beingUsedMutex_, std::adopt_lock);
-            std::lock_guard<std::recursive_mutex> lock2(other.beingUsedMutex_, std::adopt_lock);
-
-            beingUsed_ = other.beingUsed_;
-            other.setBeingUsed(false);
             other.size_ = 0;
         }
         return *this;
@@ -240,8 +217,6 @@ class Image
             }
             size_ = other.size_;
             info = other.info;
-            std::lock_guard<std::recursive_mutex> lock(beingUsedMutex_);
-            beingUsed_ = other.beingUsed_;
         }
     }
 
@@ -253,21 +228,7 @@ class Image
             std::memcpy(copy->data(), data_.get(), size_);
         }
         copy->info = this->info;
-        setBeingUsed(false);
-        copy->setBeingUsed(true);
         return copy;
-    }
-
-    bool getBeingUsed() const
-    {
-        std::lock_guard<std::recursive_mutex> lock(beingUsedMutex_);
-        return beingUsed_;
-    }
-
-    void setBeingUsed(bool val)
-    {
-        std::lock_guard<std::recursive_mutex> lock(beingUsedMutex_);
-        beingUsed_ = val;
     }
 
     // Scale image by percentage while maintaining aspect ratio
@@ -332,9 +293,6 @@ class Image
         scaledImage->info = this->info;
         scaledImage->info.width = newWidth;
         scaledImage->info.height = newHeight;
-
-        // Ensure the scaled image is marked as it was
-        scaledImage->setBeingUsed(getBeingUsed());
 
         // Perform bilinear scaling
         const unsigned char* src = data_.get();
@@ -420,6 +378,8 @@ class Image
         info.y = new_y;
     }
 
+    std::pair<unsigned long, unsigned long> getPosition() const { return {info.x, info.y}; }
+
     // Paste another image using its stored coordinates
     Image& paste(const Image& other, bool expandCanvas = false)
     {
@@ -500,7 +460,7 @@ class Image
                     common::log_error("Image::copyPixelsWithBlending - Index out of bounds");
                     continue;
                 }
-           
+
 
                 // Handle different pixel formats
                 if (pixelSize == 4) // RGBA
@@ -630,9 +590,6 @@ class Image
 
         return *this;
     }
-
-    mutable std::recursive_mutex beingUsedMutex_;
-    bool beingUsed_{false};
 
     std::shared_ptr<unsigned char> data_;
     size_t size_;

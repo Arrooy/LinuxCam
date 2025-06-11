@@ -37,42 +37,45 @@ void CameraManager::shutdown()
 
 bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
 {
-    static int turn = 0;
-    static int turnCount = 0;
+    static int i = 0;
+    static int max_i = 3;
     for (auto& input : inWebcam_)
     {
         if (input->isRunning())
         {
-            Image* inImage = nullptr;
+            std::unique_ptr<Image> newFrame;
 
-            if (!input->getImage(inImage))
+            if (!input->getImage(newFrame))
             {
-                // Input device doesn't have an image for us yet.
+                common::log_error("CameraManager::updateInput - Failed to get image from input device %s",
+                                  input->getDevicePath().c_str());
                 continue;
             }
-            else if (inImage == nullptr)
+
+            else if (newFrame == nullptr)
             {
                 common::log_error("CameraManager::updateInput - Input image is null");
                 return false;
             }
-            else if (inImage->info.width == 0 || inImage->info.height == 0)
+            else if (newFrame->info.width == 0 || newFrame->info.height == 0)
             {
                 common::log_error("CameraManager::updateInput - Input image invalid size size: %d x %d",
-                                  inImage->info.width, inImage->info.height);
-                inImage->setBeingUsed(false);
+                                  newFrame->info.width, newFrame->info.height);
+
+                newFrame.reset(); // Reset the image
                 continue;
             }
-            // inImage->scaleByPercentage(35.0f);
+
             // Valid image, copy it to output image
             if (!outputImage)
             {
-                outputImage = inImage->deepCopy(); // TODO: instead of using a copy of the inImage, we can create a new canvas of whatever size we want.
+                outputImage = std::move(newFrame);
             }
             else
             {
-                outputImage->paste(*inImage);
+                // More than 1 image, past it next to the previous one
+                outputImage->paste(*newFrame, true);
             }
-            inImage->setBeingUsed(false);
 
             if (outputImage == nullptr)
             {
@@ -94,6 +97,7 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
         common::log_error("No image to encode and write to output");
         return false;
     }
+
     bool success = true;
     for (auto& output : outWebcam_)
     {
@@ -108,8 +112,6 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
         break;
     }
 
-    // Release the image
-    image->setBeingUsed(false);
     Profiler::getInstance().stop("1", "Encode and write all output images");
     return success;
 }

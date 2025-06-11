@@ -21,11 +21,13 @@ class SafeQueue
         }
         queue_.push(item);
         const int size = queue_.size();
-        if (size > 3)
+        if (size > MAX_ITEMS_QUEUE)
         {
             // Empty queue
-            std::queue<T> empty;
-            std::swap(queue_, empty);
+            // std::queue<T> empty;
+            // std::swap(queue_, empty);
+            // Remove the oldest item
+            queue_.pop();
         }
         cond_var_.notify_one();
     }
@@ -102,6 +104,7 @@ class SafeQueue
     mutable std::mutex mutex_;
     std::condition_variable cond_var_;
     std::queue<T> queue_;
+    const unsigned int MAX_ITEMS_QUEUE = 3; // Maximum items in the queue, adjust as needed
 };
 
 #endif // QUEUE_H

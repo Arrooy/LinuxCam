@@ -7,7 +7,8 @@
 
 namespace funnyface
 {
-
+//TODO: Lets also use an enum to define type of profiling, e.g. CPU, memory, etc.
+// We can show profiling data ordered and clustered by type.
 class Profiler
 {
   public:

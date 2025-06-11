@@ -251,18 +251,6 @@ bool InputWebcam::isRunning()
     return isRecording_;
 }
 
-bool InputWebcam::getImage(Image*& outImage)
-{
-    std::lock_guard<std::mutex> lock(imageMutex_);
-    if (image_.getBeingUsed())
-    {
-        outImage = &image_;
-        return true;
-    }
-    return false;
-}
-
-
 void InputWebcam::imageAcquisitionLoop()
 {
     struct v4l2_buffer buf;
@@ -273,7 +261,10 @@ void InputWebcam::imageAcquisitionLoop()
     const unsigned int warmupDiscardCount{2u};
 
     bool readImageHeader{true};
-    image_.setBeingUsed(false);
+
+    // Image state
+    Image imageTmp;
+    TJImageDescription cameraInputInfo;
 
     while (isRecording_.load())
     {
@@ -333,7 +324,7 @@ void InputWebcam::imageAcquisitionLoop()
                 break;
             }
         }
-        
+
         if (buf.index >= bufrequest_.count)
         {
             common::errno_log("InputWebcam::imageAcquisitionLoop - INVALID INDEX in BUFF. Aborting.");
@@ -383,55 +374,52 @@ void InputWebcam::imageAcquisitionLoop()
                 continue;
             }
 
-            if (image_.size() != raw_needed_size)
+            if (imageTmp.size() != raw_needed_size)
             {
-                image_.resize(raw_needed_size);
+                imageTmp.resize(raw_needed_size);
                 common::log_warn("InputWebcam::imageAcquisitionLoop - Reallocating raw image buffer to %lu - %s",
-                                 image_.size(), common::format_size(image_.size()));
+                                 imageTmp.size(), common::format_size(imageTmp.size()));
             }
 
             cameraInputInfo = srcImage.info;
             readImageHeader = false;
         }
 
-        if (image_.getBeingUsed())
+
+        if (!decoder_->decode(srcImage, imageTmp))
         {
-            common::log_warn("InputWebcam::imageAcquisitionLoop - %s Image buffer is being used, skipping frame", name_.c_str());
+            readImageHeader = true;
             if (!requeueFrame(buf))
             {
                 break;
             }
-            continue;
+            if (decodingFailureCount > 10)
+            {
+                common::log_error("InputWebcam::imageAcquisitionLoop - Failed to decode image after %d attempts",
+                                  decodingFailureCount);
+                break;
+            }
+            else
+            {
+                decodingFailureCount++;
+                common::log_error("InputWebcam::imageAcquisitionLoop - Decoding failed %d times", decodingFailureCount);
+                continue;
+            }
         }
+
+        decodingFailureCount = 0;
+        imageTmp.info =
+            cameraInputInfo; // TODO: FIXME: Here we are resetting the decoder state. We should use the decoder state
         {
             std::lock_guard<std::mutex> lock(imageMutex_);
-
-            if (!decoder_->decode(srcImage, image_))
+            if (!latestImage_ || latestImage_->size() != imageTmp.size())
             {
-                readImageHeader = true;
-                image_.setBeingUsed(false);
-                if (!requeueFrame(buf))
-                {
-                    break;
-                }
-                if (decodingFailureCount > 10)
-                {
-                    common::log_error("InputWebcam::imageAcquisitionLoop - Failed to decode image after %d attempts",
-                                      decodingFailureCount);
-                    break;
-                }
-                else
-                {
-                    decodingFailureCount++;
-                    common::log_error("InputWebcam::imageAcquisitionLoop - Decoding failed %d times",
-                                      decodingFailureCount);
-                    continue;
-                }
+                latestImage_ = std::make_unique<Image>(imageTmp.size());
             }
-
-            decodingFailureCount = 0;
-            image_.info = cameraInputInfo;
+            // Copy image to latest image
+            latestImage_->copyFrom(imageTmp);
         }
+
         Profiler::getInstance().stop(name_.c_str(), "Input image decoding");
 
         // Others can process the image
@@ -442,8 +430,22 @@ void InputWebcam::imageAcquisitionLoop()
         }
     }
 
-    image_.setBeingUsed(false);
     common::log_warn("InputWebcam::imageAcquisitionLoop thread dead for device: %s", device_path_.c_str());
+}
+
+
+bool InputWebcam::getImage(std::unique_ptr<Image>& outImage)
+{
+    // Get the most recent frame from queue, discarding older ones
+    std::unique_ptr<Image> latestFrame;
+    if(latestImage_)
+    {
+        std::lock_guard<std::mutex> lock(imageMutex_);
+        outImage = latestImage_->deepCopy();
+        return true;
+    }
+
+    return false;
 }
 
 InputWebcam::~InputWebcam()
