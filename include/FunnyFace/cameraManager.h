@@ -36,7 +36,7 @@ class CameraManager
 
     void shutdown();
 
-    std::vector<std::string> discoverAvailableInputDevices();
+    std::vector<std::string> discoverAvailableVideoDevices();
   private:
     bool isDeviceUsable(const std::string& devicePath);
     bool processCameraInput(std::unique_ptr<Image>& outputImage, std::unique_ptr<Image>& newFrame);

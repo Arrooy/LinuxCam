@@ -4,6 +4,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace funnyface
 {
@@ -31,7 +32,13 @@ class Profiler
 
     bool duration(const std::string& sourceName, const std::string& name, std::chrono::microseconds& duration) const;
     const std::unordered_map<std::string, std::chrono::microseconds>& getDurations() const;
+
+    /**
+     * Returns all durations for a given source name.
+     */
     std::unordered_map<std::string, std::chrono::microseconds> getDurations(const std::string& sourceName) const;
+
+    std::vector<std::pair<std::string, std::chrono::microseconds>> getDurationsSorted() const;
 
 
     static std::string format_duration(std::chrono::microseconds duration) noexcept;

@@ -1,4 +1,4 @@
-#include "FunnyFace/UI/PaintWebcam.h"
+#include "FunnyFace/UI/paintWebcam.h"
 
 #include "FunnyFace/common.h"
 #include "FunnyFace/inputWebcam.h"
@@ -12,6 +12,11 @@ const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0",
 void PaintWebcam::setWebcam(std::shared_ptr<Webcam> webcam)
 {
     webcam_ = webcam;
+}
+
+void PaintWebcam::setNewDeviceModalWebcam(std::shared_ptr<Webcam> webcam)
+{
+    webcam_new_device_ = webcam;
 }
 
 std::shared_ptr<Webcam> PaintWebcam::getWebcam() const
@@ -57,6 +62,8 @@ void PaintWebcam::paintDevice()
         {
             ImGui::Text("Chrominance Subsampling: %s",
                         subsampling_options[static_cast<int>(webcam_->getChrominanceSubsampling())]);
+
+            ImGui::Text("JPEG Quality: %d", webcam_->getQuality());
         }
     }
 
@@ -97,6 +104,7 @@ void PaintWebcam::paintDevice()
         }
     }
 }
+
 void PaintWebcam::paintPhysicalInput()
 {
     const std::string& camera_key = webcam_->getDevicePath();
@@ -137,7 +145,7 @@ void PaintWebcam::paintPhysicalInput()
             const auto& format = capabilities.formats[fmt_idx];
             if (ImGui::TreeNodeEx(("Format: " + format.description).c_str(), flags))
             {
-                // TODO: FIXME: Make sure device format selection works.
+                // TODO: FIXME: Make sure FPS selection works.
 
                 for (std::size_t size_idx = 0; size_idx < format.sizes.size(); size_idx++)
                 {
@@ -288,4 +296,92 @@ void PaintWebcam::paintVirtualOutput()
             ImGui::EndDisabled();
         }
     }
+}
+
+bool PaintWebcam::paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> temp_webcams)
+{
+    if (temp_webcams.empty())
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No video devices found in /dev/video*");
+        return true;
+    }
+
+    // Locate the PopupModal
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_Appearing);
+
+    bool modal_open = true;
+    if (ImGui::BeginPopupModal("Add New Device", &modal_open,
+                               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+    {
+        const std::string combo_text = webcam_new_device_ ? webcam_new_device_->getDevicePath() : "Select device...";
+        if (ImGui::BeginCombo("Video Device", combo_text.c_str()))
+        {
+            for (auto& temp_webcam : temp_webcams)
+            {
+                bool is_selected =
+                    !webcam_new_device_ ? false : (temp_webcam->getDevicePath() == webcam_new_device_->getDevicePath());
+
+                if (ImGui::Selectable(temp_webcam->getDevicePath().c_str(), is_selected))
+                {
+                    webcam_new_device_ = temp_webcam;
+                }
+                if (is_selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (webcam_new_device_)
+        {
+            // TODO: Load and show device info using other methods
+            ImGui::Text("Device Name: %s", webcam_new_device_->getName().c_str());
+        }
+        ImGui::Separator();
+
+        if (!webcam_new_device_)
+        {
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::Button("Add Device"))
+        {
+        }
+
+        if (!webcam_new_device_)
+        {
+            ImGui::EndDisabled();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            // Close modal and reset states
+            modal_open = false;
+            common::log_info("UI::paintAddDeviceModal - User cancelled adding device");
+            ImGui::CloseCurrentPopup();
+        }
+
+
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+    // Check if modal was closed by Cancel, X button or ESC key
+    if (!modal_open)
+    {
+        if (webcam_new_device_)
+        {
+            webcam_new_device_.reset();
+        }
+        return false;
+    }
+    return true;
 }

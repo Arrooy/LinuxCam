@@ -9,10 +9,11 @@
 #include <map>
 #include <memory>
 #include <queue>
+#include <vector>
 
 #include "FunnyFace/GifReader.h"
+#include "FunnyFace/UI/paintWebcam.h"
 #include "FunnyFace/cameraManager.h"
-#include "FunnyFace/UI/PaintWebcam.h"
 #include "imgui.h"
 
 namespace funnyface
@@ -73,14 +74,13 @@ class UI
     bool ready_{false};
 
     bool show_profiler_{true};
-    bool show_input_config_{true};
-    bool show_output_config_{true};
-    bool maintain_aspect_ratio_{false};
 
     bool was_plus_tab_active_ = false;
     bool go_back_to_last_device_ = false;
     unsigned int last_device_tab_index_ = 0;
-    std::unordered_map<std::string, std::shared_ptr<InputWebcam>> temp_modal_webcams_;
+    std::vector<std::shared_ptr<Webcam>> temp_modal_webcams_;
+
+    bool oneshot_add_device_popup_{false};
 
     // Window positioning tracking
     float current_y_{0.0f};
@@ -90,7 +90,7 @@ class UI
     std::unique_ptr<PaintWebcam> paintWebcam_;
 
     // Device management
-    bool show_device_config_ = false;
+    bool show_device_config_{true};
     int active_device_tab_ = 0;
     int requestedTab_ = 0;
 
@@ -107,7 +107,7 @@ class UI
     void paintAddDeviceModal();
     void paintDeviceConfigurationTabs();
 
-    
+
     // static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
 
     static void mouseCallback(GLFWwindow* window, double xpos, double ypos)

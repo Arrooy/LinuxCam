@@ -178,7 +178,7 @@ std::vector<std::shared_ptr<Webcam>> CameraManager::getWebcams() const
     return result;
 }
 
-std::vector<std::string> CameraManager::discoverAvailableInputDevices()
+std::vector<std::string> CameraManager::discoverAvailableVideoDevices()
 {
     std::vector<std::string> availableDevices;
 
@@ -207,7 +207,7 @@ std::vector<std::string> CameraManager::discoverAvailableInputDevices()
         if (common::file_exists(devicePath) && isDeviceUsable(devicePath))
         {
             availableDevices.push_back(devicePath);
-            common::log_info("CameraManager::discoverAvailableInputDevices - Found unmanaged usable device: %s",
+            common::log_info("CameraManager::discoverAvailableVideoDevices - Found unmanaged usable device: %s",
                              devicePath.c_str());
         }
     }

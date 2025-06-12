@@ -1,6 +1,7 @@
 #include "FunnyFace/profiler.h"
 
 #include <chrono>
+#include <algorithm>
 
 using namespace funnyface;
 
@@ -29,7 +30,8 @@ void Profiler::stop(const std::string& sourceName, const std::string& name)
     }
 }
 
-bool Profiler::duration(const std::string& sourceName, const std::string& name, std::chrono::microseconds& duration) const
+bool Profiler::duration(const std::string& sourceName, const std::string& name,
+                        std::chrono::microseconds& duration) const
 {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = durations_.find(makeKey(sourceName, name));
@@ -62,5 +64,21 @@ std::unordered_map<std::string, std::chrono::microseconds> Profiler::getDuration
         }
     }
 
+    return result;
+}
+
+// Sorting should be immediate if we are dealing with small lists
+std::vector<std::pair<std::string, std::chrono::microseconds>> Profiler::getDurationsSorted() const
+{
+    std::vector<std::pair<std::string, std::chrono::microseconds>> result;
+    std::lock_guard<std::mutex> lock(mutex_);
+    result.reserve(durations_.size());
+    for (const auto& pair : durations_)
+    {
+        result.push_back(pair);
+    }
+    std::sort(result.begin(), result.end(),
+              [](const std::pair<std::string, std::chrono::microseconds>& a,
+                 const std::pair<std::string, std::chrono::microseconds>& b) { return a.second > b.second; });
     return result;
 }

@@ -69,7 +69,7 @@ bool Application::initialize()
         }
     }
 
-    auto available_device_paths = cameraManager_->discoverAvailableInputDevices();
+    auto available_device_paths = cameraManager_->discoverAvailableVideoDevices();
     for (const auto& device_path : available_device_paths)
     {
         std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", device_path, 0, 0, 2);

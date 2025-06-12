@@ -1,8 +1,8 @@
 #include "FunnyFace/ui.h"
 
+#include "FunnyFace/UI/paintWebcam.h"
 #include "FunnyFace/common.h"
 #include "FunnyFace/profiler.h"
-#include "FunnyFace/UI/PaintWebcam.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
@@ -113,16 +113,17 @@ void UI::paintMainWindow()
         ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_Always);
         ImGui::Begin("Profiler", &show_profiler_, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
         auto textColor = ImVec4(0.0f, 0.7f, 1.0f, 1.0f);
-        auto durations = Profiler::getInstance().getDurations();
+        auto durations = Profiler::getInstance().getDurationsSorted();
+
         for (const auto& pair : durations)
         {
             ImGui::TextColored(textColor, "%s - %s", pair.first.c_str(),
                                Profiler::format_duration(pair.second).c_str());
         }
-
-        ImGuiIO& io = ImGui::GetIO();
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
         if (ImGui::Button("Close"))
         {
@@ -141,10 +142,17 @@ void UI::paintMainWindow()
         paintDeviceConfigurationTabs();
     }
 
+    if(oneshot_add_device_popup_)
+    {
+        ImGui::OpenPopup("Add New Device");
+        show_add_device_modal_ = true;
+        oneshot_add_device_popup_ = false;
+    }
+
     // Render add device modal
     if (show_add_device_modal_)
     {
-        // paintAddDeviceModal();
+        show_add_device_modal_ = paintWebcam_->paintAddDeviceModal(temp_modal_webcams_);
     }
 }
 
@@ -219,27 +227,24 @@ void UI::paintDeviceConfigurationTabs()
                 temp_modal_webcams_.clear();
 
                 // Use CameraManager to discover devices
-                std::vector<std::string> device_paths = cameraManager_->discoverAvailableInputDevices();
+                std::vector<std::string> device_paths = cameraManager_->discoverAvailableVideoDevices();
+                temp_modal_webcams_.reserve(device_paths.size());
 
+                // Create a temp webcam for each device.
                 for (const auto& device_path : device_paths)
                 {
-                    try
-                    {
-                        auto temp_webcam =
-                            std::make_shared<InputWebcam>("temp_" + device_path, device_path, 640, 480, 1);
-                        temp_modal_webcams_[device_path] = temp_webcam;
-                        common::log_info("Created temporary webcam for %s", device_path.c_str());
-                    }
-                    catch (const std::exception& e)
-                    {
-                        common::log_error("Failed to create temporary webcam for %s: %s", device_path.c_str(),
-                                          e.what());
-                    }
+                    auto temp_webcam = std::make_shared<InputWebcam>("temp_" + device_path, device_path, 640, 480, 1);
+                    temp_modal_webcams_.push_back(temp_webcam);
+                    common::log_info("Created temporary webcam for %s", device_path.c_str());
                 }
 
-                common::log_info("UI::paintDeviceConfigurationTabs - Opening add device modal");
+                // Reset selected webcam
+                paintWebcam_->setNewDeviceModalWebcam(nullptr);
+                // Trigger the add device popup
+                oneshot_add_device_popup_ = true;
+
                 was_plus_tab_active_ = true;
-                show_add_device_modal_ = true;
+                common::log_info("UI::paintDeviceConfigurationTabs - Opening add device modal");
             }
         }
         else
@@ -302,8 +307,8 @@ void UI::paintDeviceConfigurationTabs()
 //                         if (selected_video_device_ >= 0)
 //                         {
 //                             std::string device_path = device_paths[selected_video_device_];
-//                             std::string device_name = "Device " + device_path.substr(device_path.find_last_of('/') + 1);
-//                             strncpy(device_name_buffer_, device_name.c_str(), sizeof(device_name_buffer_) - 1);
+//                             std::string device_name = "Device " + device_path.substr(device_path.find_last_of('/') +
+//                             1); strncpy(device_name_buffer_, device_name.c_str(), sizeof(device_name_buffer_) - 1);
 //                             device_name_buffer_[sizeof(device_name_buffer_) - 1] = '\0';
 //                         }
 //                     }
@@ -317,7 +322,8 @@ void UI::paintDeviceConfigurationTabs()
 //         }
 
 //         // Device name input
-//         ImGui::InputText("Device Name", device_name_buffer_, sizeof(device_name_buffer_), ImGuiInputTextFlags_ReadOnly);
+//         ImGui::InputText("Device Name", device_name_buffer_, sizeof(device_name_buffer_),
+//         ImGuiInputTextFlags_ReadOnly);
 
 //         // Show device information and formats for input devices
 //         if (selected_video_device_ >= 0)
@@ -386,11 +392,11 @@ void UI::paintDeviceConfigurationTabs()
 //                                         bool is_current = (selected_format == static_cast<int>(fmt_idx)
 //                                                            && selected_size == static_cast<int>(size_idx));
 
-//                                         ImGui::PushID(fmt_idx * 1000 + size_idx + 10000); // Offset to avoid conflicts
-//                                         if (ImGui::Selectable(
-//                                                 (std::to_string(size.width) + "x" + std::to_string(size.height))
-//                                                     .c_str(),
-//                                                 is_current))
+//                                         ImGui::PushID(fmt_idx * 1000 + size_idx + 10000); // Offset to avoid
+//                                         conflicts if (ImGui::Selectable((std::to_string(size.width) + "x"
+//                                                                          + std::to_string(size.height))
+//                                                                             .c_str(),
+//                                                                         is_current))
 //                                         {
 //                                             if (is_current)
 //                                             {
@@ -542,6 +548,7 @@ void UI::paintDeviceConfigurationTabs()
 
 //         ImGui::EndPopup();
 //     }
+
 //     // Handle modal being closed by X button or ESC key
 //     if (!modal_open && show_add_device_modal_)
 //     {
