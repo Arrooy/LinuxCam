@@ -36,15 +36,16 @@ class V4L2LoopbackWriter : public Webcam
     bool writeFrame(Image& image);
     void cleanup();
 
+    bool reconfigure(TJSAMP subsampling, int quality);
 
     TJSAMP getChrominanceSubsampling() const override { return chrominance_subsampling_; };
-    bool reconfigureSubsampling(TJSAMP subsampling);
+    int getQuality() const override { return quality_; };
   private:
-    int fd_;
     std::vector<Buffer> buffers_;
     bool streaming_;
 
     TJSAMP chrominance_subsampling_;
+    int quality_;
 
     // Encoder of output image
     std::unique_ptr<Encoder> encoder_;

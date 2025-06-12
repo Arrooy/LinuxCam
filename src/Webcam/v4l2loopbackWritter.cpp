@@ -7,9 +7,10 @@ using namespace funnyface;
 
 V4L2LoopbackWriter::V4L2LoopbackWriter(const std::string& name, const std::string& devicePath, const unsigned int width,
                                        const unsigned int height, const TJSAMP subsample)
-    : Webcam(name, devicePath, WebcamType::VirtualOutput, width, height), fd_(-1), streaming_(false)
+    : Webcam(name, devicePath, WebcamType::VirtualOutput, width, height), streaming_(false)
 {
     chrominance_subsampling_ = subsample;
+    quality_ = 100;
 }
 
 V4L2LoopbackWriter::~V4L2LoopbackWriter()
@@ -244,8 +245,11 @@ void V4L2LoopbackWriter::cleanup()
     // 1. Stop streaming_
     if (streaming_)
     {
-        enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-        ioctl(fd_, VIDIOC_STREAMOFF, &type);
+        if (fd_ >= 0)
+        {
+            enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+            ioctl(fd_, VIDIOC_STREAMOFF, &type);
+        }
         streaming_ = false;
     }
 
@@ -284,45 +288,42 @@ void V4L2LoopbackWriter::cleanup()
     common::log_info("v4l2LoopbackWritter - Cleanup finished!");
 }
 
-bool V4L2LoopbackWriter::reconfigureSubsampling(TJSAMP subsampling)
+bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
 {
-    common::log_info("V4L2LoopbackWriter::reconfigureSubsampling - Reconfiguring device %s with subsampling %d",
-                     name_.c_str(), static_cast<int>(subsampling));
-
     // Stop current operation
     bool wasStreaming = streaming_;
     if (wasStreaming)
     {
         if (!stop())
         {
-            common::log_error("V4L2LoopbackWriter::reconfigureSubsampling - Failed to stop streaming");
+            common::log_error("V4L2LoopbackWriter::reconfigure - Failed to stop streaming");
             return false;
         }
     }
 
-    // Update subsampling
+    // Update device variables
     chrominance_subsampling_ = subsampling;
+    quality_ = quality;
 
     // Recreate encoder with new subsampling
     if (encoder_)
     {
         encoder_.reset();
+    }
 
-        auto pixelFormat = TJPF_RGB;
-        ConfigBuilder configBuilder;
-        configBuilder.imageFormat(selectedFormat_->format)
-            .pixelFormat(pixelFormat)
-            .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
-            .height(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height)
-            .quality(100)
-            .chrominance_subsampling(chrominance_subsampling_);
+    ConfigBuilder configBuilder;
+    configBuilder.imageFormat(selectedFormat_->format)
+        .pixelFormat(TJPF_RGB)
+        .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
+        .height(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height)
+        .quality(quality)
+        .chrominance_subsampling(chrominance_subsampling_);
 
-        encoder_ = CodecFactory::create<Encoder>(configBuilder);
-        if (encoder_ == nullptr)
-        {
-            common::log_error("V4L2LoopbackWriter::reconfigureSubsampling - Failed to create encoder");
-            return false;
-        }
+    encoder_ = CodecFactory::create<Encoder>(configBuilder);
+    if (encoder_ == nullptr)
+    {
+        common::log_error("V4L2LoopbackWriter::reconfigure - Failed to create encoder");
+        return false;
     }
 
     // Restart streaming if it was active before
@@ -330,11 +331,11 @@ bool V4L2LoopbackWriter::reconfigureSubsampling(TJSAMP subsampling)
     {
         if (!start())
         {
-            common::log_error("V4L2LoopbackWriter::reconfigureSubsampling - Failed to restart streaming");
+            common::log_error("V4L2LoopbackWriter::reconfigure - Failed to restart streaming");
             return false;
         }
     }
 
-    common::log_info("V4L2LoopbackWriter::reconfigureSubsampling - Successfully reconfigured subsampling");
+    common::log_info("V4L2LoopbackWriter::reconfigure - Successfully reconfigured subsampling");
     return true;
 }

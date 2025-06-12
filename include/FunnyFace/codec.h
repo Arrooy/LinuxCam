@@ -139,12 +139,6 @@ class JPEGEncoder : public Encoder
         {
             common::log_error("JPEGEncoder - Unable to load parameter chrominance_subsampling");
         }
-
-        // Print the configured values
-        common::log_info("JPEGEncoder - Configured values:");
-        common::log_info("JPEGEncoder - Width: %dx%d", width, height);
-        common::log_info("JPEGEncoder - Pixel Format: %d", static_cast<int>(pixelFormat));
-        common::log_info("JPEGEncoder - Chrominance Subsampling: %d", static_cast<int>(chrominance_subsampling));
     }
 
     ~JPEGEncoder()

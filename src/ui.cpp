@@ -78,7 +78,7 @@ void UI::newFrame()
 
 void UI::paint()
 {
-    // ImGui::ShowDemoWindow();
+    ImGui::ShowDemoWindow();
 
     // Paint all UI windows
     paintMainWindow();

@@ -24,6 +24,9 @@ class PaintWebcam
     void paintDevice();
 
   private:
+    void paintPhysicalInput();
+    void paintVirtualOutput();
+
     // The webcam being displayed
     std::shared_ptr<Webcam> webcam_;
 
@@ -32,6 +35,7 @@ class PaintWebcam
     std::map<std::string, int> selected_size_indices_;
     std::map<std::string, int> selected_fps_indices_;
     std::map<std::string, int> selected_subsampling_;
+    int selected_quality_value_{100};
 };
 
 } // namespace funnyface

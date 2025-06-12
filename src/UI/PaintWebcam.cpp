@@ -7,6 +7,7 @@
 #include "imgui.h"
 
 using namespace funnyface;
+const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};
 
 void PaintWebcam::setWebcam(std::shared_ptr<Webcam> webcam)
 {
@@ -26,7 +27,7 @@ void PaintWebcam::paintDevice()
         return;
     }
 
-    std::string camera_key = webcam_->getDevicePath();
+    const std::string& camera_key = webcam_->getDevicePath();
 
     // Device Information
     if (ImGui::CollapsingHeader("Device Information"))
@@ -52,33 +53,55 @@ void PaintWebcam::paintDevice()
         ImGui::Text("System format description: %s", usedFormat.description.c_str());
         ImGui::Text("Pixel format %u", usedFormat.pixelformat);
         ImGui::Text("Encoding Algorithm %s", fromImageFormatToString(usedFormat.format).c_str());
-
-        // Show subsampling for output devices
         if (webcam_->getType() == WebcamType::VirtualOutput)
         {
-            const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};
-
-            // Initialize if not exists
-            if (selected_subsampling_.find(camera_key) == selected_subsampling_.end())
-            {
-                selected_subsampling_[camera_key] = static_cast<int>(webcam_->getChrominanceSubsampling());
-            }
-
-            int current_subsampling = selected_subsampling_[camera_key];
-
-            ImGui::Text("Current: %s", subsampling_options[static_cast<int>(webcam_->getChrominanceSubsampling())]);
-            if (ImGui::Combo("Subsampling", &current_subsampling, subsampling_options,
-                             IM_ARRAYSIZE(subsampling_options)))
-            {
-                selected_subsampling_[camera_key] = current_subsampling;
-                common::log_warn("User changed subsampling to %s", subsampling_options[current_subsampling]);
-            }
+            ImGui::Text("Chrominance Subsampling: %s",
+                        subsampling_options[static_cast<int>(webcam_->getChrominanceSubsampling())]);
         }
     }
 
-    // Available Formats (for input devices)
-    if (webcam_->getType() == WebcamType::PhysicalInput
-        && ImGui::CollapsingHeader("Available Formats", ImGuiTreeNodeFlags_DefaultOpen))
+    if (webcam_->getType() == WebcamType::PhysicalInput)
+    {
+        paintPhysicalInput();
+    }
+    else if (webcam_->getType() == WebcamType::VirtualOutput)
+    {
+        paintVirtualOutput();
+    }
+
+    ImGui::Separator();
+
+    // Enable capturing
+    bool enabled = webcam_->isRunning();
+    if (ImGui::Checkbox("Active Device", &enabled))
+    {
+        if (enabled)
+        {
+            webcam_->start();
+        }
+        else
+        {
+            webcam_->stop();
+        }
+    }
+
+    if (webcam_->getType() == WebcamType::PhysicalInput)
+    {
+        ImGui::SameLine();
+        ImGui::Separator();
+        // Enable capturing
+        bool selected = webcam_->isCurrentlySelected();
+        if (ImGui::Checkbox("Selected Device?", &selected))
+        {
+            webcam_->setCurrentlySelected(selected);
+        }
+    }
+}
+void PaintWebcam::paintPhysicalInput()
+{
+    const std::string& camera_key = webcam_->getDevicePath();
+    // Show available Formats
+    if (ImGui::CollapsingHeader("Available Formats", ImGuiTreeNodeFlags_DefaultOpen))
     {
         // Initialize if not exists. Search for the current format
         if (selected_format_indices_.find(camera_key) == selected_format_indices_.end())
@@ -176,17 +199,9 @@ void PaintWebcam::paintDevice()
                                sel_format.description.c_str(), sel_size.width, sel_size.height, sel_fps);
         }
 
-        bool applyChangesDisabled;
-        if (webcam_->getType() == WebcamType::PhysicalInput)
-        {
-            applyChangesDisabled = selected_format_indices_.find(camera_key) == selected_format_indices_.end()
-                                   || selected_format_indices_[camera_key] < 0 || selected_size_indices_[camera_key] < 0
-                                   || selected_fps_indices_[camera_key] < 0;
-        }
-        else
-        {
-            applyChangesDisabled = selected_subsampling_.find(camera_key) == selected_subsampling_.end();
-        }
+        bool applyChangesDisabled = selected_format_indices_.find(camera_key) == selected_format_indices_.end()
+                                    || selected_format_indices_[camera_key] < 0
+                                    || selected_size_indices_[camera_key] < 0 || selected_fps_indices_[camera_key] < 0;
 
         if (applyChangesDisabled)
         {
@@ -198,69 +213,79 @@ void PaintWebcam::paintDevice()
             common::log_info("PaintWebcam::paintGeneralizedDeviceConfig - Applying device configuration changes for %s",
                              camera_key.c_str());
 
-            if (webcam_->getType() == WebcamType::PhysicalInput)
+            // Apply format/size changes for input camera
+            auto inputCam = std::dynamic_pointer_cast<InputWebcam>(webcam_);
+            if (inputCam)
             {
-                // Apply format/size changes for input camera
-                auto inputCam = std::dynamic_pointer_cast<InputWebcam>(webcam_);
-                if (inputCam)
+                if (!inputCam->reconfigureFormat(selected_format_indices_[camera_key],
+                                                 selected_size_indices_[camera_key], 0))
                 {
-                    if (!inputCam->reconfigureFormat(selected_format_indices_[camera_key],
-                                                     selected_size_indices_[camera_key], 0))
-                    {
-                        // Reset selections after failure apply
-                        selected_format_indices_[camera_key] = -1;
-                        selected_size_indices_[camera_key] = -1;
-                        selected_fps_indices_[camera_key] = -1;
-                    }
-                }
-            }
-            else if (webcam_->getType() == WebcamType::VirtualOutput)
-            {
-                // Apply subsampling changes for output camera
-                auto outputCam = std::dynamic_pointer_cast<V4L2LoopbackWriter>(webcam_);
-                if (outputCam)
-                {
-                    TJSAMP new_subsampling = static_cast<TJSAMP>(selected_subsampling_[camera_key]);
-                    if (!outputCam->reconfigureSubsampling(new_subsampling))
-                    {
-                        selected_subsampling_[camera_key] = -1;
-                    }
+                    // Reset selections after failure apply
+                    selected_format_indices_[camera_key] = -1;
+                    selected_size_indices_[camera_key] = -1;
+                    selected_fps_indices_[camera_key] = -1;
                 }
             }
         }
-
 
         if (applyChangesDisabled)
         {
             ImGui::EndDisabled();
         }
     }
+}
 
-    ImGui::Separator();
+void PaintWebcam::paintVirtualOutput()
+{
+    const std::string& camera_key = webcam_->getDevicePath();
 
-    // Enable capturing
-    bool enabled = webcam_->isRunning();
-    if (ImGui::Checkbox("Active Device", &enabled))
+
+    // Initialize if not exists
+    if (selected_subsampling_.find(camera_key) == selected_subsampling_.end())
     {
-        if (enabled)
-        {
-            webcam_->start();
-        }
-        else
-        {
-            webcam_->stop();
-        }
+        selected_subsampling_[camera_key] = static_cast<int>(webcam_->getChrominanceSubsampling());
     }
 
-    if (webcam_->getType() == WebcamType::PhysicalInput)
+
+    if (ImGui::CollapsingHeader("Available Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::SameLine();
-        ImGui::Separator();
-        // Enable capturing
-        bool selected = webcam_->isCurrentlySelected();
-        if (ImGui::Checkbox("Selected Device?", &selected))
+        int current_subsampling = selected_subsampling_[camera_key];
+
+        // Show subsampling and quality options
+        if (ImGui::Combo("Subsampling", &current_subsampling, subsampling_options, IM_ARRAYSIZE(subsampling_options)))
         {
-            webcam_->setCurrentlySelected(selected);
+            selected_subsampling_[camera_key] = current_subsampling;
+            common::log_warn("User changed subsampling to %s", subsampling_options[current_subsampling]);
+        }
+        auto flags_for_sliders = ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoInput
+                                 | ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_NoSpeedTweaks;
+
+        ImGui::SliderInt("Image Quality", &selected_quality_value_, 0, 100, "%d", flags_for_sliders);
+
+        bool applyChangesDisabled = selected_subsampling_.find(camera_key) == selected_subsampling_.end();
+
+        if (applyChangesDisabled)
+        {
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::Button("Apply Changes"))
+        {
+            // Apply subsampling changes for output camera
+            auto outputCam = std::dynamic_pointer_cast<V4L2LoopbackWriter>(webcam_);
+            if (outputCam)
+            {
+                TJSAMP new_subsampling = static_cast<TJSAMP>(selected_subsampling_[camera_key]);
+                if (!outputCam->reconfigure(new_subsampling, selected_quality_value_))
+                {
+                    selected_subsampling_[camera_key] = -1;
+                }
+            }
+        }
+
+        if (applyChangesDisabled)
+        {
+            ImGui::EndDisabled();
         }
     }
 }

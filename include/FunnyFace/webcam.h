@@ -112,8 +112,9 @@ class Webcam
     virtual bool stop() = 0;
     virtual bool isRunning() = 0;
 
-
+    // TODO: This methods are only for V4l2VirtualDevices. Refactor so they stay there.
     virtual TJSAMP getChrominanceSubsampling() const = 0;
+    virtual int getQuality() const = 0;
 
     std::string getDevicePath() const { return device_path_; }
     WebcamType getType() const { return type_; }
