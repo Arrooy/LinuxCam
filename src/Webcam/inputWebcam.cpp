@@ -199,7 +199,7 @@ bool InputWebcam::stopStreaming()
     }
     else
     {
-        common::log_error("InputWebcam::stopStreaming - Unkown file descriptor");
+        common::log_error("InputWebcam::stopStreaming - Unknown file descriptor");
         return false;
     }
     return true;
@@ -476,7 +476,11 @@ InputWebcam::~InputWebcam()
 
 void InputWebcam::cleanup()
 {
-    stopRecording();
+    if(ready_)
+    {
+        stopRecording();
+    }
+
     cleanupBuffers();
 
     if (fd_ >= 0)

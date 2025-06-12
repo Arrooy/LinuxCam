@@ -153,6 +153,11 @@ void UI::paintMainWindow()
     if (show_add_device_modal_)
     {
         show_add_device_modal_ = paintWebcam_->paintAddDeviceModal(temp_modal_webcams_);
+        if(!show_add_device_modal_)
+        {
+            // Cleanup the modal
+            temp_modal_webcams_.clear();
+        }
     }
 }
 
