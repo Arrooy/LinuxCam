@@ -539,11 +539,11 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex
         return false;
     }
 
-    const auto& selectedFormat = capabilities_.formats[formatIndex];
+    Format selectedFormat = capabilities_.formats[formatIndex];
 
     // Cleanup current setup
     cleanup();
-
+    // TODO: FIXME: When selecting 25fps, we use 30.
     // Set new selected format
     selectedFormat_ = std::make_unique<Format>(selectedFormat);
     selectedFormat_->selectedFrameSize = sizeIndex;

@@ -53,19 +53,19 @@ bool Application::initialize()
         if (!webcam->setupDevice())
         {
             common::log_error("Failed to setup webcam: %s", wc.name.c_str());
-            return false;
+            continue;
         }
 
         if (!webcam->start())
         {
             common::log_error("Failed to start webcam: %s", wc.name.c_str());
-            return false;
+            continue;
         }
         webcam->setCurrentlySelected(true);
         if (!cameraManager_->addCamera(std::move(webcam)))
         {
             common::log_error("Failed to add webcam: %s", wc.name.c_str());
-            return false;
+            continue;
         }
     }
 

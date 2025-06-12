@@ -99,6 +99,7 @@ bool Webcam::updateDeviceCapabilities()
     {
         Format fmt;
         fmt.description = std::string(reinterpret_cast<char*>(fmtdesc.description));
+        fmt.sizes.clear();
 
         if (fmtdesc.pixelformat == V4L2_PIX_FMT_JPEG || fmtdesc.pixelformat == V4L2_PIX_FMT_MJPEG)
         {
@@ -155,26 +156,32 @@ bool Webcam::updateDeviceCapabilities()
                 FrameSize size;
                 size.width = frmsize.discrete.width;
                 size.height = frmsize.discrete.height;
-                //TODO: FIXME: There are 0 FPS for some formats?
-                // Query available frame rates for the current format
+                size.fps.clear();
+
                 struct v4l2_frmivalenum frmival;
                 CLEAR(frmival);
                 frmival.pixel_format = fmtdesc.pixelformat;
                 frmival.width = frmsize.discrete.width;
                 frmival.height = frmsize.discrete.height;
+
                 for (frmival.index = 0; ioctl(fd_, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) == 0; ++frmival.index)
                 {
                     if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE)
                     {
-                        double fps = static_cast<double>(frmival.discrete.denominator)
-                                     / static_cast<double>(frmival.discrete.numerator);
+                        int fps = static_cast<int>(static_cast<double>(frmival.discrete.denominator)
+                                                   / static_cast<double>(frmival.discrete.numerator));
 
-                        size.fps.push_back(static_cast<int>(fps));
-                        common::log_warn("Webcam::UpdateDeviceCapabilities - Found frame rate %f for size %dx%d.", fps,
-                                         size.width, size.height);
+                        if (std::find(size.fps.begin(), size.fps.end(), fps) == size.fps.end())
+                        {
+                            size.fps.push_back(fps); // Only insert if not already present
+                        }
                     }
                 }
-                fmt.sizes.push_back(size);
+
+                if (std::find(fmt.sizes.begin(), fmt.sizes.end(), size) == fmt.sizes.end())
+                {
+                    fmt.sizes.push_back(size); // No duplicate width/height/fps
+                }
             }
         }
 
@@ -233,9 +240,6 @@ void Webcam::selectBestFormat()
     if (bestFormat != nullptr)
     {
         auto& selectedSize = bestFormat->sizes[bestIndex];
-        // Remove old selected format
-        selectedSize.fps.erase(selectedSize.fps.begin() + selectedSize.selectedFPS);
-
         bestFormat->selectedFrameSize = bestIndex;
         selectedSize.selectedFPS = bestFpsIndex;
         common::log_info("Webcam: Found bestFpsIndex %d, selected FPS %d", bestFpsIndex,

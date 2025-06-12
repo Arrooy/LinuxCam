@@ -6,8 +6,8 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 #include <tuple>
+#include <vector>
 
 #include "FunnyFace/codecFactory.h"
 namespace funnyface
@@ -32,6 +32,22 @@ struct FrameSize
     unsigned int height;
     unsigned int selectedFPS{0u};
     std::vector<unsigned int> fps{0u};
+    void print() const
+    {
+        common::log_info("\t\tSize width: %d height: %d", width, height);
+        common::log_info("\t\tSelected fps index is %d", selectedFPS);
+        for (const auto& fps : fps)
+        {
+            common::log_info("\t\t\tFPS: %d", fps);
+        }
+        common::log_info("\t\tSelected fps value is %d", fps[selectedFPS]);
+    }
+
+    bool operator==(const FrameSize& other) const
+    {
+        return width == other.width && height == other.height && fps.size() == other.fps.size()
+               && std::equal(fps.begin(), fps.end(), other.fps.begin());
+    }
 };
 
 struct Format
@@ -41,6 +57,23 @@ struct Format
     unsigned int pixelformat;
     unsigned int selectedFrameSize{0u};
     std::vector<FrameSize> sizes;
+
+    void print() const
+    {
+        common::log_info("\tFormat description %s", description.c_str());
+        common::log_info("\tFormat enum: %s", fromImageFormatToString(format).c_str());
+        common::log_info("\tPixel format raw: %d", pixelformat);
+        common::log_info("\tSelected frame size index: %d", selectedFrameSize);
+
+        common::log_info("\tAvailable frame sizes:");
+        for (const auto& size : sizes)
+        {
+            size.print();
+        }
+        const auto& sel_size = sizes[selectedFrameSize];
+        common::log_info("\tSelected frame size value: %dx%d with %dFPS", sel_size.width, sel_size.height,
+                         sel_size.fps[sel_size.selectedFPS]);
+    }
 };
 
 struct CameraCapabilities
@@ -49,6 +82,17 @@ struct CameraCapabilities
     std::string card;
     std::string bus_info;
     std::vector<Format> formats;
+
+    void print() const
+    {
+        common::log_info("Driver name: %s", driver.c_str());
+        common::log_info("Driver card: %s", card.c_str());
+        common::log_info("Driver bus info: %s", bus_info.c_str());
+        for (const auto& format : formats)
+        {
+            format.print();
+        }
+    }
 };
 
 
@@ -76,6 +120,8 @@ class Webcam
 
     std::string getName() const { return name_; }
     CameraCapabilities getCapabilities() const { return capabilities_; }
+
+
     Format getSelectedFormat() const
     {
         if (selectedFormat_)
@@ -84,8 +130,14 @@ class Webcam
         }
         return Format{};
     }
-    unsigned int getDesiredWidth() const { return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width : 0; }
-    unsigned int getDesiredHeight() const { return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height : 0; }
+    unsigned int getDesiredWidth() const
+    {
+        return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width : 0;
+    }
+    unsigned int getDesiredHeight() const
+    {
+        return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height : 0;
+    }
 
     bool isCurrentlySelected() const { return currentlySelected_; }
     void setCurrentlySelected(bool selected) { currentlySelected_ = selected; }
@@ -101,8 +153,8 @@ class Webcam
 
     void selectBestFormat();
     std::tuple<unsigned int, unsigned int, double> findBestFrameSize(const Format& fmt) const;
-        double calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2,
-                                 unsigned int height2) const;
+    double
+    calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const;
 
     std::string name_;
     std::string device_path_;
