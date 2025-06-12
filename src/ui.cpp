@@ -27,9 +27,12 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 
+    // disable ini and log files for ImGui
+    io.IniFilename = NULL;
+    io.LogFilename = NULL;
+
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsLight(); // Alternative style
 
     // Setup Platform/Renderer backends
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true))

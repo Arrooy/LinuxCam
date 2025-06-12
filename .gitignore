@@ -21,3 +21,5 @@ venv
 external/onnxruntime
 external/onnxruntime*
 todo
+*.log
+imgui.ini
