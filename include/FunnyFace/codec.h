@@ -43,7 +43,6 @@ class JPEGDecoder : public Decoder
         int tj_stat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), outImage.data(), 0, 0, 0,
                                     srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
 
-        // TODO: beingUsed must be removed with a better sync method.
         if (tj_stat != 0)
         {
             common::errno_log("JPEGDecoder::decodeImage - Failed to decode image");

@@ -127,7 +127,7 @@ void PaintWebcam::paintPhysicalInput()
             selected_size_indices_[camera_key] = current_format.selectedFrameSize;
             selected_fps_indices_[camera_key] = current_format.sizes[current_format.selectedFrameSize].selectedFPS;
         }
-
+        // FIXME: We can remove the indices_ arrays.
         int& selected_format = selected_format_indices_[camera_key];
         int& selected_size = selected_size_indices_[camera_key];
         int& selected_fps = selected_fps_indices_[camera_key];
@@ -226,7 +226,7 @@ void PaintWebcam::paintPhysicalInput()
             if (inputCam)
             {
                 if (!inputCam->reconfigureFormat(selected_format_indices_[camera_key],
-                                                 selected_size_indices_[camera_key], 0))
+                                                 selected_size_indices_[camera_key], selected_fps_indices_[camera_key]))
                 {
                     // Reset selections after failure apply
                     selected_format_indices_[camera_key] = -1;

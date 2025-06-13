@@ -294,9 +294,9 @@ void InputWebcam::imageAcquisitionLoop()
         {
             common::log_warn("InputWebcam::imageAcquisitionLoop - Select timeout");
             totalTimeouts++;
-            if (totalTimeouts > 10)
+            if (totalTimeouts > 5)
             {
-                common::log_warn("InputWebcam::imageAcquisitionLoop - Select timeout reached, exiting loop");
+                common::log_error("InputWebcam::imageAcquisitionLoop - Select timeout reached. Please unplug and plug again the camera.");
                 break;
             }
             continue;
@@ -517,8 +517,9 @@ void InputWebcam::cleanupBuffers()
 
 bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex)
 {
-    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format %d, size %d", name_.c_str(),
-                     formatIndex, sizeIndex);
+    const auto& new_format = capabilities_.formats[formatIndex].sizes[sizeIndex];
+    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format Index %d, size index %d and fps index %d that is %dx%d with %d fps", name_.c_str(),
+                     formatIndex, sizeIndex, fpsIndex, new_format.width, new_format.height, new_format.fps[new_format.selectedFPS]);
 
     // Stop current operation
     bool wasRunning = isRunning();
@@ -547,7 +548,7 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex
 
     // Cleanup current setup
     cleanup();
-    // TODO: FIXME: When selecting 25fps, we use 30.
+
     // Set new selected format
     selectedFormat_ = std::make_unique<Format>(selectedFormat);
     selectedFormat_->selectedFrameSize = sizeIndex;

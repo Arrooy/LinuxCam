@@ -300,7 +300,17 @@ std::tuple<unsigned int, unsigned int, double> Webcam::findBestFrameSize(const F
             bestDistance = distance;
             bestIndex = i;
             // compute the index of the max value inside vector (Allways select best fps)
-            bestFpsIndex = std::distance(size.fps.begin(), std::max_element(size.fps.begin(), size.fps.end()));
+            common::log_info("Found a good distance and fps desired is %d", selectedSize.selectedFPS);
+
+            if (desiredFPS == 0)
+            {
+                // Select the best fps
+                bestFpsIndex = std::distance(size.fps.begin(), std::max_element(size.fps.begin(), size.fps.end()));
+            }
+            else
+            {
+                bestFpsIndex = selectedSize.selectedFPS;
+            }
         }
     }
 
@@ -349,6 +359,28 @@ bool Webcam::configureDeviceFormat()
             break;
         }
     }
+
+    // Removed since it can messup the camera. not worthit.
+    // Select FPS. 
+    // struct v4l2_streamparm streamparm;
+    // CLEAR(streamparm);
+    // streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+    // if (ioctl(fd_, VIDIOC_G_PARM, &streamparm) == -1)
+    // {
+    //     common::errno_log("ConfigureDeviceFormat - VIDIOC_G_PARM");
+    //     return false;
+    // }
+
+    // streamparm.parm.capture.timeperframe.numerator = 1;
+    // const auto& selectedSize = selectedFormat_->sizes[selectedFormat_->selectedFrameSize];
+    // streamparm.parm.capture.timeperframe.denominator = selectedSize.fps[selectedSize.selectedFPS];
+    // common::log_error("Setting fps to %d", streamparm.parm.capture.timeperframe.denominator);
+    // if (ioctl(fd_, VIDIOC_S_PARM, &streamparm) == -1)
+    // {
+    //     common::errno_log("ConfigureDeviceFormat - VIDIOC_S_PARM");
+    //     return false;
+    // }
 
     return true;
 }
