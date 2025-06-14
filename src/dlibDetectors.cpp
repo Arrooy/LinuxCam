@@ -20,7 +20,7 @@ DlibFaceDetector::DlibFaceDetector()
 
 DlibFaceDetector::~DlibFaceDetector(){}
 
-std::vector<math_utils::Rect> DlibFaceDetector::detect(const Image& image)
+std::vector<math_utils::Rect> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
 {
     // Add adapt image
     DlibImageWrapper dlib_image(image);

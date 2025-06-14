@@ -101,7 +101,7 @@ Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id) const
     return UNKNOWN;
 }
 
-void Face::paintAllLandmarks(Image& image, bool joinPoints)
+void Face::paintAllLandmarks(std::unique_ptr<Image>& image, bool joinPoints)
 {
     for (auto const& face_part : landmarks_)
     {
@@ -114,7 +114,7 @@ void Face::paintAllLandmarks(Image& image, bool joinPoints)
     }
 }
 
-void Face::paintBoundingBox(Image& image)
+void Face::paintBoundingBox(std::unique_ptr<Image>& image)
 {
     std::vector<math_utils::Point> points;
 
@@ -131,8 +131,8 @@ void Face::paintBoundingBox(Image& image)
     auto right = math_utils::DDA(boundingBox_.r, boundingBox_.t, boundingBox_.r, boundingBox_.b);
     points.insert(points.end(), right.begin(), right.end());
 
-    long width = image.info.width;
-    long height = image.info.height;
+    long width = image->info.width;
+    long height = image->info.height;
     // Pant each point
     for (const math_utils::Point& p : points)
     {
@@ -141,26 +141,26 @@ void Face::paintBoundingBox(Image& image)
         {
             continue;
         }
-        image.pxy(p.x, p.y, 0, 255, 0);
+        image->pxy(p.x, p.y, 0, 255, 0);
     }
 }
 
-void Face::paintInside(Image& image, FaceIndex facepart)
+void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart)
 {
     int inside = 0;
     long startIndex = 0;
 
-    long startPixel = (boundingBox_.l + boundingBox_.t * image.info.width) * image.info.pixelSizeBytes;
+    long startPixel = (boundingBox_.l + boundingBox_.t * image->info.width) * image->info.pixelSizeBytes;
 
     // El 25 es per corregir el bottom massa curt. Aixi no talla la cara,
-    long endPixel = (boundingBox_.r + (boundingBox_.b + 25) * image.info.width) * image.info.pixelSizeBytes;
+    long endPixel = (boundingBox_.r + (boundingBox_.b + 25) * image->info.width) * image->info.pixelSizeBytes;
 
-    for (long i = startPixel; i < endPixel; i += image.info.pixelSizeBytes)
+    for (long i = startPixel; i < endPixel; i += image->info.pixelSizeBytes)
     {
         for (const Landmark& landmark : landmarks_[facepart])
         {
             const math_utils::Point& p = landmark.p;
-            long index = static_cast<long>((p.x + p.y * image.info.width) * image.info.pixelSizeBytes);
+            long index = static_cast<long>((p.x + p.y * image->info.width) * image->info.pixelSizeBytes);
             if (index == i)
             {
                 if (inside == 0)
@@ -169,39 +169,39 @@ void Face::paintInside(Image& image, FaceIndex facepart)
                 }
                 else
                 {
-                    for (long v = startIndex; v <= i; v += image.info.pixelSizeBytes)
+                    for (long v = startIndex; v <= i; v += image->info.pixelSizeBytes)
                     {
-                        image.pidx(v, 0, 0, 0);
+                        image->pidx(v, 0, 0, 0);
                     }
                 }
 
                 // Ingora pixels seguits.
-                if (startIndex != i - image.info.pixelSizeBytes)
+                if (startIndex != i - image->info.pixelSizeBytes)
                 {
                     inside = 1 - inside;
                 }
                 else
                 {
-                    image.pidx(startIndex, 0, 0, 0);
+                    image->pidx(startIndex, 0, 0, 0);
                     startIndex = i;
                 }
                 break;
             }
         }
 
-        if (i % (image.info.width * image.info.pixelSizeBytes) == 0)
+        if (i % (image->info.width * image->info.pixelSizeBytes) == 0)
         {
             // S'ha acabat la linia i estavem buscant un pixel parella.
             if (inside == 1)
             {
-                image.pidx(startIndex, 0, 0, 0);
+                image->pidx(startIndex, 0, 0, 0);
             }
             inside = 0;
         }
     }
 }
 
-void Face::paintFaceIndex(Image& image, FaceIndex facepart, bool joinPoints, Pixel color)
+void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color)
 {
     std::vector<Landmark> points = landmarks_[facepart];
     math_utils::Point lastPoint(-1, -1);
@@ -215,11 +215,11 @@ void Face::paintFaceIndex(Image& image, FaceIndex facepart, bool joinPoints, Pix
                 std::vector<math_utils::Point> points = math_utils::DDA(lastPoint.x, lastPoint.y, l.p.x, l.p.y);
                 for (const math_utils::Point& p : points)
                 {
-                    image.ppx(p.x, p.y, color);
+                    image->ppx(p.x, p.y, color);
                 }
             }
             lastPoint = l.p;
         }
-        image.ppx(l.p.x, l.p.y, color);
+        image->ppx(l.p.x, l.p.y, color);
     }
 }

@@ -21,7 +21,6 @@ using namespace funnyface;
 int main(int argc, char* argv[])
 {
     common::init_logger("a0.0.0");
-    common::log_info("Num of cuda devices: %d", dlib::cuda::get_num_devices());
     std::string configFileLocation{"../config.yaml"};
     if (argc > 1)
     {

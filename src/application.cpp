@@ -7,6 +7,7 @@
 #include "FunnyFace/common.h"
 #include "FunnyFace/dlibDetectors.h"
 #include "FunnyFace/inputWebcam.h"
+#include "FunnyFace/onnx/fsanet.h"
 #include "config.hpp"
 using namespace funnyface;
 
@@ -98,8 +99,17 @@ bool Application::initialize()
         common::log_error("Failed to initialize UI");
         return false;
     }
-
-    faceDetector_ = std::make_unique<DlibFaceDetector>();
+    // faceDetector_ = std::make_unique<DlibFaceDetector>();
+    
+    // TODO: This should work much better than it is. https://github.com/shamangary/FSA-Net
+    // Tested https://github.com/GHLab/fsanet-onnx-demo.
+    // Works.
+    // FIXME: I think the problem is that im sending a 640x480 image resized to 64x64 to the model.
+    // The demo uses detected faces as input for the detector.
+    
+    std::string var_onnx_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/fsanet-var.onnx"; // same.
+    std::string conv_onnx_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/fsanet-1x1.onnx"; // Va com el cul.
+    fsanetDetector_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
@@ -166,6 +176,7 @@ void Application::update()
             }
         }
         process(image);
+        // TODO: Since this is very time consuming, we could make it a thread...
         if (!cameraManager_->updateOutput(image))
         {
             common::log_error("Failed to update output cameras");
@@ -204,23 +215,29 @@ void Application::render()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-    // if (faceDetector_ptr_ != nullptr)
-    // {
-    //     profiler_.start("Face detector");
-    //     auto faces_rect = faceDetector_ptr_->detect(image);
-    //     profiler_.stop("Face detector");
+    if (faceDetector_ != nullptr)
+    {
+        profiler_.start("Face Detector", "Face detector");
+        auto faces_rect = faceDetector_->detect(image);
+        profiler_.stop("Face detector", "Face Detector");
 
-    //     if (faces_rect.size() > 0)
-    //     {
-    //         profiler_.start("Face painting");
-    //         for (const auto& face_rect : faces_rect)
-    //         {
-    //             Face face(face_rect);
-    //             face.paintBoundingBox(image);
-    //         }
-    //         profiler_.stop("Face painting");
-    //     }
-    // }
+        if (faces_rect.size() > 0)
+        {
+            profiler_.start("Face painting", "Face painting");
+            for (const auto& face_rect : faces_rect)
+            {
+                Face face(face_rect);
+                face.paintBoundingBox(image);
+            }
+            profiler_.stop("Face painting", "Face painting");
+        }
+    }
+    if(fsanetDetector_ != nullptr)
+    {
+        profiler_.start("Face pose detection", "Face pose detection");
+        fsanetDetector_->detect(image);
+        profiler_.stop("Face pose detection", "Face pose detection");
+    }
     Profiler::getInstance().start("1", "Processing time");
     imageRender_.uploadImage(image);
     Profiler::getInstance().stop("1", "Processing time");

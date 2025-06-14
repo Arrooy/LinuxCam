@@ -1,19 +1,23 @@
 #ifndef DETECTORS_H
 #define DETECTORS_H
 
+#include <memory>
+
 #include "FunnyFace/face.h"
+
 namespace funnyface
 {
 
 class FaceDetector
 {
   public:
-    virtual std::vector<math_utils::Rect> detect(const Image& image) = 0;
+    virtual std::vector<math_utils::Rect> detect(const std::unique_ptr<Image>& image) = 0;
 };
 
 class ShapeDetector
 {
-    virtual std::vector<Face> detect(const Image& image, const std::vector<math_utils::Rect>& faces_rect) = 0;
+    virtual std::vector<Face>
+    detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect>& faces_rect) = 0;
 };
 
 } // namespace funnyface

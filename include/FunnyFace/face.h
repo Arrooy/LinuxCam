@@ -48,11 +48,11 @@ class Face
 
     FaceIndex get_facepart_from_landmark_id(unsigned long id) const;
 
-    void paintAllLandmarks(Image& image, bool joinPoints);
-    void paintFaceIndex(Image& image, FaceIndex facepart, bool joinPoints, Pixel color);
+    void paintAllLandmarks(std::unique_ptr<Image>& image, bool joinPoints);
+    void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color);
 
-    void paintBoundingBox(Image& image);
-    void paintInside(Image& image, FaceIndex facepart);
+    void paintBoundingBox(std::unique_ptr<Image>& image);
+    void paintInside(std::unique_ptr<Image>& image, FaceIndex facepart);
   private:
     void freeLandmarks();
 

@@ -10,6 +10,7 @@
 #include "FunnyFace/profiler.h"
 #include "FunnyFace/ui.h"
 #include "FunnyFace/window.h"
+#include "FunnyFace/onnx/fsanet.h"
 namespace funnyface
 {
 
@@ -38,6 +39,7 @@ class Application
     Profiler& profiler_;
 
     std::unique_ptr<FaceDetector> faceDetector_;
+    std::unique_ptr<FsanetDetector> fsanetDetector_;
 
     std::shared_ptr<GifReader> gif_;
 

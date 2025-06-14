@@ -23,3 +23,5 @@ external/onnxruntime*
 todo
 *.log
 imgui.ini
+models_to_use
+experimental

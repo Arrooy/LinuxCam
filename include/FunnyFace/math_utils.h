@@ -9,6 +9,13 @@ namespace funnyface
 {
 namespace math_utils
 {
+
+struct Anchor
+{
+    float cx;
+    float cy;
+    int stride;
+};
 struct Point
 {
     Point(long x1, long y1) : x(x1), y(y1) {}
@@ -30,6 +37,8 @@ struct Rect
 
     long x() const { return l; }
     long y() const { return t; }
+
+    // TODO: is this right?
     unsigned long width() const { return r - l + 1; }
     unsigned long height() const { return b - t + 1; }
 
