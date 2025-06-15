@@ -20,7 +20,7 @@ DlibFaceDetector::DlibFaceDetector()
 
 DlibFaceDetector::~DlibFaceDetector(){}
 
-std::vector<math_utils::Rect> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
+std::vector<FaceBoundingBox> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
 {
     // Add adapt image
     DlibImageWrapper dlib_image(image);
@@ -28,12 +28,12 @@ std::vector<math_utils::Rect> DlibFaceDetector::detect(const std::unique_ptr<Ima
     // Detect faces
     std::vector<dlib::rectangle> rects_detected = detector_(dlib_image);
 
-    // Convert to math_utils::Rect
-    std::vector<math_utils::Rect> rects;
+    // Convert to FaceBoundingBox
+    std::vector<FaceBoundingBox> rects_bb;
     for (const auto& rect : rects_detected)
     {
-        rects.push_back(math_utils::Rect(rect.left(), rect.top(), rect.right(), rect.bottom()));
+        rects_bb.push_back(FaceBoundingBox(rect.left(), rect.top(), rect.right(), rect.bottom()));
     }
 
-    return rects;
+    return rects_bb;
 }

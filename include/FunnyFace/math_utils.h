@@ -19,45 +19,58 @@ struct Anchor
 struct Point
 {
     Point(long x1, long y1) : x(x1), y(y1) {}
+    Point() = default;
     long x;
     long y;
 };
 
-struct Rect
+struct StridePoint
 {
-    Rect(long left, long top, long right, long bottom) : l(left), t(top), r(right), b(bottom) {}
-    Rect(Point leftTopCorner, long w, long h)
-        : l(leftTopCorner.x), t(leftTopCorner.y), r(leftTopCorner.x + w), b(leftTopCorner.y + h)
-    {
-    }
-    Rect(Point leftTopCorner, Point rightBottomCorner)
-        : l(leftTopCorner.x), t(leftTopCorner.y), r(rightBottomCorner.x), b(rightBottomCorner.y)
-    {
-    }
-
-    long x() const { return l; }
-    long y() const { return t; }
-
-    // TODO: is this right?
-    unsigned long width() const { return r - l + 1; }
-    unsigned long height() const { return b - t + 1; }
-
-    bool contains(long x, long y) const
-    {
-        if (x < l || x > r || y < t || y > b)
-        {
-            return false;
-        }
-        return true;
-    }
-
-    bool contains(const Point& p) const { return contains(p.x, p.y); }
-
-    long l;
-    long t;
-    long r;
-    long b;
+    StridePoint(float x1, float y1, float s) : cx(x1), cy(y1), stride(s) {}
+    float cx;
+    float cy;
+    float stride;
 };
+
+template <typename T = long>
+struct Rect
+{   
+    Rect() = default;
+    Rect(T left, T top, T right, T bottom) : l(left), t(top), r(right), b(bottom) {}
+
+    Rect(Point leftTopCorner, T w, T h)
+        : l(static_cast<T>(leftTopCorner.x)),
+          t(static_cast<T>(leftTopCorner.y)),
+          r(static_cast<T>(leftTopCorner.x + w)),
+          b(static_cast<T>(leftTopCorner.y + h))
+    {
+    }
+
+    Rect(Point leftTopCorner, Point rightBottomCorner)
+        : l(static_cast<T>(leftTopCorner.x)),
+          t(static_cast<T>(leftTopCorner.y)),
+          r(static_cast<T>(rightBottomCorner.x)),
+          b(static_cast<T>(rightBottomCorner.y))
+    {
+    }
+
+    T x() const { return l; }
+    T y() const { return t; }
+
+    // Assuming r >= l and b >= t
+    T width() const { return r - l + 1; }
+    T height() const { return b - t + 1; }
+
+    bool contains(T x, T y) const { return !(x < l || x > r || y < t || y > b); }
+
+    bool contains(const Point& p) const { return contains(static_cast<T>(p.x), static_cast<T>(p.y)); }
+
+    T l;
+    T t;
+    T r;
+    T b;
+};
+
 
 // function for line generation
 template <typename T>

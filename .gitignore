@@ -24,4 +24,5 @@ todo
 *.log
 imgui.ini
 models_to_use
+models_from_docker
 experimental

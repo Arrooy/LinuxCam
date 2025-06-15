@@ -7,7 +7,7 @@
 #include "FunnyFace/common.h"
 #include "FunnyFace/dlibDetectors.h"
 #include "FunnyFace/inputWebcam.h"
-#include "FunnyFace/onnx/fsanet.h"
+
 #include "config.hpp"
 using namespace funnyface;
 
@@ -100,17 +100,22 @@ bool Application::initialize()
         return false;
     }
     // faceDetector_ = std::make_unique<DlibFaceDetector>();
-    
+
     // TODO: This should work much better than it is. https://github.com/shamangary/FSA-Net
     // Tested https://github.com/GHLab/fsanet-onnx-demo.
     // Works.
     // FIXME: I think the problem is that im sending a 640x480 image resized to 64x64 to the model.
     // The demo uses detected faces as input for the detector.
-    
-    std::string var_onnx_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/fsanet-var.onnx"; // same.
+
+    std::string var_onnx_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/fsanet-var.onnx";  // same.
     std::string conv_onnx_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/fsanet-1x1.onnx"; // Va com el cul.
     fsanetDetector_ = std::make_unique<FsanetDetector>(var_onnx_path);
+    // 250ms time inference
+    std::string scrfd_10g_bnkps_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/scrfd_10g_bnkps_shape640x640.onnx";
 
+    // 1ms time inference
+    std::string scrfd_500m_bnkps_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/scrfd_500m_bnkps_shape640x640.onnx";
+    scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
 
@@ -217,9 +222,9 @@ void Application::process(std::unique_ptr<Image>& image)
 {
     if (faceDetector_ != nullptr)
     {
-        profiler_.start("Face Detector", "Face detector");
+        profiler_.start("Face Detector - DLIB", "Face Detector - DLIB");
         auto faces_rect = faceDetector_->detect(image);
-        profiler_.stop("Face detector", "Face Detector");
+        profiler_.stop("Face Detector - DLIB", "Face Detector - DLIB");
 
         if (faces_rect.size() > 0)
         {
@@ -232,11 +237,32 @@ void Application::process(std::unique_ptr<Image>& image)
             profiler_.stop("Face painting", "Face painting");
         }
     }
-    if(fsanetDetector_ != nullptr)
+
+    if (scrfdDetector_ != nullptr)
     {
-        profiler_.start("Face pose detection", "Face pose detection");
-        fsanetDetector_->detect(image);
-        profiler_.stop("Face pose detection", "Face pose detection");
+        profiler_.start("Face detection - SCRFD", "Face detection - SCRFD");
+        if (scrfdDetector_->isReady())
+        {
+            auto faces = scrfdDetector_->detect(image);
+            if(faces.size() > 0)
+            {
+                for (const auto& face : faces)
+                {
+                    face.paintBoundingBox(image);
+                }
+            }
+        }
+        profiler_.stop("Face detection - SCRFD", "Face detection - SCRFD");
+    }
+    // TODO: move fsnet to use scrfd faces.
+    if (fsanetDetector_ != nullptr)
+    {
+        profiler_.start("Face pose detection - FSANET", "Face pose detection - FSANET");
+        if (fsanetDetector_->isReady())
+        {
+            fsanetDetector_->detect(image);
+        }
+        profiler_.stop("Face pose detection - FSANET", "Face pose detection - FSANET");
     }
     Profiler::getInstance().start("1", "Processing time");
     imageRender_.uploadImage(image);

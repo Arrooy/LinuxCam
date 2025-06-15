@@ -11,6 +11,7 @@
 #include "FunnyFace/ui.h"
 #include "FunnyFace/window.h"
 #include "FunnyFace/onnx/fsanet.h"
+#include "FunnyFace/onnx/scrfd.h"
 namespace funnyface
 {
 
@@ -40,6 +41,7 @@ class Application
 
     std::unique_ptr<FaceDetector> faceDetector_;
     std::unique_ptr<FsanetDetector> fsanetDetector_;
+    std::unique_ptr<SCRFDetector> scrfdDetector_;
 
     std::shared_ptr<GifReader> gif_;
 

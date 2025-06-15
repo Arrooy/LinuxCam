@@ -5,7 +5,7 @@
 
 using namespace funnyface;
 
-std::vector<math_utils::Rect> FsanetDetector::detect(const std::unique_ptr<Image>& image)
+std::vector<math_utils::Rect<float>> FsanetDetector::detect(const std::unique_ptr<Image>& image)
 {
     std::array<int64_t, 4> input_shape = {batch_size_, channels_, width_, height_};
 
@@ -41,7 +41,7 @@ std::vector<math_utils::Rect> FsanetDetector::detect(const std::unique_ptr<Image
         {32, 800,   2, 5, 8}
     };
 
-    std::vector<math_utils::Rect> rects;
+    std::vector<math_utils::Rect<float>> rects;
     for (const auto& group : stride_groups)
     {
         // Generate anchors
@@ -65,7 +65,7 @@ std::vector<math_utils::Rect> FsanetDetector::detect(const std::unique_ptr<Image
     // auto t = image->info.y;
     // auto r = image->info.x + 300;
     // auto b = image->info.y + 300;
-    // rects.push_back(math_utils::Rect(l, t, r, b));
+    // rects.push_back(math_utils::Rect<float>(l, t, r, b));
 
     return rects;
 }
@@ -74,12 +74,12 @@ std::vector<math_utils::Rect> FsanetDetector::detect(const std::unique_ptr<Image
 
 // struct Detection
 // {
-//     math_utils::Rect box;
+//     math_utils::Rect<float> box;
 //     float score;
 //     std::vector<math_utils::Point> keypoints;
 // };
 
-// math_utils::Rect decode_box_to_rect(const math_utils::Anchor& anchor, const float* box_pred, float score)
+// math_utils::Rect<float> decode_box_to_rect(const math_utils::Anchor& anchor, const float* box_pred, float score)
 // {
 //     float cx = anchor.cx + box_pred[0] * anchor.stride;
 //     float cy = anchor.cy + box_pred[1] * anchor.stride;
@@ -92,7 +92,7 @@ std::vector<math_utils::Rect> FsanetDetector::detect(const std::unique_ptr<Image
 //     long bottom = static_cast<long>(cy + h / 2.0f + 0.5f);
 //     (void) score; // TODO: use score to filter boxes
 
-//     return math_utils::Rect(left, top, right, bottom);
+//     return math_utils::Rect<float>(left, top, right, bottom);
 // }
 
 // std::vector<math_utils::Point> decode_keypoints_to_points(const math_utils::Anchor& anchor, const float* kps_pred)
@@ -122,7 +122,7 @@ std::vector<math_utils::Rect> FsanetDetector::detect(const std::unique_ptr<Image
 //             const float* box = &boxes[i * 4];
 //             const float* kps = &keypoints[i * 10];
 
-//             math_utils::Rect rect = decode_box_to_rect(anchor, box, score);
+//             math_utils::Rect<float> rect = decode_box_to_rect(anchor, box, score);
 //             std::vector<math_utils::Point> pts = decode_keypoints_to_points(anchor, kps);
 
 //             results.push_back({rect, score, std::move(pts)});

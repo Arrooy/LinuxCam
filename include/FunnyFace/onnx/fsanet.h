@@ -10,7 +10,7 @@ namespace funnyface
 class FsanetDetector : public OnnxDetector
 {
   public:
-    explicit FsanetDetector(const std::string& onnx_path) : OnnxDetector(onnx_path) {};
+    explicit FsanetDetector(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path) {};
     ~FsanetDetector() = default;
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
     void detect(const std::unique_ptr<Image>& image);

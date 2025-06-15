@@ -399,102 +399,59 @@ class Image
         pasteImpl(other, x, y, expandCanvas);
         return *this;
     }
-
-    void toTensor(float* outputData, float pad, int new_width, int new_height)
+    // converts the image to a tensor
+    // The resize is smart, adding padding if necessary. Allways maintaining original aspect ratio.
+    void toTensor(float* outputData, float pad, int new_width, int new_height) const
     {
         const int origW = info.width;
         const int origH = info.height;
 
-        const int paddedW = static_cast<int>(origW * (1.0f + pad));
-        const int paddedH = static_cast<int>(origH * (1.0f + pad));
-        const int offsetX = (paddedW - origW) / 2;
-        const int offsetY = (paddedH - origH) / 2;
+        // Step 1: Compute scale ratio (preserve aspect ratio)
+        float r = std::min(static_cast<float>(new_width) / origW, static_cast<float>(new_height) / origH);
 
-        const int paddedSize = paddedW * paddedH;
+        const int resizedW = static_cast<int>(origW * r);
+        const int resizedH = static_cast<int>(origH * r);
 
-        // Allocate and fill padded CHW float image
-        std::vector<float> paddedCHW(3 * paddedSize, 0.0f);
+        const int offsetX = (new_width - resizedW) / 2;
+        const int offsetY = (new_height - resizedH) / 2;
 
+        const int paddedSize = new_width * new_height;
+
+        // TODO: Fill hole outputData with zero.
+        // memset(outputData, 0, paddedSize * sizeof(float));
         const unsigned char* srcData = data_.get();
 
-        for (int h = 0; h < origH; ++h)
+        // Resize original image using nearest neighbor
+        // For each pixel in resized image
+        // TODO: Test resize with bilinear interpolation or even bicubic interpolation.
+        for (int h = 0; h < resizedH; ++h)
         {
-            for (int w = 0; w < origW; ++w)
+            int srcH = static_cast<int>((static_cast<float>(h) / resizedH) * origH);
+            if (srcH >= origH)
             {
-                int origIdx = h * origW + w;
-                int rgbIdx = origIdx * 3;
-
-                int paddedHIdx = h + offsetY;
-                int paddedWIdx = w + offsetX;
-                int paddedIdx = paddedHIdx * paddedW + paddedWIdx;
-
-                paddedCHW[0 * paddedSize + paddedIdx] = srcData[rgbIdx] / 255.0f;     // R
-                paddedCHW[1 * paddedSize + paddedIdx] = srcData[rgbIdx + 1] / 255.0f; // G
-                paddedCHW[2 * paddedSize + paddedIdx] = srcData[rgbIdx + 2] / 255.0f; // B
+                srcH = origH - 1;
             }
-        }
 
-        const int resizedSize = new_width * new_height;
-
-        // Resize using nearest neighbor (CHW)
-        for (int c = 0; c < 3; ++c)
-        {
-            for (int h = 0; h < new_height; ++h)
+            for (int w = 0; w < resizedW; ++w)
             {
-                int srcH = static_cast<int>((static_cast<float>(h) / new_height) * paddedH);
-                if (srcH >= paddedH)
+                int srcW = static_cast<int>((static_cast<float>(w) / resizedW) * origW);
+                if (srcW >= origW)
                 {
-                    srcH = paddedH - 1;
+                    srcW = origW - 1;
                 }
 
-                for (int w = 0; w < new_width; ++w)
-                {
-                    int srcW = static_cast<int>((static_cast<float>(w) / new_width) * paddedW);
-                    if (srcW >= paddedW)
-                    {
-                        srcW = paddedW - 1;
-                    }
+                int srcIdx = (srcH * origW + srcW) * 3; // RGB interleaved
 
-                    int dstIdx = h * new_width + w;
-                    int srcIdx = srcH * paddedW + srcW;
+                // Location in padded (output) image
+                int dstH = h + offsetY;
+                int dstW = w + offsetX;
+                int dstIdx = dstH * new_width + dstW;
 
-                    outputData[c * resizedSize + dstIdx] = paddedCHW[c * paddedSize + srcIdx];
-                }
+                outputData[0 * paddedSize + dstIdx] = srcData[srcIdx] / 255.0f;     // R
+                outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1] / 255.0f; // G
+                outputData[2 * paddedSize + dstIdx] = srcData[srcIdx + 2] / 255.0f; // B
             }
         }
-    }
-
-    void draw_axis_inplace(float yaw_deg, float pitch_deg, float roll_deg, float size, float thickness)
-    {
-        // Convert to radians
-        const float pitch = pitch_deg * M_PI / 180.f;
-        const float yaw = -yaw_deg * M_PI / 180.f;
-        const float roll = roll_deg * M_PI / 180.f;
-
-        const int tdx = static_cast<int>(static_cast<float>(info.width) / 2.0f);
-        const int tdy = static_cast<int>(static_cast<float>(info.height) / 2.0f);
-
-        // X-Axis pointing to right. drawn in red
-        const int x1 = static_cast<int>(size * std::cos(yaw) * std::cos(roll)) + tdx;
-        const int y1 = static_cast<int>(
-                           size * (std::cos(pitch) * std::sin(roll) + std::cos(roll) * std::sin(pitch) * std::sin(yaw)))
-                       + tdy;
-        // Y-Axis | drawn in green
-        const int x2 = static_cast<int>(-size * std::cos(yaw) * std::sin(roll)) + tdx;
-        const int y2 = static_cast<int>(
-                           size * (std::cos(pitch) * std::cos(roll) - std::sin(pitch) * std::sin(yaw) * std::sin(roll)))
-                       + tdy;
-        // Z-Axis (out of the screen) drawn in blue
-        const int x3 = static_cast<int>(size * std::sin(yaw)) + tdx;
-        const int y3 = static_cast<int>(-size * std::cos(yaw) * std::sin(pitch)) + tdy;
-
-
-        auto X = math_utils::DDA(tdx, tdy, x1, y1);
-        paintPoints(X, Pixel(0, 0, 255));
-        auto Y = math_utils::DDA(tdx, tdy, x2, y2);
-        paintPoints(Y, Pixel(0, 255, 0));
-        auto Z = math_utils::DDA(tdx, tdy, x3, y3);
-        paintPoints(Z, Pixel(255, 0, 0));
     }
 
     void paintPoints(const std::vector<math_utils::Point>& points, Pixel color)

@@ -6,22 +6,22 @@
 
 using namespace funnyface;
 
-Face::Face(std::vector<Landmark> landmarks, math_utils::Rect boundingBox) : boundingBox_(boundingBox)
+Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
 {
     // Load landmarks
-    loadNewLandmarks(landmarks);
+    loadNewFaceLandmarks(landmarks);
 }
 
-Face::Face(math_utils::Rect boundingBox) : boundingBox_(boundingBox)
+Face::Face(FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
 {
 }
 
 Face::~Face()
 {
-    freeLandmarks();
+    freeFaceLandmarks();
 }
 
-void Face::freeLandmarks()
+void Face::freeFaceLandmarks()
 {
     // Clear previous landmarks
     for (auto& landmark : landmarks_)
@@ -31,21 +31,21 @@ void Face::freeLandmarks()
     landmarks_.clear();
 }
 
-void Face::loadNewLandmarks(std::vector<Landmark> landmarks)
+void Face::loadNewFaceLandmarks(std::vector<FaceLandmark> landmarks)
 {
-    freeLandmarks();
+    freeFaceLandmarks();
 
     // Fill the landmarks map with the new landmarks.
-    for (const Landmark& landmark : landmarks)
+    for (const FaceLandmark& landmark : landmarks)
     {
         unsigned int id = landmark.i;
         Face::FaceIndex index = this->get_facepart_from_landmark_id(id);
         auto it = landmarks_.find(index);
         if (it == landmarks_.end())
         {
-            std::vector<Landmark> new_landmark;
+            std::vector<FaceLandmark> new_landmark;
             new_landmark.push_back(landmark);
-            landmarks_.insert(std::pair<Face::FaceIndex, std::vector<Landmark>>(index, new_landmark));
+            landmarks_.insert(std::pair<Face::FaceIndex, std::vector<FaceLandmark>>(index, new_landmark));
         }
         else
         {
@@ -101,7 +101,7 @@ Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id) const
     return UNKNOWN;
 }
 
-void Face::paintAllLandmarks(std::unique_ptr<Image>& image, bool joinPoints)
+void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints) const
 {
     for (auto const& face_part : landmarks_)
     {
@@ -114,50 +114,42 @@ void Face::paintAllLandmarks(std::unique_ptr<Image>& image, bool joinPoints)
     }
 }
 
-void Face::paintBoundingBox(std::unique_ptr<Image>& image)
+void Face::paintBoundingBox(std::unique_ptr<Image>& image) const
 {
     std::vector<math_utils::Point> points;
 
     // Generate face rectangle points
-    auto left = math_utils::DDA(boundingBox_.l, boundingBox_.t, boundingBox_.l, boundingBox_.b);
+    auto left = math_utils::DDA(boundingBox_.rect.l, boundingBox_.rect.t, boundingBox_.rect.l, boundingBox_.rect.b);
     points.insert(points.end(), left.begin(), left.end());
 
-    auto top = math_utils::DDA(boundingBox_.l, boundingBox_.t, boundingBox_.r, boundingBox_.t);
+    auto top = math_utils::DDA(boundingBox_.rect.l, boundingBox_.rect.t, boundingBox_.rect.r, boundingBox_.rect.t);
     points.insert(points.end(), top.begin(), top.end());
 
-    auto bottom = math_utils::DDA(boundingBox_.l, boundingBox_.b, boundingBox_.r, boundingBox_.b);
+    auto bottom = math_utils::DDA(boundingBox_.rect.l, boundingBox_.rect.b, boundingBox_.rect.r, boundingBox_.rect.b);
     points.insert(points.end(), bottom.begin(), bottom.end());
 
-    auto right = math_utils::DDA(boundingBox_.r, boundingBox_.t, boundingBox_.r, boundingBox_.b);
+    auto right = math_utils::DDA(boundingBox_.rect.r, boundingBox_.rect.t, boundingBox_.rect.r, boundingBox_.rect.b);
     points.insert(points.end(), right.begin(), right.end());
 
-    long width = image->info.width;
-    long height = image->info.height;
-    // Pant each point
-    for (const math_utils::Point& p : points)
-    {
-        // Check image bounds
-        if (p.x < 0 || p.x >= width || p.y < 0 || p.y >= height)
-        {
-            continue;
-        }
-        image->pxy(p.x, p.y, 0, 255, 0);
-    }
+    image->paintPoints(points, Pixel(0, 255, 0));
 }
 
-void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart)
+void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
 {
     int inside = 0;
     long startIndex = 0;
 
-    long startPixel = (boundingBox_.l + boundingBox_.t * image->info.width) * image->info.pixelSizeBytes;
+    long startPixel =
+        static_cast<long>((boundingBox_.rect.l + boundingBox_.rect.t * static_cast<float>(image->info.width))
+                          * static_cast<float>(image->info.pixelSizeBytes));
 
     // El 25 es per corregir el bottom massa curt. Aixi no talla la cara,
-    long endPixel = (boundingBox_.r + (boundingBox_.b + 25) * image->info.width) * image->info.pixelSizeBytes;
+    long endPixel = (boundingBox_.rect.r + (boundingBox_.rect.b + 25.0f) * static_cast<float>(image->info.width))
+                    * static_cast<float>(image->info.pixelSizeBytes);
 
     for (long i = startPixel; i < endPixel; i += image->info.pixelSizeBytes)
     {
-        for (const Landmark& landmark : landmarks_[facepart])
+        for (const FaceLandmark& landmark : landmarks_.at(facepart))
         {
             const math_utils::Point& p = landmark.p;
             long index = static_cast<long>((p.x + p.y * image->info.width) * image->info.pixelSizeBytes);
@@ -201,11 +193,11 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart)
     }
 }
 
-void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color)
+void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color) const
 {
-    std::vector<Landmark> points = landmarks_[facepart];
+    std::vector<FaceLandmark> points = landmarks_.at(facepart);
     math_utils::Point lastPoint(-1, -1);
-    for (const Landmark& l : points)
+    for (const FaceLandmark& l : points)
     {
         if (joinPoints)
         {
@@ -213,13 +205,44 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
             {
                 // We know a last point. Proceed with DDA and paint it
                 std::vector<math_utils::Point> points = math_utils::DDA(lastPoint.x, lastPoint.y, l.p.x, l.p.y);
-                for (const math_utils::Point& p : points)
-                {
-                    image->ppx(p.x, p.y, color);
-                }
+                image->paintPoints(points, color);
             }
             lastPoint = l.p;
         }
         image->ppx(l.p.x, l.p.y, color);
     }
+}
+
+void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const
+{
+    // Convert to radians
+    const float pitch = pose_.pitch * M_PI / 180.f;
+    const float yaw = -pose_.yaw * M_PI / 180.f;
+    const float roll = pose_.roll * M_PI / 180.f;
+
+    // TODO: Set tdx tdy to the center of the face.
+    const int tdx = 250;
+    const int tdy = 250;
+
+    // X-Axis pointing to right. drawn in red
+    const int x1 = static_cast<int>(size * std::cos(yaw) * std::cos(roll)) + tdx;
+    const int y1 =
+        static_cast<int>(size * (std::cos(pitch) * std::sin(roll) + std::cos(roll) * std::sin(pitch) * std::sin(yaw)))
+        + tdy;
+    // Y-Axis | drawn in green
+    const int x2 = static_cast<int>(-size * std::cos(yaw) * std::sin(roll)) + tdx;
+    const int y2 =
+        static_cast<int>(size * (std::cos(pitch) * std::cos(roll) - std::sin(pitch) * std::sin(yaw) * std::sin(roll)))
+        + tdy;
+    // Z-Axis (out of the screen) drawn in blue
+    const int x3 = static_cast<int>(size * std::sin(yaw)) + tdx;
+    const int y3 = static_cast<int>(-size * std::cos(yaw) * std::sin(pitch)) + tdy;
+
+
+    auto X = math_utils::DDA(tdx, tdy, x1, y1);
+    image->paintPoints(X, Pixel(0, 0, 255));
+    auto Y = math_utils::DDA(tdx, tdy, x2, y2);
+    image->paintPoints(Y, Pixel(0, 255, 0));
+    auto Z = math_utils::DDA(tdx, tdy, x3, y3);
+    image->paintPoints(Z, Pixel(255, 0, 0));
 }

@@ -72,7 +72,7 @@ class DlibFaceDetector : public FaceDetector
   public:
     DlibFaceDetector();
     ~DlibFaceDetector();
-    virtual std::vector<math_utils::Rect> detect(const std::unique_ptr<Image>& image) override;
+    virtual std::vector<FaceBoundingBox> detect(const std::unique_ptr<Image>& image) override;
 
   private:
     dlib::frontal_face_detector detector_;
@@ -82,7 +82,7 @@ class DlibShapeDetector : public ShapeDetector
 {
     DlibShapeDetector();
     ~DlibShapeDetector();
-    virtual std::vector<Face> detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect>& faces_rect) override;
+    virtual std::vector<Face> detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) override;
 };
 
 } // namespace funnyface

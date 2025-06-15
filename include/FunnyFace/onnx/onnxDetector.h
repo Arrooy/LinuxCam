@@ -11,11 +11,11 @@ namespace funnyface
 class OnnxDetector
 {
   public:
+    const bool isReady() const { return ready_; };
   protected:
     OnnxDetector(const std::string& onnx_model_path);
     ~OnnxDetector() = default;
 
-    const bool isReady() const { return ready_; };
     virtual Ort::Value transform(const std::unique_ptr<Image>& image) = 0;
 
     int batch_size_;
@@ -37,10 +37,9 @@ class OnnxDetector
 
     // Get default CPU allocator
     Ort::AllocatorWithDefaultOptions allocator_;
-
-private:
-
     bool ready_{false};
+
+  private:
 };
 } // namespace funnyface
 

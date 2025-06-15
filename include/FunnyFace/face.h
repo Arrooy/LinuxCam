@@ -11,12 +11,31 @@
 namespace funnyface
 {
 
-struct Landmark
+struct FaceLandmark
 {
     // Index of the landmark
     unsigned int i;
     // Location of the landmark
     math_utils::Point p;
+};
+
+struct FaceBoundingBox
+{
+    FaceBoundingBox() = default;
+    FaceBoundingBox(float left, float top, float right, float bottom) : rect(left, top, right, bottom) {}
+
+    // Location of the bounding box
+    math_utils::Rect<float> rect;
+
+    // Confidence of the bounding box
+    float score;
+};
+
+struct FacePose
+{
+    float yaw;
+    float pitch;
+    float roll;
 };
 
 // Represents a human face. With all its landmarks. Currently suported 64
@@ -40,24 +59,30 @@ class Face
         UNKNOWN
     };
 
-    Face(math_utils::Rect boundingBox);
-    Face(std::vector<Landmark> landmarks, math_utils::Rect boundingBox);
+    Face(FaceBoundingBox boundingBox);
+    Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox);
+    Face() = default;
     ~Face();
 
-    void loadNewLandmarks(std::vector<Landmark> landmarks);
+    void loadNewFaceLandmarks(std::vector<FaceLandmark> landmarks);
 
     FaceIndex get_facepart_from_landmark_id(unsigned long id) const;
 
-    void paintAllLandmarks(std::unique_ptr<Image>& image, bool joinPoints);
-    void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color);
+    void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints) const;
+    void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color) const;
 
-    void paintBoundingBox(std::unique_ptr<Image>& image);
-    void paintInside(std::unique_ptr<Image>& image, FaceIndex facepart);
+    void paintBoundingBox(std::unique_ptr<Image>& image) const;
+    void paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const;
+
+    void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const;
+
+    float getScore() const { return boundingBox_.score; };
   private:
-    void freeLandmarks();
+    void freeFaceLandmarks();
 
-    math_utils::Rect boundingBox_;
-    std::map<FaceIndex, std::vector<Landmark>> landmarks_;
+    FaceBoundingBox boundingBox_;
+    std::map<FaceIndex, std::vector<FaceLandmark>> landmarks_;
+    FacePose pose_;
 };
 
 } // namespace funnyface
