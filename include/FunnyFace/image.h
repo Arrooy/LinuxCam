@@ -399,7 +399,7 @@ class Image
         pasteImpl(other, x, y, expandCanvas);
         return *this;
     }
-    // converts the image to a tensor
+    // Converts the image to a tensor
     // The resize is smart, adding padding if necessary. Allways maintaining original aspect ratio.
     void toTensor(float* outputData, float pad, int new_width, int new_height) const
     {
@@ -494,6 +494,42 @@ class Image
             }
             ppx(p.x, p.y, color);
         }
+    }
+    // Crop a portion of the image and return it.
+    std::unique_ptr<Image> crop(const math_utils::Rect<float>& rect)
+    {
+        // Round and clamp rectangle coordinates to fit within image bounds
+        const int x0 = std::max(0, static_cast<int>(rect.l));
+        const int y0 = std::max(0, static_cast<int>(rect.t));
+        const int x1 = std::min(info.width, static_cast<unsigned long>(rect.r));
+        const int y1 = std::min(info.height, static_cast<unsigned long>(rect.b));
+
+        const int crop_width = x1 - x0;
+        const int crop_height = y1 - y0;
+
+        if (crop_width <= 0 || crop_height <= 0)
+        {
+            return nullptr;
+        }
+
+        size_t result_size = crop_width * crop_height * info.pixelSizeBytes;
+        std::unique_ptr<Image> result = std::make_unique<Image>(result_size);
+
+        const unsigned char* srcImg = data_.get();
+        unsigned char* dstImg = result->data();
+
+        for (int y = 0; y < crop_height; ++y)
+        {
+            const unsigned char* src_row = srcImg + ((y0 + y) * info.width + x0) * info.pixelSizeBytes;
+            unsigned char* dst_row = dstImg + (y * crop_width) * info.pixelSizeBytes;
+            std::memcpy(dst_row, src_row, crop_width * info.pixelSizeBytes);
+        }
+        result->info = info;
+        result->info.x = rect.x();
+        result->info.y = rect.y();
+        result->info.width = crop_width;
+        result->info.height = crop_height;
+        return result;
     }
 
   private:

@@ -1,5 +1,5 @@
 #include "FunnyFace/imageRenderGL.h"
-
+#include "FunnyFace/profiler.h"
 #include "FunnyFace/common.h"
 // Vertex shader for full-screen quad
 const char* vertexShaderSource = R"(
@@ -132,6 +132,7 @@ void ImageRenderGL::noImage()
 
 bool ImageRenderGL::uploadImage(std::unique_ptr<Image>& image)
 {
+    Profiler::getInstance().start("ImageRenderGL", "generate OpenGL texture");
     if (!image || !image->data() || image->info.width <= 0 || image->info.height <= 0)
     {
         common::log_error("Invalid image data");
@@ -194,6 +195,7 @@ bool ImageRenderGL::uploadImage(std::unique_ptr<Image>& image)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glBindTexture(GL_TEXTURE_2D, 0);
+    Profiler::getInstance().stop("ImageRenderGL", "generate OpenGL texture");
     return true;
 }
 

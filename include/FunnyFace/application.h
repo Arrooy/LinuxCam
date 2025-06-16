@@ -40,7 +40,8 @@ class Application
     Profiler& profiler_;
 
     std::unique_ptr<FaceDetector> faceDetector_;
-    std::unique_ptr<FsanetDetector> fsanetDetector_;
+    std::unique_ptr<FsanetDetector> fsanetDetectorVar_;
+    std::unique_ptr<FsanetDetector> fsanetDetectorConv_;
     std::unique_ptr<SCRFDetector> scrfdDetector_;
 
     std::shared_ptr<GifReader> gif_;

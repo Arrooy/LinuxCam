@@ -74,9 +74,10 @@ class Face
     void paintBoundingBox(std::unique_ptr<Image>& image, Pixel color = Pixel(0, 255, 0)) const;
     void paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const;
 
-    void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const;
+    void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness, bool testColor = false) const;
 
     FaceBoundingBox getBoundingBox() const { return boundingBox_; }
+    void setFacePose(FacePose pose) { pose_ = pose; }
   private:
     void freeFaceLandmarks();
 

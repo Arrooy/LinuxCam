@@ -98,23 +98,33 @@ bool Application::initialize()
         common::log_error("Failed to initialize UI");
         return false;
     }
-    faceDetector_ = std::make_unique<DlibFaceDetector>();
 
-    // TODO: This should work much better than it is. https://github.com/shamangary/FSA-Net
-    // Tested https://github.com/GHLab/fsanet-onnx-demo.
-    // Works.
-    // FIXME: I think the problem is that im sending a 640x480 image resized to 64x64 to the model.
-    // The demo uses detected faces as input for the detector.
+    // Just here for benchmarking.
+    // faceDetector_ = std::make_unique<DlibFaceDetector>();
 
-    std::string var_onnx_path = "/home/arroyoa/LinuxCam/models/fsanet-var.onnx";  // same.
-    std::string conv_onnx_path = "/home/arroyoa/LinuxCam/models/fsanet-1x1.onnx"; // Va com el cul.
-    fsanetDetector_ = std::make_unique<FsanetDetector>(var_onnx_path);
-    // 250ms time inference
-    std::string scrfd_10g_bnkps_path = "/home/arroyoa/LinuxCam/models/scrfd_10g_bnkps_shape640x640.onnx";
+    std::string models_folder = "/home/arroyo/Documents/Projectes/FunnyFace/models/";
+
+    std::string var_onnx_path = models_folder + "fsanet-var.onnx";
+    fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
+
+    std::string conv_onnx_path = models_folder + "fsanet-1x1.onnx";
+    fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
+
+    std::string scrfd_10g_bnkps_path = models_folder + "scrfd_10g_bnkps_shape640x640.onnx";
 
     // 1ms time inference
-    std::string scrfd_500m_bnkps_path = "/home/arroyoa/LinuxCam/models/scrfd_500m_bnkps_shape640x640.onnx";
+    std::string scrfd_500m_bnkps_path = models_folder + "scrfd_500m_bnkps_shape640x640.onnx";
     scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
+
+    // TODO: test models:
+    // pipnet68/xx
+    // Maybe nanodet_m.onnx
+    // Maybe mobile_human_matting_256x256
+    // mobile_hair_seg_hairmattenetv1_224x224
+    // Mirar test_lite_facefusion_pipeline
+    // 2dfan4.onnx (landmarks 68)
+    // emotion face-emotion-recognition-enet_b0_8_best_afew.onnx
+    // Matting BGMv2_mobilenetv2-512x512-full.onnx
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
 
@@ -148,8 +158,6 @@ void Application::run()
     while (!window_.shouldClose() && !g_should_exit)
     {
         update();
-        // TODO: FIXME:
-
         render();
     }
 
@@ -208,7 +216,7 @@ void Application::render()
     // Render background image first
     int width, height;
     window_.getFramebufferSize(width, height);
-    imageRender_.renderBackground(width, height); // TODO: Pending to know why claude send this as param.
+    imageRender_.renderBackground(width, height);
 
     // Render UI
     ui_.render();
@@ -234,27 +242,25 @@ void Application::process(std::unique_ptr<Image>& image)
         }
     }
 
-    // if (fsanetDetector_ != nullptr)
-    // {
-    //     profiler_.start("Face pose detection - FSANET", "Face pose detection - FSANET");
-    //     if (fsanetDetector_->isReady())
-    //     {
-    //         fsanetDetector_->detect(image);
-    //     }
-    //     profiler_.stop("Face pose detection - FSANET", "Face pose detection - FSANET");
-    // }
-
     // Paint results:
     for (const auto& face : dlib_faces)
     {
         face.paintBoundingBox(image, Pixel(255, 0, 0));
     }
 
-    for (const auto& face : scrfd_faces)
+    for (auto& face : scrfd_faces)
     {
+        if (fsanetDetectorVar_->isReady())
+        {
+            fsanetDetectorVar_->detect(image, face);
+            face.paintPoseAxis(image, 30, 3);
+        }
+        if (fsanetDetectorConv_->isReady())
+        {
+            fsanetDetectorConv_->detect(image, face);
+            face.paintPoseAxis(image, 30, 3, true);
+        }
         face.paintBoundingBox(image, Pixel(0, 255, 0));
     }
-    Profiler::getInstance().start("1", "Processing time");
     imageRender_.uploadImage(image);
-    Profiler::getInstance().stop("1", "Processing time");
 }

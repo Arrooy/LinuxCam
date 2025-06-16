@@ -74,7 +74,7 @@ struct Rect
         return (width() <= allowedMaxWidth) && ( height() <= allowedMaxHeight) && 
                (width() > 0) && ( height() > 0);
     }
-
+    
     T l;
     T t;
     T r;

@@ -7,8 +7,8 @@ using namespace funnyface;
 OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     : env_(ORT_LOGGING_LEVEL_INFO, "OnnxDetector"), session_options_{}, detector_session_{nullptr}, allocator_{}
 {
-    session_options_.SetIntraOpNumThreads(1);
-    session_options_.SetInterOpNumThreads(1);
+    // session_options_.SetInterOpNumThreads(2);  // e.g., parallel execution of independent ops
+    // session_options_.SetIntraOpNumThreads(4);  // e.g., threads used inside each op
     session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options_.SetLogSeverityLevel(4);
 
@@ -22,7 +22,7 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
         OrtCUDAProviderOptions cuda_options{};
         cuda_options.device_id = 0;
         cuda_options.arena_extend_strategy = 0;
-        cuda_options.gpu_mem_limit = 2ULL * 1024 * 1024 * 1024; // Limit to 2GB as you mentioned
+        cuda_options.gpu_mem_limit = 3ULL * 1024 * 1024 * 1024; // Limit memory to 3Gb
         cuda_options.do_copy_in_default_stream = 1;
 
         session_options_.AppendExecutionProvider_CUDA(cuda_options);
@@ -90,6 +90,7 @@ bool OnnxDetector::readModelInputSize()
             width_ = input_node_dims[i];
         }
     }
+
     auto names = detector_session_->GetInputNames();
     for (const auto& name : names)
     {

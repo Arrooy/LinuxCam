@@ -97,7 +97,7 @@ bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage, std:
 
 bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
 {
-    Profiler::getInstance().start("1", "Encode and write all output images");
+    Profiler::getInstance().start("CameraManager", "Encode and write all output images");
 
     if (!image)
     {
@@ -119,7 +119,7 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
         break;
     }
 
-    Profiler::getInstance().stop("1", "Encode and write all output images");
+    Profiler::getInstance().stop("CameraManager", "Encode and write all output images");
     return success;
 }
 

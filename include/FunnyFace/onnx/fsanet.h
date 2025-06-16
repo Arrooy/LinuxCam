@@ -13,7 +13,7 @@ class FsanetDetector : public OnnxDetector
     explicit FsanetDetector(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path) {};
     ~FsanetDetector() = default;
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
-    void detect(const std::unique_ptr<Image>& image);
+    void detect(const std::unique_ptr<Image>& image, Face& face);
 
   private:
 

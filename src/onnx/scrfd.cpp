@@ -112,10 +112,12 @@ void SCRFDetector::applyNMS(std::vector<Face>& faces) const
     std::sort(faces.begin(), faces.end(),
               [](const Face& a, const Face& b) { return a.getBoundingBox().score > b.getBoundingBox().score; });
 
-    std::vector<bool> suppressed(faces.size(), false);
+    const size_t faces_size = faces.size();
+
+    std::vector<bool> suppressed(faces_size, false);
     size_t write_idx = 0;
 
-    for (size_t i = 0; i < faces.size(); ++i)
+    for (size_t i = 0; i < faces_size; ++i)
     {
         if (suppressed[i])
         {
@@ -129,16 +131,16 @@ void SCRFDetector::applyNMS(std::vector<Face>& faces) const
         }
 
         const auto& current_rect = faces[write_idx].getBoundingBox().rect;
-        write_idx++;
 
         // Early termination if confidence too low
-        if (faces[write_idx - 1].getBoundingBox().score < 0.02f)
+        if (faces[write_idx].getBoundingBox().score < 0.02f)
         {
             break;
         }
+        write_idx++;
 
         // Check overlap with remaining faces
-        for (size_t j = i + 1; j < faces.size(); ++j)
+        for (size_t j = i + 1; j < faces_size; ++j)
         {
             if (suppressed[j])
             {
@@ -213,6 +215,7 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
     const float* score_ptr = score_pred.GetTensorMutableData<float>(); // [1,12800,1]
     const float* bbox_ptr = bbox_pred.GetTensorMutableData<float>();   // [1,12800,4]
     const float* kps_ptr;
+
     if (using_kps_)
     {
         kps_ptr = kps_pred.GetTensorMutableData<float>(); // [1,12800,10]
@@ -293,7 +296,7 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
             stride_faces.emplace_back(face_box);
         }
 
-        if (stride_faces.size() >= 30000) // Hard limit
+        if (stride_faces.size() >= max_number_of_faces_) // Hard limit
         {
             break;
         }

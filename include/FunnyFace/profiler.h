@@ -60,7 +60,7 @@ inline std::string Profiler::format_duration(int64_t micros) noexcept
 {
     char buffer[64];
 
-    if (micros <= 0)
+    if (micros < 0)
     {
         if (snprintf(buffer, sizeof(buffer), "Invalid duration") == -1)
         {
@@ -69,10 +69,19 @@ inline std::string Profiler::format_duration(int64_t micros) noexcept
     }
     else if (micros < 1000)
     {
-        double hz = 1e6 / micros;
-        if (snprintf(buffer, sizeof(buffer), "%ld µs (%.2f Hz)", micros, hz) == -1)
+        if (micros == 0)
         {
-            return "Error formatting duration";
+            if (snprintf(buffer, sizeof(buffer), "%ld µs", micros) == -1)
+            {
+                return "Error formatting duration";
+            }
+        }
+        else{
+            double hz = 1e6 / micros;
+            if (snprintf(buffer, sizeof(buffer), "%ld µs (%.2f Hz)", micros, hz) == -1)
+            {
+                return "Error formatting duration";
+            }
         }
     }
     else if (micros < 1000 * 1000)

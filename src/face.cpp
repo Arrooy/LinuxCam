@@ -226,7 +226,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
     }
 }
 
-void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const
+void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness, bool testColor) const
 {
     // Convert to radians
     const float pitch = pose_.pitch * M_PI / 180.f;
@@ -234,28 +234,43 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickn
     const float roll = pose_.roll * M_PI / 180.f;
 
     // TODO: Set tdx tdy to the center of the face.
-    const int tdx = 250;
-    const int tdy = 250;
+    auto test_offset = 0;
+    if(testColor)
+    {
+        test_offset = 50;
+    }
+    const int tdx = static_cast<int>(boundingBox_.rect.x() + boundingBox_.rect.width() / 2.0f) + test_offset;
+    const int tdy = static_cast<int>(boundingBox_.rect.y() + boundingBox_.rect.height() / 2.0f);
 
     // X-Axis pointing to right. drawn in red
     const int x1 = static_cast<int>(size * std::cos(yaw) * std::cos(roll)) + tdx;
     const int y1 =
         static_cast<int>(size * (std::cos(pitch) * std::sin(roll) + std::cos(roll) * std::sin(pitch) * std::sin(yaw)))
         + tdy;
+
     // Y-Axis | drawn in green
     const int x2 = static_cast<int>(-size * std::cos(yaw) * std::sin(roll)) + tdx;
     const int y2 =
         static_cast<int>(size * (std::cos(pitch) * std::cos(roll) - std::sin(pitch) * std::sin(yaw) * std::sin(roll)))
         + tdy;
+
     // Z-Axis (out of the screen) drawn in blue
     const int x3 = static_cast<int>(size * std::sin(yaw)) + tdx;
     const int y3 = static_cast<int>(-size * std::cos(yaw) * std::sin(pitch)) + tdy;
 
-
+    auto x_color = Pixel(0, 0, 255);
+    auto y_color = Pixel(0, 255, 0);
+    auto z_color = Pixel(255, 0, 0);
+    if(testColor)
+    {
+        x_color = Pixel(200, 50, 255);
+        y_color = Pixel(200, 255, 50);
+        z_color = Pixel(255, 50, 200);
+    }
     auto X = math_utils::DDA(tdx, tdy, x1, y1);
-    image->paintPoints(X, Pixel(0, 0, 255));
+    image->paintPoints(X, x_color);
     auto Y = math_utils::DDA(tdx, tdy, x2, y2);
-    image->paintPoints(Y, Pixel(0, 255, 0));
+    image->paintPoints(Y, y_color);
     auto Z = math_utils::DDA(tdx, tdy, x3, y3);
-    image->paintPoints(Z, Pixel(255, 0, 0));
+    image->paintPoints(Z, z_color);
 }

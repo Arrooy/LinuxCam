@@ -29,10 +29,12 @@ class SCRFDetector : public OnnxDetector
 
     // True if the model is using keypoints.
     bool using_kps_{false};
+
     // Configuration constants
-    static constexpr const float nms_threshold_ = 0.4f;
+    static constexpr const float nms_threshold_ = 0.45f;
     static constexpr const float score_threshold = 0.3f;
     static constexpr const unsigned int max_faces_per_stride = 1000;
+    static constexpr const unsigned int max_number_of_faces_ = 3000;
 
     // NMS implementation - works in-place
     void applyNMS(std::vector<Face>& faces) const;
