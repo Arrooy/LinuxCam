@@ -126,7 +126,8 @@ bool Application::initialize()
     // emotion face-emotion-recognition-enet_b0_8_best_afew.onnx
     // Matting BGMv2_mobilenetv2-512x512-full.onnx
 
-    // https://github.com/ibaiGorordo/ONNX-CREStereo-Depth-Estimation
+    // precise depth https://github.com/yvanyin/metric3d
+    // fast depth https://github.com/ibaiGorordo/ONNX-FastACVNet-Depth-Estimation
 
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
