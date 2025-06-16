@@ -32,6 +32,15 @@ struct FrameSize
     unsigned int height;
     unsigned int selectedFPS{0u};
     std::vector<unsigned int> fps{0u};
+    unsigned int getFps(size_t index) const
+    {
+        if (index < fps.size())
+        {
+            return fps[index];
+        }
+        return 0u; // Return 0 if index is out of bounds
+    }
+
     void print() const
     {
         common::log_info("\t\tSize width: %d height: %d", width, height);
@@ -40,7 +49,7 @@ struct FrameSize
         {
             common::log_info("\t\t\tFPS: %d", fps);
         }
-        common::log_info("\t\tSelected fps value is %d", fps[selectedFPS]);
+        common::log_info("\t\tSelected fps value is %d", getFps(selectedFPS));
     }
 
     bool operator==(const FrameSize& other) const
@@ -72,7 +81,7 @@ struct Format
         }
         const auto& sel_size = sizes[selectedFrameSize];
         common::log_info("\tSelected frame size value: %dx%d with %dFPS", sel_size.width, sel_size.height,
-                         sel_size.fps[sel_size.selectedFPS]);
+                         sel_size.getFps(sel_size.selectedFPS));
     }
 };
 

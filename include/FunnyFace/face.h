@@ -76,7 +76,7 @@ class Face
 
     void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const;
 
-    float getScore() const { return boundingBox_.score; };
+    FaceBoundingBox getBoundingBox() const {return boundingBox_;}
   private:
     void freeFaceLandmarks();
 

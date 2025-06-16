@@ -406,6 +406,18 @@ class Image
         const int origW = info.width;
         const int origH = info.height;
 
+        if (info.pixelSizeBytes != 3)
+        {
+            common::log_error("Image::toTensor - Unsupported pixel size: %d", info.pixelSizeBytes);
+            return;
+        }
+
+        if (!outputData || !data_ || size_ == 0)
+        {
+            common::log_error("Image::toTensor - Invalid input data");
+            return;
+        }
+
         // Step 1: Compute scale ratio (preserve aspect ratio)
         float r = std::min(static_cast<float>(new_width) / origW, static_cast<float>(new_height) / origH);
 
@@ -417,8 +429,9 @@ class Image
 
         const int paddedSize = new_width * new_height;
 
-        // TODO: Fill hole outputData with zero.
-        // memset(outputData, 0, paddedSize * sizeof(float));
+        // Initialize the entire output buffer with 0
+        std::memset(outputData, 0, paddedSize * 3 * sizeof(float));
+
         const unsigned char* srcData = data_.get();
 
         // Resize original image using nearest neighbor
@@ -442,10 +455,25 @@ class Image
 
                 int srcIdx = (srcH * origW + srcW) * 3; // RGB interleaved
 
+                // Bounds check for source data
+                if (srcIdx + 2 >= static_cast<int>(size_))
+                {
+                    common::log_error("Image::toTensor - Source index out of bounds: %d >= %zu", srcIdx + 2, size_);
+                    continue;
+                }
+
                 // Location in padded (output) image
                 int dstH = h + offsetY;
                 int dstW = w + offsetX;
                 int dstIdx = dstH * new_width + dstW;
+
+                // Bounds check for destination
+                if (dstIdx >= paddedSize)
+                {
+                    common::log_error("Image::toTensor - Destination index out of bounds: %d >= %d", dstIdx,
+                                      paddedSize);
+                    continue;
+                }
 
                 outputData[0 * paddedSize + dstIdx] = srcData[srcIdx] / 255.0f;     // R
                 outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1] / 255.0f; // G

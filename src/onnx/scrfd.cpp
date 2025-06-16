@@ -184,6 +184,10 @@ SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Val
         y2 = std::min(img_height - 1.f, y2);
 
         FaceBoundingBox face_box(x1, y1, x2, y2);
+        if(!face_box.rect.isWithinBounds(img_width, img_height, 1.2f))
+        {
+            continue; // filter out of bounds boxes
+        }
         face_box.score = cls_conf;
 
         if (using_kps_)
@@ -220,7 +224,7 @@ SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Val
     if (faces.size() > nms_pre_)
     {
         std::sort(faces.begin(), faces.end(),
-                  [](const Face& a, const Face& b) { return a.getScore() > b.getScore(); }); // sort inplace
+                  [](const Face& a, const Face& b) { return a.getBoundingBox().score > b.getBoundingBox().score; }); // sort inplace
         // truncate data after sorting.
         faces.resize(nms_pre_);
     }

@@ -242,12 +242,10 @@ void Webcam::selectBestFormat()
         auto& selectedSize = bestFormat->sizes[bestIndex];
         bestFormat->selectedFrameSize = bestIndex;
         selectedSize.selectedFPS = bestFpsIndex;
-        common::log_info("Webcam: Found bestFpsIndex %d, selected FPS %d", bestFpsIndex,
-                         selectedSize.fps[selectedSize.selectedFPS]);
 
         common::log_info("Webcam: Selected format is %s with frame size of %dx%d (%d FPS). And with pixel format %u",
-                         bestFormat->description.c_str(), selectedSize.width, selectedSize.height,
-                         selectedSize.fps[selectedSize.selectedFPS], bestFormat->pixelformat);
+                         bestFormat->description.c_str(), selectedSize.width, selectedSize.height, selectedSize.getFps(selectedSize.selectedFPS),
+                         bestFormat->pixelformat);
         selectedFormat_ = std::make_unique<Format>(*bestFormat);
     }
     else
@@ -257,7 +255,7 @@ void Webcam::selectBestFormat()
         capabilities_.formats[0].selectedFrameSize = 0u;
         electedSize.selectedFPS = 0u;
         common::log_error("Webcam: No suitable format found, selecting first one of %dx%d and %d FPS",
-                          electedSize.width, electedSize.height, electedSize.fps[electedSize.selectedFPS]);
+                          electedSize.width, electedSize.height, electedSize.getFps(electedSize.selectedFPS));
         selectedFormat_ = std::make_unique<Format>(capabilities_.formats[0]);
     }
 }
@@ -284,15 +282,18 @@ std::tuple<unsigned int, unsigned int, double> Webcam::findBestFrameSize(const F
         const auto& selectedSize = selectedFormat_->sizes[selectedFormat_->selectedFrameSize];
         unsigned int desiredWidth_ = selectedSize.width;
         unsigned int desiredHeight_ = selectedSize.height;
+        unsigned int desiredFPS = 0;
 
         // Check that the desired FPS appears in the format (ignore for 0fps)
-        unsigned int desiredFPS = selectedSize.fps[selectedSize.selectedFPS];
-        if (desiredFPS != 0 && std::find(size.fps.begin(), size.fps.end(), desiredFPS) == size.fps.end())
+        if (selectedSize.fps.size() > selectedSize.selectedFPS)
         {
-            // Skip this format
-            continue;
+            desiredFPS = selectedSize.getFps(selectedSize.selectedFPS);
+            if (desiredFPS != 0 && std::find(size.fps.begin(), size.fps.end(), desiredFPS) == size.fps.end())
+            {
+                // Skip this format
+                continue;
+            }
         }
-
         double distance = calculateDistance(size.width, size.height, desiredWidth_, desiredHeight_);
 
         if (distance <= bestDistance)
@@ -361,7 +362,7 @@ bool Webcam::configureDeviceFormat()
     }
 
     // Removed since it can messup the camera. not worthit.
-    // Select FPS. 
+    // Select FPS.
     // struct v4l2_streamparm streamparm;
     // CLEAR(streamparm);
     // streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -374,7 +375,7 @@ bool Webcam::configureDeviceFormat()
 
     // streamparm.parm.capture.timeperframe.numerator = 1;
     // const auto& selectedSize = selectedFormat_->sizes[selectedFormat_->selectedFrameSize];
-    // streamparm.parm.capture.timeperframe.denominator = selectedSize.fps[selectedSize.selectedFPS];
+    // streamparm.parm.capture.timeperframe.denominator = selectedSize.getFps(selectedSize.selectedFPS);
     // common::log_error("Setting fps to %d", streamparm.parm.capture.timeperframe.denominator);
     // if (ioctl(fd_, VIDIOC_S_PARM, &streamparm) == -1)
     // {

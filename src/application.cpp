@@ -107,14 +107,14 @@ bool Application::initialize()
     // FIXME: I think the problem is that im sending a 640x480 image resized to 64x64 to the model.
     // The demo uses detected faces as input for the detector.
 
-    std::string var_onnx_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/fsanet-var.onnx";  // same.
-    std::string conv_onnx_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/fsanet-1x1.onnx"; // Va com el cul.
+    std::string var_onnx_path = "/home/arroyoa/LinuxCam/models/fsanet-var.onnx";  // same.
+    std::string conv_onnx_path = "/home/arroyoa/LinuxCam/models/fsanet-1x1.onnx"; // Va com el cul.
     fsanetDetector_ = std::make_unique<FsanetDetector>(var_onnx_path);
     // 250ms time inference
-    std::string scrfd_10g_bnkps_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/scrfd_10g_bnkps_shape640x640.onnx";
+    std::string scrfd_10g_bnkps_path = "/home/arroyoa/LinuxCam/models/scrfd_10g_bnkps_shape640x640.onnx";
 
     // 1ms time inference
-    std::string scrfd_500m_bnkps_path = "/home/arroyo/Documents/Projectes/FunnyFace/models/scrfd_500m_bnkps_shape640x640.onnx";
+    std::string scrfd_500m_bnkps_path = "/home/arroyoa/LinuxCam/models/scrfd_500m_bnkps_shape640x640.onnx";
     scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
@@ -246,15 +246,18 @@ void Application::process(std::unique_ptr<Image>& image)
             auto faces = scrfdDetector_->detect(image);
             if(faces.size() > 0)
             {
+                int i = 0;
+                int max_faces = 500;
                 for (const auto& face : faces)
                 {
+                    if(i++ >= max_faces)break;
                     face.paintBoundingBox(image);
                 }
             }
         }
         profiler_.stop("Face detection - SCRFD", "Face detection - SCRFD");
     }
-    // TODO: move fsnet to use scrfd faces.
+    // TODO: move fsnet to use scrfd faces. 
     if (fsanetDetector_ != nullptr)
     {
         profiler_.start("Face pose detection - FSANET", "Face pose detection - FSANET");

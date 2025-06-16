@@ -54,16 +54,26 @@ struct Rect
     {
     }
 
-    T x() const { return l; }
-    T y() const { return t; }
+    inline T x() const { return l; }
+    inline T y() const { return t; }
 
     // Assuming r >= l and b >= t
-    T width() const { return r - l + 1; }
-    T height() const { return b - t + 1; }
+    inline T width() const { return r - l + 1; }
+    inline T height() const { return b - t + 1; }
 
     bool contains(T x, T y) const { return !(x < l || x > r || y < t || y > b); }
 
     bool contains(const Point& p) const { return contains(static_cast<T>(p.x), static_cast<T>(p.y)); }
+
+    // Check if this rectangle is within bounds of maximum dimensions by given factor
+    bool isWithinBounds(T maxWidth, T maxHeight, float scaleFactor = 1.2f) const
+    {
+        const T allowedMaxWidth = static_cast<T>(maxWidth * scaleFactor);
+        const T allowedMaxHeight = static_cast<T>(maxHeight * scaleFactor);
+
+        return (width() <= allowedMaxWidth) && ( height() <= allowedMaxHeight) && 
+               (width() > 0) && ( height() > 0);
+    }
 
     T l;
     T t;

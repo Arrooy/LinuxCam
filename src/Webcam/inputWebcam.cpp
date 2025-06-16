@@ -519,7 +519,7 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex
 {
     const auto& new_format = capabilities_.formats[formatIndex].sizes[sizeIndex];
     common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format Index %d, size index %d and fps index %d that is %dx%d with %d fps", name_.c_str(),
-                     formatIndex, sizeIndex, fpsIndex, new_format.width, new_format.height, new_format.fps[new_format.selectedFPS]);
+                     formatIndex, sizeIndex, fpsIndex, new_format.width, new_format.height, new_format.getFps(new_format.selectedFPS));
 
     // Stop current operation
     bool wasRunning = isRunning();

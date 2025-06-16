@@ -118,20 +118,33 @@ void Face::paintBoundingBox(std::unique_ptr<Image>& image) const
 {
     std::vector<math_utils::Point> points;
 
-    // Generate face rectangle points
-    auto left = math_utils::DDA(boundingBox_.rect.l, boundingBox_.rect.t, boundingBox_.rect.l, boundingBox_.rect.b);
-    points.insert(points.end(), left.begin(), left.end());
+    // Clamp bounding box coordinates to image bounds
+    int imageWidth = static_cast<int>(image->info.width);
+    int imageHeight = static_cast<int>(image->info.height);
 
-    auto top = math_utils::DDA(boundingBox_.rect.l, boundingBox_.rect.t, boundingBox_.rect.r, boundingBox_.rect.t);
-    points.insert(points.end(), top.begin(), top.end());
+    int left = std::max(0, std::min(static_cast<int>(boundingBox_.rect.l), imageWidth - 1));
+    int right = std::max(0, std::min(static_cast<int>(boundingBox_.rect.r), imageWidth - 1));
+    int top = std::max(0, std::min(static_cast<int>(boundingBox_.rect.t), imageHeight - 1));
+    int bottom = std::max(0, std::min(static_cast<int>(boundingBox_.rect.b), imageHeight - 1));
 
-    auto bottom = math_utils::DDA(boundingBox_.rect.l, boundingBox_.rect.b, boundingBox_.rect.r, boundingBox_.rect.b);
-    points.insert(points.end(), bottom.begin(), bottom.end());
+    // Only draw if we have a valid rectangle
+    if (left < right && top < bottom)
+    {
+        // Generate face rectangle points
+        auto leftLine = math_utils::DDA(left, top, left, bottom);
+        points.insert(points.end(), leftLine.begin(), leftLine.end());
 
-    auto right = math_utils::DDA(boundingBox_.rect.r, boundingBox_.rect.t, boundingBox_.rect.r, boundingBox_.rect.b);
-    points.insert(points.end(), right.begin(), right.end());
+        auto topLine = math_utils::DDA(left, top, right, top);
+        points.insert(points.end(), topLine.begin(), topLine.end());
 
-    image->paintPoints(points, Pixel(0, 255, 0));
+        auto bottomLine = math_utils::DDA(left, bottom, right, bottom);
+        points.insert(points.end(), bottomLine.begin(), bottomLine.end());
+
+        auto rightLine = math_utils::DDA(right, top, right, bottom);
+        points.insert(points.end(), rightLine.begin(), rightLine.end());
+
+        image->paintPoints(points, Pixel(0, 255, 0));
+    }
 }
 
 void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const

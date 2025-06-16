@@ -87,7 +87,9 @@ bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage, std:
     else
     {
         // If outputImage already exists, paste the new frame next to the previous one
-        outputImage->paste(*newFrame, true);
+        // outputImage->paste(*newFrame, true);
+        // TODO: Temporaly, use always new frame
+        outputImage = std::move(newFrame); 
     }
 
     return outputImage != nullptr;

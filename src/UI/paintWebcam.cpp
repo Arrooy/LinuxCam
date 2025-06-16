@@ -53,7 +53,7 @@ void PaintWebcam::paintDevice()
     {
         Format usedFormat = webcam_->getSelectedFormat();
         FrameSize selectedFrameSize = usedFormat.sizes[usedFormat.selectedFrameSize];
-        ImGui::Text("FPS: %d", selectedFrameSize.fps[selectedFrameSize.selectedFPS]);
+        ImGui::Text("FPS: %u", selectedFrameSize.getFps(selectedFrameSize.selectedFPS));
         ImGui::Text("Resolution: %ux%u", selectedFrameSize.width, selectedFrameSize.height);
         ImGui::Text("System format description: %s", usedFormat.description.c_str());
         ImGui::Text("Pixel format %u", usedFormat.pixelformat);
@@ -161,7 +161,7 @@ void PaintWebcam::paintPhysicalInput()
                     {
                         for (std::size_t fps_idx = 0; fps_idx < size.fps.size(); fps_idx++)
                         {
-                            const auto& fps = size.fps[fps_idx];
+                            const auto& fps = size.getFps(fps_idx);
                             // common::log_error("User selected  fps amount %d in indx %d", fps, fps_idx);
                             bool is_current = (selected_format == static_cast<int>(fmt_idx)
                                                && selected_size == static_cast<int>(size_idx)
@@ -202,7 +202,7 @@ void PaintWebcam::paintPhysicalInput()
             ImGui::Separator();
             const auto& sel_format = capabilities.formats[selected_format];
             const auto& sel_size = sel_format.sizes[selected_size];
-            const auto& sel_fps = sel_size.fps[selected_fps];
+            const auto& sel_fps = sel_size.getFps(selected_fps);
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.4f, 1.0f), "Selection: %s - %ux%u (%d FPS)",
                                sel_format.description.c_str(), sel_size.width, sel_size.height, sel_fps);
         }
