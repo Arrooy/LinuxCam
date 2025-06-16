@@ -108,7 +108,7 @@ bool Application::initialize()
     fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
     std::string conv_onnx_path = models_folder + "fsanet-1x1.onnx";
-    fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
+    // fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
 
     std::string scrfd_10g_bnkps_path = models_folder + "scrfd_10g_bnkps_shape640x640.onnx";
 
@@ -125,11 +125,14 @@ bool Application::initialize()
     // 2dfan4.onnx (landmarks 68)
     // emotion face-emotion-recognition-enet_b0_8_best_afew.onnx
     // Matting BGMv2_mobilenetv2-512x512-full.onnx
+
+    // https://github.com/ibaiGorordo/ONNX-CREStereo-Depth-Estimation
+
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
 
 
-    gif_ = std::make_shared<GifReader>("/home/arroyoa/LinuxCam/first.gif");
+    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/FunnyFace/first.gif");
     // if (!gif_->decodeAllFrames())
     // {
     //     common::log_error("Failed to decode giff frames.");
@@ -250,12 +253,12 @@ void Application::process(std::unique_ptr<Image>& image)
 
     for (auto& face : scrfd_faces)
     {
-        if (fsanetDetectorVar_->isReady())
+        if (fsanetDetectorVar_ && fsanetDetectorVar_->isReady())
         {
             fsanetDetectorVar_->detect(image, face);
-            face.paintPoseAxis(image, 30, 3);
+            face.paintPoseAxis(image, 60, 3);
         }
-        if (fsanetDetectorConv_->isReady())
+        if (fsanetDetectorConv_ && fsanetDetectorConv_->isReady())
         {
             fsanetDetectorConv_->detect(image, face);
             face.paintPoseAxis(image, 30, 3, true);
