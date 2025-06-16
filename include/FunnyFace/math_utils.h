@@ -121,6 +121,45 @@ inline double distance(int a, int b, int c, int d)
     return sqrt(pow(c - a, 2) + pow(d - b, 2));
 }
 
+// Calculate Intersection over Union (IoU) between two rectangles
+template <typename T>
+inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
+{
+    // Calculate areas of both rectangles first
+    T area1 = (rect1.r - rect1.l) * (rect1.b - rect1.t);
+    T area2 = (rect2.r - rect2.l) * (rect2.b - rect2.t);
+    
+    // Area-based pre-filter: if areas are vastly different, skip expensive intersection calculation
+    float area_ratio = static_cast<float>(std::min(area1, area2)) / static_cast<float>(std::max(area1, area2));
+    if (area_ratio < 0.1f) {
+        return 0.0f;
+    }
+    
+    // Calculate intersection coordinates
+    T x_left = std::max(rect1.l, rect2.l);
+    T y_top = std::max(rect1.t, rect2.t);
+    T x_right = std::min(rect1.r, rect2.r);
+    T y_bottom = std::min(rect1.b, rect2.b);
+    
+    // Check if there's no intersection
+    if (x_left >= x_right || y_top >= y_bottom) {
+        return 0.0f;
+    }
+    
+    // Calculate intersection area
+    T intersection_area = (x_right - x_left) * (y_bottom - y_top);
+    
+    // Calculate union area
+    T union_area = area1 + area2 - intersection_area;
+    
+    // Avoid division by zero
+    if (union_area <= 0) {
+        return 0.0f;
+    }
+    
+    return static_cast<float>(intersection_area) / static_cast<float>(union_area);
+}
+
 } // namespace math_utils
 } // namespace funnyface
 #endif // MATH_UTILS_H

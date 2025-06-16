@@ -7,7 +7,6 @@
 #include "FunnyFace/common.h"
 #include "FunnyFace/dlibDetectors.h"
 #include "FunnyFace/inputWebcam.h"
-
 #include "config.hpp"
 using namespace funnyface;
 
@@ -99,7 +98,7 @@ bool Application::initialize()
         common::log_error("Failed to initialize UI");
         return false;
     }
-    // faceDetector_ = std::make_unique<DlibFaceDetector>();
+    faceDetector_ = std::make_unique<DlibFaceDetector>();
 
     // TODO: This should work much better than it is. https://github.com/shamangary/FSA-Net
     // Tested https://github.com/GHLab/fsanet-onnx-demo.
@@ -220,52 +219,40 @@ void Application::render()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
+    std::vector<Face> dlib_faces;
     if (faceDetector_ != nullptr)
     {
-        profiler_.start("Face Detector - DLIB", "Face Detector - DLIB");
-        auto faces_rect = faceDetector_->detect(image);
-        profiler_.stop("Face Detector - DLIB", "Face Detector - DLIB");
-
-        if (faces_rect.size() > 0)
-        {
-            profiler_.start("Face painting", "Face painting");
-            for (const auto& face_rect : faces_rect)
-            {
-                Face face(face_rect);
-                face.paintBoundingBox(image);
-            }
-            profiler_.stop("Face painting", "Face painting");
-        }
+        dlib_faces = faceDetector_->detect(image);
     }
 
+    std::vector<Face> scrfd_faces;
     if (scrfdDetector_ != nullptr)
     {
-        profiler_.start("Face detection - SCRFD", "Face detection - SCRFD");
         if (scrfdDetector_->isReady())
         {
-            auto faces = scrfdDetector_->detect(image);
-            if(faces.size() > 0)
-            {
-                int i = 0;
-                int max_faces = 500;
-                for (const auto& face : faces)
-                {
-                    if(i++ >= max_faces)break;
-                    face.paintBoundingBox(image);
-                }
-            }
+            scrfd_faces = scrfdDetector_->detect(image);
         }
-        profiler_.stop("Face detection - SCRFD", "Face detection - SCRFD");
     }
-    // TODO: move fsnet to use scrfd faces. 
-    if (fsanetDetector_ != nullptr)
+
+    // if (fsanetDetector_ != nullptr)
+    // {
+    //     profiler_.start("Face pose detection - FSANET", "Face pose detection - FSANET");
+    //     if (fsanetDetector_->isReady())
+    //     {
+    //         fsanetDetector_->detect(image);
+    //     }
+    //     profiler_.stop("Face pose detection - FSANET", "Face pose detection - FSANET");
+    // }
+
+    // Paint results:
+    for (const auto& face : dlib_faces)
     {
-        profiler_.start("Face pose detection - FSANET", "Face pose detection - FSANET");
-        if (fsanetDetector_->isReady())
-        {
-            fsanetDetector_->detect(image);
-        }
-        profiler_.stop("Face pose detection - FSANET", "Face pose detection - FSANET");
+        face.paintBoundingBox(image, Pixel(255, 0, 0));
+    }
+
+    for (const auto& face : scrfd_faces)
+    {
+        face.paintBoundingBox(image, Pixel(0, 255, 0));
     }
     Profiler::getInstance().start("1", "Processing time");
     imageRender_.uploadImage(image);

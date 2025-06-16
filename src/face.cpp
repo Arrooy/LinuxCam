@@ -114,7 +114,7 @@ void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints)
     }
 }
 
-void Face::paintBoundingBox(std::unique_ptr<Image>& image) const
+void Face::paintBoundingBox(std::unique_ptr<Image>& image, Pixel color) const
 {
     std::vector<math_utils::Point> points;
 
@@ -143,7 +143,7 @@ void Face::paintBoundingBox(std::unique_ptr<Image>& image) const
         auto rightLine = math_utils::DDA(right, top, right, bottom);
         points.insert(points.end(), rightLine.begin(), rightLine.end());
 
-        image->paintPoints(points, Pixel(0, 255, 0));
+        image->paintPoints(points, color);
     }
 }
 

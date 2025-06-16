@@ -1,5 +1,5 @@
 #include "FunnyFace/dlibDetectors.h"
-
+#include "FunnyFace/profiler.h"
 using namespace funnyface;
 
 namespace dlib
@@ -20,20 +20,22 @@ DlibFaceDetector::DlibFaceDetector()
 
 DlibFaceDetector::~DlibFaceDetector(){}
 
-std::vector<FaceBoundingBox> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
+std::vector<Face> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
 {
+    Profiler::getInstance().start("DLIB", "Face Detector");
     // Add adapt image
     DlibImageWrapper dlib_image(image);
 
     // Detect faces
     std::vector<dlib::rectangle> rects_detected = detector_(dlib_image);
 
-    // Convert to FaceBoundingBox
-    std::vector<FaceBoundingBox> rects_bb;
+    // Convert to Face
+    std::vector<Face> rects_bb;
     for (const auto& rect : rects_detected)
     {
-        rects_bb.push_back(FaceBoundingBox(rect.left(), rect.top(), rect.right(), rect.bottom()));
+        rects_bb.push_back(Face(FaceBoundingBox(rect.left(), rect.top(), rect.right(), rect.bottom())));
     }
 
+    Profiler::getInstance().stop("DLIB", "Face Detector");
     return rects_bb;
 }

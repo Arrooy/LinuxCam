@@ -11,7 +11,7 @@ namespace funnyface
 class FaceDetector
 {
   public:
-    virtual std::vector<FaceBoundingBox> detect(const std::unique_ptr<Image>& image) = 0;
+    virtual std::vector<Face> detect(const std::unique_ptr<Image>& image) = 0;
 };
 
 class ShapeDetector

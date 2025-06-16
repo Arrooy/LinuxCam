@@ -71,12 +71,12 @@ class Face
     void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints) const;
     void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color) const;
 
-    void paintBoundingBox(std::unique_ptr<Image>& image) const;
+    void paintBoundingBox(std::unique_ptr<Image>& image, Pixel color = Pixel(0, 255, 0)) const;
     void paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const;
 
     void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const;
 
-    FaceBoundingBox getBoundingBox() const {return boundingBox_;}
+    FaceBoundingBox getBoundingBox() const { return boundingBox_; }
   private:
     void freeFaceLandmarks();
 

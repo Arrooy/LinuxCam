@@ -1,6 +1,7 @@
 #include "FunnyFace/onnx/scrfd.h"
 
 #include "FunnyFace/common.h"
+#include "FunnyFace/profiler.h"
 
 using namespace funnyface;
 
@@ -36,7 +37,9 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
 
 std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
 {
+    Profiler::getInstance().start("SCRFD", "Face detection");
     std::vector<Face> faces;
+    faces.reserve(3000); // Reserve once for all strides (rough estimate)
     // Convert from image to tensor.
     Ort::Value input_tensor = this->transform(image);
     try
@@ -44,6 +47,8 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
         auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,
                                                      1, output_node_names_.data(), output_node_names_str_.size());
 
+        Profiler::getInstance().stop("SCRFD", "Face detection");
+        Profiler::getInstance().start("SCRFD", "Result processing");
         if (output_tensors.size() < 6)
         {
             common::log_error("SCRFDetector::detect: output_tensors.size() = %d", output_tensors.size());
@@ -81,7 +86,12 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
         generate_bboxes_kps_single_stride(score_32, bbox_32, kps_32, 32, score_threshold, image->info.width,
                                           image->info.height, faces);
 
-        // TODO: nms_bboxes_kps
+        // Apply NMS to all collected faces
+        Profiler::getInstance().start("SCRFD", "NMS");
+        applyNMS(faces);
+        Profiler::getInstance().stop("SCRFD", "NMS");
+
+        Profiler::getInstance().stop("SCRFD", "Result processing");
     }
     catch (const Ort::Exception& e)
     {
@@ -91,6 +101,63 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
     return faces;
 }
 
+void SCRFDetector::applyNMS(std::vector<Face>& faces) const
+{
+    if (faces.empty())
+    {
+        return;
+    }
+
+    // Global sort of all faces from all strides
+    std::sort(faces.begin(), faces.end(),
+              [](const Face& a, const Face& b) { return a.getBoundingBox().score > b.getBoundingBox().score; });
+
+    std::vector<bool> suppressed(faces.size(), false);
+    size_t write_idx = 0;
+
+    for (size_t i = 0; i < faces.size(); ++i)
+    {
+        if (suppressed[i])
+        {
+            continue;
+        }
+
+        // Keep this face by moving it to the write position
+        if (write_idx != i)
+        {
+            faces[write_idx] = std::move(faces[i]);
+        }
+
+        const auto& current_rect = faces[write_idx].getBoundingBox().rect;
+        write_idx++;
+
+        // Early termination if confidence too low
+        if (faces[write_idx - 1].getBoundingBox().score < 0.02f)
+        {
+            break;
+        }
+
+        // Check overlap with remaining faces
+        for (size_t j = i + 1; j < faces.size(); ++j)
+        {
+            if (suppressed[j])
+            {
+                continue;
+            }
+
+            const auto& other_rect = faces[j].getBoundingBox().rect;
+            float iou = math_utils::calculateIoU(current_rect, other_rect);
+
+            if (iou > nms_threshold_)
+            {
+                suppressed[j] = true;
+            }
+        }
+    }
+
+    // Keep only the non-suppressed faces
+    faces.resize(write_idx);
+}
 
 void SCRFDetector::generate_points()
 {
@@ -118,11 +185,9 @@ void SCRFDetector::generate_points()
     }
 }
 
-
-std::vector<Face>
-SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Value& bbox_pred, Ort::Value& kps_pred,
-                                                unsigned int stride, float score_threshold, float img_width,
-                                                float img_height, std::vector<Face>& faces)
+void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Value& bbox_pred,
+                                                     Ort::Value& kps_pred, unsigned int stride, float score_threshold,
+                                                     float img_width, float img_height, std::vector<Face>& faces)
 {
     // generate center points.
     const float new_height = 640; // TODO: make dinamic.
@@ -153,81 +218,97 @@ SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Val
         kps_ptr = kps_pred.GetTensorMutableData<float>(); // [1,12800,10]
     }
 
-    unsigned int count = 0;
+    // Pre-calculate constants outside the loop
+    const float inv_ratio = 1.0f / ratio;
+    const float dw_f = static_cast<float>(dw);
+    const float dh_f = static_cast<float>(dh);
+    const float img_width_minus_1 = img_width - 1.0f;
+    const float img_height_minus_1 = img_height - 1.0f;
+
+    // Use a simpler container - just collect Face objects directly
+    std::vector<Face> stride_faces;
+    stride_faces.reserve(1000); // Based on max_faces_per_stride
+
     auto& stride_points = center_points_[stride];
     for (unsigned int i = 0; i < num_points; ++i)
     {
         const float cls_conf = score_ptr[i];
         if (cls_conf < score_threshold)
         {
-            continue; // filter
+            continue;
         }
-        auto& point = stride_points.at(i);
-        const float cx = point.cx;    // cx
-        const float cy = point.cy;    // cy
-        const float s = point.stride; // stride
 
-        // bbox
-        const float* offsets = bbox_ptr + i * 4;
-        float l = offsets[0]; // left
-        float t = offsets[1]; // top
-        float r = offsets[2]; // right
-        float b = offsets[3]; // bottom
+        const auto& point = stride_points[i]; // Remove reference to avoid indirection
+        const float cx = point.cx;
+        const float cy = point.cy;
+        const float s = point.stride;
 
-        float x1 = ((cx - l) * s - (float) dw) / ratio; // cx - l x1
-        float y1 = ((cy - t) * s - (float) dh) / ratio; // cy - t y1
-        float x2 = ((cx + r) * s - (float) dw) / ratio; // cx + r x2
-        float y2 = ((cy + b) * s - (float) dh) / ratio; // cy + b y2
-        x1 = std::max(0.f, x1);
-        y1 = std::max(0.f, y1);
-        x2 = std::min(img_width - 1.f, x2);
-        y2 = std::min(img_height - 1.f, y2);
+        // Optimized bbox calculation with pre-calculated constants
+        const float* offsets = bbox_ptr + (i << 2);
+        const float l = offsets[0];
+        const float t = offsets[1];
+        const float r = offsets[2];
+        const float b = offsets[3];
+
+        // Inline coordinate transformation
+        float x1 = ((cx - l) * s - dw_f) * inv_ratio;
+        float y1 = ((cy - t) * s - dh_f) * inv_ratio;
+        float x2 = ((cx + r) * s - dw_f) * inv_ratio;
+        float y2 = ((cy + b) * s - dh_f) * inv_ratio;
+
+        // Clamp coordinates
+        x1 = std::max(0.0f, std::min(x1, img_width_minus_1));
+        y1 = std::max(0.0f, std::min(y1, img_height_minus_1));
+        x2 = std::max(0.0f, std::min(x2, img_width_minus_1));
+        y2 = std::max(0.0f, std::min(y2, img_height_minus_1));
 
         FaceBoundingBox face_box(x1, y1, x2, y2);
-        if(!face_box.rect.isWithinBounds(img_width, img_height, 1.2f))
+        if (!face_box.rect.isWithinBounds(img_width, img_height, 1.2f))
         {
-            continue; // filter out of bounds boxes
+            continue;
         }
         face_box.score = cls_conf;
 
         if (using_kps_)
         {
             std::vector<FaceLandmark> face_landmarks;
-            const float* kps_offsets = kps_ptr + i * 10;
-            int index = 0;
+            face_landmarks.reserve(5);                     // Exactly 5 landmarks for SCRFD
+            const float* kps_offsets = kps_ptr + (i * 10); // 10 = 5 landmarks * 2 coords
+
             for (unsigned int j = 0; j < 10; j += 2)
             {
-                FaceLandmark landmark;
-                float kps_l = kps_offsets[j];
-                float kps_t = kps_offsets[j + 1];
-                float kps_x = ((cx + kps_l) * s - (float) dw) / ratio; // cx + l x
-                float kps_y = ((cy + kps_t) * s - (float) dh) / ratio; // cy + t y
-                landmark.p.x = std::min(std::max(0.f, kps_x), img_width - 1.f);
-                landmark.p.y = std::min(std::max(0.f, kps_y), img_height - 1.f);
-                landmark.i = index++; // TODO: find the corresponding index of the face.
-                face_landmarks.push_back(landmark);
+                const float kps_l = kps_offsets[j];
+                const float kps_t = kps_offsets[j + 1];
+                const float kps_x = std::max(0.0f, std::min(((cx + kps_l) * s - dw_f) * inv_ratio, img_width_minus_1));
+                const float kps_y = std::max(0.0f, std::min(((cy + kps_t) * s - dh_f) * inv_ratio, img_height_minus_1));
+
+                face_landmarks.emplace_back(FaceLandmark{
+                    j >> 1, {static_cast<long>(kps_x), static_cast<long>(kps_y)}
+                });
             }
-            faces.push_back(Face(face_landmarks, face_box));
+            stride_faces.emplace_back(std::move(face_landmarks), face_box);
         }
         else
         {
-            faces.push_back(Face(face_box));
+            stride_faces.emplace_back(face_box);
         }
 
-        count += 1; // limit boxes for nms.
-        if (count > max_nms)
+        if (stride_faces.size() >= 30000) // Hard limit
         {
             break;
         }
     }
 
-    if (faces.size() > nms_pre_)
+    // Sort by score (descending)
+    std::sort(stride_faces.begin(), stride_faces.end(), [](const Face& a, const Face& b) noexcept
+              { return a.getBoundingBox().score > b.getBoundingBox().score; });
+
+    // Apply stride limit and move to main vector
+    const size_t stride_limit = std::min(static_cast<size_t>(max_faces_per_stride), stride_faces.size());
+    faces.reserve(faces.size() + stride_limit); // Reserve exactly what we need
+
+    for (size_t i = 0; i < stride_limit; ++i)
     {
-        std::sort(faces.begin(), faces.end(),
-                  [](const Face& a, const Face& b) { return a.getBoundingBox().score > b.getBoundingBox().score; }); // sort inplace
-        // truncate data after sorting.
-        faces.resize(nms_pre_);
+        faces.push_back(std::move(stride_faces[i]));
     }
-    // TODO: maybe is not optimal to return a copy.
-    return faces;
 }

@@ -8,21 +8,60 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     : env_(ORT_LOGGING_LEVEL_INFO, "OnnxDetector"), session_options_{}, detector_session_{nullptr}, allocator_{}
 {
     session_options_.SetIntraOpNumThreads(1);
-    // session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
+    session_options_.SetInterOpNumThreads(1);
+    session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options_.SetLogSeverityLevel(4);
 
-    // OrtCUDAProviderOptions cuda_options{};
-    // cuda_options.device_id = 0;
-    // cuda_options.arena_extend_strategy = 0;
-    // cuda_options.gpu_mem_limit = SIZE_MAX;
-    // cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearch::EXHAUSTIVE;
-    // cuda_options.do_copy_in_default_stream = 1;
+    // Try to add CUDA provider with better error handling
+    bool cuda_available = false;
+    try
+    {
+        // Check if CUDA libraries are available
+        common::log_info("OnnxDetector: Attempting to initialize CUDA provider...");
 
-    // session_options_.AppendExecutionProvider_CUDA(cuda_options);
+        OrtCUDAProviderOptions cuda_options{};
+        cuda_options.device_id = 0;
+        cuda_options.arena_extend_strategy = 0;
+        cuda_options.gpu_mem_limit = 2ULL * 1024 * 1024 * 1024; // Limit to 2GB as you mentioned
+        cuda_options.do_copy_in_default_stream = 1;
 
-    // Create ONNX Runtime detector_session_ for the detector
-    detector_session_ = std::make_unique<Ort::Session>(env_, onnx_model_path.c_str(), session_options_);
+        session_options_.AppendExecutionProvider_CUDA(cuda_options);
+        cuda_available = true;
+        common::log_info("OnnxDetector: CUDA provider added successfully with 2GB memory limit");
+    }
+    catch (const Ort::Exception& e)
+    {
+        common::log_warn("OnnxDetector: ONNX Runtime CUDA error: %s. Falling back to CPU.", e.what());
+    }
+    catch (const std::exception& e)
+    {
+        common::log_warn("OnnxDetector: CUDA initialization failed: %s. Falling back to CPU.", e.what());
+    }
+    catch (...)
+    {
+        common::log_warn("OnnxDetector: Unknown CUDA initialization error. Falling back to CPU.");
+    }
+
+    try
+    {
+        // Create ONNX Runtime detector_session_ for the detector
+        detector_session_ = std::make_unique<Ort::Session>(env_, onnx_model_path.c_str(), session_options_);
+
+        if (cuda_available)
+        {
+            common::log_info("OnnxDetector: Model loaded successfully with CUDA acceleration");
+        }
+        else
+        {
+            common::log_info("OnnxDetector: Model loaded successfully with CPU execution");
+        }
+    }
+    catch (const Ort::Exception& e)
+    {
+        common::log_error("OnnxDetector: Failed to create ONNX session: %s", e.what());
+        ready_ = false;
+        return;
+    }
 
     ready_ = readModelInputSize();
 }
@@ -34,21 +73,21 @@ bool OnnxDetector::readModelInputSize()
     input_node_dims = tensor_info.GetShape();
     for (size_t i = 0; i < input_node_dims.size(); ++i)
     {
-        if (i == 1)
+        if (i == 0)
         {
             batch_size_ = input_node_dims[i];
         }
-        else if (i == 2)
+        else if (i == 1)
         {
             channels_ = input_node_dims[i];
         }
         else if (i == 2)
         {
-            width_ = input_node_dims[i];
-        }
-        else if (i == 2)
-        {
             height_ = input_node_dims[i];
+        }
+        else if (i == 3)
+        {
+            width_ = input_node_dims[i];
         }
     }
     auto names = detector_session_->GetInputNames();

@@ -72,7 +72,7 @@ class DlibFaceDetector : public FaceDetector
   public:
     DlibFaceDetector();
     ~DlibFaceDetector();
-    virtual std::vector<FaceBoundingBox> detect(const std::unique_ptr<Image>& image) override;
+    virtual std::vector<Face> detect(const std::unique_ptr<Image>& image) override;
 
   private:
     dlib::frontal_face_detector detector_;
