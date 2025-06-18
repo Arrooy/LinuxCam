@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "FunnyFace/common.h"
+#include "FunnyFace/depthImage.h"
 #include "FunnyFace/dlibDetectors.h"
 #include "FunnyFace/inputWebcam.h"
 #include "config.hpp"
@@ -105,7 +106,7 @@ bool Application::initialize()
     std::string models_folder = "/home/arroyo/Documents/Projectes/FunnyFace/models/";
 
     std::string var_onnx_path = models_folder + "fsanet-var.onnx";
-    fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
+    // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
     std::string conv_onnx_path = models_folder + "fsanet-1x1.onnx";
     // fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
@@ -114,12 +115,14 @@ bool Application::initialize()
 
     // 1ms time inference
     std::string scrfd_500m_bnkps_path = models_folder + "scrfd_500m_bnkps_shape640x640.onnx";
-    scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
+    // scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
+
+
+    metric3dDetector_ = std::make_unique<Metric3D>(models_folder + "metric3d_vit_small_32f.onnx");
 
     // TODO: test models:
     // pipnet68/xx
-    // Maybe nanodet_m.onnx
-    // Maybe mobile_human_matting_256x256
+    // Maybe nanodet_m.onnx (Fast yolo)
     // mobile_hair_seg_hairmattenetv1_224x224
     // Mirar test_lite_facefusion_pipeline
     // 2dfan4.onnx (landmarks 68)
@@ -128,6 +131,13 @@ bool Application::initialize()
 
     // precise depth https://github.com/yvanyin/metric3d
     // fast depth https://github.com/ibaiGorordo/ONNX-FastACVNet-Depth-Estimation
+
+
+    /**
+     * modnet_photographic_portrait_matting = https://github.com/ZHKKKe/MODNet
+     * onnx_mobilenetv2_hd = https://github.com/PeterL1n/BackgroundMattingV2
+     * metric3d_vit_small_32f = https://github.com/YvanYin/Metric3D/tree/main
+     */
 
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
@@ -157,6 +167,17 @@ bool Application::initialize()
 void Application::run()
 {
     common::log_info("Starting main loop...");
+
+    // Load test image using the improved interface
+    std::unique_ptr<Image> image = ImageLoader::loadImageFromFile("/home/arroyoa/LinuxCam/python/example.jpg");
+    if (image)
+    {
+        process(image);
+    }
+    else
+    {
+        common::log_error("Failed to load test image");
+    }
 
     // Main loop
     while (!window_.shouldClose() && !g_should_exit)
@@ -231,6 +252,7 @@ void Application::render()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
+#if 0
     std::vector<Face> dlib_faces;
     if (faceDetector_ != nullptr)
     {
@@ -245,6 +267,7 @@ void Application::process(std::unique_ptr<Image>& image)
             scrfd_faces = scrfdDetector_->detect(image);
         }
     }
+
 
     // Paint results:
     for (const auto& face : dlib_faces)
@@ -265,6 +288,60 @@ void Application::process(std::unique_ptr<Image>& image)
             face.paintPoseAxis(image, 30, 3, true);
         }
         face.paintBoundingBox(image, Pixel(0, 255, 0));
+    }
+#endif
+// FIXME: TODO: NOT WORKING!
+    if (metric3dDetector_ != nullptr && metric3dDetector_->isReady())
+    {
+        // TODO: Move it somewhere else.
+        auto depth_image = metric3dDetector_->detect_depth(image);
+        if (depth_image)
+        {
+            // Get depth statistics to normalize the visualization
+            auto stats = depth_image->getDepthStats();
+
+            if (stats.validPixels > 0)
+            {
+                common::log_info("Depth stats - Min: %.2f, Max: %.2f, Mean: %.2f, Valid pixels: %lu", stats.minDepth,
+                                 stats.maxDepth, stats.meanDepth, stats.validPixels);
+
+
+                // Create a grayscale visualization of the depth data
+                auto depth_viz = std::make_unique<Image>(depth_image->info.width * depth_image->info.height * 3);
+                depth_viz->info.width = depth_image->info.width;
+                depth_viz->info.height = depth_image->info.height;
+                depth_viz->info.pixelSizeBytes = 3;
+                depth_viz->info.format = ImageFormat::RGB;
+                depth_viz->info.x = image->info.width;
+                depth_viz->info.y = 0;
+
+                const float* depthData = depth_image->getDepthData();
+                unsigned char* vizData = image->data();
+
+                // Normalize depth values to 0-255 range for visualization
+                float depthRange = stats.maxDepth - stats.minDepth;
+                if (depthRange > 0.0f)
+                {
+                    for (unsigned long i = 0; i < depth_image->info.width * depth_image->info.height; ++i)
+                    {
+                        float depth = depthData[i];
+                        unsigned char grayValue = 0;
+
+                        if (depth > 0.0f) // Valid depth value
+                        {
+                            // Normalize to 0-1 range, then to 0-255
+                            float normalized = (depth - stats.minDepth) / depthRange;
+                            grayValue = static_cast<unsigned char>(normalized * 255.0f);
+                        }
+
+                        // Set RGB values (grayscale)
+                        vizData[i * 3] = grayValue;     // R
+                        vizData[i * 3 + 1] = grayValue; // G
+                        vizData[i * 3 + 2] = grayValue; // B
+                    }
+                }
+            }
+        }
     }
     imageRender_.uploadImage(image);
 }

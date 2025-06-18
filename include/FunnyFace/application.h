@@ -7,11 +7,14 @@
 #include "FunnyFace/cameraManager.h"
 #include "FunnyFace/detectors.h"
 #include "FunnyFace/imageRenderGL.h"
+#include "FunnyFace/onnx/fsanet.h"
+#include "FunnyFace/onnx/metric3d.h"
+#include "FunnyFace/onnx/scrfd.h"
 #include "FunnyFace/profiler.h"
 #include "FunnyFace/ui.h"
 #include "FunnyFace/window.h"
-#include "FunnyFace/onnx/fsanet.h"
-#include "FunnyFace/onnx/scrfd.h"
+#include "FunnyFace/imageLoader.h"
+
 namespace funnyface
 {
 
@@ -43,6 +46,7 @@ class Application
     std::unique_ptr<FsanetDetector> fsanetDetectorVar_;
     std::unique_ptr<FsanetDetector> fsanetDetectorConv_;
     std::unique_ptr<SCRFDetector> scrfdDetector_;
+    std::unique_ptr<Metric3D> metric3dDetector_;
 
     std::shared_ptr<GifReader> gif_;
 

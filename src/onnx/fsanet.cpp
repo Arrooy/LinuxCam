@@ -13,7 +13,7 @@ Ort::Value FsanetDetector::transform(const std::unique_ptr<Image>& image)
 
     // Get pointer to tensor data.
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    image->toTensor(tensor_data, pad_, input_width_, input_height_);
+    image->toTensor(tensor_data, TensorPadding::fsanet(), input_width_, input_height_);
 
     return input_tensor;
 }

@@ -14,7 +14,6 @@
 namespace funnyface
 {
 
-
 enum class ImageFormat
 {
     UNKNOWN,
@@ -24,6 +23,12 @@ enum class ImageFormat
     UYUV422,   // UYVY 4:2:2 format
     YUYV422,   // YUYV 4:2:2 format
     RAW,
+    RGB,        // RGB format
+    RGBA,       // RGBA format
+    GRAYSCALE,  // Single channel grayscale
+    DEPTH_FLOAT, // Floating point depth data
+    PNG,
+    BMP, // Bitmap format
 };
 
 inline std::string fromImageFormatToString(const ImageFormat& format)
@@ -42,6 +47,14 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
             return "YUYV422";
         case ImageFormat::RAW:
             return "RAW";
+        case ImageFormat::RGB:
+            return "RGB";
+        case ImageFormat::RGBA:
+            return "RGBA";
+        case ImageFormat::GRAYSCALE:
+            return "GRAYSCALE";
+        case ImageFormat::DEPTH_FLOAT:
+            return "DEPTH_FLOAT";
         default:
             return "UNKNOWN";
     }
@@ -65,16 +78,97 @@ struct Pixel
     }
 };
 
-struct TJImageDescription
+struct ImageMetadata
 {
-    unsigned long x{0u};
-    unsigned long y{0u};
-    unsigned long width;
-    unsigned long height;
+    unsigned long x {0u};
+    unsigned long y {0u};
+    unsigned long width{0u};
+    unsigned long height{0u};
     unsigned char pixelSizeBytes;
-    TJSAMP TJSampleFormat; // TJSAMP_444
-    TJCS TJColorSpace;     // TJCS_RGB
-    TJPF TJPixelFormat;    // TJPF_RGB
+    TJSAMP TJSampleFormat;                // TJSAMP_444
+    TJCS TJColorSpace;                    // TJCS_RGB
+    TJPF TJPixelFormat;                   // TJPF_RGB
+    ImageFormat format{ImageFormat::RGB}; // Default to RGB
+    bool is_valid {false};
+};
+
+// TODO: move this to another place.
+enum class PaddingType
+{
+    ZERO,         // Fill with zeros
+    CONSTANT,     // Fill with single constant value
+    RGB_CONSTANT, // Fill with RGB values (for color images)
+    EDGE_REFLECT, // Reflect edge pixels
+    MEAN_FILL     // Fill with mean color values
+};
+
+struct TensorPadding
+{
+    PaddingType type;
+    union
+    {
+        float constant_value;
+        float rgb_values[3];
+    };
+
+    // Transform metadata for reversing tensor operations
+    mutable int tensor_width = 0;
+    mutable int tensor_height = 0;
+    mutable int resized_width = 0;
+    mutable int resized_height = 0;
+    mutable int offset_x = 0;
+    mutable int offset_y = 0;
+    mutable float scale_ratio = 1.0f;
+    mutable bool has_transform = false;
+
+    // Constructors for different padding types
+    static TensorPadding zero()
+    {
+        TensorPadding p;
+        p.type = PaddingType::ZERO;
+        p.constant_value = 0.0f;
+        return p;
+    }
+
+    static TensorPadding constant(float value)
+    {
+        TensorPadding p;
+        p.type = PaddingType::CONSTANT;
+        p.constant_value = value;
+        return p;
+    }
+
+    static TensorPadding rgb(float r, float g, float b)
+    {
+        TensorPadding p;
+        p.type = PaddingType::RGB_CONSTANT;
+        p.rgb_values[0] = r;
+        p.rgb_values[1] = g;
+        p.rgb_values[2] = b;
+        return p;
+    }
+
+    static TensorPadding metric3d()
+    {
+        // Metric3D specific padding values [123.675, 116.28, 103.53] normalized
+        return rgb(123.675f / 255.0f, 116.28f / 255.0f, 103.53f / 255.0f);
+    }
+
+    static TensorPadding fsanet() { return constant(0.3f); }
+
+    static TensorPadding scrfd() { return zero(); }
+
+    void reset_transform() const
+    {
+        tensor_width = 0;
+        tensor_height = 0;
+        resized_width = 0;
+        resized_height = 0;
+        offset_x = 0;
+        offset_y = 0;
+        scale_ratio = 1.0f;
+        has_transform = false;
+    }
 };
 
 // Image class with proper resource management
@@ -91,6 +185,9 @@ class Image
         if (size > 0)
         {
             data_ = std::shared_ptr<unsigned char>(new unsigned char[size], std::default_delete<unsigned char[]>());
+            // Set default format to RGB
+            info.format = ImageFormat::RGB;
+            info.pixelSizeBytes = 3;
         }
     }
 
@@ -203,7 +300,34 @@ class Image
     // Data accessor
     unsigned char* data() const { return data_ != nullptr ? data_.get() : nullptr; }
 
-    TJImageDescription info;
+    // Helper method to determine if image is RGB/RGBA based on format
+    bool isColorImage() const
+    {
+        return info.format == ImageFormat::RGB || info.format == ImageFormat::RGBA || info.format == ImageFormat::JPEG;
+    }
+
+    // Helper method to determine expected pixel size based on format
+    unsigned char getExpectedPixelSize() const
+    {
+        // TODO: Refactor this.
+        switch (info.format)
+        {
+            case ImageFormat::RGB:
+                return 3;
+            case ImageFormat::RGBA:
+                return 4;
+            case ImageFormat::GRAYSCALE:
+                return 1;
+            case ImageFormat::DEPTH_FLOAT:
+                return sizeof(float);
+            case ImageFormat::DEPTH_Z16:
+                return 2;
+            default:
+                return info.pixelSizeBytes;
+        }
+    }
+
+    ImageMetadata info;
 
     void copyFrom(const Image& other)
     {
@@ -400,15 +524,16 @@ class Image
         return *this;
     }
     // Converts the image to a tensor
-    // The resize is smart, adding padding if necessary. Allways maintaining original aspect ratio.
-    void toTensor(float* outputData, float pad, int new_width, int new_height) const
+    // The resize is smart, adding padding if necessary. Always maintaining original aspect ratio.
+    void toTensor(float* outputData, const TensorPadding& padding, int new_width, int new_height) const
     {
         const int origW = info.width;
         const int origH = info.height;
 
-        if (info.pixelSizeBytes != 3)
+        if (!isColorImage() || info.pixelSizeBytes != 3)
         {
-            common::log_error("Image::toTensor - Unsupported pixel size: %d", info.pixelSizeBytes);
+            common::log_error("Image::toTensor - Expected RGB format, got format: %s with pixel size: %d",
+                              fromImageFormatToString(info.format).c_str(), info.pixelSizeBytes);
             return;
         }
 
@@ -429,8 +554,51 @@ class Image
 
         const int paddedSize = new_width * new_height;
 
-        // Initialize the entire output buffer with 0
-        std::memset(outputData, 0, paddedSize * 3 * sizeof(float));
+        // Store transform metadata in the padding object
+        padding.tensor_width = new_width;
+        padding.tensor_height = new_height;
+        padding.resized_width = resizedW;
+        padding.resized_height = resizedH;
+        padding.offset_x = offsetX;
+        padding.offset_y = offsetY;
+        padding.scale_ratio = r;
+        padding.has_transform = true;
+
+        // Initialize the entire output buffer based on padding type
+        switch (padding.type)
+        {
+            case PaddingType::ZERO:
+                std::memset(outputData, 0, paddedSize * 3 * sizeof(float));
+                break;
+            case PaddingType::CONSTANT:
+            {
+                float* ptr = outputData;
+                float* end = outputData + (paddedSize * 3);
+                while (ptr < end)
+                {
+                    *ptr++ = padding.constant_value;
+                }
+            }
+            break;
+            case PaddingType::RGB_CONSTANT:
+            {
+                // Fill each channel separately with direct assignment
+                float* r_channel = outputData;
+                float* g_channel = outputData + paddedSize;
+                float* b_channel = outputData + 2 * paddedSize;
+
+                for (int i = 0; i < paddedSize; i++)
+                {
+                    r_channel[i] = padding.rgb_values[0];
+                    g_channel[i] = padding.rgb_values[1];
+                    b_channel[i] = padding.rgb_values[2];
+                }
+            }
+            break;
+            default:
+                std::memset(outputData, 0, paddedSize * 3 * sizeof(float));
+                break;
+        }
 
         const unsigned char* srcData = data_.get();
 
@@ -478,6 +646,82 @@ class Image
                 outputData[0 * paddedSize + dstIdx] = srcData[srcIdx] / 255.0f;     // R
                 outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1] / 255.0f; // G
                 outputData[2 * paddedSize + dstIdx] = srcData[srcIdx + 2] / 255.0f; // B
+            }
+        }
+    }
+
+    // Converts tensor data back to image format (for depth/single channel data)
+    void fromTensor(const float* tensorData, int tensor_width, int tensor_height, const TensorPadding& padding)
+    {
+        if (!tensorData || !data_ || size_ == 0)
+        {
+            common::log_error("Image::fromTensor - Invalid input data");
+            return;
+        }
+
+        if (info.pixelSizeBytes != sizeof(float))
+        {
+            common::log_error("Image::fromTensor - Expected float pixel format, got size: %d", info.pixelSizeBytes);
+            return;
+        }
+
+        // Use stored transform metadata if available, otherwise calculate it
+        int offsetX, offsetY, resizedW, resizedH;
+        float r;
+
+        common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
+        common::log_info("Tensor padding = %d width, %d height",
+                         padding.tensor_width, padding.tensor_height);
+
+        if (padding.has_transform && padding.tensor_width == tensor_width && padding.tensor_height == tensor_height)
+        {
+            // Use stored transform metadata from padding
+            offsetX = padding.offset_x;
+            offsetY = padding.offset_y;
+            resizedW = padding.resized_width;
+            resizedH = padding.resized_height;
+            r = padding.scale_ratio;
+
+            common::log_info(
+                "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
+                offsetX, offsetY, resizedW, resizedH, r);
+        }
+        else
+        {
+            // Fallback: calculate transform parameters
+            const int origW = info.width;
+            const int origH = info.height;
+
+            r = std::min(static_cast<float>(tensor_width) / origW, static_cast<float>(tensor_height) / origH);
+            resizedW = static_cast<int>(origW * r);
+            resizedH = static_cast<int>(origH * r);
+            offsetX = (tensor_width - resizedW) / 2;
+            offsetY = (tensor_height - resizedH) / 2;
+
+            common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
+                             "resized(%dx%d), scale=%.3f",
+                             offsetX, offsetY, resizedW, resizedH, r);
+        }
+
+        float* dstData = reinterpret_cast<float*>(data_.get());
+
+        // Extract and resize depth data back to original dimensions
+        for (int h = 0; h < static_cast<int>(info.height); ++h)
+        {
+            for (int w = 0; w < static_cast<int>(info.width); ++w)
+            {
+                // Map to tensor coordinates
+                int tensorH = static_cast<int>((static_cast<float>(h) / info.height) * resizedH) + offsetY;
+                int tensorW = static_cast<int>((static_cast<float>(w) / info.width) * resizedW) + offsetX;
+
+                // Clamp to tensor bounds
+                tensorH = std::max(0, std::min(tensorH, tensor_height - 1));
+                tensorW = std::max(0, std::min(tensorW, tensor_width - 1));
+
+                int tensorIdx = tensorH * tensor_width + tensorW;
+                int dstIdx = h * info.width + w;
+
+                dstData[dstIdx] = tensorData[tensorIdx];
             }
         }
     }
@@ -701,6 +945,7 @@ class Image
 
         common::log_info("Image::paste - Resizing canvas from %lux%lu to %lux%lu", info.width, info.height, newWidth,
                          newHeight);
+
         // Resize this image using existing method
         size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
         this->resize(newSize);
@@ -712,17 +957,15 @@ class Image
         info.height = newHeight;
 
         // // Clear the new buffer
-        // if (data_)
-        // {
-        //     std::memset(data_.get(), 0, size_);
-        // }
+        if (data_)
+        {
+            std::memset(data_.get(), 0, size_);
+        }
 
         // Copy original image to new position
-        common::log_info("Image::paste - Copying backup image to new position");
         copyPixelsWithBlending(backup, baseLeft, baseTop, minX, minY, newWidth, newHeight);
 
         // Copy other image
-        common::log_info("Image::paste - Copying other image to new position");
         copyPixelsWithBlending(other, otherLeft, otherTop, minX, minY, newWidth, newHeight);
 
         return *this;

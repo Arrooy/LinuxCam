@@ -30,7 +30,7 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
 
     // Get pointer to tensor data.
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    image->toTensor(tensor_data, 0, target_width, target_height);
+    image->toTensor(tensor_data, TensorPadding::scrfd(), target_width, target_height);
 
     return input_tensor;
 }
@@ -201,14 +201,6 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
 
     const int dw = (new_width - resizedW) / 2;
     const int dh = (new_height - resizedH) / 2;
-
-    // Generate max of 30000 boxes.
-    constexpr const unsigned int max_nms = 30000;
-    // Sort boxes and return best ones.
-    constexpr const unsigned int nms_pre = 1000;
-
-    unsigned int nms_pre_ = (stride / 8) * nms_pre; // 1 * 1000,2*1000,...
-    nms_pre_ = nms_pre_ >= nms_pre ? nms_pre_ : nms_pre;
 
     auto stride_dims = score_pred.GetTypeInfo().GetTensorTypeAndShapeInfo().GetShape();
     const unsigned int num_points = stride_dims.at(1);                 // 12800

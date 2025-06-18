@@ -26,6 +26,16 @@ class JPEGDecoder : public Decoder
 
     JPEGDecoder()
     {
+        if ((d_handle_ = tjInitDecompress()) == nullptr)
+        {
+            common::errno_log("JPEGDecoder Constructor failed to init decompressor");
+            common::errno_log((const char*) tjGetErrorStr2(d_handle_));
+            return;
+        }
+    }
+
+    ~JPEGDecoder()
+    {
         if (d_handle_ != nullptr)
         {
             int tj_stat = tjDestroy(d_handle_);

@@ -73,7 +73,7 @@ class UI
   private:
     bool ready_{false};
 
-    bool show_profiler_{true};
+    bool show_profiler_{false};
 
     bool was_plus_tab_active_ = false;
     bool go_back_to_last_device_ = false;
@@ -90,7 +90,7 @@ class UI
     std::unique_ptr<PaintWebcam> paintWebcam_;
 
     // Device management
-    bool show_device_config_{true};
+    bool show_device_config_{false};
     int active_device_tab_ = 0;
     int requestedTab_ = 0;
 

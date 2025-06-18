@@ -264,7 +264,7 @@ void InputWebcam::imageAcquisitionLoop()
 
     // Image state
     Image imageTmp;
-    TJImageDescription cameraInputInfo;
+    ImageMetadata cameraInputInfo;
 
     while (isRecording_.load())
     {

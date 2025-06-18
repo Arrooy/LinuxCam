@@ -11,7 +11,7 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     // session_options_.SetIntraOpNumThreads(4);  // e.g., threads used inside each op
     session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options_.SetLogSeverityLevel(4);
-
+    // TODO: Add way of disabling cuda.
     // Try to add CUDA provider with better error handling
     bool cuda_available = false;
     try
