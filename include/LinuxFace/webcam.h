@@ -9,8 +9,8 @@
 #include <tuple>
 #include <vector>
 
-#include "FunnyFace/codecFactory.h"
-namespace funnyface
+#include "LinuxFace/codecFactory.h"
+namespace linuxface
 {
 
 enum class WebcamType
@@ -178,5 +178,5 @@ class Webcam
     bool currentlySelected_{false}; // True if the user has selected this webcam in the UI
 };
 
-} // namespace funnyface
+} // namespace linuxface
 #endif // WEBCAM_H

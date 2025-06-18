@@ -10,9 +10,9 @@ extern "C"
 #include "gifdec.h"
 }
 
-#include "FunnyFace/image.h"
+#include "LinuxFace/image.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class GifReader
@@ -45,6 +45,6 @@ class GifReader
     long x_{0}, y_{0};
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // GIF_READER_H

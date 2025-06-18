@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace funnyface
+namespace linuxface
 {
 
 // Forward declarations
@@ -50,6 +50,6 @@ class PaintWebcam
     int selected_quality_value_{100};
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // PAINTWEBCAM_H

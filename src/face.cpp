@@ -1,10 +1,10 @@
-#include "FunnyFace/face.h"
+#include "LinuxFace/face.h"
 
 #include <utility>
 
-#include "FunnyFace/math_utils.h"
+#include "LinuxFace/math_utils.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
 {

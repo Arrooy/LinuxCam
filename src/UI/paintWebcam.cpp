@@ -1,12 +1,12 @@
-#include "FunnyFace/UI/paintWebcam.h"
+#include "LinuxFace/UI/paintWebcam.h"
 
-#include "FunnyFace/common.h"
-#include "FunnyFace/inputWebcam.h"
-#include "FunnyFace/v4l2loopbackWritter.h"
-#include "FunnyFace/webcam.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/inputWebcam.h"
+#include "LinuxFace/v4l2loopbackWritter.h"
+#include "LinuxFace/webcam.h"
 #include "imgui.h"
 
-using namespace funnyface;
+using namespace linuxface;
 const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};
 
 void PaintWebcam::setWebcam(std::shared_ptr<Webcam> webcam)

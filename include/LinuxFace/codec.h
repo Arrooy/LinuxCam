@@ -4,10 +4,10 @@
 #include <algorithm>
 #include <functional>
 
-#include "FunnyFace/codecFactory.h"
-#include "FunnyFace/image.h"
+#include "LinuxFace/codecFactory.h"
+#include "LinuxFace/image.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class JPEGDecoder : public Decoder
@@ -59,6 +59,14 @@ class JPEGDecoder : public Decoder
             common::errno_log((const char*) tjGetErrorStr2(d_handle_));
             return false;
         }
+        outImage.info.width = srcImage.info.width;
+        outImage.info.height = srcImage.info.height;
+        outImage.info.x = srcImage.info.x;
+        outImage.info.y = srcImage.info.y;
+        outImage.info.format = ImageFormat::RGB;
+        outImage.info.TJPixelFormat = srcImage.info.TJPixelFormat;
+        outImage.info.TJColorSpace = srcImage.info.TJColorSpace;
+        outImage.info.pixelSizeBytes = 3;
         return true;
     }
 
@@ -818,5 +826,5 @@ class YUYV422Decoder : public YUV422
         return {.y0 = block[0], .u = block[1], .v = block[3], .y1 = block[2]};
     }
 };
-} // namespace funnyface
+} // namespace linuxface
 #endif // CODEC_H

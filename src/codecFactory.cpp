@@ -1,8 +1,8 @@
-#include "FunnyFace/codecFactory.h"
+#include "LinuxFace/codecFactory.h"
 
-#include "FunnyFace/codec.h"
+#include "LinuxFace/codec.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 // Create a fresh decoder instance
 template <typename T>

@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.10.0)
-project(FunnyFace)
+project(LinuxFace)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_BUILD_TYPE "Release")
-# set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE Debug)
 
 set(USE_AVX_INSTRUCTIONS ON CACHE BOOL "Use AVX instructions for Dlib")
 set(DLIB_NO_GUI_SUPPORT OFF CACHE BOOL "Disable GUI support for Dlib")
@@ -223,12 +223,12 @@ endif()
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 
 # Define the main executable
-add_executable(FunnyFace
+add_executable(LinuxFace
     ${SRC_FILES}
 )
 
 # Link dependencies
-target_link_libraries(FunnyFace
+target_link_libraries(LinuxFace
     dlib::dlib
     libjpeg
     turbojpeg
@@ -243,7 +243,7 @@ target_link_libraries(FunnyFace
 )
 
 # Ensure include directory is set *after* it exists
-add_dependencies(FunnyFace libjpeg_include_dir)
+add_dependencies(LinuxFace libjpeg_include_dir)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -255,4 +255,4 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 
 # Strip symbols in Release mode
-target_link_options(FunnyFace PRIVATE $<$<CONFIG:RELEASE>:-s>)
+target_link_options(LinuxFace PRIVATE $<$<CONFIG:RELEASE>:-s>)

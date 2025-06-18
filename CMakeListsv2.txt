@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.31.8) # TODO: Update to 3.28.0 when available
-project(FunnyFace)
+project(LinuxFace)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -234,13 +234,13 @@ target_include_directories(gifdec PUBLIC ${gifdec_SOURCE_DIR})
 
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 
-add_executable(FunnyFace ${SRC_FILES})
+add_executable(LinuxFace ${SRC_FILES})
 
 # Make sure ONNX Runtime is built before your executable
-add_dependencies(FunnyFace onnxruntime)
-add_dependencies(FunnyFace libjpeg_include_dir)
+add_dependencies(LinuxFace onnxruntime)
+add_dependencies(LinuxFace libjpeg_include_dir)
 
-target_link_libraries(FunnyFace
+target_link_libraries(LinuxFace
     dlib::dlib
     libjpeg
     turbojpeg
@@ -255,7 +255,7 @@ target_link_libraries(FunnyFace
 )
 
 # Ensure include directory is set *after* it exists
-add_dependencies(FunnyFace libjpeg_include_dir)
+add_dependencies(LinuxFace libjpeg_include_dir)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -267,4 +267,4 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 # Strip symbols in Release
-target_link_options(FunnyFace PRIVATE $<$<CONFIG:RELEASE>:-s>)
+target_link_options(LinuxFace PRIVATE $<$<CONFIG:RELEASE>:-s>)

@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace funnyface
+namespace linuxface
 {
 //TODO: Lets also use an enum to define type of profiling, e.g. CPU, memory, etc.
 // We can show profiling data ordered and clustered by type.
@@ -130,6 +130,6 @@ inline std::string Profiler::format_duration(std::chrono::microseconds duration)
 }
 
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // PROFILER_H

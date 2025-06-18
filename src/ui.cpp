@@ -1,12 +1,12 @@
-#include "FunnyFace/ui.h"
+#include "LinuxFace/ui.h"
 
-#include "FunnyFace/UI/paintWebcam.h"
-#include "FunnyFace/common.h"
-#include "FunnyFace/profiler.h"
+#include "LinuxFace/UI/paintWebcam.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/profiler.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 UI::UI()
 {

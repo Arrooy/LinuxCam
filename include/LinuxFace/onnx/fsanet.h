@@ -1,10 +1,10 @@
 #ifndef FSANETDETECTOR_H
 #define FSANETDETECTOR_H
 
-#include "FunnyFace/detectors.h"
-#include "FunnyFace/onnx/onnxDetector.h"
+#include "LinuxFace/detectors.h"
+#include "LinuxFace/onnx/onnxDetector.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class FsanetDetector : public OnnxDetector
@@ -22,6 +22,6 @@ class FsanetDetector : public OnnxDetector
     static constexpr const int input_width_ = 64;
     static constexpr const int input_height_ = 64;
 };
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // FSANETDETECTOR_H

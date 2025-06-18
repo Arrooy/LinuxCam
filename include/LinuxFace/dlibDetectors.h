@@ -5,15 +5,15 @@
 #include <dlib/pixel.h>
 #include <dlib/image_processing/generic_image.h>
 
-#include "FunnyFace/detectors.h"
-#include "FunnyFace/face.h"
+#include "LinuxFace/detectors.h"
+#include "LinuxFace/face.h"
 
-#include "FunnyFace/common.h"
+#include "LinuxFace/common.h"
 
 // Tested and it works. The detection is not very good,
 // but it works. Good lighting is required. and release compilation. 
 
-namespace funnyface
+namespace linuxface
 {
 struct DlibImageWrapper
 {
@@ -85,5 +85,5 @@ class DlibShapeDetector : public ShapeDetector
     virtual std::vector<Face> detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) override;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 #endif // DLIBDETECTORS_H

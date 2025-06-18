@@ -1,15 +1,15 @@
-#include "FunnyFace/application.h"
+#include "LinuxFace/application.h"
 
 #include <csignal>
 #include <iostream>
 #include <memory>
 
-#include "FunnyFace/common.h"
-#include "FunnyFace/depthImage.h"
-#include "FunnyFace/dlibDetectors.h"
-#include "FunnyFace/inputWebcam.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/depthImage.h"
+#include "LinuxFace/dlibDetectors.h"
+#include "LinuxFace/inputWebcam.h"
 #include "config.hpp"
-using namespace funnyface;
+using namespace linuxface;
 
 
 std::atomic<bool> g_should_exit{false};
@@ -117,8 +117,8 @@ bool Application::initialize()
     std::string scrfd_500m_bnkps_path = models_folder + "scrfd_500m_bnkps_shape640x640.onnx";
     // scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
 
-
-    metric3dDetector_ = std::make_unique<Metric3D>(models_folder + "metric3d_vit_small_32f.onnx");
+    std::string modnet_onnx_path = models_folder + "modnet.onnx";
+    modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
     // TODO: test models:
     // pipnet68/xx
@@ -136,14 +136,13 @@ bool Application::initialize()
     /**
      * modnet_photographic_portrait_matting = https://github.com/ZHKKKe/MODNet
      * onnx_mobilenetv2_hd = https://github.com/PeterL1n/BackgroundMattingV2
-     * metric3d_vit_small_32f = https://github.com/YvanYin/Metric3D/tree/main
      */
 
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
 
 
-    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/FunnyFace/first.gif");
+    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/LinuxFace/first.gif");
     // if (!gif_->decodeAllFrames())
     // {
     //     common::log_error("Failed to decode giff frames.");
@@ -168,17 +167,6 @@ void Application::run()
 {
     common::log_info("Starting main loop...");
 
-    // Load test image using the improved interface
-    std::unique_ptr<Image> image = ImageLoader::loadImageFromFile("/home/arroyoa/LinuxCam/python/example.jpg");
-    if (image)
-    {
-        process(image);
-    }
-    else
-    {
-        common::log_error("Failed to load test image");
-    }
-
     // Main loop
     while (!window_.shouldClose() && !g_should_exit)
     {
@@ -191,10 +179,6 @@ void Application::run()
     common::log_info("Main loop ended");
 }
 
-void Application::shutdown()
-{
-    // UI and Window destructors will handle cleanup automatically
-}
 
 void Application::update()
 {
@@ -252,7 +236,6 @@ void Application::render()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-#if 0
     std::vector<Face> dlib_faces;
     if (faceDetector_ != nullptr)
     {
@@ -268,6 +251,14 @@ void Application::process(std::unique_ptr<Image>& image)
         }
     }
 
+    if(modnetDetector_ && modnetDetector_->isReady())
+    {
+        std::unique_ptr<Image> matting = image->deepCopy();
+        modnetDetector_->detect(image, matting);
+        matting->info.x = image->info.width;
+        matting->info.y = 0;
+        image->paste(*matting, true);
+    }
 
     // Paint results:
     for (const auto& face : dlib_faces)
@@ -289,59 +280,39 @@ void Application::process(std::unique_ptr<Image>& image)
         }
         face.paintBoundingBox(image, Pixel(0, 255, 0));
     }
-#endif
-// FIXME: TODO: NOT WORKING!
-    if (metric3dDetector_ != nullptr && metric3dDetector_->isReady())
-    {
-        // TODO: Move it somewhere else.
-        auto depth_image = metric3dDetector_->detect_depth(image);
-        if (depth_image)
-        {
-            // Get depth statistics to normalize the visualization
-            auto stats = depth_image->getDepthStats();
-
-            if (stats.validPixels > 0)
-            {
-                common::log_info("Depth stats - Min: %.2f, Max: %.2f, Mean: %.2f, Valid pixels: %lu", stats.minDepth,
-                                 stats.maxDepth, stats.meanDepth, stats.validPixels);
-
-
-                // Create a grayscale visualization of the depth data
-                auto depth_viz = std::make_unique<Image>(depth_image->info.width * depth_image->info.height * 3);
-                depth_viz->info.width = depth_image->info.width;
-                depth_viz->info.height = depth_image->info.height;
-                depth_viz->info.pixelSizeBytes = 3;
-                depth_viz->info.format = ImageFormat::RGB;
-                depth_viz->info.x = image->info.width;
-                depth_viz->info.y = 0;
-
-                const float* depthData = depth_image->getDepthData();
-                unsigned char* vizData = image->data();
-
-                // Normalize depth values to 0-255 range for visualization
-                float depthRange = stats.maxDepth - stats.minDepth;
-                if (depthRange > 0.0f)
-                {
-                    for (unsigned long i = 0; i < depth_image->info.width * depth_image->info.height; ++i)
-                    {
-                        float depth = depthData[i];
-                        unsigned char grayValue = 0;
-
-                        if (depth > 0.0f) // Valid depth value
-                        {
-                            // Normalize to 0-1 range, then to 0-255
-                            float normalized = (depth - stats.minDepth) / depthRange;
-                            grayValue = static_cast<unsigned char>(normalized * 255.0f);
-                        }
-
-                        // Set RGB values (grayscale)
-                        vizData[i * 3] = grayValue;     // R
-                        vizData[i * 3 + 1] = grayValue; // G
-                        vizData[i * 3 + 2] = grayValue; // B
-                    }
-                }
-            }
-        }
-    }
     imageRender_.uploadImage(image);
+}
+
+void Application::shutdown()
+{
+    // UI and Window destructors will handle cleanup automatically
+}
+
+void Application::runSingleShot()
+{
+    // Poll events
+    window_.pollEvents();
+
+    // Load test image using the improved interface
+    testImg_ = ImageLoader::loadImageFromFile("/home/arroyo/Documents/Projectes/LinuxFace/example.jpg");
+    if (testImg_ == nullptr)
+    {
+        return;
+    }
+
+    // do test here, modify testImg
+
+    imageRender_.uploadImage(testImg_);
+
+    // Start new UI frame
+    ui_.newFrame();
+
+    // Paint UI elements
+    ui_.paint();
+    render();
+
+    while (!window_.shouldClose() && !g_should_exit)
+    {
+        sleep(1);
+    }
 }

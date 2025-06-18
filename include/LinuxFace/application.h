@@ -3,19 +3,19 @@
 
 #include <memory>
 
-#include "FunnyFace/GifReader.h"
-#include "FunnyFace/cameraManager.h"
-#include "FunnyFace/detectors.h"
-#include "FunnyFace/imageRenderGL.h"
-#include "FunnyFace/onnx/fsanet.h"
-#include "FunnyFace/onnx/metric3d.h"
-#include "FunnyFace/onnx/scrfd.h"
-#include "FunnyFace/profiler.h"
-#include "FunnyFace/ui.h"
-#include "FunnyFace/window.h"
-#include "FunnyFace/imageLoader.h"
+#include "LinuxFace/GifReader.h"
+#include "LinuxFace/cameraManager.h"
+#include "LinuxFace/detectors.h"
+#include "LinuxFace/imageRenderGL.h"
+#include "LinuxFace/onnx/fsanet.h"
+#include "LinuxFace/onnx/scrfd.h"
+#include "LinuxFace/profiler.h"
+#include "LinuxFace/ui.h"
+#include "LinuxFace/window.h"
+#include "LinuxFace/imageLoader.h"
+#include "LinuxFace/onnx/MODNet.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class Application
@@ -29,6 +29,9 @@ class Application
 
     // Run the main application loop
     void run();
+
+    // Run a simple test with no loop.
+    void runSingleShot();
 
     // Shutdown the application
     void shutdown();
@@ -46,9 +49,11 @@ class Application
     std::unique_ptr<FsanetDetector> fsanetDetectorVar_;
     std::unique_ptr<FsanetDetector> fsanetDetectorConv_;
     std::unique_ptr<SCRFDetector> scrfdDetector_;
-    std::unique_ptr<Metric3D> metric3dDetector_;
+    std::unique_ptr<MODNetDetector> modnetDetector_;
 
     std::shared_ptr<GifReader> gif_;
+
+    std::unique_ptr<Image> testImg_;
 
     // Main loop methods
     void update();
@@ -56,6 +61,6 @@ class Application
     void render();
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // APP_H

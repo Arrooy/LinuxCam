@@ -7,16 +7,16 @@
 #include <cstring>
 #include <string>
 
-#include "FunnyFace/JPEGManager.h"
-#include "FunnyFace/application.h"
-#include "FunnyFace/cameraManager.h"
-#include "FunnyFace/common.h"
-#include "FunnyFace/detectors.h"
-#include "FunnyFace/face.h"
-#include "FunnyFace/math_utils.h"
+#include "LinuxFace/JPEGManager.h"
+#include "LinuxFace/application.h"
+#include "LinuxFace/cameraManager.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/detectors.h"
+#include "LinuxFace/face.h"
+#include "LinuxFace/math_utils.h"
 #include "config.hpp"
 
-using namespace funnyface;
+using namespace linuxface;
 
 int main(int argc, char* argv[])
 {

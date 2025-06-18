@@ -1,6 +1,6 @@
-#include "FunnyFace/imageRenderGL.h"
-#include "FunnyFace/profiler.h"
-#include "FunnyFace/common.h"
+#include "LinuxFace/imageRenderGL.h"
+#include "LinuxFace/profiler.h"
+#include "LinuxFace/common.h"
 // Vertex shader for full-screen quad
 const char* vertexShaderSource = R"(
 #version 400 core
@@ -28,7 +28,7 @@ void main() {
 }
 )";
 
-using namespace funnyface;
+using namespace linuxface;
 
 ImageRenderGL::ImageRenderGL()
     : textureId_(0), noImageTextureId_(0), previousTextureId_(0), vao_(0), vbo_(0), ebo_(0), shaderProgram_(0), currentWidth_(0), currentHeight_(0)

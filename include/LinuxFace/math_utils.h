@@ -5,7 +5,7 @@
 #include <cmath>
 #include <vector>
 
-namespace funnyface
+namespace linuxface
 {
 namespace math_utils
 {
@@ -161,5 +161,5 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
 }
 
 } // namespace math_utils
-} // namespace funnyface
+} // namespace linuxface
 #endif // MATH_UTILS_H

@@ -1,9 +1,9 @@
-#include "FunnyFace/onnx/scrfd.h"
+#include "LinuxFace/onnx/scrfd.h"
 
-#include "FunnyFace/common.h"
-#include "FunnyFace/profiler.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/profiler.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 SCRFDetector::SCRFDetector(const std::string& onnx_model_path)
     : OnnxDetector(onnx_model_path), feat_stride_fpn_{8, 16, 32}
@@ -30,7 +30,7 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
 
     // Get pointer to tensor data.
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    image->toTensor(tensor_data, TensorPadding::scrfd(), target_width, target_height);
+    image->toTensor(tensor_data, TensorPadding::scrfd(), target_width, target_height, NormalizationType::MINMAX);
 
     return input_tensor;
 }

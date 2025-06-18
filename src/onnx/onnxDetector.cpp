@@ -1,8 +1,8 @@
-#include "FunnyFace/onnx/onnxDetector.h"
+#include "LinuxFace/onnx/onnxDetector.h"
 
-#include "FunnyFace/math_utils.h"
+#include "LinuxFace/math_utils.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     : env_(ORT_LOGGING_LEVEL_INFO, "OnnxDetector"), session_options_{}, detector_session_{nullptr}, allocator_{}

@@ -1,9 +1,9 @@
-#include "FunnyFace/onnx/fsanet.h"
+#include "LinuxFace/onnx/fsanet.h"
 
-#include "FunnyFace/math_utils.h"
-#include "FunnyFace/profiler.h"
+#include "LinuxFace/math_utils.h"
+#include "LinuxFace/profiler.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 
 Ort::Value FsanetDetector::transform(const std::unique_ptr<Image>& image)
@@ -13,7 +13,7 @@ Ort::Value FsanetDetector::transform(const std::unique_ptr<Image>& image)
 
     // Get pointer to tensor data.
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    image->toTensor(tensor_data, TensorPadding::fsanet(), input_width_, input_height_);
+    image->toTensor(tensor_data, TensorPadding::fsanet(), input_width_, input_height_, NormalizationType::MINMAX);
 
     return input_tensor;
 }
@@ -32,7 +32,10 @@ void FsanetDetector::detect(const std::unique_ptr<Image>& image, Face& face)
 
         const float* angles_ptr = output_tensors.front().GetTensorMutableData<float>();
         // TODO: We could add an average here, to smooth the pose.
-        face.setFacePose(FacePose{angles_ptr[0], angles_ptr[1], angles_ptr[2]});
+        if(angles_ptr)
+        {
+            face.setFacePose(FacePose{angles_ptr[0], angles_ptr[1], angles_ptr[2]});
+        }
     }
     catch (const Ort::Exception& e)
     {

@@ -8,10 +8,10 @@
 #include <memory>
 #include <mutex>
 
-#include "FunnyFace/common.h"
-#include "FunnyFace/math_utils.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/math_utils.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 enum class ImageFormat
@@ -23,9 +23,9 @@ enum class ImageFormat
     UYUV422,   // UYVY 4:2:2 format
     YUYV422,   // YUYV 4:2:2 format
     RAW,
-    RGB,        // RGB format
-    RGBA,       // RGBA format
-    GRAYSCALE,  // Single channel grayscale
+    RGB,         // RGB format
+    RGBA,        // RGBA format
+    GRAYSCALE,   // Single channel grayscale
     DEPTH_FLOAT, // Floating point depth data
     PNG,
     BMP, // Bitmap format
@@ -80,26 +80,33 @@ struct Pixel
 
 struct ImageMetadata
 {
-    unsigned long x {0u};
-    unsigned long y {0u};
+    unsigned long x{0u};
+    unsigned long y{0u};
     unsigned long width{0u};
     unsigned long height{0u};
-    unsigned char pixelSizeBytes;
+    unsigned char pixelSizeBytes{0u};
     TJSAMP TJSampleFormat;                // TJSAMP_444
     TJCS TJColorSpace;                    // TJCS_RGB
     TJPF TJPixelFormat;                   // TJPF_RGB
     ImageFormat format{ImageFormat::RGB}; // Default to RGB
-    bool is_valid {false};
+    bool is_valid{false};
+};
+
+
+enum class NormalizationType
+{
+    NONE,
+    MINMAX,
+    ZERO_CENTER
 };
 
 // TODO: move this to another place.
 enum class PaddingType
 {
+    NO_PADDING,   // No padding
     ZERO,         // Fill with zeros
     CONSTANT,     // Fill with single constant value
     RGB_CONSTANT, // Fill with RGB values (for color images)
-    EDGE_REFLECT, // Reflect edge pixels
-    MEAN_FILL     // Fill with mean color values
 };
 
 struct TensorPadding
@@ -122,6 +129,13 @@ struct TensorPadding
     mutable bool has_transform = false;
 
     // Constructors for different padding types
+    static TensorPadding no_padding()
+    {
+        TensorPadding p;
+        p.type = PaddingType::NO_PADDING;
+        return p;
+    }
+
     static TensorPadding zero()
     {
         TensorPadding p;
@@ -151,7 +165,8 @@ struct TensorPadding
     static TensorPadding metric3d()
     {
         // Metric3D specific padding values [123.675, 116.28, 103.53] normalized
-        return rgb(123.675f / 255.0f, 116.28f / 255.0f, 103.53f / 255.0f);
+        // return rgb(123.675f / 255.0f, 116.28f / 255.0f, 103.53f / 255.0f);
+        return rgb(123.675f, 116.28f, 103.53f);
     }
 
     static TensorPadding fsanet() { return constant(0.3f); }
@@ -525,11 +540,9 @@ class Image
     }
     // Converts the image to a tensor
     // The resize is smart, adding padding if necessary. Always maintaining original aspect ratio.
-    void toTensor(float* outputData, const TensorPadding& padding, int new_width, int new_height) const
+    void toTensor(float* outputData, const TensorPadding& padding, int new_width, int new_height,
+                  NormalizationType normType) const
     {
-        const int origW = info.width;
-        const int origH = info.height;
-
         if (!isColorImage() || info.pixelSizeBytes != 3)
         {
             common::log_error("Image::toTensor - Expected RGB format, got format: %s with pixel size: %d",
@@ -542,6 +555,9 @@ class Image
             common::log_error("Image::toTensor - Invalid input data");
             return;
         }
+
+        const int origW = info.width;
+        const int origH = info.height;
 
         // Step 1: Compute scale ratio (preserve aspect ratio)
         float r = std::min(static_cast<float>(new_width) / origW, static_cast<float>(new_height) / origH);
@@ -567,6 +583,8 @@ class Image
         // Initialize the entire output buffer based on padding type
         switch (padding.type)
         {
+            case PaddingType::NO_PADDING:
+                break;
             case PaddingType::ZERO:
                 std::memset(outputData, 0, paddedSize * 3 * sizeof(float));
                 break;
@@ -602,9 +620,9 @@ class Image
 
         const unsigned char* srcData = data_.get();
 
+        // TODO: Test resize with bilinear interpolation or even bicubic interpolation.
         // Resize original image using nearest neighbor
         // For each pixel in resized image
-        // TODO: Test resize with bilinear interpolation or even bicubic interpolation.
         for (int h = 0; h < resizedH; ++h)
         {
             int srcH = static_cast<int>((static_cast<float>(h) / resizedH) * origH);
@@ -642,16 +660,33 @@ class Image
                                       paddedSize);
                     continue;
                 }
-
-                outputData[0 * paddedSize + dstIdx] = srcData[srcIdx] / 255.0f;     // R
-                outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1] / 255.0f; // G
-                outputData[2 * paddedSize + dstIdx] = srcData[srcIdx + 2] / 255.0f; // B
+                if (normType == NormalizationType::NONE)
+                {
+                    outputData[0 * paddedSize + dstIdx] = srcData[srcIdx];     // R
+                    outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1]; // G
+                    outputData[2 * paddedSize + dstIdx] = srcData[srcIdx + 2]; // B
+                }
+                else if (normType == NormalizationType::MINMAX)
+                {
+                    outputData[0 * paddedSize + dstIdx] = srcData[srcIdx] / 255.0f;     // R
+                    outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1] / 255.0f; // G
+                    outputData[2 * paddedSize + dstIdx] = srcData[srcIdx + 2] / 255.0f; // B
+                }
+                else if (normType == NormalizationType::ZERO_CENTER)
+                {
+                    outputData[0 * paddedSize + dstIdx] = (static_cast<float>(srcData[srcIdx] - 127.5f)) / 127.5f; // R
+                    outputData[1 * paddedSize + dstIdx] =
+                        (static_cast<float>(srcData[srcIdx + 1] - 127.5f)) / 127.5f; // G
+                    outputData[2 * paddedSize + dstIdx] =
+                        (static_cast<float>(srcData[srcIdx + 2] - 127.5f)) / 127.5f; // B
+                }
             }
         }
     }
 
     // Converts tensor data back to image format (for depth/single channel data)
-    void fromTensor(const float* tensorData, int tensor_width, int tensor_height, const TensorPadding& padding)
+    void fromTensor(const float* tensorData, int tensor_width, int tensor_height, const TensorPadding& padding,
+                    const NormalizationType normType)
     {
         if (!tensorData || !data_ || size_ == 0)
         {
@@ -659,19 +694,12 @@ class Image
             return;
         }
 
-        if (info.pixelSizeBytes != sizeof(float))
-        {
-            common::log_error("Image::fromTensor - Expected float pixel format, got size: %d", info.pixelSizeBytes);
-            return;
-        }
-
         // Use stored transform metadata if available, otherwise calculate it
         int offsetX, offsetY, resizedW, resizedH;
         float r;
 
-        common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
-        common::log_info("Tensor padding = %d width, %d height",
-                         padding.tensor_width, padding.tensor_height);
+        // common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
+        // common::log_info("Tensor padding = %d width, %d height", padding.tensor_width, padding.tensor_height);
 
         if (padding.has_transform && padding.tensor_width == tensor_width && padding.tensor_height == tensor_height)
         {
@@ -682,9 +710,9 @@ class Image
             resizedH = padding.resized_height;
             r = padding.scale_ratio;
 
-            common::log_info(
-                "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
-                offsetX, offsetY, resizedW, resizedH, r);
+            // common::log_info(
+            //     "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
+            //     offsetX, offsetY, resizedW, resizedH, r);
         }
         else
         {
@@ -698,12 +726,12 @@ class Image
             offsetX = (tensor_width - resizedW) / 2;
             offsetY = (tensor_height - resizedH) / 2;
 
-            common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
-                             "resized(%dx%d), scale=%.3f",
-                             offsetX, offsetY, resizedW, resizedH, r);
+            // common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
+            //                  "resized(%dx%d), scale=%.3f",
+            //                  offsetX, offsetY, resizedW, resizedH, r);
         }
 
-        float* dstData = reinterpret_cast<float*>(data_.get());
+        unsigned char* dstData = data_.get();
 
         // Extract and resize depth data back to original dimensions
         for (int h = 0; h < static_cast<int>(info.height); ++h)
@@ -719,9 +747,31 @@ class Image
                 tensorW = std::max(0, std::min(tensorW, tensor_width - 1));
 
                 int tensorIdx = tensorH * tensor_width + tensorW;
-                int dstIdx = h * info.width + w;
 
-                dstData[dstIdx] = tensorData[tensorIdx];
+                // Convert tensor value to unsigned char
+                unsigned char pixelValue;
+                if (normType == NormalizationType::NONE)
+                {
+                    pixelValue = tensorData[tensorIdx];
+                }
+                else if (normType == NormalizationType::MINMAX)
+                {
+                    pixelValue = static_cast<unsigned char>(tensorData[tensorIdx] * 255.0f);
+                }
+                else if (normType == NormalizationType::ZERO_CENTER)
+                {
+                    pixelValue = static_cast<unsigned char>((tensorData[tensorIdx] + 1.0) / 2.0f * 255.0f);
+                }
+                else
+                {
+                    common::log_error("Unknown normalization type");
+                    return;
+                }
+
+                int dstIdx = (h * info.width + w) * 3;
+                dstData[dstIdx]   = pixelValue;
+                dstData[dstIdx+1] = pixelValue;
+                dstData[dstIdx+2] = pixelValue;
             }
         }
     }
@@ -774,6 +824,35 @@ class Image
         result->info.width = crop_width;
         result->info.height = crop_height;
         return result;
+    }
+
+    void saveToDisk(const std::string& dest_path)
+    {
+        if (info.format != ImageFormat::JPEG)
+        {
+            common::log_error("Only JPEG format is supported for saving to disk");
+            return;
+        }
+
+        if (data_.get() == nullptr || size_ == 0u)
+        {
+            common::log_error("No data to save");
+            return;
+        }
+
+        int jpgfile;
+        if ((jpgfile = open(dest_path.c_str(), O_WRONLY | O_CREAT, 0660)) < 0)
+        {
+            common::log_error("Error opening file for writing: %s", dest_path.c_str());
+            common::errno_log("Error opening file for writing");
+            return;
+        }
+
+        if (static_cast<ssize_t>(size_) != write(jpgfile, data_.get(), size_))
+        {
+            common::log_error("Error saving to file. Not all bytes where stored.");
+        }
+        close(jpgfile);
     }
 
   private:
@@ -943,8 +1022,8 @@ class Image
         Image backup; // TODO: FIXME: THIS IS WRONG: MAYBE .
         backup.copyFrom(*this);
 
-        common::log_info("Image::paste - Resizing canvas from %lux%lu to %lux%lu", info.width, info.height, newWidth,
-                         newHeight);
+        // common::log_info("Image::paste - Resizing canvas from %lux%lu to %lux%lu", info.width, info.height, newWidth,
+        //                  newHeight);
 
         // Resize this image using existing method
         size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
@@ -975,6 +1054,6 @@ class Image
     size_t size_;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // IMAGE_H

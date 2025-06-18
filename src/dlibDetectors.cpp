@@ -1,6 +1,6 @@
-#include "FunnyFace/dlibDetectors.h"
-#include "FunnyFace/profiler.h"
-using namespace funnyface;
+#include "LinuxFace/dlibDetectors.h"
+#include "LinuxFace/profiler.h"
+using namespace linuxface;
 
 namespace dlib
 {

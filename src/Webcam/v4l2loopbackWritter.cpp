@@ -1,8 +1,8 @@
-#include "FunnyFace/v4l2loopbackWritter.h"
+#include "LinuxFace/v4l2loopbackWritter.h"
 
-#include "FunnyFace/profiler.h"
+#include "LinuxFace/profiler.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 
 V4L2LoopbackWriter::V4L2LoopbackWriter(const std::string& name, const std::string& devicePath, const unsigned int width,

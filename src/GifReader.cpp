@@ -1,7 +1,7 @@
-#include "FunnyFace/GifReader.h"
+#include "LinuxFace/GifReader.h"
 
-#include "FunnyFace/common.h"
-namespace funnyface
+#include "LinuxFace/common.h"
+namespace linuxface
 {
 
 GifReader::GifReader(const std::string& filename)
@@ -85,4 +85,4 @@ std::unique_ptr<Image>& GifReader::next()
     return img;
 }
 
-} // namespace funnyface
+} // namespace linuxface

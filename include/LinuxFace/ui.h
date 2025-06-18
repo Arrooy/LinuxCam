@@ -11,12 +11,12 @@
 #include <queue>
 #include <vector>
 
-#include "FunnyFace/GifReader.h"
-#include "FunnyFace/UI/paintWebcam.h"
-#include "FunnyFace/cameraManager.h"
+#include "LinuxFace/GifReader.h"
+#include "LinuxFace/UI/paintWebcam.h"
+#include "LinuxFace/cameraManager.h"
 #include "imgui.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 // Common resolution presets
@@ -121,6 +121,6 @@ class UI
         }
     }
 };
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // UI_H

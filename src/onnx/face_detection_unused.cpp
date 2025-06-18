@@ -1,9 +1,9 @@
 #if 0
-#include "FunnyFace/onnx/fsanet.h"
+#include "LinuxFace/onnx/fsanet.h"
 
-#include "FunnyFace/math_utils.h"
+#include "LinuxFace/math_utils.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 std::vector<math_utils::Rect<float>> FsanetDetector::detect(const std::unique_ptr<Image>& image)
 {

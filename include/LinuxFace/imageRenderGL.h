@@ -4,9 +4,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 // clang-format on
-#include "FunnyFace/image.h"
+#include "LinuxFace/image.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class ImageRenderGL
@@ -46,5 +46,5 @@ class ImageRenderGL
     unsigned long currentHeight_;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 #endif // IMAGERENDERGL_H

@@ -1,14 +1,14 @@
-#include "FunnyFace/imageLoader.h"
+#include "LinuxFace/imageLoader.h"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 
-#include "FunnyFace/codec.h"
-#include "FunnyFace/common.h"
+#include "LinuxFace/codec.h"
+#include "LinuxFace/common.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 // ImageFormatDetector Implementation
 ImageFormat ImageFormatDetector::detectFormat(const std::vector<unsigned char>& data)
@@ -181,6 +181,7 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
 
     // Create source image from raw file data (non-owning reference)
     Image srcImage(const_cast<unsigned char*>(raw_data_.data()), raw_data_.size(), false);
+    srcImage.info = metadata_;
 
     // Create decoded image for caching
     decoded_image_ = std::make_unique<Image>();
@@ -207,6 +208,9 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
     // Mark as decoded
     is_decoded_ = true;
 
+    common::log_info("ImageLoader::loadFileData: Decoded image data successfully");
+    common::log_info("Width height: %d x %d", decoded_image_->info.width, decoded_image_->info.height);
+    common::log_info("Size of decoded image: %d bytes", decoded_image_->size());
     // Return a deep copy of the cached decoded image
     outImage = decoded_image_->deepCopy();
     return true;
@@ -261,6 +265,7 @@ bool ImageLoader::extractMetadata()
     {
         case ImageFormat::JPEG:
             temp_decoder = std::make_unique<JPEGDecoder>();
+            metadata_.TJPixelFormat = TJPF_RGB; //TODO: could be RGBA
             break;
         case ImageFormat::PNG:
             // temp_decoder = std::make_unique<PngDecoder>();
@@ -274,7 +279,8 @@ bool ImageLoader::extractMetadata()
 
     // Create source image from raw data for header parsing
     Image temp_image(const_cast<unsigned char*>(raw_data_.data()), raw_data_.size(), false);
-
+    temp_image.info = metadata_;
+    
     // Try to get metadata without full decode
     unsigned long raw_needed_size = 0;
     if (temp_decoder->decodeHeader(temp_image, raw_needed_size))

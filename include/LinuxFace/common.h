@@ -17,7 +17,7 @@
 
 
 // I did replace all static for inline to remove warnings. Dont know if its good or no...
-namespace funnyface
+namespace linuxface
 {
 namespace common
 {
@@ -272,6 +272,6 @@ inline void errno_log(const char* s)
     log_error("%s error %d, %s", s, errno, std::strerror(errno));
 }
 } // namespace common
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // COMMON_H

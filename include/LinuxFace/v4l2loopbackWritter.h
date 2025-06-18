@@ -12,10 +12,10 @@
 #include <iostream>
 #include <vector>
 
-#include "FunnyFace/common.h"
-#include "FunnyFace/webcam.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/webcam.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class V4L2LoopbackWriter : public Webcam
@@ -50,7 +50,7 @@ class V4L2LoopbackWriter : public Webcam
     // Encoder of output image
     std::unique_ptr<Encoder> encoder_;
 };
-} // namespace funnyface
+} // namespace linuxface
 
 
 #endif // V4L2LOOPBACKWRITTER_H

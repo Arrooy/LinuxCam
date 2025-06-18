@@ -1,11 +1,11 @@
 #ifndef SCRFD_H
 #define SCRFD_H
 
-#include "FunnyFace/detectors.h"
-#include "FunnyFace/math_utils.h"
-#include "FunnyFace/onnx/onnxDetector.h"
+#include "LinuxFace/detectors.h"
+#include "LinuxFace/math_utils.h"
+#include "LinuxFace/onnx/onnxDetector.h"
 
-namespace funnyface
+namespace linuxface
 {
 class SCRFDetector : public OnnxDetector
 {
@@ -39,5 +39,5 @@ class SCRFDetector : public OnnxDetector
     // NMS implementation - works in-place
     void applyNMS(std::vector<Face>& faces) const;
 };
-} // namespace funnyface
+} // namespace linuxface
 #endif

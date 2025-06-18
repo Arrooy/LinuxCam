@@ -5,10 +5,10 @@
 #include <map>
 #include <vector>
 
-#include "FunnyFace/image.h"
-#include "FunnyFace/math_utils.h"
+#include "LinuxFace/image.h"
+#include "LinuxFace/math_utils.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 struct FaceLandmark
@@ -86,6 +86,6 @@ class Face
     FacePose pose_;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // FACE_H

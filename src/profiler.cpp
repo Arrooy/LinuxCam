@@ -1,9 +1,9 @@
-#include "FunnyFace/profiler.h"
+#include "LinuxFace/profiler.h"
 
 #include <chrono>
 #include <algorithm>
 
-using namespace funnyface;
+using namespace linuxface;
 
 std::string Profiler::makeKey(const std::string& sourceName, const std::string& name) const
 {

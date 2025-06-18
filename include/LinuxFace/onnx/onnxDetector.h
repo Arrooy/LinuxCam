@@ -3,9 +3,9 @@
 
 #include <onnxruntime_cxx_api.h>
 
-#include "FunnyFace/detectors.h"
+#include "LinuxFace/detectors.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class OnnxDetector
@@ -41,6 +41,6 @@ class OnnxDetector
 
   private:
 };
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // ONNXDETECTOR_H

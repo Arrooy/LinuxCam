@@ -1,10 +1,10 @@
-#include "FunnyFace/window.h"
+#include "LinuxFace/window.h"
 
 #include <iostream>
 
-#include "FunnyFace/common.h"
+#include "LinuxFace/common.h"
 #include "config.hpp"
-using namespace funnyface;
+using namespace linuxface;
 
 // Check version in ubuntu with:
 // glxinfo | grep "OpenGL shading language version"

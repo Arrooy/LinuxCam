@@ -6,9 +6,9 @@
 #include <type_traits>
 #include <unordered_map>
 
-#include "FunnyFace/image.h"
+#include "LinuxFace/image.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 
@@ -126,5 +126,5 @@ class CodecFactory
     static std::unique_ptr<T> createEncoder(ImageFormat format, const ConfigBuilder& config);
 };
 
-} // namespace funnyface
+} // namespace linuxface
 #endif // CODECFACTORY_H

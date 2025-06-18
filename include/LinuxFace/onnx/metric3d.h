@@ -1,9 +1,13 @@
 #ifndef METRIC3D_H
 #define METRIC3D_H
 
-#include "FunnyFace/onnx/onnxDetector.h"
+#include "LinuxFace/onnx/onnxDetector.h"
 
-namespace funnyface
+//Source https://github.com/YvanYin/Metric3D/tree/main
+// tested python inference, small model doesnt work well.
+// large model works nice but inference time is too big.
+
+namespace linuxface
 {
 
 class DepthImage; // Forward declaration
@@ -23,6 +27,6 @@ class Metric3D : public OnnxDetector
     TensorPadding padding_; // Store padding info for tensor operations
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // METRIC3D_H

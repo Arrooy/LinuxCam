@@ -1,14 +1,14 @@
-#include "FunnyFace/inputWebcam.h"
+#include "LinuxFace/inputWebcam.h"
 
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/select.h>
 #include <unistd.h>
 
-#include "FunnyFace/codecFactory.h"
-#include "FunnyFace/common.h"
-#include "FunnyFace/profiler.h"
-using namespace funnyface;
+#include "LinuxFace/codecFactory.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/profiler.h"
+using namespace linuxface;
 
 InputWebcam::InputWebcam(const std::string& name, const std::string& devicePath, const unsigned int width,
                          const unsigned int height, const unsigned int bufferCount)

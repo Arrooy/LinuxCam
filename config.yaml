@@ -1,6 +1,6 @@
 input_cameras:
-    - name: "Logitech HD"
-      path: "/dev/video7"
+    - name: "Logitech"
+      path: "/dev/video0"
       width: 640
       height: 480
       buffer_count: 2
@@ -22,6 +22,6 @@ external_images:
     folder: "./images"
 
 window:
-    title: "FunnyFace"
+    title: "LinuxFace"
     width: 1920
     height: 1080

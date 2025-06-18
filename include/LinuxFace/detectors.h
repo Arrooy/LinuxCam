@@ -3,9 +3,9 @@
 
 #include <memory>
 
-#include "FunnyFace/face.h"
+#include "LinuxFace/face.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class FaceDetector
@@ -20,6 +20,6 @@ class ShapeDetector
     detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) = 0;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // DETECTORS_H

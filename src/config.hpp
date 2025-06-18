@@ -1,11 +1,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include "FunnyFace/cameraManager.h"
-#include "FunnyFace/common.h"
+#include "LinuxFace/cameraManager.h"
+#include "LinuxFace/common.h"
 #include "yaml-cpp/yaml.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 // Configuration structures
@@ -257,5 +257,5 @@ class Config
     std::string windowTitle_;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 #endif // CONFIG_H

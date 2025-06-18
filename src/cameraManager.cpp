@@ -1,4 +1,4 @@
-#include "FunnyFace/cameraManager.h"
+#include "LinuxFace/cameraManager.h"
 
 #include <fcntl.h>
 #include <linux/videodev2.h>
@@ -7,9 +7,9 @@
 
 #include <set>
 
-#include "FunnyFace/common.h"
-#include "FunnyFace/profiler.h"
-using namespace funnyface;
+#include "LinuxFace/common.h"
+#include "LinuxFace/profiler.h"
+using namespace linuxface;
 
 CameraManager::CameraManager()
 {

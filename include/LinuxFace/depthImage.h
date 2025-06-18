@@ -4,9 +4,9 @@
 #include <limits>
 #include <memory>
 
-#include "FunnyFace/image.h"
+#include "LinuxFace/image.h"
 //TODO: Still under evaluation.
-namespace funnyface
+namespace linuxface
 {
 
 class DepthImage : public Image
@@ -429,6 +429,6 @@ class DepthImage : public Image
     bool hasConfidence_ = false;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // DEPTH_IMAGE_H

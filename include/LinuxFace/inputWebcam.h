@@ -6,9 +6,9 @@
 #include <atomic>
 #include <thread>
 
-#include "FunnyFace/codec.h"
-#include "FunnyFace/webcam.h"
-namespace funnyface
+#include "LinuxFace/codec.h"
+#include "LinuxFace/webcam.h"
+namespace linuxface
 {
 
 class InputWebcam : public Webcam
@@ -58,6 +58,6 @@ class InputWebcam : public Webcam
     mutable std::mutex imageMutex_;
     std::unique_ptr<Image> latestImage_;
 };
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // INPUTWEBCAM_H

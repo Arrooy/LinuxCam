@@ -6,10 +6,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "FunnyFace/codec.h"
-#include "FunnyFace/image.h"
+#include "LinuxFace/codec.h"
+#include "LinuxFace/image.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class ImageFormatDetector
@@ -79,5 +79,5 @@ class ImageLoader
     bool is_decoded_{false};
 };
 
-} // namespace funnyface
+} // namespace linuxface
 #endif // IMAGELOADER_H

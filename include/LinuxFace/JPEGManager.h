@@ -3,10 +3,10 @@
 #define JPEGMANAGER_H
 
 #include <turbojpeg.h>
-#include "FunnyFace/image.h"
+#include "LinuxFace/image.h"
 #include <memory>
 
-namespace funnyface
+namespace linuxface
 {
 
 class JPEGManager
@@ -54,7 +54,7 @@ class JPEGManager
     int o_fd_;
 };
 
-} // namespace funnyface
+} // namespace linuxface
 
 #endif // JPEGMANAGER_H
 #endif

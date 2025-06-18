@@ -1,4 +1,4 @@
-#include "FunnyFace/webcam.h"
+#include "LinuxFace/webcam.h"
 
 #include <fcntl.h>
 #include <linux/videodev2.h>
@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <cmath>
 
-#include "FunnyFace/common.h"
+#include "LinuxFace/common.h"
 
-using namespace funnyface;
+using namespace linuxface;
 
 Webcam::Webcam(const std::string& name, const std::string& devicePath, const WebcamType type, const unsigned int width,
                const unsigned int height)

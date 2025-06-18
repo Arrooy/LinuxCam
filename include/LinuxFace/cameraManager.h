@@ -10,13 +10,13 @@
 #include <thread>
 #include <unordered_map>
 
-#include "FunnyFace/JPEGManager.h"
-#include "FunnyFace/inputWebcam.h"
-#include "FunnyFace/profiler.h"
-#include "FunnyFace/v4l2loopbackWritter.h"
-#include "FunnyFace/webcam.h"
+#include "LinuxFace/JPEGManager.h"
+#include "LinuxFace/inputWebcam.h"
+#include "LinuxFace/profiler.h"
+#include "LinuxFace/v4l2loopbackWritter.h"
+#include "LinuxFace/webcam.h"
 
-namespace funnyface
+namespace linuxface
 {
 
 class CameraManager
@@ -111,5 +111,5 @@ bool updateCameraImpl(std::vector<std::shared_ptr<T>>& container, std::shared_pt
 }
 
 
-} // namespace funnyface
+} // namespace linuxface
 #endif // CAMERA_H
