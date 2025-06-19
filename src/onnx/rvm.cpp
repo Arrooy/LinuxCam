@@ -153,26 +153,25 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
         const float* pha_data = pha_tensor.GetTensorData<float>();
         if (pha_data && matte)
         {
-            auto pha_shape = pha_tensor.GetTensorTypeAndShapeInfo().GetShape();
+            std::vector<int64_t> pha_shape = pha_tensor.GetTensorTypeAndShapeInfo().GetShape();
             int output_height = static_cast<int>(pha_shape[2]);
             int output_width = static_cast<int>(pha_shape[3]);
 
             common::log_info("pha shape: %d, %d, %d, %d", pha_shape[0], pha_shape[1], pha_shape[2], pha_shape[3]);
             // Note that pha_shape[1] is 1. (Grayscale)
-            matte->fromTensor(pha_data, output_width, output_height, padding_, NormalizationType::MINMAX);
+            matte->fromTensor(pha_data, pha_shape, output_width, output_height, padding_, NormalizationType::MINMAX);
         }
 
         // Process foreground (fgr) tensor if needed
         const float* fgr_data = fgr_tensor.GetTensorData<float>();
         if (fgr_data && frg)
         {
-            auto fgr_shape = fgr_tensor.GetTensorTypeAndShapeInfo().GetShape();
+            std::vector<int64_t> fgr_shape = fgr_tensor.GetTensorTypeAndShapeInfo().GetShape();
             int output_height = static_cast<int>(fgr_shape[2]);
             int output_width = static_cast<int>(fgr_shape[3]);
             // Note that fgr_shape[1] is 3. (RGB)
-            common::log_info("fgr shape: %d, %d, %d, %d", fgr_shape[0], fgr_shape[1], fgr_shape[2], fgr_shape[3]);
-
-            frg->fromTensor(fgr_data, output_width, output_height, padding_, NormalizationType::NONE);
+             common::log_info("frg shape: %d, %d, %d, %d", fgr_shape[0], fgr_shape[1], fgr_shape[2], fgr_shape[3]);
+            frg->fromTensor(fgr_data, fgr_shape, output_width, output_height, padding_, NormalizationType::MINMAX);
         }
         // Update recurrent states for next iteration (outputs 2-5 are r1o, r2o, r3o, r4o)
         // These become the next frame's r1i, r2i, r3i, r4i inputs
@@ -211,6 +210,7 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
                 // Resize CPU storage if needed
                 if (rec_cpu_data_[rec_index].size() != rec_size)
                 {
+                    common::log_error("A resize happened. From %d to %d", rec_cpu_data_[rec_index].size(), rec_size);
                     rec_cpu_data_[rec_index].resize(rec_size);
                 }
 

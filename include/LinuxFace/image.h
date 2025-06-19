@@ -538,10 +538,11 @@ class Image
         pasteImpl(other, x, y, expandCanvas);
         return *this;
     }
+
     // Converts the image to a tensor
     // The resize is smart, adding padding if necessary. Always maintaining original aspect ratio.
-    void toTensor(float* outputData, TensorPadding& padding, int new_width, int new_height,
-                  NormalizationType normType) const
+    void
+    toTensor(float* outputData, TensorPadding& padding, int new_width, int new_height, NormalizationType normType) const
     {
         if (!isColorImage() || info.pixelSizeBytes != 3)
         {
@@ -685,8 +686,8 @@ class Image
     }
 
     // Converts tensor data back to image format (for depth/single channel data)
-    void fromTensor(const float* tensorData, int tensor_width, int tensor_height, const TensorPadding& padding,
-                    const NormalizationType normType)
+    void fromTensor(const float* tensorData, std::vector<int64_t> tensorShape, int tensor_width, int tensor_height,
+                    const TensorPadding& padding, const NormalizationType normType)
     {
         if (!tensorData || !data_ || size_ == 0)
         {
@@ -698,8 +699,8 @@ class Image
         int offsetX, offsetY, resizedW, resizedH;
         float r;
 
-        // common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
-        // common::log_info("Tensor padding = %d width, %d height", padding.tensor_width, padding.tensor_height);
+        common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
+        common::log_info("Tensor padding = %d width, %d height", padding.tensor_width, padding.tensor_height);
 
         if (padding.has_transform && padding.tensor_width == tensor_width && padding.tensor_height == tensor_height)
         {
@@ -710,9 +711,9 @@ class Image
             resizedH = padding.resized_height;
             r = padding.scale_ratio;
 
-            // common::log_info(
-            //     "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
-            //     offsetX, offsetY, resizedW, resizedH, r);
+            common::log_info(
+                "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
+                offsetX, offsetY, resizedW, resizedH, r);
         }
         else
         {
@@ -726,41 +727,66 @@ class Image
             offsetX = (tensor_width - resizedW) / 2;
             offsetY = (tensor_height - resizedH) / 2;
 
-            // common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
-            //                  "resized(%dx%d), scale=%.3f",
-            //                  offsetX, offsetY, resizedW, resizedH, r);
+            common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
+                             "resized(%dx%d), scale=%.3f",
+                             offsetX, offsetY, resizedW, resizedH, r);
         }
 
         unsigned char* dstData = data_.get();
-
+        int tensor_size = tensor_width * tensor_height;
         // Extract and resize depth data back to original dimensions
-        for (int h = 0; h < static_cast<int>(info.height); ++h)
+        for (int y = 0; y < static_cast<int>(info.height); ++y)
         {
-            for (int w = 0; w < static_cast<int>(info.width); ++w)
+            for (int x = 0; x < static_cast<int>(info.width); ++x)
             {
                 // Map to tensor coordinates
-                int tensorH = static_cast<int>((static_cast<float>(h) / info.height) * resizedH) + offsetY;
-                int tensorW = static_cast<int>((static_cast<float>(w) / info.width) * resizedW) + offsetX;
+                int tensorH = static_cast<int>((static_cast<float>(y) / info.height) * resizedH) + offsetY;
+                int tensorW = static_cast<int>((static_cast<float>(x) / info.width) * resizedW) + offsetX;
 
                 // Clamp to tensor bounds
                 tensorH = std::max(0, std::min(tensorH, tensor_height - 1));
                 tensorW = std::max(0, std::min(tensorW, tensor_width - 1));
 
-                int tensorIdx = tensorH * tensor_width + tensorW;
+                int channels = 1;
+                // Check if the tensor has a single channel
+                if (tensorShape[1] == 3)
+                {
+                    channels = 3;
+                }
+
+                int tensorIdx = (tensorH * tensor_width + tensorW);
 
                 // Convert tensor value to unsigned char
-                unsigned char pixelValue;
+                unsigned char pixelValues[3];
                 if (normType == NormalizationType::NONE)
                 {
-                    pixelValue = tensorData[tensorIdx];
+                    pixelValues[0] = static_cast<unsigned char>(tensorData[tensorIdx]);
+                    if (channels == 3)
+                    {
+                        // Remember that thi is in CHW not HWC
+                        pixelValues[1] = static_cast<unsigned char>(tensorData[1 * tensor_size + tensorIdx]);
+                        pixelValues[2] = static_cast<unsigned char>(tensorData[2 * tensor_size + tensorIdx]);
+                    }
                 }
                 else if (normType == NormalizationType::MINMAX)
                 {
-                    pixelValue = static_cast<unsigned char>(tensorData[tensorIdx] * 255.0f);
+                    pixelValues[0] = static_cast<unsigned char>(tensorData[tensorIdx] * 255.0f);
+                    if (channels == 3)
+                    {
+                        pixelValues[1] = static_cast<unsigned char>(tensorData[1 * tensor_size + tensorIdx] * 255.0f);
+                        pixelValues[2] = static_cast<unsigned char>(tensorData[2 * tensor_size + tensorIdx] * 255.0f);
+                    }
                 }
                 else if (normType == NormalizationType::ZERO_CENTER)
                 {
-                    pixelValue = static_cast<unsigned char>((tensorData[tensorIdx] + 1.0) / 2.0f * 255.0f);
+                    pixelValues[0] = static_cast<unsigned char>((tensorData[tensorIdx] + 1.0) / 2.0f * 255.0f);
+                    if (channels == 3)
+                    {
+                        pixelValues[1] =
+                            static_cast<unsigned char>((tensorData[1 * tensor_size + tensorIdx] + 1.0) / 2.0f * 255.0f);
+                        pixelValues[2] =
+                            static_cast<unsigned char>((tensorData[2 * tensor_size + tensorIdx] + 1.0) / 2.0f * 255.0f);
+                    }
                 }
                 else
                 {
@@ -768,10 +794,20 @@ class Image
                     return;
                 }
 
-                int dstIdx = (h * info.width + w) * 3;
-                dstData[dstIdx] = pixelValue;
-                dstData[dstIdx + 1] = pixelValue;
-                dstData[dstIdx + 2] = pixelValue;
+                int dstIdx = (y * info.width + x) * 3;
+                dstData[dstIdx] = pixelValues[0];
+                if (channels == 3)
+                {
+                    // RGB
+                    dstData[dstIdx + 1] = pixelValues[1];
+                    dstData[dstIdx + 2] = pixelValues[2];
+                }
+                else
+                {
+                    // Grayscale
+                    dstData[dstIdx + 1] = pixelValues[0];
+                    dstData[dstIdx + 2] = pixelValues[0];
+                }
             }
         }
     }
@@ -789,6 +825,7 @@ class Image
             ppx(p.x, p.y, color);
         }
     }
+
     // Crop a portion of the image and return it.
     std::unique_ptr<Image> crop(const math_utils::Rect<float>& rect)
     {
@@ -853,6 +890,44 @@ class Image
             common::log_error("Error saving to file. Not all bytes where stored.");
         }
         close(jpgfile);
+    }
+
+    void changeBackgroundImage(const Image& matting, const Image& background)
+    {
+        if (matting.info.width != background.info.width || matting.info.height != background.info.height)
+        {
+            common::log_error("Background image and matting image have different dimensions");
+            common::log_info("Dimensions are %d x %d", matting.info.width, matting.info.height);
+            common::log_info("Dimensions are %d x %d", background.info.width, background.info.height);
+            return;
+        }
+
+        if (matting.info.pixelSizeBytes != background.info.pixelSizeBytes)
+        {
+            common::log_error("Background image and matting image have different pixel sizes");
+            return;
+        }
+
+        if (matting.data() == nullptr || background.data() == nullptr)
+        {
+            common::log_error("Background image or matting image have no data");
+            return;
+        }
+        unsigned char* phaData = matting.data();
+        unsigned char* frgData = data();
+        unsigned char* backgroundData = background.data();
+        unsigned long dimensions = info.height * info.width;
+        for (int y = 0; y < info.height; ++y)
+        {
+            for (int x = 0; x < info.width; ++x)
+            {
+                int idx = (y * info.width + x) * 3;
+                unsigned char alpha = phaData[idx];
+                frgData[idx] = (alpha * frgData[idx] + (255 - alpha) * backgroundData[idx]) / 255;
+                frgData[idx + 1] = (alpha * frgData[idx + 1] + (255 - alpha) * backgroundData[idx + 1]) / 255;
+                frgData[idx + 2] = (alpha * frgData[idx + 2] + (255 - alpha) * backgroundData[idx + 2]) / 255;
+            }
+        }
     }
 
   private:
@@ -959,6 +1034,7 @@ class Image
                 }
                 else
                 {
+                    common::log_error("Image::paste - Unsupported pixel format");
                     // Fallback to memcpy for other formats
                     std::memcpy(dstData + dstIdx, srcData + srcIdx, pixelSize);
                 }

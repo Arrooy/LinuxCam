@@ -41,12 +41,13 @@ void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr
     {
         auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,
                                                      1, output_node_names_.data(), 1);
-
-        const float* mate = output_tensors.front().GetTensorMutableData<float>();
+        auto& output_tensor = output_tensors.front();
+        const float* mate = output_tensor.GetTensorMutableData<float>();
 
         if (mate)
         {
-            matte->fromTensor(mate, input_width_, input_height_, padding_, NormalizationType::MINMAX);
+            std::vector<int64_t> matte_shape = output_tensor.GetTensorTypeAndShapeInfo().GetShape();
+            matte->fromTensor(mate, matte_shape, input_width_, input_height_, padding_, NormalizationType::MINMAX);
         }else
         {
             common::log_error("MODNetDetector: Failed to get output tensor");

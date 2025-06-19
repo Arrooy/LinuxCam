@@ -123,7 +123,12 @@ bool Application::initialize()
     std::string rvm_model = models_folder + "rvm_mobilenetv3_fp32.onnx";
     rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
     rvmDetector_->initialize();
-
+    testImg_ = ImageLoader::loadImageFromFile("/home/arroyo/Documents/Projectes/FunnyFace/example.jpg");
+    testImg_ = testImg_->scale(640,480);
+    if (testImg_ == nullptr)
+    {
+        return false;
+    }
     // TODO: test models:
     // pipnet68/xx
     // Maybe nanodet_m.onnx (Fast yolo)
@@ -279,6 +284,13 @@ void Application::process(std::unique_ptr<Image>& image)
         Profiler::getInstance().start("RVM", "App paste");
         image->paste(*foreground, true);
         image->paste(*matting, true);
+
+        // use matting layer with foreground layer
+        foreground->changeBackgroundImage(*matting, *testImg_);
+        foreground->info.x = 0;
+        foreground->info.y = image->info.height;
+        image->paste(*foreground, true);
+
         Profiler::getInstance().stop("RVM", "App paste");
     }
 
