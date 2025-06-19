@@ -118,7 +118,11 @@ bool Application::initialize()
     // scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
 
     std::string modnet_onnx_path = models_folder + "modnet.onnx";
-    modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
+    // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
+
+    std::string rvm_model = models_folder + "rvm_mobilenetv3_fp32.onnx";
+    rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
+    rvmDetector_->initialize();
 
     // TODO: test models:
     // pipnet68/xx
@@ -251,13 +255,31 @@ void Application::process(std::unique_ptr<Image>& image)
         }
     }
 
-    if(modnetDetector_ && modnetDetector_->isReady())
+    if (modnetDetector_ && modnetDetector_->isReady())
     {
         std::unique_ptr<Image> matting = image->deepCopy();
         modnetDetector_->detect(image, matting);
         matting->info.x = image->info.width;
         matting->info.y = 0;
         image->paste(*matting, true);
+    }
+
+    if (rvmDetector_ && rvmDetector_->isReady())
+    {
+        Profiler::getInstance().start("RVM", "App deep copy");
+        std::unique_ptr<Image> matting = image->deepCopy();
+        std::unique_ptr<Image> foreground = image->deepCopy();
+        Profiler::getInstance().stop("RVM", "App deep copy");
+
+        rvmDetector_->detect(image, foreground, matting);
+        foreground->info.x = image->info.width;
+        foreground->info.y = 0;
+        matting->info.x = foreground->info.x + foreground->info.width;
+        matting->info.y = 0;
+        Profiler::getInstance().start("RVM", "App paste");
+        image->paste(*foreground, true);
+        image->paste(*matting, true);
+        Profiler::getInstance().stop("RVM", "App paste");
     }
 
     // Paint results:

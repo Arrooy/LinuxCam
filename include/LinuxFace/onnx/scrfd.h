@@ -12,7 +12,7 @@ class SCRFDetector : public OnnxDetector
   public:
     explicit SCRFDetector(const std::string& onnx_model_path);
     ~SCRFDetector() = default;
-    Ort::Value transform(const std::unique_ptr<Image>& image) override;
+    std::vector<Ort::Value> transform(const std::unique_ptr<Image>& image) override;
     std::vector<Face> detect(const std::unique_ptr<Image>& image);
 
   private:

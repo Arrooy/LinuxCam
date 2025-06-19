@@ -21,7 +21,7 @@ SCRFDetector::SCRFDetector(const std::string& onnx_model_path)
     }
 }
 
-Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
+std::vector<Ort::Value> SCRFDetector::transform(const std::unique_ptr<Image>& image)
 {
     const int target_height = static_cast<int>(input_node_dims.at(2));
     const int target_width = static_cast<int>(input_node_dims.at(3));
@@ -30,9 +30,13 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
 
     // Get pointer to tensor data.
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    image->toTensor(tensor_data, TensorPadding::scrfd(), target_width, target_height, NormalizationType::MINMAX);
+    auto tensor_padding = TensorPadding::scrfd();
+    image->toTensor(tensor_data, tensor_padding, target_width, target_height, NormalizationType::MINMAX);
 
-    return input_tensor;
+    // Use initializer list for efficiency
+    std::vector<Ort::Value> input_result;
+    input_result.emplace_back(std::move(input_tensor));
+    return input_result;
 }
 
 std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
@@ -41,7 +45,7 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
     std::vector<Face> faces;
     faces.reserve(3000); // Reserve once for all strides (rough estimate)
     // Convert from image to tensor.
-    Ort::Value input_tensor = this->transform(image);
+    Ort::Value input_tensor = std::move(this->transform(image)[0]);
     try
     {
         auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,

@@ -7,7 +7,6 @@
 
 namespace linuxface
 {
-
 class OnnxDetector
 {
   public:
@@ -16,7 +15,7 @@ class OnnxDetector
     OnnxDetector(const std::string& onnx_model_path);
     ~OnnxDetector() = default;
 
-    virtual Ort::Value transform(const std::unique_ptr<Image>& image) = 0;
+    virtual std::vector<Ort::Value> transform(const std::unique_ptr<Image>& image) = 0;
 
     int batch_size_;
     int channels_;
@@ -34,12 +33,15 @@ class OnnxDetector
     Ort::Env env_;
     Ort::SessionOptions session_options_;
     std::unique_ptr<Ort::Session> detector_session_;
-
-    // Get default CPU allocator
+    Ort::MemoryInfo memory_info_;
+    Ort::IoBinding io_binding_;
     Ort::AllocatorWithDefaultOptions allocator_;
+
     bool ready_{false};
+    bool has_cuda_{false};
 
   private:
+    bool checkCudaAvailability();
 };
 } // namespace linuxface
 

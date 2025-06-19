@@ -1,0 +1,243 @@
+#include "LinuxFace/onnx/rvm.h"
+
+#include "LinuxFace/profiler.h"
+
+using namespace linuxface;
+
+/**
+ * This onnx model is different, it uses its output[-1] for its next input.
+ * Since we don't want to move data between CPU-GPU, lets use io bindings.
+ * (The NN recycles recurrent states)
+ */
+
+RobustVideoMatting::RobustVideoMatting(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path)
+{
+}
+
+void RobustVideoMatting::initialize()
+{
+    // 1x1x1x1 tensor shape
+    constexpr std::array<int64_t, 4> shape = {1, 1, 1, 1};
+    rec_.clear();
+    rec_cpu_data_.clear();
+    // initialize rec vector
+    int rec_index = 0;
+    for (const auto output_name : output_node_names_)
+    {
+        io_binding_.BindOutput(output_name, memory_info_);
+
+        // only add r1o,r2o,r3o,r4o
+        if (output_name[0] != 'r')
+        {
+            continue;
+        }
+
+        if (has_cuda_)
+        {
+            // GPU path: Use allocator for proper GPU memory management
+            Ort::Value rec_tensor = Ort::Value::CreateTensor<float>(allocator_, shape.data(), shape.size());
+
+            // Initialize GPU memory with zeros
+            float* gpu_data = rec_tensor.GetTensorMutableData<float>();
+            // cudaMemset(gpu_data, 0, sizeof(float));
+
+            rec_.push_back(std::move(rec_tensor));
+        }
+        else
+        {
+            if (rec_cpu_data_.size() <= rec_index)
+            {
+                rec_cpu_data_.resize(rec_index + 1);
+            }
+            rec_cpu_data_[rec_index] = std::vector<float>(1, 0.0f); // Initialize with proper index
+
+            // CPU path: Use traditional approach with persistent data
+            Ort::Value rec_tensor = Ort::Value::CreateTensor<float>(
+                memory_info_, rec_cpu_data_.back().data(), rec_cpu_data_.back().size(), shape.data(), shape.size());
+            rec_.push_back(std::move(rec_tensor));
+        }
+        rec_index++;
+    }
+}
+
+std::vector<Ort::Value> RobustVideoMatting::transform(const std::unique_ptr<Image>& image)
+{
+    // Create tensor with fixed dimensions instead of dynamic input_node_dims with -1
+    if (input_node_dims[2] == -1 || input_node_dims[3] == -1)
+    {
+        // [batch, channels, height, width]
+        input_node_dims[0] = 1;
+        input_node_dims[1] = 3;
+        input_node_dims[2] = image->info.height; // input_height_;
+        input_node_dims[3] = image->info.width;  // input_width_;
+    }
+
+    Ort::Value input_tensor =
+        Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
+
+    // TODO: Rename TensorPadding to TensorImageTransformation or whatever.
+    padding_ = TensorPadding::no_padding();
+
+    std::vector<Ort::Value> input_tensors;
+    // Get pointer to tensor data.
+    float* tensor_data = input_tensor.GetTensorMutableData<float>();
+
+    downsample_ = std::min(512.0f / std::max(image->info.width, image->info.height), 1.0f);
+    common::log_info("USING A DOWNSAMPLE OF %f", downsample_);
+    // Note no resize.
+    image->toTensor(tensor_data, padding_, image->info.width, image->info.height, NormalizationType::MINMAX);
+
+    // Use initializer list for efficiency
+    std::vector<Ort::Value> input_result;
+    input_result.emplace_back(std::move(input_tensor));
+    return input_result;
+}
+
+void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& frg,
+                                std::unique_ptr<Image>& matte)
+{
+    Profiler::getInstance().start("RVM", "Matting detection");
+    common::log_info("Starting a detection RVM!");
+
+    common::log_info("Input image of %d x %d. Size bytes %d", image->info.width, image->info.height, image->size());
+
+    // Convert from image to tensor.
+    Ort::Value input_tensor = std::move(this->transform(image)[0]);
+    common::log_info("After transforming, input tensor size %d",
+                     input_tensor.GetTensorTypeAndShapeInfo().GetElementCount());
+    try
+    {
+        io_binding_.BindInput(input_node_names_[0], input_tensor);
+
+        int index = 0;
+        for (const auto& input_name : input_node_names_)
+        {
+            // only add r1i,r2i,r3i,r4i
+            if (input_name[0] != 'r')
+            {
+                continue;
+            }
+            io_binding_.BindInput(input_name, rec_[index++]);
+        }
+
+        // downsampling tensor
+        constexpr std::array<int64_t, 1> shape = {1};
+        std::vector<float> tensor_data(1, downsample_);
+
+        Ort::Value downsample_tensor = Ort::Value::CreateTensor<float>(memory_info_, &downsample_,
+                                                                       1,             // data length
+                                                                       shape.data(),  // shape pointer
+                                                                       shape.size()); // shape dimension count
+        io_binding_.BindInput("downsample_ratio", downsample_tensor);
+
+
+        detector_session_->Run(Ort::RunOptions{nullptr}, io_binding_);
+
+        std::vector<Ort::Value> output_values = io_binding_.GetOutputValues();
+        auto output_names_io = io_binding_.GetOutputNames();
+        for (const auto& name : output_names_io)
+        {
+            common::log_info("Got name %s", name.c_str());
+        }
+
+        if (output_values.size() < 6)
+        {
+            common::log_error("RobustVideoMatting: Expected at least 6 outputs, got %zu", output_values.size());
+            return;
+        }
+        // Get fgr (foreground) and pha (alpha/matte) - first two outputs
+        auto& fgr_tensor = output_values[0];
+        auto& pha_tensor = output_values[1];
+
+        // Process matte (pha) tensor
+        const float* pha_data = pha_tensor.GetTensorData<float>();
+        if (pha_data && matte)
+        {
+            auto pha_shape = pha_tensor.GetTensorTypeAndShapeInfo().GetShape();
+            int output_height = static_cast<int>(pha_shape[2]);
+            int output_width = static_cast<int>(pha_shape[3]);
+
+            matte->fromTensor(pha_data, output_width, output_height, padding_, NormalizationType::MINMAX);
+        }
+
+        // Process foreground (fgr) tensor if needed
+        const float* fgr_data = fgr_tensor.GetTensorData<float>();
+        if (fgr_data && frg)
+        {
+            auto fgr_shape = fgr_tensor.GetTensorTypeAndShapeInfo().GetShape();
+            int output_height = static_cast<int>(fgr_shape[2]);
+            int output_width = static_cast<int>(fgr_shape[3]);
+
+            frg->fromTensor(fgr_data, output_width, output_height, padding_, NormalizationType::NONE);
+        }
+        // Update recurrent states for next iteration (outputs 2-5 are r1o, r2o, r3o, r4o)
+        // These become the next frame's r1i, r2i, r3i, r4i inputs
+        int rec_index = 0;
+        for (size_t i = 2; i < output_values.size() && rec_index < rec_.size(); ++i)
+        {
+            auto& new_rec_tensor = output_values[i];
+
+            if (has_cuda_)
+            {
+                // GPU: Copy new recurrent state to our persistent rec_ tensor
+                const float* new_rec_data = new_rec_tensor.GetTensorData<float>();
+                float* rec_data = rec_[rec_index].GetTensorMutableData<float>();
+
+                auto rec_shape = new_rec_tensor.GetTensorTypeAndShapeInfo().GetShape();
+                size_t rec_size = 1;
+                for (auto dim : rec_shape)
+                {
+                    rec_size *= dim;
+                }
+
+                // cudaMemcpy(rec_data, new_rec_data, rec_size * sizeof(float), cudaMemcpyDeviceToDevice);
+            }
+            else
+            {
+                // CPU: Copy new recurrent state to our CPU data storage
+                const float* new_rec_data = new_rec_tensor.GetTensorData<float>();
+                auto rec_shape = new_rec_tensor.GetTensorTypeAndShapeInfo().GetShape();
+
+                size_t rec_size = 1;
+                for (auto dim : rec_shape)
+                {
+                    rec_size *= dim;
+                }
+
+                // Ensure rec_cpu_data_ has enough space
+                if (rec_cpu_data_.size() <= rec_index)
+                {
+                    common::log_error("RobustVideoMatting: rec_cpu_data_ index %d out of bounds (size: %zu)", rec_index,
+                                      rec_cpu_data_.size());
+                    break;
+                }
+
+                // Resize CPU storage if needed
+                if (rec_cpu_data_[rec_index].size() != rec_size)
+                {
+                    rec_cpu_data_[rec_index].resize(rec_size);
+                }
+
+                std::memcpy(rec_cpu_data_[rec_index].data(), new_rec_data, rec_size * sizeof(float));
+
+                // Recreate the tensor with updated data for next frame
+                // Get actual shape from the output tensor
+                std::vector<int64_t> tensor_shape(rec_shape.begin(), rec_shape.end());
+                Ort::MemoryInfo cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
+                rec_[rec_index] = Ort::Value::CreateTensor<float>(cpu_memory_info, rec_cpu_data_[rec_index].data(),
+                                                                  rec_cpu_data_[rec_index].size(), tensor_shape.data(),
+                                                                  tensor_shape.size());
+            }
+
+            rec_index++;
+        }
+    }
+    catch (const Ort::Exception& e)
+    {
+        common::log_error("RobustVideoMatting: %s", e.what());
+        exit(-1);
+    }
+
+    Profiler::getInstance().stop("RVM", "Matting detection");
+}

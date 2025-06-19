@@ -540,7 +540,7 @@ class Image
     }
     // Converts the image to a tensor
     // The resize is smart, adding padding if necessary. Always maintaining original aspect ratio.
-    void toTensor(float* outputData, const TensorPadding& padding, int new_width, int new_height,
+    void toTensor(float* outputData, TensorPadding& padding, int new_width, int new_height,
                   NormalizationType normType) const
     {
         if (!isColorImage() || info.pixelSizeBytes != 3)
@@ -674,11 +674,11 @@ class Image
                 }
                 else if (normType == NormalizationType::ZERO_CENTER)
                 {
-                    outputData[0 * paddedSize + dstIdx] = (static_cast<float>(srcData[srcIdx] - 127.5f)) / 127.5f; // R
+                    outputData[0 * paddedSize + dstIdx] = (static_cast<float>(srcData[srcIdx]) - 127.5f) / 127.5f; // R
                     outputData[1 * paddedSize + dstIdx] =
-                        (static_cast<float>(srcData[srcIdx + 1] - 127.5f)) / 127.5f; // G
+                        (static_cast<float>(srcData[srcIdx + 1]) - 127.5f) / 127.5f; // G
                     outputData[2 * paddedSize + dstIdx] =
-                        (static_cast<float>(srcData[srcIdx + 2] - 127.5f)) / 127.5f; // B
+                        (static_cast<float>(srcData[srcIdx + 2]) - 127.5f) / 127.5f; // B
                 }
             }
         }
@@ -769,9 +769,9 @@ class Image
                 }
 
                 int dstIdx = (h * info.width + w) * 3;
-                dstData[dstIdx]   = pixelValue;
-                dstData[dstIdx+1] = pixelValue;
-                dstData[dstIdx+2] = pixelValue;
+                dstData[dstIdx] = pixelValue;
+                dstData[dstIdx + 1] = pixelValue;
+                dstData[dstIdx + 2] = pixelValue;
             }
         }
     }
@@ -969,6 +969,7 @@ class Image
     // Core paste implementation - all paste methods delegate to this
     Image& pasteImpl(const Image& other, long otherX, long otherY, bool expandCanvas)
     {
+        // TODO: FIXME: This has a high execution cost!
         // Validation
         if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
         {
