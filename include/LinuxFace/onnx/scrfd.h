@@ -5,6 +5,11 @@
 #include "LinuxFace/math_utils.h"
 #include "LinuxFace/onnx/onnxDetector.h"
 
+/**
+ * Using CPU -> 40ms 
+ * Using Cuda + CPUMemory -> 10ms
+ */
+
 namespace linuxface
 {
 class SCRFDetector : public OnnxDetector

@@ -17,8 +17,7 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     session_options_.SetLogSeverityLevel(4);
     // TODO: Add way of disabling cuda.
     // Try to add CUDA provider with better error handling
-    // has_cuda_ = checkCudaAvailability();
-    has_cuda_ = false;
+    has_cuda_ = false;// checkCudaAvailability();
     if (has_cuda_)
     {
         try

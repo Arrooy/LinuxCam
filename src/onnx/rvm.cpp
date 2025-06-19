@@ -157,6 +157,8 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
             int output_height = static_cast<int>(pha_shape[2]);
             int output_width = static_cast<int>(pha_shape[3]);
 
+            common::log_info("pha shape: %d, %d, %d, %d", pha_shape[0], pha_shape[1], pha_shape[2], pha_shape[3]);
+            // Note that pha_shape[1] is 1. (Grayscale)
             matte->fromTensor(pha_data, output_width, output_height, padding_, NormalizationType::MINMAX);
         }
 
@@ -167,6 +169,8 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
             auto fgr_shape = fgr_tensor.GetTensorTypeAndShapeInfo().GetShape();
             int output_height = static_cast<int>(fgr_shape[2]);
             int output_width = static_cast<int>(fgr_shape[3]);
+            // Note that fgr_shape[1] is 3. (RGB)
+            common::log_info("fgr shape: %d, %d, %d, %d", fgr_shape[0], fgr_shape[1], fgr_shape[2], fgr_shape[3]);
 
             frg->fromTensor(fgr_data, output_width, output_height, padding_, NormalizationType::NONE);
         }
@@ -204,14 +208,6 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
                     rec_size *= dim;
                 }
 
-                // Ensure rec_cpu_data_ has enough space
-                if (rec_cpu_data_.size() <= rec_index)
-                {
-                    common::log_error("RobustVideoMatting: rec_cpu_data_ index %d out of bounds (size: %zu)", rec_index,
-                                      rec_cpu_data_.size());
-                    break;
-                }
-
                 // Resize CPU storage if needed
                 if (rec_cpu_data_[rec_index].size() != rec_size)
                 {
@@ -222,6 +218,7 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
 
                 // Recreate the tensor with updated data for next frame
                 // Get actual shape from the output tensor
+                // TODO: if a resize occurs, doesnt the shape change? 
                 std::vector<int64_t> tensor_shape(rec_shape.begin(), rec_shape.end());
                 Ort::MemoryInfo cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
