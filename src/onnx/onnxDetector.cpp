@@ -17,7 +17,7 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     session_options_.SetLogSeverityLevel(4);
     // TODO: Add way of disabling cuda.
     // Try to add CUDA provider with better error handling
-    has_cuda_ = false;// checkCudaAvailability();
+    has_cuda_ = checkCudaAvailability();
     if (has_cuda_)
     {
         try
@@ -58,7 +58,8 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
         // Create ONNX Runtime detector_session_ for the detector
         detector_session_ = std::make_unique<Ort::Session>(env_, onnx_model_path.c_str(), session_options_);
 
-        if (has_cuda_)
+        // Disable CUDA memory acceleration.
+        if (false)
         {
             common::log_info("OnnxDetector: Model loaded successfully with CUDA acceleration");
             memory_info_ =

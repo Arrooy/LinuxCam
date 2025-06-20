@@ -21,17 +21,12 @@ void RobustVideoMatting::initialize()
     rec_cpu_data_.clear();
 
     // Define recurrent shapes based on input dimensions
-    std::vector<std::vector<int64_t>> rec_shapes;
-    if (lastHeight_ > 0 && lastWidth_ > 0)
-    {
-        // Reset, not a init
-        rec_shapes = {
-            {1, 16, lastHeight_ / 4, lastWidth_ / 4},
-            {1, 20, lastHeight_ / 8, lastWidth_ / 8},
-            {1, 40, lastHeight_ / 16, lastWidth_ / 16},
-            {1, 64, lastHeight_ / 32, lastWidth_ / 32}
-        };
-    }
+    const std::vector<std::vector<int64_t>> rec_shapes = {
+        {1, 1, 1, 1},
+        {1, 1, 1, 1},
+        {1, 1, 1, 1},
+        {1, 1, 1, 1}
+    };
 
     // initialize rec vector
     int rec_index = 0;
@@ -53,30 +48,18 @@ void RobustVideoMatting::initialize()
             total_size *= dim;
         }
 
-        if (has_cuda_)
-        {
-            // GPU path: Use allocator for proper GPU memory management
-            Ort::Value rec_tensor = Ort::Value::CreateTensor<float>(allocator_, shape.data(), shape.size());
 
-            // Initialize GPU memory with zeros
-            float* gpu_data = rec_tensor.GetTensorMutableData<float>();
-            // Clear GPU memory (uncomment if using CUDA)
-            // cudaMemset(gpu_data, 0, total_size * sizeof(float));
-            rec_.push_back(std::move(rec_tensor));
-        }
-        else
+        if (rec_cpu_data_.size() <= rec_index)
         {
-            if (rec_cpu_data_.size() <= rec_index)
-            {
-                rec_cpu_data_.resize(rec_index + 1);
-            }
-            rec_cpu_data_[rec_index] = std::vector<float>(total_size, 0.0f);
-
-            // CPU path: Use traditional approach with persistent data
-            Ort::Value rec_tensor = Ort::Value::CreateTensor<float>(memory_info_, rec_cpu_data_[rec_index].data(),
-                                                                    total_size, shape.data(), shape.size());
-            rec_.push_back(std::move(rec_tensor));
+            rec_cpu_data_.resize(rec_index + 1);
         }
+        rec_cpu_data_[rec_index] = std::vector<float>(total_size, 0.0f);
+
+        // CPU path: Use traditional approach with persistent data
+        Ort::Value rec_tensor = Ort::Value::CreateTensor<float>(memory_info_, rec_cpu_data_[rec_index].data(),
+                                                                total_size, shape.data(), shape.size());
+        rec_.push_back(std::move(rec_tensor));
+
         rec_index++;
     }
 }
@@ -201,52 +184,35 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
         {
             auto& new_rec_tensor = output_values[i];
 
-            if (has_cuda_)
+            // CPU: Copy new recurrent state to our CPU data storage
+            const float* new_rec_data = new_rec_tensor.GetTensorData<float>();
+            auto rec_shape = new_rec_tensor.GetTensorTypeAndShapeInfo().GetShape();
+
+            size_t rec_size = 1;
+            for (auto dim : rec_shape)
             {
-                // GPU: Copy new recurrent state to our persistent rec_ tensor
-                const float* new_rec_data = new_rec_tensor.GetTensorData<float>();
-                float* rec_data = rec_[rec_index].GetTensorMutableData<float>();
-
-                auto rec_shape = new_rec_tensor.GetTensorTypeAndShapeInfo().GetShape();
-                size_t rec_size = 1;
-                for (auto dim : rec_shape)
-                {
-                    rec_size *= dim;
-                }
-
-                // cudaMemcpy(rec_data, new_rec_data, rec_size * sizeof(float), cudaMemcpyDeviceToDevice);
+                rec_size *= dim;
             }
-            else
+
+            // Resize CPU storage if needed
+            if (rec_cpu_data_[rec_index].size() != rec_size)
             {
-                // CPU: Copy new recurrent state to our CPU data storage
-                const float* new_rec_data = new_rec_tensor.GetTensorData<float>();
-                auto rec_shape = new_rec_tensor.GetTensorTypeAndShapeInfo().GetShape();
-
-                size_t rec_size = 1;
-                for (auto dim : rec_shape)
-                {
-                    rec_size *= dim;
-                }
-
-                // Resize CPU storage if needed
-                if (rec_cpu_data_[rec_index].size() != rec_size)
-                {
-                    common::log_error("A resize happened. From %d to %d", rec_cpu_data_[rec_index].size(), rec_size);
-                    rec_cpu_data_[rec_index].resize(rec_size);
-                }
-
-                std::memcpy(rec_cpu_data_[rec_index].data(), new_rec_data, rec_size * sizeof(float));
-
-                // Recreate the tensor with updated data for next frame
-                // Get actual shape from the output tensor
-                // TODO: if a resize occurs, doesnt the shape change?
-                std::vector<int64_t> tensor_shape(rec_shape.begin(), rec_shape.end());
-                Ort::MemoryInfo cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-
-                rec_[rec_index] = Ort::Value::CreateTensor<float>(cpu_memory_info, rec_cpu_data_[rec_index].data(),
-                                                                  rec_cpu_data_[rec_index].size(), tensor_shape.data(),
-                                                                  tensor_shape.size());
+                common::log_error("A resize happened. From %d to %d", rec_cpu_data_[rec_index].size(), rec_size);
+                rec_cpu_data_[rec_index].resize(rec_size);
             }
+
+            std::memcpy(rec_cpu_data_[rec_index].data(), new_rec_data, rec_size * sizeof(float));
+
+            // Recreate the tensor with updated data for next frame
+            // Get actual shape from the output tensor
+            // TODO: if a resize occurs, doesnt the shape change?
+            std::vector<int64_t> tensor_shape(rec_shape.begin(), rec_shape.end());
+            Ort::MemoryInfo cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
+            rec_[rec_index] = Ort::Value::CreateTensor<float>(cpu_memory_info, rec_cpu_data_[rec_index].data(),
+                                                              rec_cpu_data_[rec_index].size(), tensor_shape.data(),
+                                                              tensor_shape.size());
+
 
             rec_index++;
         }
