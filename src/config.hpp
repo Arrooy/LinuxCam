@@ -9,9 +9,11 @@ namespace linuxface
 {
 
 // Configuration structures
-struct ExternalImages
+struct ExternalData
 {
-    std::string folder;
+    std::string mediaFolderPath;
+    std::string modelFolderPath;
+    bool preLoading{false};
 };
 
 struct WebcamDevice
@@ -163,20 +165,36 @@ class Config
 
     bool validateAndLoadExternalImages()
     {
-        if (!config_["external_images"])
+        if (!config_["external_data"])
         {
-            common::log_error("Missing external_images section in config");
+            common::log_error("Missing external_data section in config");
             return false;
         }
 
-        auto images = config_["external_images"];
-        if (!images["folder"])
+        auto images = config_["external_data"];
+        if (!images["media_folder_path"])
         {
-            common::log_error("Missing folder field in external_images section");
+            common::log_error("Missing media_folder_path field in external_data section");
+            return false;
+        }
+        // TODO: Make sure it finishes with only one "/"
+        external_data_.mediaFolderPath = images["media_folder_path"].as<std::string>() + "/";
+
+        if (!images["models_folder_path"])
+        {
+            common::log_error("Missing models_folder_path field in external_data section");
             return false;
         }
 
-        external_images_.folder = images["folder"].as<std::string>();
+        // TODO: Make sure it finishes with only one "/"
+        external_data_.modelFolderPath = images["models_folder_path"].as<std::string>() + "/";
+
+        if (!images["preload_content"])
+        {
+            common::log_error("Missing preload_content field in external_data section");
+            return false;
+        }
+        external_data_.preLoading = images["preload_content"].as<bool>();
         return true;
     }
 
@@ -221,12 +239,15 @@ class Config
 
     bool loadConfiguration()
     {
-        return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages() && validateAndLoadWindowConfig();
+        return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()
+               && validateAndLoadWindowConfig();
     }
 
     // Get configuration sections
     std::vector<WebcamDevice> getWebcams() const { return cameras_; }
-    ExternalImages getExternalImages() const { return external_images_; }
+    std::string getMediaFolderPath() const { return external_data_.mediaFolderPath; }
+    std::string getModelFolderPath() const { return external_data_.modelFolderPath; }
+    bool preloadExternalContent() const { return external_data_.preLoading; }
 
     void getWindowSize(int& width, int& height) const
     {
@@ -250,7 +271,7 @@ class Config
   private:
     YAML::Node config_;
     std::vector<WebcamDevice> cameras_;
-    ExternalImages external_images_;
+    ExternalData external_data_;
 
     unsigned int windowWidth_;
     unsigned int windowHeight_;

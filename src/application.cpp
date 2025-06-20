@@ -12,6 +12,19 @@
 using namespace linuxface;
 
 
+// TODO: test models:
+// pipnet68/xx
+// Maybe nanodet_m.onnx (Fast yolo)
+// mobile_hair_seg_hairmattenetv1_224x224
+// Mirar test_lite_facefusion_pipeline
+// 2dfan4.onnx (landmarks 68)
+// emotion face-emotion-recognition-enet_b0_8_best_afew.onnx
+// Matting BGMv2_mobilenetv2-512x512-full.onnx
+
+// precise depth https://github.com/yvanyin/metric3d
+// fast depth https://github.com/ibaiGorordo/ONNX-FastACVNet-Depth-Estimation
+
+
 std::atomic<bool> g_should_exit{false};
 
 void signalHandler(int signal)
@@ -102,9 +115,7 @@ bool Application::initialize()
 
     // Just here for benchmarking.
     // faceDetector_ = std::make_unique<DlibFaceDetector>();
-
-    std::string models_folder = "/home/arroyo/Documents/Projectes/FunnyFace/models/";
-
+    std::string models_folder = Config::getInstance().getModelFolderPath();
     std::string var_onnx_path = models_folder + "fsanet-var.onnx";
     // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
@@ -121,32 +132,16 @@ bool Application::initialize()
     // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
     std::string rvm_model = models_folder + "rvm_mobilenetv3_fp32.onnx";
-    
+
     rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
-    testImg_ = ImageLoader::loadImageFromFile("/home/arroyo/Documents/Projectes/FunnyFace/example.jpg");
-    // TODO: test models:
-    // pipnet68/xx
-    // Maybe nanodet_m.onnx (Fast yolo)
-    // mobile_hair_seg_hairmattenetv1_224x224
-    // Mirar test_lite_facefusion_pipeline
-    // 2dfan4.onnx (landmarks 68)
-    // emotion face-emotion-recognition-enet_b0_8_best_afew.onnx
-    // Matting BGMv2_mobilenetv2-512x512-full.onnx
 
-    // precise depth https://github.com/yvanyin/metric3d
-    // fast depth https://github.com/ibaiGorordo/ONNX-FastACVNet-Depth-Estimation
-
-
-    /**
-     * modnet_photographic_portrait_matting = https://github.com/ZHKKKe/MODNet
-     * onnx_mobilenetv2_hd = https://github.com/PeterL1n/BackgroundMattingV2
-     */
+    std::string media_folder = Config::getInstance().getMediaFolderPath();
+    testImg_ = ImageLoader::loadImageFromFile(media_folder + "example.jpg");
 
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
 
-
-    gif_ = std::make_shared<GifReader>("/home/arroyo/Documents/Projectes/LinuxFace/first.gif");
+    gif_ = std::make_shared<GifReader>(media_folder + "first.gif");
     // if (!gif_->decodeAllFrames())
     // {
     //     common::log_error("Failed to decode giff frames.");
@@ -240,7 +235,7 @@ void Application::render()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-        std::vector<Face> dlib_faces;
+    std::vector<Face> dlib_faces;
     if (faceDetector_ != nullptr)
     {
         dlib_faces = faceDetector_->detect(image);
@@ -266,10 +261,12 @@ void Application::process(std::unique_ptr<Image>& image)
 
     if (rvmDetector_ && rvmDetector_->isReady())
     {
-        if(!rvmDetector_->isImageCompatible(image))
+        // If resize occurs, rvm is not able to handle that, we just reset it.
+        if (!rvmDetector_->isImageCompatible(image))
         {
             rvmDetector_.reset();
-            rvmDetector_ = std::make_unique<RobustVideoMatting>("/home/arroyo/Documents/Projectes/FunnyFace/models/rvm_mobilenetv3_fp32.onnx");
+            rvmDetector_ = std::make_unique<RobustVideoMatting>(
+                "/home/arroyo/Documents/Projectes/FunnyFace/models/rvm_mobilenetv3_fp32.onnx");
         }
 
         Profiler::getInstance().start("RVM", "App deep copy");
@@ -278,10 +275,6 @@ void Application::process(std::unique_ptr<Image>& image)
         Profiler::getInstance().stop("RVM", "App deep copy");
 
         rvmDetector_->detect(image, foreground, matting);
-        foreground->info.x = image->info.width;
-        foreground->info.y = 0;
-        matting->info.x = foreground->info.x + foreground->info.width;
-        matting->info.y = 0;
         Profiler::getInstance().start("RVM", "App paste");
         // use matting layer with foreground layer
         if (testImg_ && !image->isCompatible(*testImg_))
@@ -289,8 +282,6 @@ void Application::process(std::unique_ptr<Image>& image)
             testImg_ = testImg_->scale(image->info.width, image->info.height);
             common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
         }
-        image->paste(*foreground, true);
-        image->paste(*matting, true);
         foreground->changeBackgroundImage(*matting, *testImg_);
         foreground->info.x = 0;
         foreground->info.y = image->info.height;
