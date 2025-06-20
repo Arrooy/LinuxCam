@@ -109,6 +109,7 @@ enum class PaddingType
     RGB_CONSTANT, // Fill with RGB values (for color images)
 };
 
+// TODO: Lets refactor this to a more elegant
 struct TensorPadding
 {
     PaddingType type;
@@ -343,6 +344,21 @@ class Image
     }
 
     ImageMetadata info;
+
+    bool hasSameDimensions(const Image& other) const
+    {
+        return info.width == other.info.width && info.height == other.info.height;
+    }
+
+    bool hasSameSize(const Image& other) const
+    {
+        return size_ == other.size_ && info.format == other.info.format && info.pixelSizeBytes == other.info.pixelSizeBytes;
+    }
+
+    bool isCompatible(const Image& other) const
+    {
+        return hasSameDimensions(other) && hasSameSize(other);
+    }
 
     void copyFrom(const Image& other)
     {
@@ -897,8 +913,8 @@ class Image
         if (matting.info.width != background.info.width || matting.info.height != background.info.height)
         {
             common::log_error("Background image and matting image have different dimensions");
-            common::log_info("Dimensions are %d x %d", matting.info.width, matting.info.height);
-            common::log_info("Dimensions are %d x %d", background.info.width, background.info.height);
+            common::log_info("Dimensions are matting %d x %d", matting.info.width, matting.info.height);
+            common::log_info("Dimensions are background %d x %d", background.info.width, background.info.height);
             return;
         }
 
@@ -913,15 +929,15 @@ class Image
             common::log_error("Background image or matting image have no data");
             return;
         }
+
         unsigned char* phaData = matting.data();
         unsigned char* frgData = data();
         unsigned char* backgroundData = background.data();
-        unsigned long dimensions = info.height * info.width;
-        for (int y = 0; y < info.height; ++y)
+        for (unsigned long y = 0; y < info.height; ++y)
         {
-            for (int x = 0; x < info.width; ++x)
+            for (unsigned long x = 0; x < info.width; ++x)
             {
-                int idx = (y * info.width + x) * 3;
+                unsigned long idx = (y * info.width + x) * 3;
                 unsigned char alpha = phaData[idx];
                 frgData[idx] = (alpha * frgData[idx] + (255 - alpha) * backgroundData[idx]) / 255;
                 frgData[idx + 1] = (alpha * frgData[idx + 1] + (255 - alpha) * backgroundData[idx + 1]) / 255;

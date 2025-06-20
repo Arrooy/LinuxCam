@@ -114,8 +114,8 @@ std::unique_ptr<DepthImage> Metric3D::detect_depth(const std::unique_ptr<Image>&
 
         // Get tensor data pointers
         auto depth_data = depth_output.GetTensorMutableData<float>();
-        auto normal_data = normal_output.GetTensorMutableData<float>();
-        auto confidence_data = confidence_output.GetTensorMutableData<float>();
+        // auto normal_data = normal_output.GetTensorMutableData<float>();
+        // auto confidence_data = confidence_output.GetTensorMutableData<float>();
 
         // Step 1: Remove padding from tensor output to get back to scaled image size
         // Calculate the scaled image dimensions that were used during padding

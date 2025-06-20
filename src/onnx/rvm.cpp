@@ -12,14 +12,27 @@ using namespace linuxface;
 
 RobustVideoMatting::RobustVideoMatting(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path)
 {
+    initialize();
 }
 
 void RobustVideoMatting::initialize()
 {
-    // 1x1x1x1 tensor shape
-    constexpr std::array<int64_t, 4> shape = {1, 1, 1, 1};
     rec_.clear();
     rec_cpu_data_.clear();
+
+    // Define recurrent shapes based on input dimensions
+    std::vector<std::vector<int64_t>> rec_shapes;
+    if (lastHeight_ > 0 && lastWidth_ > 0)
+    {
+        // Reset, not a init
+        rec_shapes = {
+            {1, 16, lastHeight_ / 4, lastWidth_ / 4},
+            {1, 20, lastHeight_ / 8, lastWidth_ / 8},
+            {1, 40, lastHeight_ / 16, lastWidth_ / 16},
+            {1, 64, lastHeight_ / 32, lastWidth_ / 32}
+        };
+    }
+
     // initialize rec vector
     int rec_index = 0;
     for (const auto output_name : output_node_names_)
@@ -32,6 +45,14 @@ void RobustVideoMatting::initialize()
             continue;
         }
 
+        const auto& shape = rec_shapes[rec_index];
+
+        size_t total_size = 1;
+        for (auto dim : shape)
+        {
+            total_size *= dim;
+        }
+
         if (has_cuda_)
         {
             // GPU path: Use allocator for proper GPU memory management
@@ -39,8 +60,8 @@ void RobustVideoMatting::initialize()
 
             // Initialize GPU memory with zeros
             float* gpu_data = rec_tensor.GetTensorMutableData<float>();
-            // cudaMemset(gpu_data, 0, sizeof(float));
-
+            // Clear GPU memory (uncomment if using CUDA)
+            // cudaMemset(gpu_data, 0, total_size * sizeof(float));
             rec_.push_back(std::move(rec_tensor));
         }
         else
@@ -49,11 +70,11 @@ void RobustVideoMatting::initialize()
             {
                 rec_cpu_data_.resize(rec_index + 1);
             }
-            rec_cpu_data_[rec_index] = std::vector<float>(1, 0.0f); // Initialize with proper index
+            rec_cpu_data_[rec_index] = std::vector<float>(total_size, 0.0f);
 
             // CPU path: Use traditional approach with persistent data
-            Ort::Value rec_tensor = Ort::Value::CreateTensor<float>(
-                memory_info_, rec_cpu_data_.back().data(), rec_cpu_data_.back().size(), shape.data(), shape.size());
+            Ort::Value rec_tensor = Ort::Value::CreateTensor<float>(memory_info_, rec_cpu_data_[rec_index].data(),
+                                                                    total_size, shape.data(), shape.size());
             rec_.push_back(std::move(rec_tensor));
         }
         rec_index++;
@@ -170,7 +191,7 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
             int output_height = static_cast<int>(fgr_shape[2]);
             int output_width = static_cast<int>(fgr_shape[3]);
             // Note that fgr_shape[1] is 3. (RGB)
-             common::log_info("frg shape: %d, %d, %d, %d", fgr_shape[0], fgr_shape[1], fgr_shape[2], fgr_shape[3]);
+            common::log_info("frg shape: %d, %d, %d, %d", fgr_shape[0], fgr_shape[1], fgr_shape[2], fgr_shape[3]);
             frg->fromTensor(fgr_data, fgr_shape, output_width, output_height, padding_, NormalizationType::MINMAX);
         }
         // Update recurrent states for next iteration (outputs 2-5 are r1o, r2o, r3o, r4o)
@@ -218,7 +239,7 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
 
                 // Recreate the tensor with updated data for next frame
                 // Get actual shape from the output tensor
-                // TODO: if a resize occurs, doesnt the shape change? 
+                // TODO: if a resize occurs, doesnt the shape change?
                 std::vector<int64_t> tensor_shape(rec_shape.begin(), rec_shape.end());
                 Ort::MemoryInfo cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
