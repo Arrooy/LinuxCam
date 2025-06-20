@@ -165,13 +165,11 @@ bool OnnxDetector::readModelInputSize()
     }
     input_node_names_.reserve(input_node_names_str_.size());
     output_node_names_.reserve(output_node_names_str_.size());
-    int i = 0;
     for (const auto& name : input_node_names_str_)
     {
         input_node_names_.push_back(name.c_str());
         // common::log_info("FSANet: input_tensor: %s", name.c_str());
     }
-    i = 0;
     for (const auto& name : output_node_names_str_)
     {
         output_node_names_.push_back(name.c_str());

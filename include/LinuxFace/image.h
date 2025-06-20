@@ -715,8 +715,8 @@ class Image
         int offsetX, offsetY, resizedW, resizedH;
         float r;
 
-        common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
-        common::log_info("Tensor padding = %d width, %d height", padding.tensor_width, padding.tensor_height);
+        // common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
+        // common::log_info("Tensor padding = %d width, %d height", padding.tensor_width, padding.tensor_height);
 
         if (padding.has_transform && padding.tensor_width == tensor_width && padding.tensor_height == tensor_height)
         {
@@ -727,9 +727,9 @@ class Image
             resizedH = padding.resized_height;
             r = padding.scale_ratio;
 
-            common::log_info(
-                "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
-                offsetX, offsetY, resizedW, resizedH, r);
+            // common::log_info(
+            //     "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
+            //     offsetX, offsetY, resizedW, resizedH, r);
         }
         else
         {
@@ -743,9 +743,9 @@ class Image
             offsetX = (tensor_width - resizedW) / 2;
             offsetY = (tensor_height - resizedH) / 2;
 
-            common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
-                             "resized(%dx%d), scale=%.3f",
-                             offsetX, offsetY, resizedW, resizedH, r);
+            // common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
+            //                  "resized(%dx%d), scale=%.3f",
+            //                  offsetX, offsetY, resizedW, resizedH, r);
         }
 
         unsigned char* dstData = data_.get();

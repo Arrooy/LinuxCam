@@ -29,7 +29,7 @@ void RobustVideoMatting::initialize()
     };
 
     // initialize rec vector
-    int rec_index = 0;
+    size_t rec_index = 0;
     for (const auto output_name : output_node_names_)
     {
         io_binding_.BindOutput(output_name, memory_info_);
@@ -64,6 +64,15 @@ void RobustVideoMatting::initialize()
     }
 }
 
+bool RobustVideoMatting::isImageCompatible(const std::unique_ptr<Image>& image)
+{
+    if(lastHeight_ == 0 && lastWidth_ == 0)
+    {
+        return true;
+    }
+    return image->info.height == lastHeight_ && image->info.width == lastWidth_;
+}
+
 std::vector<Ort::Value> RobustVideoMatting::transform(const std::unique_ptr<Image>& image)
 {
     // Create tensor with fixed dimensions instead of dynamic input_node_dims with -1
@@ -72,8 +81,10 @@ std::vector<Ort::Value> RobustVideoMatting::transform(const std::unique_ptr<Imag
         // [batch, channels, height, width]
         input_node_dims[0] = 1;
         input_node_dims[1] = 3;
-        input_node_dims[2] = image->info.height; // input_height_;
-        input_node_dims[3] = image->info.width;  // input_width_;
+        input_node_dims[2] = image->info.height;
+        input_node_dims[3] = image->info.width;
+        lastHeight_ = image->info.height;
+        lastWidth_ = image->info.width;
     }
 
     Ort::Value input_tensor =
@@ -87,7 +98,6 @@ std::vector<Ort::Value> RobustVideoMatting::transform(const std::unique_ptr<Imag
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
 
     downsample_ = std::min(512.0f / std::max(image->info.width, image->info.height), 1.0f);
-    common::log_info("USING A DOWNSAMPLE OF %f", downsample_);
     // Note no resize.
     image->toTensor(tensor_data, padding_, image->info.width, image->info.height, NormalizationType::MINMAX);
 
@@ -101,14 +111,9 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
                                 std::unique_ptr<Image>& matte)
 {
     Profiler::getInstance().start("RVM", "Matting detection");
-    common::log_info("Starting a detection RVM!");
-
-    common::log_info("Input image of %d x %d. Size bytes %d", image->info.width, image->info.height, image->size());
 
     // Convert from image to tensor.
     Ort::Value input_tensor = std::move(this->transform(image)[0]);
-    common::log_info("After transforming, input tensor size %d",
-                     input_tensor.GetTensorTypeAndShapeInfo().GetElementCount());
     try
     {
         io_binding_.BindInput(input_node_names_[0], input_tensor);
@@ -138,17 +143,7 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
         detector_session_->Run(Ort::RunOptions{nullptr}, io_binding_);
 
         std::vector<Ort::Value> output_values = io_binding_.GetOutputValues();
-        auto output_names_io = io_binding_.GetOutputNames();
-        for (const auto& name : output_names_io)
-        {
-            common::log_info("Got name %s", name.c_str());
-        }
 
-        if (output_values.size() < 6)
-        {
-            common::log_error("RobustVideoMatting: Expected at least 6 outputs, got %zu", output_values.size());
-            return;
-        }
         // Get fgr (foreground) and pha (alpha/matte) - first two outputs
         auto& fgr_tensor = output_values[0];
         auto& pha_tensor = output_values[1];
@@ -161,7 +156,7 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
             int output_height = static_cast<int>(pha_shape[2]);
             int output_width = static_cast<int>(pha_shape[3]);
 
-            common::log_info("pha shape: %d, %d, %d, %d", pha_shape[0], pha_shape[1], pha_shape[2], pha_shape[3]);
+            // common::log_info("pha shape: %d, %d, %d, %d", pha_shape[0], pha_shape[1], pha_shape[2], pha_shape[3]);
             // Note that pha_shape[1] is 1. (Grayscale)
             matte->fromTensor(pha_data, pha_shape, output_width, output_height, padding_, NormalizationType::MINMAX);
         }
@@ -174,12 +169,12 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
             int output_height = static_cast<int>(fgr_shape[2]);
             int output_width = static_cast<int>(fgr_shape[3]);
             // Note that fgr_shape[1] is 3. (RGB)
-            common::log_info("frg shape: %d, %d, %d, %d", fgr_shape[0], fgr_shape[1], fgr_shape[2], fgr_shape[3]);
+            // common::log_info("frg shape: %d, %d, %d, %d", fgr_shape[0], fgr_shape[1], fgr_shape[2], fgr_shape[3]);
             frg->fromTensor(fgr_data, fgr_shape, output_width, output_height, padding_, NormalizationType::MINMAX);
         }
         // Update recurrent states for next iteration (outputs 2-5 are r1o, r2o, r3o, r4o)
         // These become the next frame's r1i, r2i, r3i, r4i inputs
-        int rec_index = 0;
+        size_t rec_index = 0;
         for (size_t i = 2; i < output_values.size() && rec_index < rec_.size(); ++i)
         {
             auto& new_rec_tensor = output_values[i];
@@ -197,7 +192,6 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
             // Resize CPU storage if needed
             if (rec_cpu_data_[rec_index].size() != rec_size)
             {
-                common::log_error("A resize happened. From %d to %d", rec_cpu_data_[rec_index].size(), rec_size);
                 rec_cpu_data_[rec_index].resize(rec_size);
             }
 
@@ -205,14 +199,12 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
 
             // Recreate the tensor with updated data for next frame
             // Get actual shape from the output tensor
-            // TODO: if a resize occurs, doesnt the shape change?
             std::vector<int64_t> tensor_shape(rec_shape.begin(), rec_shape.end());
             Ort::MemoryInfo cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
             rec_[rec_index] = Ort::Value::CreateTensor<float>(cpu_memory_info, rec_cpu_data_[rec_index].data(),
                                                               rec_cpu_data_[rec_index].size(), tensor_shape.data(),
                                                               tensor_shape.size());
-
 
             rec_index++;
         }

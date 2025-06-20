@@ -15,6 +15,9 @@ class RobustVideoMatting : public OnnxDetector
     void detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& frg, std::unique_ptr<Image>& matte);
 
     void initialize();
+
+    bool isImageCompatible(const std::unique_ptr<Image>& image);
+
   private:
     // The downsample must make the downsampled_resolution between 256px and 512px.
     float downsample_ = 0.25f;

@@ -121,6 +121,7 @@ bool Application::initialize()
     // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
     std::string rvm_model = models_folder + "rvm_mobilenetv3_fp32.onnx";
+    
     rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
     testImg_ = ImageLoader::loadImageFromFile("/home/arroyo/Documents/Projectes/FunnyFace/example.jpg");
     // TODO: test models:
@@ -265,6 +266,12 @@ void Application::process(std::unique_ptr<Image>& image)
 
     if (rvmDetector_ && rvmDetector_->isReady())
     {
+        if(!rvmDetector_->isImageCompatible(image))
+        {
+            rvmDetector_.reset();
+            rvmDetector_ = std::make_unique<RobustVideoMatting>("/home/arroyo/Documents/Projectes/FunnyFace/models/rvm_mobilenetv3_fp32.onnx");
+        }
+
         Profiler::getInstance().start("RVM", "App deep copy");
         std::unique_ptr<Image> matting = image->deepCopy();
         std::unique_ptr<Image> foreground = image->deepCopy();
