@@ -5,7 +5,7 @@
 using namespace linuxface;
 
 OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
-    : env_(ORT_LOGGING_LEVEL_INFO, "OnnxDetector"),
+    : env_(ORT_LOGGING_LEVEL_FATAL, "OnnxDetector"),
       session_options_{},
       detector_session_{nullptr},
       memory_info_{nullptr},
@@ -14,7 +14,7 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     // session_options_.SetInterOpNumThreads(2);  // e.g., parallel execution of independent ops
     // session_options_.SetIntraOpNumThreads(4);  // e.g., threads used inside each op
     session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    session_options_.SetLogSeverityLevel(4);
+    session_options_.SetLogSeverityLevel(ORT_LOGGING_LEVEL_FATAL);
     // TODO: Add way of disabling cuda.
     // Try to add CUDA provider with better error handling
     has_cuda_ = checkCudaAvailability();
@@ -139,7 +139,7 @@ bool OnnxDetector::readModelInputSize()
     for (const auto& name : names)
     {
         input_node_names_str_.push_back(name);
-        common::log_info("OnnxDetector::readModelInputSize - input name: %s", name.c_str());
+        // common::log_info("OnnxDetector::readModelInputSize - input name: %s", name.c_str());
     }
 
     common::log_info("OnnxDetector::readModelInputSize - batch_size_ = %d, channels_ = %d, width_ = %d, height_ = %d",
@@ -157,11 +157,11 @@ bool OnnxDetector::readModelInputSize()
         auto output_tensor_info = ouput_type_info.GetTensorTypeAndShapeInfo();
         std::vector<int64_t> output_dims = output_tensor_info.GetShape();
         output_node_names_str_.push_back(names[i]);
-        common::log_info("OnnxDetector::readModelInputSize - Output name: %s", names[i].c_str());
-        for (size_t i = 0; i < output_dims.size(); ++i)
-        {
-            common::log_info("OnnxDetector::readModelInputSize - Detected shape: %d", output_dims[i]);
-        }
+        // common::log_info("OnnxDetector::readModelInputSize - Output name: %s", names[i].c_str());
+        // for (size_t i = 0; i < output_dims.size(); ++i)
+        // {
+        //     common::log_info("OnnxDetector::readModelInputSize - Detected shape: %d", output_dims[i]);
+        // }
     }
     input_node_names_.reserve(input_node_names_str_.size());
     output_node_names_.reserve(output_node_names_str_.size());
