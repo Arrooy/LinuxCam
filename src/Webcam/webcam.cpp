@@ -139,6 +139,8 @@ bool Webcam::updateDeviceCapabilities()
 
         else
         {
+            // TODO: Add support for 8-bit Greyscale
+            // TODO: Some cameras provide metadata instead of video. maybe we can support that also
             common::log_warn("Webcam::updateDeviceCapabilities - Camera supports unknown format: %s",
                              fmt.description.c_str());
             continue; // Skip unsupported formats
