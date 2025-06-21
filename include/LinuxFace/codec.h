@@ -5,7 +5,7 @@
 #include <functional>
 
 #include "LinuxFace/codecFactory.h"
-#include "LinuxFace/image.h"
+#include "LinuxFace/Image/image.h"
 
 namespace linuxface
 {

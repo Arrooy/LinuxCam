@@ -3,7 +3,7 @@
 #define JPEGMANAGER_H
 
 #include <turbojpeg.h>
-#include "LinuxFace/image.h"
+#include "LinuxFace/Image/image.h"
 #include <memory>
 
 namespace linuxface

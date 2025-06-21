@@ -8,8 +8,8 @@
 
 namespace linuxface
 {
-//TODO: Lets also use an enum to define type of profiling, e.g. CPU, memory, etc.
-// We can show profiling data ordered and clustered by type.
+// TODO: Lets also use an enum to define type of profiling, e.g. CPU, memory, etc.
+//  We can show profiling data ordered and clustered by type.
 class Profiler
 {
   public:
@@ -44,7 +44,7 @@ class Profiler
     static std::string format_duration(std::chrono::microseconds duration) noexcept;
     static std::string format_duration(int64_t micros) noexcept;
     static std::string format_duration(std::chrono::high_resolution_clock::time_point start,
-                                      std::chrono::high_resolution_clock::time_point end) noexcept;
+                                       std::chrono::high_resolution_clock::time_point end) noexcept;
   private:
     Profiler() = default;
 
@@ -69,19 +69,9 @@ inline std::string Profiler::format_duration(int64_t micros) noexcept
     }
     else if (micros < 1000)
     {
-        if (micros == 0)
+        if (snprintf(buffer, sizeof(buffer), "%ld µs", micros) == -1)
         {
-            if (snprintf(buffer, sizeof(buffer), "%ld µs", micros) == -1)
-            {
-                return "Error formatting duration";
-            }
-        }
-        else{
-            double hz = 1e6 / micros;
-            if (snprintf(buffer, sizeof(buffer), "%ld µs (%.2f Hz)", micros, hz) == -1)
-            {
-                return "Error formatting duration";
-            }
+            return "Error formatting duration";
         }
     }
     else if (micros < 1000 * 1000)

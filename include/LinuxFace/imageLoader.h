@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "LinuxFace/codec.h"
-#include "LinuxFace/image.h"
+#include "LinuxFace/Image/image.h"
 
 namespace linuxface
 {

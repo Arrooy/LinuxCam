@@ -5,7 +5,7 @@
 #include <map>
 #include <vector>
 
-#include "LinuxFace/image.h"
+#include "LinuxFace/Image/image.h"
 #include "LinuxFace/math_utils.h"
 
 namespace linuxface

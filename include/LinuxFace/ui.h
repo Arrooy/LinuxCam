@@ -11,7 +11,9 @@
 #include <queue>
 #include <vector>
 
-#include "LinuxFace/GifReader.h"
+#include "LinuxFace/Image/gif.h"
+#include "LinuxFace/Image/mediaManager.h"
+#include "LinuxFace/UI/mediaBrowserUi.h"
 #include "LinuxFace/UI/paintWebcam.h"
 #include "LinuxFace/cameraManager.h"
 #include "imgui.h"
@@ -54,7 +56,10 @@ class UI
     bool initialize(GLFWwindow* window, const char* glsl_version = "#version 130");
 
     inline void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = newCameraManager; }
-    inline void connect(std::shared_ptr<GifReader> newGifReader) { gifReader_ = newGifReader; }
+    inline void connect(std::shared_ptr<MediaManager> newMediaManager) { 
+        mediaManager_ = newMediaManager; 
+        mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_);
+    }
 
     // Cleanup the UI system
     void shutdown();
@@ -86,8 +91,10 @@ class UI
     float current_y_{0.0f};
 
     std::shared_ptr<CameraManager> cameraManager_;
-    std::shared_ptr<GifReader> gifReader_;
-    std::unique_ptr<PaintWebcam> paintWebcam_;
+    std::shared_ptr<MediaManager> mediaManager_;
+
+    std::unique_ptr<PaintWebcam> paintWebcam_{nullptr};
+    std::unique_ptr<MediaBrowserUI> mediaBrowserUI_{nullptr};
 
     // Device management
     bool show_device_config_{false};
@@ -117,7 +124,6 @@ class UI
         {
             // TODO: FIXME: adding the callback, we lost IMGUI interaction
             // common::log_error("Xpos %f.2 %f.2", xpos, ypos);
-            self->gifReader_->move(xpos, ypos);
         }
     }
 };

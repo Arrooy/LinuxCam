@@ -141,15 +141,14 @@ bool Application::initialize()
     // Pass pointer instead of reference
     ui_.connect(cameraManager_);
 
-    gif_ = std::make_shared<GifReader>(media_folder + "first.gif");
+    gif_ = std::make_shared<Gif>(media_folder + "first.gif");
     // if (!gif_->decodeAllFrames())
     // {
     //     common::log_error("Failed to decode giff frames.");
     //     return false;
     // }
-    ui_.connect(gif_);
 
-    std::cout << "OpenGL version: " << glGetString(GL_VERSION) << "\n";
+    common::log_info("OpenGL version: %s", glGetString(GL_VERSION));
 
     // Initialize image renderer
     if (!imageRender_.initialize())
@@ -157,6 +156,9 @@ bool Application::initialize()
         common::log_error("Failed to initialize image renderer");
         return false;
     }
+
+    mediaManager_ = std::make_shared<MediaManager>();
+    ui_.connect(mediaManager_);
 
     common::log_info("Application initialized successfully");
     return true;
@@ -309,6 +311,14 @@ void Application::process(std::unique_ptr<Image>& image)
             face.paintPoseAxis(image, 30, 3, true);
         }
         face.paintBoundingBox(image, Pixel(0, 255, 0));
+    }
+    static bool aria = true;
+    if (aria)
+    {
+        // RGB is the same as PPM without the header.
+        image->info.format = ImageFormat::PPM;
+        image->saveToDisk(Config::getInstance().getMediaFolderPath() + "output.ppm");
+        aria = false;
     }
     imageRender_.uploadImage(image);
 }

@@ -93,18 +93,17 @@ bool OnnxDetector::checkCudaAvailability()
     {
         if (provider == "CUDAExecutionProvider")
         {
-            std::cout << "CUDA Execution Provider available" << std::endl;
+            common::log_info("CUDA Execution Provider available");
             return true;
         }
     }
 
-    std::cout << "CUDA Execution Provider not available" << std::endl;
-    std::cout << "Available providers: ";
+    common::log_info("CUDA Execution Provider not available");
+    common::log_info("Available providers: ");
     for (const auto& provider : available_providers)
     {
-        std::cout << provider << " ";
+        common::log_info("\t %s", provider.c_str());
     }
-    std::cout << std::endl;
 
     return false;
 }

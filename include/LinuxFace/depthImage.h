@@ -4,7 +4,7 @@
 #include <limits>
 #include <memory>
 
-#include "LinuxFace/image.h"
+#include "LinuxFace/Image/image.h"
 //TODO: Still under evaluation.
 namespace linuxface
 {

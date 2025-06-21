@@ -3,7 +3,7 @@
 
 #include <memory>
 
-#include "LinuxFace/GifReader.h"
+#include "LinuxFace/Image/gif.h"
 #include "LinuxFace/cameraManager.h"
 #include "LinuxFace/detectors.h"
 #include "LinuxFace/imageRenderGL.h"
@@ -15,6 +15,7 @@
 #include "LinuxFace/imageLoader.h"
 #include "LinuxFace/onnx/MODNet.h"
 #include "LinuxFace/onnx/rvm.h"
+#include "LinuxFace/Image/mediaManager.h"
 
 namespace linuxface
 {
@@ -53,7 +54,9 @@ class Application
     std::unique_ptr<MODNetDetector> modnetDetector_;
     std::unique_ptr<RobustVideoMatting> rvmDetector_;
 
-    std::shared_ptr<GifReader> gif_;
+    std::shared_ptr<MediaManager> mediaManager_;
+    //TODO: delete this individuals.
+    std::shared_ptr<Gif> gif_;
     std::unique_ptr<Image> testImg_;
 
     // Main loop methods

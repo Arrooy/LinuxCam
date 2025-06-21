@@ -10,16 +10,16 @@ extern "C"
 #include "gifdec.h"
 }
 
-#include "LinuxFace/image.h"
+#include "LinuxFace/Image/image.h"
 
 namespace linuxface
 {
 
-class GifReader
+class Gif
 {
   public:
-    explicit GifReader(const std::string& filename);
-    ~GifReader();
+    explicit Gif(const std::string& filename);
+    ~Gif();
 
     bool isOpen() const;
 

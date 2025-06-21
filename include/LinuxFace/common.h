@@ -12,6 +12,10 @@
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <unordered_map>
+#include <algorithm>
+#include <vector>
+#include <memory>
 // Macro to clear a buffer
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
@@ -21,8 +25,6 @@ namespace linuxface
 {
 namespace common
 {
-
-
 inline bool file_exists(const std::string& port)
 {
     struct stat sb;
@@ -271,6 +273,48 @@ inline void errno_log(const char* s)
 {
     log_error("%s error %d, %s", s, errno, std::strerror(errno));
 }
+
+
+
+inline bool long_write(int fd, const void* buf, size_t size)
+{
+
+    // Write the buff data
+    size_t written {0u};
+    const char* ptr = static_cast<const char*>(buf);
+    while (written < size)
+    {
+        ssize_t result = write(fd, ptr + written, size - written);
+        if (result <= 0)
+        {
+            log_error("common::long_write - Write buf data failed. Written %zd bytes", written);
+            return false;
+        }
+         written += static_cast<size_t>(result);
+    }
+    return true;
+}
+
+template<typename T>
+std::vector<std::string> getKeysFromMap(const std::unordered_map<std::string, std::shared_ptr<T>>& map)
+{
+    std::vector<std::string> keys;
+    for (const auto& pair : map)
+    {
+        keys.push_back(pair.first);
+    }
+
+    // Sort keys alphabetically
+    std::sort(keys.begin(), keys.end());
+    return keys;
+}
+
+// Interpolate between two T
+template<typename T>
+T lerp(T a, T b, T t) {
+    return a + t * (b - a);
+}
+
 } // namespace common
 } // namespace linuxface
 

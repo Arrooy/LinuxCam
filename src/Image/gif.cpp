@@ -1,15 +1,15 @@
-#include "LinuxFace/GifReader.h"
+#include "LinuxFace/Image/gif.h"
 
 #include "LinuxFace/common.h"
 namespace linuxface
 {
 
-GifReader::GifReader(const std::string& filename)
+Gif::Gif(const std::string& filename)
 {
     gif_ = gd_open_gif(filename.c_str());
 }
 
-GifReader::~GifReader()
+Gif::~Gif()
 {
     if (gif_)
     {
@@ -17,12 +17,12 @@ GifReader::~GifReader()
     }
 }
 
-bool GifReader::isOpen() const
+bool Gif::isOpen() const
 {
     return gif_ != nullptr;
 }
 
-bool GifReader::decodeAllFrames()
+bool Gif::decodeAllFrames()
 {
     if (!gif_)
     {
@@ -31,7 +31,7 @@ bool GifReader::decodeAllFrames()
     // Gif library only works with RGB
     const size_t frameSize = gif_->width * gif_->height * 3;
     auto buffer = std::make_unique<uint8_t[]>(frameSize);
-    size_t size {0u};
+    size_t size{0u};
     do
     {
         // TODO: FIXME: There are 2 buffer copy here, we could simplify
@@ -51,22 +51,22 @@ bool GifReader::decodeAllFrames()
         size += frameSize;
         frameImages_.push_back(std::move(img));
     } while (gd_get_frame(gif_));
-    common::log_info("Gif loaded using %s",common::format_size(size));
+    common::log_info("Gif loaded using %s", common::format_size(size));
     return true;
 }
 
-std::vector<std::unique_ptr<Image>>& GifReader::frames()
+std::vector<std::unique_ptr<Image>>& Gif::frames()
 {
     return frameImages_;
 }
 
 
-bool GifReader::hasNext() const
+bool Gif::hasNext() const
 {
     return !frameImages_.empty();
 }
 
-std::unique_ptr<Image>& GifReader::next()
+std::unique_ptr<Image>& Gif::next()
 {
     index_++;
     if (index_ >= frameImages_.size())
@@ -80,7 +80,7 @@ std::unique_ptr<Image>& GifReader::next()
     }
     else
     {
-        common::log_error("GifReader::next - No image found at index %zu", index_);
+        common::log_error("Gif::next - No image found at index %zu", index_);
     }
     return img;
 }

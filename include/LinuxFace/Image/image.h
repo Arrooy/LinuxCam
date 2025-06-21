@@ -29,6 +29,7 @@ enum class ImageFormat
     DEPTH_FLOAT, // Floating point depth data
     PNG,
     BMP, // Bitmap format
+    PPM, // Portable Pixmap
 };
 
 inline std::string fromImageFormatToString(const ImageFormat& format)
@@ -352,13 +353,11 @@ class Image
 
     bool hasSameSize(const Image& other) const
     {
-        return size_ == other.size_ && info.format == other.info.format && info.pixelSizeBytes == other.info.pixelSizeBytes;
+        return size_ == other.size_ && info.format == other.info.format
+               && info.pixelSizeBytes == other.info.pixelSizeBytes;
     }
 
-    bool isCompatible(const Image& other) const
-    {
-        return hasSameDimensions(other) && hasSameSize(other);
-    }
+    bool isCompatible(const Image& other) const { return hasSameDimensions(other) && hasSameSize(other); }
 
     void copyFrom(const Image& other)
     {
@@ -879,33 +878,53 @@ class Image
         return result;
     }
 
-    void saveToDisk(const std::string& dest_path)
+    // Saves the image as JPEG or PPM format into dest_path
+    bool saveToDisk(const std::string& dest_path)
     {
-        if (info.format != ImageFormat::JPEG)
+        if (info.format != ImageFormat::JPEG && info.format != ImageFormat::PPM)
         {
-            common::log_error("Only JPEG format is supported for saving to disk");
-            return;
+            common::log_error("Image::saveToDisk - Only JPEG or PPM formats are supported for saving to disk");
+            return false;
         }
 
         if (data_.get() == nullptr || size_ == 0u)
         {
-            common::log_error("No data to save");
-            return;
+            common::log_error("Image::saveToDisk - No data to save");
+            return false;
         }
 
-        int jpgfile;
-        if ((jpgfile = open(dest_path.c_str(), O_WRONLY | O_CREAT, 0660)) < 0)
+        int file;
+        if ((file = open(dest_path.c_str(), O_WRONLY | O_CREAT, 0660)) < 0)
         {
-            common::log_error("Error opening file for writing: %s", dest_path.c_str());
-            common::errno_log("Error opening file for writing");
-            return;
+            common::log_error("Image::saveToDisk - Error opening file for writing: %s", dest_path.c_str());
+            common::errno_log("Image::saveToDisk - Error opening file for writing");
+            return false;
+        }
+        if (info.format == ImageFormat::PPM)
+        {
+            char header[64];
+            // Write the P6 header
+            int header_len = std::snprintf(header, sizeof(header), "P6\n%lu %lu\n255\n", info.width, info.height);
+
+
+            // Write the header
+            if (write(file, header, header_len) != header_len)
+            {
+                common::errno_log("Image::saveToDisk - write header failed");
+                close(file);
+                return false;
+            }
         }
 
-        if (static_cast<ssize_t>(size_) != write(jpgfile, data_.get(), size_))
+        if (!common::long_write(file, data_.get(), size_))
         {
-            common::log_error("Error saving to file. Not all bytes where stored.");
+            common::log_error("Image::saveToDisk - Error saving to file. Not all bytes where stored.");
+            close(file);
+            return false;
         }
-        close(jpgfile);
+
+        close(file);
+        return true;
     }
 
     void changeBackgroundImage(const Image& matting, const Image& background)
