@@ -22,11 +22,12 @@ class MediaBrowserUI
 
   private:
     void renderSidebar();
+    void renderLeftSidebar();
+    void renderRightSidebar();
     void renderMainArea();
-    void renderToolbar();
-    void renderToolbarContent();
-    void renderToolbarInfo();
-    void renderPreview();
+    void renderImageDataContent();
+    void renderPreviewControlsContent();
+    void renderAdditionalInfoContent();
     void renderImagePreview(std::shared_ptr<Image> image);
     void renderGifPreview(std::shared_ptr<Gif> gif);
 

@@ -36,22 +36,22 @@ void MediaBrowserUI::render()
 
     if (ImGui::Begin(windowTitle.c_str(), nullptr, windowFlags))
     {
-        renderSidebar();
+        renderLeftSidebar();
         ImGui::SameLine();
         renderMainArea();
+        ImGui::SameLine();
+        renderRightSidebar();
     }
     ImGui::End();
 }
 
-void MediaBrowserUI::renderSidebar()
+void MediaBrowserUI::renderLeftSidebar()
 {
-    // Calculate minimum sidebar width
+    // Calculate sidebar width (20% of window)
     ImVec2 windowSize = ImGui::GetWindowSize();
-    float sidebarWidth = windowSize.x * 0.25f;
-    float minSidebarWidth = 225.0f; // Absolute minimum width
-    sidebarWidth = std::max(sidebarWidth, minSidebarWidth);
+    float sidebarWidth = windowSize.x * 0.20f;
 
-    ImGui::BeginChild("Sidebar", ImVec2(sidebarWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("LeftSidebar", ImVec2(sidebarWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
 
     ImGui::Text("Categories");
     ImGui::Separator();
@@ -61,6 +61,187 @@ void MediaBrowserUI::renderSidebar()
     renderCollapsingHeader("GIFs", mediaManager->getGifNames(), "gif");
 
     ImGui::EndChild();
+}
+
+void MediaBrowserUI::renderSidebar()
+{
+    // Legacy method - now redirects to left sidebar
+    renderLeftSidebar();
+}
+
+void MediaBrowserUI::renderMainArea()
+{
+    // Calculate main area width (60% of window)
+    ImVec2 windowSize = ImGui::GetWindowSize();
+    float mainAreaWidth = windowSize.x * 0.60f;
+
+    ImGui::BeginChild("MainArea", ImVec2(mainAreaWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
+
+    if (!selectedItem.empty())
+    {
+        // Preview area fills the entire main area
+        ImGui::BeginChild("PreviewArea", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+
+        if (selectedType == "image")
+        {
+            auto image = mediaManager->getImage(selectedItem);
+            if (image)
+            {
+                renderImagePreview(image);
+            }
+            else
+            {
+                ImGui::Text("Failed to load image preview.");
+            }
+        }
+        else if (selectedType == "gif")
+        {
+            auto gif = mediaManager->getGif(selectedItem);
+            if (gif)
+            {
+                renderGifPreview(gif);
+            }
+            else
+            {
+                ImGui::Text("Failed to load GIF preview.");
+            }
+        }
+
+        ImGui::EndChild();
+    }
+    else
+    {
+        // Show placeholder when nothing is selected
+        ImVec2 contentSize = ImGui::GetContentRegionAvail();
+        ImVec2 textSize = ImGui::CalcTextSize("Select an item to preview");
+        ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
+        ImGui::TextDisabled("Select an item to preview");
+    }
+
+    ImGui::EndChild();
+}
+
+void MediaBrowserUI::renderRightSidebar()
+{
+    // Calculate right sidebar width (20% of window)
+    ImVec2 windowSize = ImGui::GetWindowSize();
+    float sidebarWidth = windowSize.x * 0.20f;
+
+    ImGui::BeginChild("RightSidebar", ImVec2(sidebarWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
+
+    // Image Data collapsing header
+    if (ImGui::CollapsingHeader("Image Data", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        renderImageDataContent();
+    }
+
+    ImGui::Spacing();
+
+    // Preview Controls collapsing header
+    if (ImGui::CollapsingHeader("Preview Controls", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        renderPreviewControlsContent();
+    }
+
+    ImGui::Spacing();
+
+    // Additional Info collapsing header
+    if (ImGui::CollapsingHeader("Additional Info"))
+    {
+        renderAdditionalInfoContent();
+    }
+
+    ImGui::EndChild();
+}
+
+void MediaBrowserUI::renderImageDataContent()
+{
+    if (selectedType == "image" && !selectedItem.empty())
+    {
+        auto image = mediaManager->getImage(selectedItem);
+        if (image)
+        {
+            ImGui::Text("File: %s", selectedItem.c_str());
+            ImGui::Text("Size: %s", common::format_size(image->size()));
+            ImGui::Text("Dimensions:");
+            ImGui::Text("  %lu x %lu", image->info.width, image->info.height);
+            ImGui::Text("Display Size:");
+            ImGui::Text("  %.0f x %.0f", image->info.width * previewScale, image->info.height * previewScale);
+            ImGui::Text("Scale: %.1fx", previewScale);
+        }
+    }
+    else if (selectedType == "gif" && !selectedItem.empty())
+    {
+        auto gif = mediaManager->getGif(selectedItem);
+        if (gif)
+        {
+            ImGui::Text("File: %s", selectedItem.c_str());
+            ImGui::Text("Type: GIF Animation");
+            // Add more GIF-specific data here
+        }
+    }
+    else
+    {
+        ImGui::TextDisabled("No item selected");
+    }
+}
+
+void MediaBrowserUI::renderPreviewControlsContent()
+{
+    ImGui::Text("Scale:");
+    ImGui::SetNextItemWidth(-1);
+    bool scaleChanged = ImGui::SliderFloat("##Scale", &previewScale, 0.1f, 5.0f, "%.1fx");
+
+    if (ImGui::Checkbox("Fit to Window", &fitToWindow))
+    {
+        if (fitToWindow && !selectedItem.empty())
+        {
+            float width = 800, height = 600;
+            if (selectedType == "image")
+            {
+                auto image = mediaManager->getImage(selectedItem);
+                if (image)
+                {
+                    width = static_cast<float>(image->info.width);
+                    height = static_cast<float>(image->info.height);
+                }
+            }
+            else if (selectedType == "gif")
+            {
+                auto gif = mediaManager->getGif(selectedItem);
+                if (gif)
+                {
+                    width = 800;
+                    height = 600;
+                }
+            }
+            previewScale = calculateFitScale(width, height);
+        }
+    }
+    if (scaleChanged)
+    {
+        fitToWindow = false;
+    }
+}
+
+void MediaBrowserUI::renderAdditionalInfoContent()
+{
+    ImGui::TextWrapped("This section displays additional metadata and quick actions for the selected media item.");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::Text("Quick Actions:");
+    if (ImGui::Button("Copy Path", ImVec2(-1, 0)))
+    {
+        // TODO: Implement copy to clipboard functionality
+    }
+
+    if (ImGui::Button("Open Location", ImVec2(-1, 0)))
+    {
+        // TODO: Implement open in file explorer functionality
+    }
 }
 
 void MediaBrowserUI::renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
@@ -89,142 +270,6 @@ void MediaBrowserUI::renderCollapsingHeader(const std::string& headerName, const
     }
 }
 
-void MediaBrowserUI::renderMainArea()
-{
-    ImGui::BeginChild("MainArea", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
-
-    if (!selectedItem.empty())
-    {
-        ImVec2 availableSize = ImGui::GetContentRegionAvail();
-
-        // Reserve space for toolbar at the bottom
-        float toolbarHeight = ImGui::GetTextLineHeightWithSpacing() * 2 + ImGui::GetStyle().WindowPadding.y * 2;
-        float previewHeight = availableSize.y - toolbarHeight;
-
-        // Preview area (fills all available space above toolbar)
-        ImGui::BeginChild("PreviewArea", ImVec2(availableSize.x, previewHeight), ImGuiChildFlags_None,
-                          ImGuiWindowFlags_NoScrollbar);
-
-        if (selectedType == "image")
-        {
-            auto image = mediaManager->getImage(selectedItem);
-            if (image)
-            {
-                renderImagePreview(image);
-            }
-            else
-            {
-                ImGui::Text("Failed to load image preview.");
-            }
-        }
-        else if (selectedType == "gif")
-        {
-            auto gif = mediaManager->getGif(selectedItem);
-            if (gif)
-            {
-                renderGifPreview(gif);
-            }
-            else
-            {
-                ImGui::Text("Failed to load GIF preview.");
-            }
-        }
-
-        ImGui::EndChild();
-
-        // Toolbar area at the bottom, fixed height
-        ImGui::BeginChild("ToolbarArea", ImVec2(availableSize.x, toolbarHeight), ImGuiChildFlags_Border,
-                          ImGuiWindowFlags_NoScrollbar);
-        renderToolbarContent();
-        ImGui::EndChild();
-    }
-    else
-    {
-        // Show placeholder when nothing is selected
-        ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        ImVec2 textSize = ImGui::CalcTextSize("Select an item to preview");
-        ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
-        ImGui::TextDisabled("Select an item to preview");
-    }
-
-    ImGui::EndChild();
-}
-
-void MediaBrowserUI::renderToolbar()
-{
-    // This method is now just a wrapper for the toolbar content
-    renderToolbarContent();
-}
-
-void MediaBrowserUI::renderToolbarContent()
-{
-    renderToolbarInfo();
-
-    ImGui::Text("Scale:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(50);
-    bool scaleChanged = ImGui::SliderFloat("##Scale", &previewScale, 0.1f, 5.0f, "%.1fx");
-    ImGui::SameLine();
-    if (ImGui::Checkbox("Fit to Window", &fitToWindow))
-    {
-        if (fitToWindow && !selectedItem.empty())
-        {
-            float width = 800, height = 600;
-            if (selectedType == "image")
-            {
-                auto image = mediaManager->getImage(selectedItem);
-                if (image)
-                {
-                    width = static_cast<float>(image->info.width);
-                    height = static_cast<float>(image->info.height);
-                }
-            }
-            else if (selectedType == "gif")
-            {
-                auto gif = mediaManager->getGif(selectedItem);
-                if (gif)
-                {
-                    width = 800;
-                    height = 600;
-                }
-            }
-            previewScale = calculateFitScale(width, height);
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Reset##Scale"))
-    {
-        previewScale = 1.0f;
-        fitToWindow = false;
-    }
-    if (scaleChanged)
-    {
-        fitToWindow = false;
-    }
-}
-
-void MediaBrowserUI::renderToolbarInfo()
-{
-    if (selectedType == "image" && !selectedItem.empty())
-    {
-        auto image = mediaManager->getImage(selectedItem);
-        if (image)
-        {
-            ImGui::Text("Image: %s | Size %s | %lux%lu | Display: %.0fx%.0f (Scale: %.1fx)", selectedItem.c_str(),
-                        common::format_size(image->size()), image->info.width, image->info.height,
-                        image->info.width * previewScale, image->info.height * previewScale, previewScale);
-        }
-    }
-    else if (selectedType == "gif" && !selectedItem.empty())
-    {
-        auto gif = mediaManager->getGif(selectedItem);
-        if (gif)
-        {
-            ImGui::Text("GIF: %s", selectedItem.c_str());
-        }
-    }
-}
-
 void MediaBrowserUI::renderImagePreview(std::shared_ptr<Image> image)
 {
     if (!image || !image->data())
@@ -237,15 +282,17 @@ void MediaBrowserUI::renderImagePreview(std::shared_ptr<Image> image)
 
     ImVec2 previewSize = calculatePreviewSize(originalWidth, originalHeight);
 
-    // Use available content region for proper centering
-    ImVec2 availableSize = ImGui::GetContentRegionAvail();
-    ImVec2 centerPos = ImVec2((availableSize.x - previewSize.x) * 0.5f, (availableSize.y - previewSize.y) * 0.5f);
+    ImVec2 startPos = ImGui::GetCursorPos();
+    ImVec2 contentMax = ImGui::GetContentRegionMax();
+    ImVec2 fullSize = ImVec2(contentMax.x - startPos.x, contentMax.y - startPos.y);
+
+    ImVec2 centerPos = ImVec2((fullSize.x - previewSize.x) * 0.5f, (fullSize.y - previewSize.y) * 0.5f);
 
     // Ensure positive positioning
     centerPos.x = std::max(0.0f, centerPos.x);
     centerPos.y = std::max(0.0f, centerPos.y);
 
-    ImGui::SetCursorPos(centerPos);
+    ImGui::SetCursorPos(ImVec2(startPos.x + centerPos.x, startPos.y + centerPos.y));
 
     ImTextureID textureID = getOrCreateTexture(image);
 
@@ -301,10 +348,11 @@ ImVec2 MediaBrowserUI::calculatePreviewSize(float originalWidth, float originalH
 
 float MediaBrowserUI::calculateFitScale(float originalWidth, float originalHeight)
 {
-    ImVec2 availableSize = ImGui::GetContentRegionAvail();
+    ImVec2 availableSize = ImGui::GetContentRegionMax();
 
-    float scaleX = availableSize.x / originalWidth;
-    float scaleY = availableSize.y / originalHeight;
+    float extra_padding = -2.5f;
+    float scaleX = (availableSize.x + extra_padding) / originalWidth;
+    float scaleY = (availableSize.y + extra_padding) / originalHeight;
 
     float fitScale = std::min(scaleX, scaleY);
 
