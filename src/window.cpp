@@ -67,6 +67,11 @@ bool Window::initialize()
         return false;
     }
 
+    // GLFWimage images[1];
+    // auto media_path = Config::getInstance().getMediaFolderPath();
+    // images[0] = load_icon(media_path + "icon.png");
+    // glfwSetWindowIcon(window_, 1, images);
+
     common::log_info("GLFW Window initialized successfully. Size %d x %d", width, height);
     return true;
 }

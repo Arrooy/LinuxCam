@@ -24,7 +24,8 @@ class MediaBrowserUI
     void renderSidebar();
     void renderMainArea();
     void renderToolbar();
-    void renderToolbarContent(); // New method for toolbar content
+    void renderToolbarContent();
+    void renderToolbarInfo();
     void renderPreview();
     void renderImagePreview(std::shared_ptr<Image> image);
     void renderGifPreview(std::shared_ptr<Gif> gif);
