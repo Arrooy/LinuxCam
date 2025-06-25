@@ -30,6 +30,7 @@ class MediaBrowserUI
     void renderAdditionalInfoContent();
     void renderImagePreview(std::shared_ptr<Image> image);
     void renderGifPreview(std::shared_ptr<Gif> gif);
+    void renderImageOperationsContent();
 
     // Helper method to render collapsing headers dynamically
     void renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items, const std::string& type);

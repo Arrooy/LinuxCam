@@ -151,6 +151,14 @@ void MediaBrowserUI::renderRightSidebar()
         renderAdditionalInfoContent();
     }
 
+    ImGui::Spacing();
+
+    // Image Operations collapsing header
+    if (ImGui::CollapsingHeader("Image Operations"))
+    {
+        renderImageOperationsContent();
+    }
+
     ImGui::EndChild();
 }
 
@@ -241,6 +249,93 @@ void MediaBrowserUI::renderAdditionalInfoContent()
     if (ImGui::Button("Open Location", ImVec2(-1, 0)))
     {
         // TODO: Implement open in file explorer functionality
+    }
+}
+
+void MediaBrowserUI::renderImageOperationsContent()
+{
+    if (selectedType == "image" && !selectedItem.empty())
+    {
+        auto image = mediaManager->getImage(selectedItem);
+        if (!image)
+        {
+            return;
+        }
+
+        static int newWidth = 0;
+        static int newHeight = 0;
+
+        if (ImGui::Button("Grayscale"))
+        {
+            image->toGrayscale();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Flip Horizontal"))
+        {
+            image->flipHorizontal();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Flip Vertical"))
+        {
+            image->flipVertical();
+        }
+
+        ImGui::Text("Rotate:");
+        ImGui::SameLine();
+        if (ImGui::Button("90°"))
+        {
+            image->rotate90();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("180°"))
+        {
+            image->rotate180();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("270°"))
+        {
+            image->rotate270();
+        }
+
+        // Set defaults if not set
+        if (newWidth == 0 || newHeight == 0)
+        {
+            newWidth = static_cast<int>(image->info.width);
+            newHeight = static_cast<int>(image->info.height);
+        }
+
+        ImGui::Text("Resize Image:");
+        ImGui::InputInt("Width", &newWidth);
+        ImGui::InputInt("Height", &newHeight);
+
+        if (ImGui::Button("Apply Resize"))
+        {
+            if (newWidth > 0 && newHeight > 0)
+            {
+                auto resized = image->scaleTo(static_cast<size_t>(newWidth), static_cast<size_t>(newHeight));
+                if (resized)
+                {
+                    image->copyFrom(*resized);
+                }
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset Size"))
+        {
+            newWidth = static_cast<int>(image->info.width);
+            newHeight = static_cast<int>(image->info.height);
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button("Reset"))
+        {
+            // TODO: Implement reload functionality
+            // mediaManager->reloadImage(selectedItem);
+        }
+    }
+    else
+    {
+        ImGui::TextDisabled("No image selected");
     }
 }
 
