@@ -56,8 +56,9 @@ class UI
     bool initialize(GLFWwindow* window, const char* glsl_version = "#version 130");
 
     inline void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = newCameraManager; }
-    inline void connect(std::shared_ptr<MediaManager> newMediaManager) { 
-        mediaManager_ = newMediaManager; 
+    inline void connect(std::shared_ptr<MediaManager> newMediaManager)
+    {
+        mediaManager_ = newMediaManager;
         mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_);
     }
 
@@ -105,6 +106,8 @@ class UI
     bool show_add_device_modal_ = false;
     int selected_video_device_ = -1;
     char device_name_buffer_[256] = "";
+
+    bool mediaBrowserVisible{false};
 
     // Tracked camera state On/Off
     std::unordered_map<std::string, bool> cameraDesiredStates;

@@ -101,6 +101,7 @@ void UI::paintMainWindow()
         {
             ImGui::MenuItem("Toggle Profiler", NULL, &show_profiler_);
             ImGui::MenuItem("Toggle Device Configuration", NULL, &show_device_config_);
+            ImGui::MenuItem("Toggle Media Browser", NULL, &mediaBrowserVisible);
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
@@ -163,9 +164,9 @@ void UI::paintMainWindow()
         }
     }
 
-    if (mediaBrowserUI_)
+    if (mediaBrowserUI_ && mediaBrowserVisible)
     {
-        // mediaBrowserUI_->render();
+        mediaBrowserUI_->render();
     }
 }
 
