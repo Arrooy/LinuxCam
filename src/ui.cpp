@@ -10,9 +10,11 @@ using namespace linuxface;
 
 ImVec4 getProfileColorFromDuration(int64_t value);
 
-UI::UI()
+UI::UI(std::shared_ptr<LayerManager> layerManager)
+    : layerManager_(std::move(layerManager))
 {
     paintWebcam_ = std::make_unique<PaintWebcam>();
+    // MediaBrowserUI will be constructed in connect()
 }
 
 UI::~UI()
@@ -57,6 +59,25 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
     return true;
 }
 
+void UI::loadingScreen()
+{
+    newFrame();
+    // Centered loading text
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+    ImGui::Begin("LoadingWindow", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar
+                     | ImGuiWindowFlags_NoBackground);
+    // Show placeholder when nothing is selected
+    std::string msg = "Select an item to preview";
+    ImVec2 contentSize = ImGui::GetContentRegionAvail();
+    ImVec2 textSize = ImGui::CalcTextSize(msg.c_str());
+    ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
+    ImGui::TextDisabled(msg.c_str());
+    ImGui::End();
+
+    render();
+}
 
 void UI::shutdown()
 {
@@ -97,13 +118,24 @@ void UI::paintMainWindow()
 {
     if (ImGui::BeginMainMenuBar())
     {
-        if (ImGui::BeginMenu("More Options..."))
+        if (ImGui::BeginMenu("Options..."))
         {
             ImGui::MenuItem("Toggle Profiler", NULL, &show_profiler_);
             ImGui::MenuItem("Toggle Device Configuration", NULL, &show_device_config_);
-            ImGui::MenuItem("Toggle Media Browser", NULL, &mediaBrowserVisible);
+            ImGui::MenuItem("Toggle Media Browser", NULL, &mediaBrowserVisible_);
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Load media..."))
+        {
+            ImGui::Text("Media categories");
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            renderCollapsingHeader("Images", mediaManager_->getImageNames(), "image");
+            renderCollapsingHeader("GIFs", mediaManager_->getGifNames(), "gif");
+            ImGui::EndMenu();
+        }
+
         ImGui::EndMainMenuBar();
     }
     // Calculate base position for window stacking
@@ -164,9 +196,53 @@ void UI::paintMainWindow()
         }
     }
 
-    if (mediaBrowserUI_ && mediaBrowserVisible)
+    if (mediaBrowserUI_ && mediaBrowserVisible_)
     {
-        mediaBrowserUI_->render();
+        mediaBrowserVisible_ = mediaBrowserUI_->render();
+    }
+}
+void UI::renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
+                                const std::string& type)
+{
+    if (items.empty())
+    {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::CollapsingHeader(headerName.c_str()))
+    {
+        for (const auto& item : items)
+        {
+            ImGui::AlignTextToFramePadding();
+            ImGui::PushID(item.c_str());
+
+            float rowWidth = ImGui::GetContentRegionAvail().x;
+            float buttonWidth = ImGui::CalcTextSize("+").x + ImGui::GetStyle().FramePadding.x * 4.0f;
+            float textWidth = rowWidth - buttonWidth - ImGui::GetStyle().ItemSpacing.x;
+
+            ImGui::BeginGroup();
+            ImGui::Text(item.c_str());
+            ImGui::EndGroup();
+
+            if (type == "image")
+            {
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                // ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x / 2);
+                if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+                {
+                    if (!mediaManager_->addToBackground(item))
+                    {
+                        common::log_error("Failed to add image %s to background", item.c_str());
+                    }
+                }
+                ImGui::EndGroup();
+            }
+            ImGui::PopID();
+        }
+    }
+    if (items.empty())
+    {
+        ImGui::EndDisabled();
     }
 }
 
@@ -334,3 +410,4 @@ ImVec4 getProfileColorFromDuration(int64_t duration)
 
     return ImVec4(r, g, b, a);
 }
+

@@ -16,6 +16,7 @@
 #include "LinuxFace/UI/mediaBrowserUi.h"
 #include "LinuxFace/UI/paintWebcam.h"
 #include "LinuxFace/cameraManager.h"
+#include "LinuxFace/UI/layerManager.h"
 #include "imgui.h"
 
 namespace linuxface
@@ -49,7 +50,7 @@ static constexpr Resolution common_resolutions_[] = {
 class UI
 {
   public:
-    UI();
+    UI(std::shared_ptr<LayerManager> layerManager);
     ~UI();
 
     // Initialize the UI system
@@ -59,7 +60,7 @@ class UI
     inline void connect(std::shared_ptr<MediaManager> newMediaManager)
     {
         mediaManager_ = newMediaManager;
-        mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_);
+        mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_, layerManager_);
     }
 
     // Cleanup the UI system
@@ -75,6 +76,11 @@ class UI
     void render();
 
     void handleKeyboard();
+
+    void loadingScreen();
+
+    // Handle dragging of selected layer (image or text)
+    void handleLayerDragging();
 
   private:
     bool ready_{false};
@@ -93,6 +99,7 @@ class UI
 
     std::shared_ptr<CameraManager> cameraManager_;
     std::shared_ptr<MediaManager> mediaManager_;
+    std::shared_ptr<LayerManager> layerManager_;
 
     std::unique_ptr<PaintWebcam> paintWebcam_{nullptr};
     std::unique_ptr<MediaBrowserUI> mediaBrowserUI_{nullptr};
@@ -107,7 +114,7 @@ class UI
     int selected_video_device_ = -1;
     char device_name_buffer_[256] = "";
 
-    bool mediaBrowserVisible{false};
+    bool mediaBrowserVisible_{false};
 
     // Tracked camera state On/Off
     std::unordered_map<std::string, bool> cameraDesiredStates;
@@ -116,19 +123,9 @@ class UI
     void paintMainWindow();
     void paintAddDeviceModal();
     void paintDeviceConfigurationTabs();
-
-
-    // static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
-
-    static void mouseCallback(GLFWwindow* window, double xpos, double ypos)
-    {
-        UI* self = static_cast<UI*>(glfwGetWindowUserPointer(window));
-        if (self)
-        {
-            // TODO: FIXME: adding the callback, we lost IMGUI interaction
-            // common::log_error("Xpos %f.2 %f.2", xpos, ypos);
-        }
-    }
+    // Helper method to render collapsing headers dynamically
+    void renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
+                                const std::string& type);
 };
 } // namespace linuxface
 

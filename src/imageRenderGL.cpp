@@ -1,6 +1,17 @@
 #include "LinuxFace/imageRenderGL.h"
-#include "LinuxFace/profiler.h"
+
+#include <unistd.h>
+
+#include <sstream>
+#include <string>
+#include <thread>
+#include <unordered_map>
+
+#include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
+#include "LinuxFace/profiler.h"
+#include "imgui.h"
+
 // Vertex shader for full-screen quad
 const char* vertexShaderSource = R"(
 #version 400 core
@@ -30,8 +41,7 @@ void main() {
 
 using namespace linuxface;
 
-ImageRenderGL::ImageRenderGL()
-    : textureId_(0), noImageTextureId_(0), previousTextureId_(0), vao_(0), vbo_(0), ebo_(0), shaderProgram_(0), currentWidth_(0), currentHeight_(0)
+ImageRenderGL::ImageRenderGL() : vao_(0), vbo_(0), ebo_(0), shaderProgram_(0)
 {
 }
 
@@ -42,226 +52,135 @@ ImageRenderGL::~ImageRenderGL()
 
 bool ImageRenderGL::initialize()
 {
-    common::log_info("ImageRenderGL starting");
-    // Create shaders
     if (!createShaders())
     {
         common::log_error("Failed to create shaders");
         return false;
     }
-
-    // Create full-screen quad vertices
-    float vertices[] = {
-        // positions   // texture coords
-        -1.0f, -1.0f, 0.0f, 1.0f, // bottom left
-        1.0f,  -1.0f, 1.0f, 1.0f, // bottom right
-        1.0f,  1.0f,  1.0f, 0.0f, // top right
-        -1.0f, 1.0f,  0.0f, 0.0f  // top left
-    };
-
-    unsigned int indices[] = {
-        0, 1, 2, // first triangle
-        2, 3, 0  // second triangle
-    };
-
-    // Generate and bind VAO
-    glGenVertexArrays(1, &vao_);
-    glGenBuffers(1, &vbo_);
-    glGenBuffers(1, &ebo_);
-
-    glBindVertexArray(vao_);
-
-    // Upload vertex data
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    // Upload index data
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    // Position attribute
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) 0);
-    glEnableVertexAttribArray(0);
-
-    // Texture coordinate attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    // Generate texture
-    glGenTextures(1, &textureId_);
-
-    // Create pre-allocated "no image" texture
-    glGenTextures(1, &noImageTextureId_);
-    glBindTexture(GL_TEXTURE_2D, noImageTextureId_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    // Unbind
-    glBindVertexArray(0);
-
-    common::log_info("ImageRenderGL initialized successfully");
+    // Vertex data will be set per-image in renderLayers
+    vao_ = vbo_ = ebo_ = 0;
     return true;
 }
-
-void ImageRenderGL::noImage()
+bool ImageRenderGL::uploadImage(Image& image, bool force)
 {
-    // Store current texture as previous (don't delete it)
-    if (textureId_ != 0 && textureId_ != noImageTextureId_)
-    {
-        // Clean up any existing previous texture first
-        if (previousTextureId_ != 0)
-        {
-            glDeleteTextures(1, &previousTextureId_);
-        }
-        previousTextureId_ = textureId_;
-    }
-
-    // Switch to using the pre-created "no image" texture
-    textureId_ = noImageTextureId_;
-
-    // Reset dimensions
-    currentWidth_ = 0;
-    currentHeight_ = 0;
-
-    common::log_info("Switched to no image texture (previous texture preserved)");
+    GLuint texId = getOrCreateTexture(image, force);
+    return texId != 0;
 }
 
-bool ImageRenderGL::uploadImage(std::unique_ptr<Image>& image)
+// Accept a list of layers to render (images and text)
+void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWidth, int windowHeight)
 {
-    Profiler::getInstance().start("ImageRenderGL", "generate OpenGL texture");
-    if (!image || !image->data() || image->info.width <= 0 || image->info.height <= 0)
+    if (shaderProgram_ == 0)
     {
-        common::log_error("Invalid image data");
-        return false;
+        common::log_error("No shader program available for rendering");
+        return; // No shader available
     }
-
-    // Validate image size matches expected byte count
-    size_t expectedSize = image->info.width * image->info.height * image->info.pixelSizeBytes;
-    if (image->size() < expectedSize)
-    {
-        common::log_error("Image size mismatch: expected %zu, got %zu", expectedSize, image->size());
-        return false;
-    }
-
-    glBindTexture(GL_TEXTURE_2D, textureId_);
-
-    // Determine format
-    GLenum format = (image->info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
-
-    // Always reallocate texture when dimensions change, even if scaling is involved
-    if (currentWidth_ != image->info.width || currentHeight_ != image->info.height)
-    {
-        glTexImage2D(GL_TEXTURE_2D, 0, format, image->info.width, image->info.height, 0, format, GL_UNSIGNED_BYTE,
-                     image->data());
-
-        GLenum error = glGetError();
-        if (error != GL_NO_ERROR)
-        {
-            common::log_error("OpenGL texture allocation error: 0x%x", error);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            return false;
-        }
-
-        currentWidth_ = image->info.width;
-        currentHeight_ = image->info.height;
-        common::log_info("Texture reallocated: %lu x %lu (format: %s)", image->info.width, image->info.height,
-                         (format == GL_RGBA) ? "RGBA" : "RGB");
-    }
-    else
-    {
-        // Just update the existing texture data (faster!)
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image->info.width, image->info.height, format, GL_UNSIGNED_BYTE,
-                        image->data());
-
-        // Check for errors in texture update
-        GLenum error = glGetError();
-        if (error != GL_NO_ERROR)
-        {
-            common::log_error("OpenGL texture update error: 0x%x", error);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            return false;
-        }
-    }
-
-    // Set texture parameters for optimal performance and scaling
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Use GL_LINEAR for automatic scaling (bilinear interpolation)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    Profiler::getInstance().stop("ImageRenderGL", "generate OpenGL texture");
-    return true;
-}
-
-void ImageRenderGL::renderBackground(int windowWidth, int windowHeight)
-{
-    if (textureId_ == 0 || shaderProgram_ == 0)
-    {
-        return; // No texture or shader available
-    }
-
-    // Set viewport to match window dimensions
     glViewport(0, 0, windowWidth, windowHeight);
-
-    // Clear the background
     glClear(GL_COLOR_BUFFER_BIT);
-
-    // Disable depth testing for background
     glDisable(GL_DEPTH_TEST);
-
-    // Use our shader program
     glUseProgram(shaderProgram_);
-
-    // Set the texture uniform (sampler2D defaults to texture unit 0)
     GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
     if (textureLocation >= 0)
     {
         glUniform1i(textureLocation, 0);
     }
-
-    // Bind texture to unit 0
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textureId_);
-
-    // Render full-screen quad
-    glBindVertexArray(vao_);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
-
-    // Cleanup
-    glBindTexture(GL_TEXTURE_2D, 0);
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        common::log_error("OpenGL error after setting texture uniform: %d", err);
+    }
+    for (auto& layer : const_cast<std::vector<Layer>&>(layers))
+    {
+        if (layer.type == LayerType::Image && layer.img)
+        {
+            GLuint texId = getOrCreateTexture(*layer.img, layer.dirty);
+            if (layer.dirty)
+            {
+                layer.dirty = false;
+            }
+            if (texId)
+            {
+                std::string key = layer.img->info.filename;
+                auto& entry = textureCache_[key];
+                // If VAO/VBO/EBO not created or window/image size changed, (re)create them
+                bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
+                                     || entry.width != layer.img->info.width || entry.height != layer.img->info.height);
+                if (needRecreate)
+                {
+                    if (entry.vao)
+                    {
+                        glDeleteVertexArrays(1, &entry.vao);
+                    }
+                    if (entry.vbo)
+                    {
+                        glDeleteBuffers(1, &entry.vbo);
+                    }
+                    if (entry.ebo)
+                    {
+                        glDeleteBuffers(1, &entry.ebo);
+                    }
+                    glGenVertexArrays(1, &entry.vao);
+                    glGenBuffers(1, &entry.vbo);
+                    glGenBuffers(1, &entry.ebo);
+                    float imgW = static_cast<float>(layer.img->info.width);
+                    float imgH = static_cast<float>(layer.img->info.height);
+                    float winW = static_cast<float>(windowWidth);
+                    float winH = static_cast<float>(windowHeight);
+                    float px = static_cast<float>(layer.img->info.x); // image x position in pixels
+                    float py = static_cast<float>(layer.img->info.y); // image y position in pixels
+                    // Convert pixel coordinates to normalized device coordinates (NDC), with (0,0) at top-left
+                    float x0 = -1.0f + 2.0f * (px / winW);
+                    float y0 = 1.0f - 2.0f * (py / winH);
+                    float x1 = -1.0f + 2.0f * ((px + imgW) / winW);
+                    float y1 = 1.0f - 2.0f * ((py + imgH) / winH);
+                    float vertices[] = {
+                        x0, y1, 0.0f, 1.0f, // bottom left (note: y1)
+                        x1, y1, 1.0f, 1.0f, // bottom right
+                        x1, y0, 1.0f, 0.0f, // top right (note: y0)
+                        x0, y0, 0.0f, 0.0f  // top left
+                    };
+                    unsigned int indices[] = {0, 1, 2, 2, 3, 0};
+                    glBindVertexArray(entry.vao);
+                    glBindBuffer(GL_ARRAY_BUFFER, entry.vbo);
+                    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry.ebo);
+                    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+                    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) 0);
+                    glEnableVertexAttribArray(0);
+                    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
+                    glEnableVertexAttribArray(1);
+                    glBindVertexArray(0);
+                    // Update cached width/height
+                    entry.width = layer.img->info.width;
+                    entry.height = layer.img->info.height;
+                }
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, texId);
+                glBindVertexArray(entry.vao);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
+        }
+        else if (layer.type == LayerType::Text)
+        {
+            // Use ImGui for text rendering
+            ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+            ImVec2 pos = ImVec2(layer.x, layer.y);
+            draw_list->AddText(nullptr, layer.fontSize, pos, layer.textColor, layer.textContent.c_str());
+        }
+    }
     glUseProgram(0);
-
-    // Re-enable depth testing for UI
     glEnable(GL_DEPTH_TEST);
+    err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        common::log_error("OpenGL error: %d", err);
+    }
 }
 
 void ImageRenderGL::shutdown()
 {
-    if (textureId_ != 0 && textureId_ != noImageTextureId_)
-    {
-        glDeleteTextures(1, &textureId_);
-        textureId_ = 0;
-    }
-
-    if (previousTextureId_ != 0)
-    {
-        glDeleteTextures(1, &previousTextureId_);
-        previousTextureId_ = 0;
-    }
-
-    if (noImageTextureId_)
-    {
-        glDeleteTextures(1, &noImageTextureId_);
-        noImageTextureId_ = 0;
-    }
-
     if (vao_)
     {
         glDeleteVertexArrays(1, &vao_);
@@ -285,6 +204,9 @@ void ImageRenderGL::shutdown()
         glDeleteProgram(shaderProgram_);
         shaderProgram_ = 0;
     }
+
+    // Cleanup cached textures
+    cleanupTextures();
 }
 
 bool ImageRenderGL::createShaders()
@@ -354,4 +276,148 @@ GLuint ImageRenderGL::createShaderProgram(const char* vertexSource, const char* 
     glDeleteShader(fragmentShader);
 
     return program;
+}
+
+// Get or create a cached OpenGL texture for an image
+GLuint ImageRenderGL::getOrCreateTexture(Image& image, bool force)
+{
+    // Remove thread/context/image info logs
+    if (image.info.width == 0 || image.info.height == 0 || !image.data())
+    {
+        common::log_error("[getOrCreateTexture] Invalid image dimensions or data");
+        return 0;
+    }
+    if (image.info.pixelSizeBytes != 3 && image.info.pixelSizeBytes != 4)
+    {
+        common::log_warn("Image pixelSizeBytes is unusual: %d (should be 3 or 4)", image.info.pixelSizeBytes);
+    }
+    GLenum format = (image.info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
+    std::string key = image.info.filename;
+    if (force && image.info.textureId != 0)
+    {
+        // Also delete VAO/VBO/EBO if present
+        auto it = textureCache_.find(key);
+        if (it != textureCache_.end())
+        {
+            if (it->second.vao)
+            {
+                glDeleteVertexArrays(1, &it->second.vao);
+            }
+            if (it->second.vbo)
+            {
+                glDeleteBuffers(1, &it->second.vbo);
+            }
+            if (it->second.ebo)
+            {
+                glDeleteBuffers(1, &it->second.ebo);
+            }
+        }
+        glDeleteTextures(1, &image.info.textureId);
+        image.info.textureId = 0;
+        textureCache_.erase(key);
+    }
+    auto it = textureCache_.find(key);
+    if (it != textureCache_.end())
+    {
+        if (it->second.layer != image.info.layer)
+        {
+            it->second.layer = image.info.layer;
+        }
+        if (it->second.width == image.info.width && it->second.height == image.info.height && !force)
+        {
+            glBindTexture(GL_TEXTURE_2D, it->second.texId);
+            GLenum err = glGetError();
+            if (err != GL_NO_ERROR)
+            {
+                common::log_error("[getOrCreateTexture] OpenGL error after glBindTexture: %d", err);
+            }
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            err = glGetError();
+            if (err != GL_NO_ERROR)
+            {
+                common::log_error("[getOrCreateTexture] OpenGL error after glPixelStorei: %d", err);
+            }
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.info.width, image.info.height, format, GL_UNSIGNED_BYTE,
+                            image.data());
+            err = glGetError();
+            if (err != GL_NO_ERROR)
+            {
+                common::log_error("[getOrCreateTexture] OpenGL error after glTexSubImage2D: %d", err);
+            }
+            glBindTexture(GL_TEXTURE_2D, 0);
+            image.setTextureId(it->second.texId);
+            return it->second.texId;
+        }
+        else
+        {
+            // Also delete VAO/VBO/EBO if present
+            if (it->second.vao)
+            {
+                glDeleteVertexArrays(1, &it->second.vao);
+            }
+            if (it->second.vbo)
+            {
+                glDeleteBuffers(1, &it->second.vbo);
+            }
+            if (it->second.ebo)
+            {
+                glDeleteBuffers(1, &it->second.ebo);
+            }
+            glDeleteTextures(1, &it->second.texId);
+            textureCache_.erase(it);
+        }
+    }
+    GLuint texId;
+    glGenTextures(1, &texId);
+    glBindTexture(GL_TEXTURE_2D, texId);
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        common::log_error("[getOrCreateTexture] OpenGL error after glBindTexture (new): %d", err);
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        common::log_error("[getOrCreateTexture] OpenGL error after glPixelStorei (new): %d", err);
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, format, image.info.width, image.info.height, 0, format, GL_UNSIGNED_BYTE,
+                 image.data());
+    err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        common::log_error("[getOrCreateTexture] OpenGL error after glTexImage2D (new): %d", err);
+    }
+    // Set filtering to GL_NEAREST for pixel-perfect rendering
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    // VAO/VBO/EBO will be created in renderLayers when needed
+    textureCache_[key] = TextureCacheEntry{
+        texId, static_cast<int>(image.info.width), static_cast<int>(image.info.height), image.info.layer, 0, 0, 0};
+    image.setTextureId(texId);
+    return texId;
+}
+
+void ImageRenderGL::cleanupTextures()
+{
+    for (auto& pair : textureCache_)
+    {
+        if (pair.second.vao)
+        {
+            glDeleteVertexArrays(1, &pair.second.vao);
+        }
+        if (pair.second.vbo)
+        {
+            glDeleteBuffers(1, &pair.second.vbo);
+        }
+        if (pair.second.ebo)
+        {
+            glDeleteBuffers(1, &pair.second.ebo);
+        }
+        glDeleteTextures(1, &pair.second.texId);
+    }
+    textureCache_.clear();
 }

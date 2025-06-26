@@ -15,6 +15,7 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     // session_options_.SetIntraOpNumThreads(4);  // e.g., threads used inside each op
     session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options_.SetLogSeverityLevel(ORT_LOGGING_LEVEL_FATAL);
+    
     // TODO: Add way of disabling cuda.
     // Try to add CUDA provider with better error handling
     has_cuda_ = checkCudaAvailability();
@@ -75,6 +76,17 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     catch (const Ort::Exception& e)
     {
         common::log_error("OnnxDetector: Failed to create ONNX session: %s", e.what());
+        ready_ = false;
+        return;
+    }catch (const std::exception& e)
+    {
+        common::log_error("OnnxDetector: Failed to create ONNX session: %s", e.what());
+        ready_ = false;
+        return;
+    }
+    catch (...)
+    {
+        common::log_error("OnnxDetector: Unknown error while creating ONNX session");
         ready_ = false;
         return;
     }

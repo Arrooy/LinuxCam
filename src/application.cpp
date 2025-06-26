@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 
+#include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/depthImage.h"
 #include "LinuxFace/dlibDetectors.h"
@@ -24,6 +25,10 @@ using namespace linuxface;
 // precise depth https://github.com/yvanyin/metric3d
 // fast depth https://github.com/ibaiGorordo/ONNX-FastACVNet-Depth-Estimation
 
+// inswapper 128 https://huggingface.co/ezioruan/inswapper_128.onnx/tree/main
+// inswapper 128
+// https://drive.usercontent.google.com/download?id=1krOLgjW2tAPaqV-Bw4YALz0xT5zlb5HF&export=download&authuser=0 PLEASE
+// VERIFY Checksum md5sum ./inswapper_128.onnx a3a155b90354160350efd66fed6b3d80  ./inswapper_128.onnx
 
 std::atomic<bool> g_should_exit{false};
 
@@ -48,6 +53,30 @@ Application::~Application()
 bool Application::initialize()
 {
     std::signal(SIGINT, signalHandler);
+
+    // Initialize window
+    if (!window_.initialize())
+    {
+        common::log_error("Failed to initialize window");
+        return false;
+    }
+
+    layerManager_ = std::make_shared<LayerManager>();
+
+    // Initialize UI with LayerManager
+    ui_ = std::make_unique<UI>(layerManager_);
+    if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
+    {
+        common::log_error("Failed to initialize UI");
+        return false;
+    }
+
+    // Display loading screen
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ui_->loadingScreen();
+    window_.swapBuffers();
+    window_.pollEvents();
 
     cameraManager_ = std::make_shared<CameraManager>();
 
@@ -99,20 +128,6 @@ bool Application::initialize()
         }
     }
 
-    // Initialize window
-    if (!window_.initialize())
-    {
-        common::log_error("Failed to initialize window");
-        return false;
-    }
-
-    // Initialize UI
-    if (!ui_.initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
-    {
-        common::log_error("Failed to initialize UI");
-        return false;
-    }
-
     // Just here for benchmarking.
     // faceDetector_ = std::make_unique<DlibFaceDetector>();
     std::string models_folder = Config::getInstance().getModelFolderPath();
@@ -135,30 +150,21 @@ bool Application::initialize()
 
     rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
 
-    std::string media_folder = Config::getInstance().getMediaFolderPath();
-    testImg_ = ImageLoader::loadImageFromFile(media_folder + "example.jpg");
-
     // Pass pointer instead of reference
-    ui_.connect(cameraManager_);
-
-    gif_ = std::make_shared<Gif>(media_folder + "first.gif");
-    // if (!gif_->decodeAllFrames())
-    // {
-    //     common::log_error("Failed to decode giff frames.");
-    //     return false;
-    // }
+    ui_->connect(cameraManager_);
 
     common::log_info("OpenGL version: %s", glGetString(GL_VERSION));
 
     // Initialize image renderer
-    if (!imageRender_.initialize())
+    imageRender_ = std::make_shared<ImageRenderGL>();
+    if (!imageRender_ || !imageRender_->initialize())
     {
         common::log_error("Failed to initialize image renderer");
         return false;
     }
 
-    mediaManager_ = std::make_shared<MediaManager>();
-    ui_.connect(mediaManager_);
+    mediaManager_ = std::make_shared<MediaManager>(imageRender_);
+    ui_->connect(mediaManager_);
 
     common::log_info("Application initialized successfully");
     return true;
@@ -171,8 +177,11 @@ void Application::run()
     // Main loop
     while (!window_.shouldClose() && !g_should_exit)
     {
-        update();
-        render();
+        if (update())
+        {
+            render();
+            // break; // For testing purposes, remove this line in production
+        }
     }
 
     cameraManager_->shutdown();
@@ -180,38 +189,63 @@ void Application::run()
     common::log_info("Main loop ended");
 }
 
-
-void Application::update()
+// TODO: Each time we add a image in mediaManager, we should also add it into the process image.
+//  As a newlayer, and cache it so we only generate the image once.
+bool Application::update()
 {
     // Poll events
     window_.pollEvents();
 
     std::unique_ptr<Image> image;
-    if (cameraManager_->updateInput(image))
+    if (!cameraManager_->updateInput(image))
     {
-        if (gif_->isOpen() && gif_->hasNext())
+        return false;
+    }
+    image->info.filename = std::string("Base");
+
+    process(image);
+
+    // Update or create the base layer after processing
+    Layer* baseLayer = layerManager_->getLayerByNumber(0);
+    if (baseLayer && baseLayer->type == LayerType::Image)
+    {
+        // Update the image in the base layer
+        baseLayer->img = std::move(image);
+        baseLayer->dirty = true;
+    }
+    else
+    {
+        // Create the base layer if it doesn't exist
+        Layer newBaseLayer;
+        newBaseLayer.type = LayerType::Image;
+        newBaseLayer.name = "base";
+        newBaseLayer.img = std::move(image);
+        newBaseLayer.dirty = true;
+        if (newBaseLayer.img)
         {
-            auto& gif_image = gif_->next();
-            if (gif_image != nullptr)
-            {
-                image->paste(*gif_image);
-            }
+            newBaseLayer.img->info.layer = 0;
         }
-        process(image);
-        // TODO: Since this is very time consuming, we could make it a thread...
-        if (!cameraManager_->updateOutput(image))
+        layerManager_->addLayer(newBaseLayer);
+    }
+    // TODO: merge all layers into one and ouput it to virtual device.
+    // Output the current base image if available
+    if (baseLayer && baseLayer->img)
+    {
+        // Make a deep copy for output as unique_ptr
+        std::unique_ptr<Image> tempImage = baseLayer->img->deepCopy();
+        if (!cameraManager_->updateOutput(tempImage))
         {
             common::log_error("Failed to update output cameras");
         }
     }
-
-    ui_.handleKeyboard();
+    ui_->handleKeyboard();
 
     // Start new UI frame
-    ui_.newFrame();
+    ui_->newFrame();
 
     // Paint UI elements
-    ui_.paint();
+    ui_->paint();
+    return true;
 }
 
 void Application::render()
@@ -223,13 +257,13 @@ void Application::render()
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Render background image first
+    // Render all layers
     int width, height;
     window_.getFramebufferSize(width, height);
-    imageRender_.renderBackground(width, height);
+    imageRender_->renderLayers(layerManager_->getLayers(), width, height);
 
     // Render UI
-    ui_.render();
+    ui_->render();
 
     // Swap buffers
     window_.swapBuffers();
@@ -278,16 +312,16 @@ void Application::process(std::unique_ptr<Image>& image)
 
         rvmDetector_->detect(image, foreground, matting);
         Profiler::getInstance().start("RVM", "App paste");
-        // use matting layer with foreground layer
-        if (testImg_ && !image->isCompatible(*testImg_))
-        {
-            testImg_ = testImg_->scale(image->info.width, image->info.height);
-            common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
-        }
-        foreground->changeBackgroundImage(*matting, *testImg_);
-        foreground->info.x = 0;
-        foreground->info.y = image->info.height;
-        image->paste(*foreground, true);
+        // // use matting layer with foreground layer
+        // if (testImg_ && !image->isCompatible(*testImg_))
+        // {
+        //     testImg_ = testImg_->scale(image->info.width, image->info.height);
+        //     common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
+        // }
+        // foreground->changeBackgroundImage(*matting, *testImg_);
+        // foreground->info.x = 0;
+        // foreground->info.y = image->info.height;
+        // image->paste(*foreground, true);
 
         Profiler::getInstance().stop("RVM", "App paste");
     }
@@ -312,47 +346,11 @@ void Application::process(std::unique_ptr<Image>& image)
         }
         face.paintBoundingBox(image, Pixel(0, 255, 0));
     }
-    static bool aria = true;
-    if (aria)
-    {
-        // RGB is the same as PPM without the header.
-        image->info.format = ImageFormat::PPM;
-        image->saveToDisk(Config::getInstance().getMediaFolderPath() + "output.ppm");
-        aria = false;
-    }
-    imageRender_.uploadImage(image);
+
+    imageRender_->uploadImage(*image);
 }
 
 void Application::shutdown()
 {
     // UI and Window destructors will handle cleanup automatically
-}
-
-void Application::runSingleShot()
-{
-    // Poll events
-    window_.pollEvents();
-
-    // Load test image using the improved interface
-    testImg_ = ImageLoader::loadImageFromFile("/home/arroyo/Documents/Projectes/LinuxFace/example.jpg");
-    if (testImg_ == nullptr)
-    {
-        return;
-    }
-
-    // do test here, modify testImg
-
-    imageRender_.uploadImage(testImg_);
-
-    // Start new UI frame
-    ui_.newFrame();
-
-    // Paint UI elements
-    ui_.paint();
-    render();
-
-    while (!window_.shouldClose() && !g_should_exit)
-    {
-        sleep(1);
-    }
 }

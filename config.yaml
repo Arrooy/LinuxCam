@@ -12,7 +12,7 @@ input_cameras:
 
 output_cameras:
     - name: "VirtualCamera"
-      path: "/dev/video20"
+      path: "/dev/video8"
       width: 640
       height: 480
       jpeg_quality: 90

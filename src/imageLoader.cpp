@@ -115,6 +115,7 @@ bool ImageLoader::loadFromFile(const std::string& file_path)
     decoded_image_.reset();
     is_decoded_ = false;
     metadata_.is_valid = false;
+    metadata_.filename = file_path;
 
     // Load file data
     if (!loadFileData(file_path))

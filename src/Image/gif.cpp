@@ -4,7 +4,7 @@
 namespace linuxface
 {
 
-Gif::Gif(const std::string& filename)
+Gif::Gif(const std::string& filename) : filename_(filename)
 {
     gif_ = gd_open_gif(filename.c_str());
 }
@@ -32,6 +32,7 @@ bool Gif::decodeAllFrames()
     const size_t frameSize = gif_->width * gif_->height * 3;
     auto buffer = std::make_unique<uint8_t[]>(frameSize);
     size_t size{0u};
+    int i = 0;
     do
     {
         // TODO: FIXME: There are 2 buffer copy here, we could simplify
@@ -48,6 +49,7 @@ bool Gif::decodeAllFrames()
         img->info.TJSampleFormat = TJSAMP_444;
         img->info.TJColorSpace = TJCS_RGB;
         img->info.TJPixelFormat = TJPF_RGB;
+        img->info.filename = filename_+"_"+std::to_string(i++);
         size += frameSize;
         frameImages_.push_back(std::move(img));
     } while (gd_get_frame(gif_));

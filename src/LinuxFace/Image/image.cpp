@@ -87,7 +87,7 @@ Image::Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(siz
 }
 
 // Add missing move constructor and assignment operator
-Image::Image(Image&& other) noexcept : data_(std::move(other.data_)), size_(other.size_), info(other.info)
+Image::Image(Image&& other) noexcept :  info(other.info), data_(std::move(other.data_)), size_(other.size_)
 {
     other.size_ = 0;
     other.info = {};
@@ -896,6 +896,7 @@ void Image::toGrayscale()
     {
         return;
     }
+
     if (info.format == ImageFormat::GRAYSCALE)
     {
         return;

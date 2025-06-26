@@ -91,6 +91,9 @@ struct ImageMetadata
     TJPF TJPixelFormat;                   // TJPF_RGB
     ImageFormat format{ImageFormat::RGB}; // Default to RGB
     bool is_valid{false};
+    std::string filename;
+    unsigned int textureId{0};
+    int layer {0}; // Layer for rendering, default is 0
 };
 
 
@@ -322,6 +325,10 @@ class Image
     void flipHorizontalInPlace();
     void flipVerticalInPlace();
     void rotateInPlace(float angleDegrees);
+
+
+    void setTextureId(unsigned int textureId) { info.textureId = textureId; }
+    [[nodiscard]] unsigned int getTextureId() const { return info.textureId; }
 
     ImageMetadata info{};
 

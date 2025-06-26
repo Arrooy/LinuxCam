@@ -7,56 +7,60 @@
 #include <vector>
 
 #include "LinuxFace/Image/mediaManager.h"
+#include "LinuxFace/UI/layerManager.h"
 #include "imgui.h"
 
 namespace linuxface
 {
+
+
 class MediaBrowserUI
 {
 
   public:
-    MediaBrowserUI(std::shared_ptr<MediaManager> manager);
+    MediaBrowserUI(std::shared_ptr<MediaManager> manager, std::shared_ptr<LayerManager> layerManager);
     ~MediaBrowserUI();
 
-    void render();
+    bool render();
 
   private:
-    void renderSidebar();
+    // Handle dragging of selected layer (image or text)
+    void handleLayerDragging();
     void renderLeftSidebar();
     void renderRightSidebar();
     void renderMainArea();
     void renderImageDataContent();
     void renderPreviewControlsContent();
-    void renderAdditionalInfoContent();
+    void renderSceneCompositor();
+    void renderAddTextLayerUI();
     void renderImagePreview(std::shared_ptr<Image> image);
     void renderGifPreview(std::shared_ptr<Gif> gif);
     void renderImageOperationsContent();
 
     // Helper method to render collapsing headers dynamically
-    void renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items, const std::string& type);
+    void renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
+                                const std::string& type);
 
     ImVec2 calculatePreviewSize(float originalWidth, float originalHeight);
     float calculateFitScale(float originalWidth, float originalHeight);
     ImVec2 calculateCenterPosition(const ImVec2& previewSize);
     void resetPreviewControls();
-    ImTextureID getOrCreateTexture(std::shared_ptr<Image> image);
-    ImTextureID createTextureFromImage(std::shared_ptr<Image> image);
-    void cleanupTextures();
 
     std::shared_ptr<MediaManager> mediaManager;
-
+    std::shared_ptr<LayerManager> layerManager_;
+ 
     // UI State
     bool showImages = true;
     bool showGifs = true;
-    std::string selectedItem = "";
-    std::string selectedType = ""; // "image" or "gif"
+    std::shared_ptr<Layer> selectedLayer_ = nullptr;
 
     // Preview controls
     float previewScale = 1.0f;
     bool fitToWindow = true;
 
-    // Texture cache for images
-    std::unordered_map<std::string, ImTextureID> textureCache;
+
+    // Texture cache for images (now handled by LayerManager)
+    // std::unordered_map<std::string, ImTextureID> textureCache;
 };
 } // namespace linuxface
 

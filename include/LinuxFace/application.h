@@ -16,6 +16,7 @@
 #include "LinuxFace/onnx/MODNet.h"
 #include "LinuxFace/onnx/rvm.h"
 #include "LinuxFace/Image/mediaManager.h"
+#include "LinuxFace/UI/layerManager.h"
 
 namespace linuxface
 {
@@ -32,18 +33,16 @@ class Application
     // Run the main application loop
     void run();
 
-    // Run a simple test with no loop.
-    void runSingleShot();
-
     // Shutdown the application
     void shutdown();
 
   private:
     Window window_;
-    UI ui_;
+    std::unique_ptr<UI> ui_;
 
     std::shared_ptr<CameraManager> cameraManager_;
-    ImageRenderGL imageRender_;
+    std::shared_ptr<ImageRenderGL> imageRender_;
+    std::shared_ptr<LayerManager> layerManager_;
 
     Profiler& profiler_;
 
@@ -55,12 +54,9 @@ class Application
     std::unique_ptr<RobustVideoMatting> rvmDetector_;
 
     std::shared_ptr<MediaManager> mediaManager_;
-    //TODO: delete this individuals.
-    std::shared_ptr<Gif> gif_;
-    std::unique_ptr<Image> testImg_;
 
     // Main loop methods
-    void update();
+    bool update();
     void process(std::unique_ptr<Image>& image);
     void render();
 };

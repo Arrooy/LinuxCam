@@ -1,10 +1,12 @@
 #include "LinuxFace/UI/mediaBrowserUi.h"
 
 #include <GL/gl.h>
+#include <algorithm>
 
 namespace linuxface
 {
-MediaBrowserUI::MediaBrowserUI(std::shared_ptr<MediaManager> manager) : mediaManager(manager)
+MediaBrowserUI::MediaBrowserUI(std::shared_ptr<MediaManager> manager, std::shared_ptr<LayerManager> layerManager)
+    : mediaManager(manager), layerManager_(layerManager)
 {
     if (!mediaManager)
     {
@@ -14,10 +16,9 @@ MediaBrowserUI::MediaBrowserUI(std::shared_ptr<MediaManager> manager) : mediaMan
 
 MediaBrowserUI::~MediaBrowserUI()
 {
-    cleanupTextures();
 }
 
-void MediaBrowserUI::render()
+bool MediaBrowserUI::render()
 {
     // Center the window in the screen and set its size to 90% of the viewport size
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -27,105 +28,35 @@ void MediaBrowserUI::render()
     ImGui::SetNextWindowPos(ImVec2(center.x - size.x * 0.5f, center.y - size.y * 0.5f), ImGuiCond_FirstUseEver);
 
     std::string windowTitle = "Media Browser";
-    if (!selectedItem.empty())
+    if (selectedLayer_)
     {
-        windowTitle += " - Viewing: " + selectedItem;
+        windowTitle += " - Viewing: " + selectedLayer_->name;
     }
 
     ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
-
-    if (ImGui::Begin(windowTitle.c_str(), nullptr, windowFlags))
+    bool show_window{true};
+    if (ImGui::Begin(windowTitle.c_str(), &show_window, windowFlags))
     {
-        renderLeftSidebar();
-        ImGui::SameLine();
-        renderMainArea();
-        ImGui::SameLine();
         renderRightSidebar();
     }
     ImGui::End();
-}
-
-void MediaBrowserUI::renderLeftSidebar()
-{
-    // Calculate sidebar width (20% of window)
-    ImVec2 windowSize = ImGui::GetWindowSize();
-    float sidebarWidth = windowSize.x * 0.20f;
-
-    ImGui::BeginChild("LeftSidebar", ImVec2(sidebarWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
-
-    ImGui::Text("Categories");
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    renderCollapsingHeader("Images", mediaManager->getImageNames(), "image");
-    renderCollapsingHeader("GIFs", mediaManager->getGifNames(), "gif");
-
-    ImGui::EndChild();
-}
-
-void MediaBrowserUI::renderSidebar()
-{
-    // Legacy method - now redirects to left sidebar
-    renderLeftSidebar();
-}
-
-void MediaBrowserUI::renderMainArea()
-{
-    // Calculate main area width (60% of window)
-    ImVec2 windowSize = ImGui::GetWindowSize();
-    float mainAreaWidth = windowSize.x * 0.60f;
-
-    ImGui::BeginChild("MainArea", ImVec2(mainAreaWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
-
-    if (!selectedItem.empty())
+    handleLayerDragging();
+    if (!show_window)
     {
-        // Preview area fills the entire main area
-        ImGui::BeginChild("PreviewArea", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
-
-        if (selectedType == "image")
-        {
-            auto image = mediaManager->getImage(selectedItem);
-            if (image)
-            {
-                renderImagePreview(image);
-            }
-            else
-            {
-                ImGui::Text("Failed to load image preview.");
-            }
-        }
-        else if (selectedType == "gif")
-        {
-            auto gif = mediaManager->getGif(selectedItem);
-            if (gif)
-            {
-                renderGifPreview(gif);
-            }
-            else
-            {
-                ImGui::Text("Failed to load GIF preview.");
-            }
-        }
-
-        ImGui::EndChild();
-    }
-    else
-    {
-        // Show placeholder when nothing is selected
-        ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        ImVec2 textSize = ImGui::CalcTextSize("Select an item to preview");
-        ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
-        ImGui::TextDisabled("Select an item to preview");
+        selectedLayer_ = nullptr;
     }
 
-    ImGui::EndChild();
+    return show_window;
 }
 
 void MediaBrowserUI::renderRightSidebar()
 {
     // Calculate right sidebar width (20% of window)
     ImVec2 windowSize = ImGui::GetWindowSize();
-    float sidebarWidth = windowSize.x * 0.20f;
+    float totalSpacing = ImGui::GetStyle().ItemSpacing.x * 2;
+    float totalPadding = ImGui::GetStyle().WindowPadding.x * 2;
+    float availableWidth = windowSize.x - totalSpacing - totalPadding;
+    float sidebarWidth = availableWidth * 0.20f;
 
     ImGui::BeginChild("RightSidebar", ImVec2(sidebarWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
 
@@ -137,26 +68,25 @@ void MediaBrowserUI::renderRightSidebar()
 
     ImGui::Spacing();
 
+    // Image Operations collapsing header
+    if (ImGui::CollapsingHeader("Image Operations"))
+    {
+        renderImageOperationsContent();
+    }
+
+    ImGui::Spacing();
+
     // Preview Controls collapsing header
-    if (ImGui::CollapsingHeader("Preview Controls", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader("Preview Controls"))
     {
         renderPreviewControlsContent();
     }
 
     ImGui::Spacing();
 
-    // Additional Info collapsing header
-    if (ImGui::CollapsingHeader("Additional Info"))
+    if (ImGui::CollapsingHeader("Scene composition", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        renderAdditionalInfoContent();
-    }
-
-    ImGui::Spacing();
-
-    // Image Operations collapsing header
-    if (ImGui::CollapsingHeader("Image Operations"))
-    {
-        renderImageOperationsContent();
+        renderSceneCompositor();
     }
 
     ImGui::EndChild();
@@ -164,64 +94,46 @@ void MediaBrowserUI::renderRightSidebar()
 
 void MediaBrowserUI::renderImageDataContent()
 {
-    if (selectedType == "image" && !selectedItem.empty())
+    if (selectedLayer_ && selectedLayer_->type == LayerType::Image && selectedLayer_->img)
     {
-        auto image = mediaManager->getImage(selectedItem);
-        if (image)
-        {
-            ImGui::Text("File: %s", selectedItem.c_str());
-            ImGui::Text("Size: %s", common::format_size(image->size()));
-            ImGui::Text("Dimensions:");
-            ImGui::Text("  %lu x %lu", image->info.width, image->info.height);
-            ImGui::Text("Display Size:");
-            ImGui::Text("  %.0f x %.0f", image->info.width * previewScale, image->info.height * previewScale);
-            ImGui::Text("Scale: %.1fx", previewScale);
-        }
+        auto image = selectedLayer_->img;
+        ImGui::Text("Layer: %s", selectedLayer_->name.c_str());
+        ImGui::Text("File: %s", selectedLayer_->name.c_str());
+        ImGui::Text("Size: %s", common::format_size(image->size()));
+        ImGui::Text("Dimensions:");
+        ImGui::Text("  %lu x %lu", image->info.width, image->info.height);
+        ImGui::Text("Display Size:");
+        ImGui::Text("  %.0f x %.0f", image->info.width * previewScale, image->info.height * previewScale);
+        ImGui::Text("Scale: %.1fx", previewScale);
     }
-    else if (selectedType == "gif" && !selectedItem.empty())
+    else if (selectedLayer_ && selectedLayer_->type == LayerType::Text)
     {
-        auto gif = mediaManager->getGif(selectedItem);
-        if (gif)
-        {
-            ImGui::Text("File: %s", selectedItem.c_str());
-            ImGui::Text("Type: GIF Animation");
-            // Add more GIF-specific data here
-        }
+        ImGui::Text("Layer: %s", selectedLayer_->name.c_str());
+        ImGui::Text("Type: Text");
+        ImGui::Text("Content: %s", selectedLayer_->textContent.c_str());
+        ImGui::Text("Font size: %.1f", selectedLayer_->fontSize);
     }
     else
     {
-        ImGui::TextDisabled("No item selected");
+        ImGui::TextDisabled("No layer selected");
     }
 }
 
 void MediaBrowserUI::renderPreviewControlsContent()
 {
     ImGui::Text("Scale:");
-    ImGui::SetNextItemWidth(-1);
     bool scaleChanged = ImGui::SliderFloat("##Scale", &previewScale, 0.1f, 5.0f, "%.1fx");
 
     if (ImGui::Checkbox("Fit to Window", &fitToWindow))
     {
-        if (fitToWindow && !selectedItem.empty())
+        if (fitToWindow && selectedLayer_)
         {
             float width = 800, height = 600;
-            if (selectedType == "image")
+
+            if (selectedLayer_->type == LayerType::Image && selectedLayer_->img)
             {
-                auto image = mediaManager->getImage(selectedItem);
-                if (image)
-                {
-                    width = static_cast<float>(image->info.width);
-                    height = static_cast<float>(image->info.height);
-                }
-            }
-            else if (selectedType == "gif")
-            {
-                auto gif = mediaManager->getGif(selectedItem);
-                if (gif)
-                {
-                    width = 800;
-                    height = 600;
-                }
+                width = static_cast<float>(selectedLayer_->img->info.width);
+                height = static_cast<float>(selectedLayer_->img->info.height);
             }
             previewScale = calculateFitScale(width, height);
         }
@@ -232,31 +144,11 @@ void MediaBrowserUI::renderPreviewControlsContent()
     }
 }
 
-void MediaBrowserUI::renderAdditionalInfoContent()
-{
-    ImGui::TextWrapped("This section displays additional metadata and quick actions for the selected media item.");
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    ImGui::Text("Quick Actions:");
-    if (ImGui::Button("Copy Path", ImVec2(-1, 0)))
-    {
-        // TODO: Implement copy to clipboard functionality
-    }
-
-    if (ImGui::Button("Open Location", ImVec2(-1, 0)))
-    {
-        // TODO: Implement open in file explorer functionality
-    }
-}
-
 void MediaBrowserUI::renderImageOperationsContent()
 {
-    if (selectedType == "image" && !selectedItem.empty())
+    if (selectedLayer_ && selectedLayer_->type == LayerType::Image && selectedLayer_->img)
     {
-        auto image = mediaManager->getImage(selectedItem);
+        auto image = selectedLayer_->img;
         if (!image)
         {
             return;
@@ -297,7 +189,6 @@ void MediaBrowserUI::renderImageOperationsContent()
             image->rotate270();
         }
 
-        // Set defaults if not set
         if (newWidth == 0 || newHeight == 0)
         {
             newWidth = static_cast<int>(image->info.width);
@@ -329,104 +220,125 @@ void MediaBrowserUI::renderImageOperationsContent()
         ImGui::Spacing();
         if (ImGui::Button("Reset"))
         {
-            // TODO: Implement reload functionality
-            // mediaManager->reloadImage(selectedItem);
-        }
-    }
-    else
-    {
-        ImGui::TextDisabled("No image selected");
-    }
-}
-
-void MediaBrowserUI::renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
-                                            const std::string& type)
-{
-    if (items.empty())
-    {
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::CollapsingHeader(headerName.c_str()))
-    {
-        for (const auto& item : items)
-        {
-            bool isSelected = (selectedItem == item && selectedType == type);
-            if (ImGui::Selectable(item.c_str(), isSelected))
+            if(!mediaManager->reloadImage(selectedLayer_->name))
             {
-                selectedItem = item;
-                selectedType = type;
-                resetPreviewControls();
+                common::log_error("Failed to reload image: %s", selectedLayer_->name.c_str());
             }
         }
     }
-    if (items.empty())
-    {
-        ImGui::EndDisabled();
-    }
-}
-
-void MediaBrowserUI::renderImagePreview(std::shared_ptr<Image> image)
-{
-    if (!image || !image->data())
-    {
-        return;
-    }
-
-    float originalWidth = static_cast<float>(image->info.width);
-    float originalHeight = static_cast<float>(image->info.height);
-
-    ImVec2 previewSize = calculatePreviewSize(originalWidth, originalHeight);
-
-    ImVec2 startPos = ImGui::GetCursorPos();
-    ImVec2 contentMax = ImGui::GetContentRegionMax();
-    ImVec2 fullSize = ImVec2(contentMax.x - startPos.x, contentMax.y - startPos.y);
-
-    ImVec2 centerPos = ImVec2((fullSize.x - previewSize.x) * 0.5f, (fullSize.y - previewSize.y) * 0.5f);
-
-    // Ensure positive positioning
-    centerPos.x = std::max(0.0f, centerPos.x);
-    centerPos.y = std::max(0.0f, centerPos.y);
-
-    ImGui::SetCursorPos(ImVec2(startPos.x + centerPos.x, startPos.y + centerPos.y));
-
-    ImTextureID textureID = getOrCreateTexture(image);
-
-    if (textureID)
-    {
-        ImGui::Image(textureID, previewSize);
-    }
     else
     {
-        ImGui::GetWindowDrawList()->AddRect(
-            ImGui::GetCursorScreenPos(),
-            ImVec2(ImGui::GetCursorScreenPos().x + previewSize.x, ImGui::GetCursorScreenPos().y + previewSize.y),
-            IM_COL32(100, 100, 100, 255));
-        ImGui::SetCursorPos(ImVec2(centerPos.x, centerPos.y + previewSize.y / 2));
-        ImGui::Text("Failed to load texture");
+        ImGui::TextDisabled("No image layer selected");
     }
 }
 
-void MediaBrowserUI::renderGifPreview(std::shared_ptr<Gif> gif)
+void MediaBrowserUI::renderSceneCompositor()
 {
-    // Similar to renderImagePreview but for GIFs
-    // You'll need to handle frame updates for animation
+    renderAddTextLayerUI();
 
-    ImVec2 previewSize = calculatePreviewSize(800, 600); // Placeholder dimensions
-    ImVec2 centerPos = calculateCenterPosition(previewSize);
+    if (!layerManager_) return;
+    auto& layers = layerManager_->getLayers();
 
-    ImGui::SetCursorPos(centerPos);
+    // Auto-select first layer if none selected
+    if (!layers.empty() && !selectedLayer_)
+    {
+        selectedLayer_ = std::make_shared<Layer>(layers[0]);
+    }
 
-    // Placeholder rectangle - replace with actual GIF rendering
-    ImGui::GetWindowDrawList()->AddRect(
-        ImGui::GetCursorScreenPos(),
-        ImVec2(ImGui::GetCursorScreenPos().x + previewSize.x, ImGui::GetCursorScreenPos().y + previewSize.y),
-        IM_COL32(100, 150, 100, 255));
+    // Remove invalid selection if out of bounds
+    if (selectedLayer_)
+    {
+        auto it = std::find_if(layers.begin(), layers.end(), [this](const Layer& l)
+                               { return selectedLayer_->name == l.name && selectedLayer_->getLayerNumber() == l.getLayerNumber(); });
+        if (it == layers.end())
+        {
+            selectedLayer_ = nullptr;
+        }
+    }
 
-    // Display GIF info
-    ImGui::SetCursorPos(ImVec2(centerPos.x, centerPos.y + previewSize.y + 10));
-    ImGui::Text("GIF: %s", selectedItem.c_str());
-    ImGui::Text("Size: %.0fx%.0f (Scale: %.1fx)", previewSize.x, previewSize.y, previewScale);
+    int removeIndex = -1;
+    for (int i = 0; i < (int) layers.size(); ++i)
+    {
+        Layer& layer = layers[i];
+        std::string label = layer.name + (layer.type == LayerType::Text ? " (T)" : " (I)");
+        ImGui::AlignTextToFramePadding();
+        ImGui::PushID(i);
+        ImGui::BeginGroup();
+        bool isSelected = selectedLayer_ && selectedLayer_->name == layer.name && selectedLayer_->getLayerNumber() == layer.getLayerNumber();
+        if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(120, 0)))
+        {
+            selectedLayer_ = std::make_shared<Layer>(layer);
+        }
+        ImGui::EndGroup();
+
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        if (i == 0) ImGui::BeginDisabled();
+        if (ImGui::Button("Up"))
+        {
+            if (i > 0) std::swap(layers[i], layers[i - 1]);
+            if (isSelected) selectedLayer_ = std::make_shared<Layer>(layers[i > 0 ? i - 1 : i]);
+            if (layerManager_) layerManager_->markDirty();
+        }
+        if (i == 0) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (i == static_cast<int>(layers.size()) - 1) ImGui::BeginDisabled();
+        if (ImGui::Button("Down"))
+        {
+            if (i < (int)layers.size() - 1) std::swap(layers[i], layers[i + 1]);
+            if (isSelected) selectedLayer_ = std::make_shared<Layer>(layers[i < (int)layers.size() - 1 ? i + 1 : i]);
+            if (layerManager_) layerManager_->markDirty();
+        }
+        if (i == static_cast<int>(layers.size()) - 1) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x"))
+        {
+            removeIndex = i;
+        }
+        ImGui::EndGroup();
+        ImGui::PopID();
+    }
+    if (removeIndex >= 0 && removeIndex < (int) layers.size())
+    {
+        if (selectedLayer_ && selectedLayer_->name == layers[removeIndex].name
+            && selectedLayer_->getLayerNumber() == layers[removeIndex].getLayerNumber())
+        {
+            selectedLayer_ = nullptr;
+        }
+        layers.erase(layers.begin() + removeIndex);
+        if (!layers.empty() && !selectedLayer_)
+        {
+            selectedLayer_ = std::make_shared<Layer>(layers[0]);
+        }
+        if (layerManager_) layerManager_->markDirty();
+    }
+    for (int i = 0; i < (int) layers.size(); ++i)
+    {
+        layers[i].selected = (selectedLayer_ && selectedLayer_->name == layers[i].name && selectedLayer_->getLayerNumber() == layers[i].getLayerNumber());
+        if (layers[i].type == LayerType::Image && layers[i].img) layers[i].img->info.layer = i;
+    }
 }
+
+void MediaBrowserUI::renderAddTextLayerUI()
+{
+    if (!layerManager_) return;
+    static char textBuf[256] = "Write here";
+    ImGui::InputText("Text", textBuf, IM_ARRAYSIZE(textBuf));
+    ImGui::SameLine();
+    if (ImGui::Button("New Text Layer"))
+    {
+        Layer newText;
+        newText.type = LayerType::Text;
+        newText.textContent = textBuf;
+        newText.name = textBuf;
+        newText.x = 10;
+        newText.y = 10;
+        layerManager_->addLayer(newText);
+        auto& layers = layerManager_->getLayers();
+        selectedLayer_ = std::make_shared<Layer>(layers.back());
+    }
+}
+
 
 ImVec2 MediaBrowserUI::calculatePreviewSize(float originalWidth, float originalHeight)
 {
@@ -476,54 +388,33 @@ void MediaBrowserUI::resetPreviewControls()
     fitToWindow = true;
 }
 
-// Texture management functions
-ImTextureID MediaBrowserUI::getOrCreateTexture(std::shared_ptr<Image> image)
+void MediaBrowserUI::handleLayerDragging()
 {
-    std::string cacheKey = selectedItem; // Use filename as cache key
+    if (!layerManager_) return;
+    if (!ImGui::IsMouseDown(0))
+        return;
 
-    auto it = textureCache.find(cacheKey);
-    if (it != textureCache.end())
+    ImVec2 delta = ImGui::GetIO().MouseDelta;
+    if (!selectedLayer_)
+        return;
+
+    // Only allow dragging if mouse is dragging and a layer is selected
+    if (ImGui::IsMouseDragging(0))
     {
-        return it->second;
+        selectedLayer_->x += delta.x;
+        selectedLayer_->y += delta.y;
+        // Update the layer in the LayerManager as well
+        auto& layers = layerManager_->getLayers();
+        for (auto& layer : layers)
+        {
+            if (layer.name == selectedLayer_->name && layer.getLayerNumber() == selectedLayer_->getLayerNumber())
+            {
+                layer.x = selectedLayer_->x;
+                layer.y = selectedLayer_->y;
+                layerManager_->markDirty();
+                break;
+            }
+        }
     }
-
-    // Create new texture from image data
-    ImTextureID textureID = createTextureFromImage(image);
-    if (textureID)
-    {
-        textureCache[cacheKey] = textureID;
-    }
-
-    return textureID;
-}
-
-ImTextureID MediaBrowserUI::createTextureFromImage(std::shared_ptr<Image> image)
-{
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image->info.width, image->info.height, 0, GL_RGB, GL_UNSIGNED_BYTE,
-                 image->data());
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    return static_cast<ImTextureID>(textureID);
-}
-
-void MediaBrowserUI::cleanupTextures()
-{
-    // Clean up OpenGL textures when needed
-    // This should be called in destructor or when changing folders
-    for (auto& pair : textureCache)
-    {
-        // Example OpenGL cleanup:
-        GLuint textureID = static_cast<GLuint>(pair.second);
-        glDeleteTextures(1, &textureID);
-    }
-    textureCache.clear();
 }
 } // namespace linuxface
