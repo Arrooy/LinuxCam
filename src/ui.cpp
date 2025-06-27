@@ -541,6 +541,10 @@ void UI::handleLayerDragging()
             }
         }
     }
+    if (!ImGui::IsMouseDown(0))
+    {
+        return;
+    }
     // Find the selected layer (search all layers for .selected)
     auto it = std::find_if(layers.begin(), layers.end(), [](const Layer& l) { return l.selected; });
     if (it == layers.end())
@@ -548,13 +552,9 @@ void UI::handleLayerDragging()
         return;
     }
     Layer& selectedLayer = *it;
-    if (!ImGui::IsMouseDown(0))
-    {
-        return;
-    }
     ImVec2 delta = ImGui::GetIO().MouseDelta;
     // Only allow dragging if mouse is dragging and a layer is selected
-    if (ImGui::IsMouseDragging(0))
+    if (ImGui::IsMouseDragging(0) && !selectedLayer.isBaseLayer)
     {
         selectedLayer.x += delta.x;
         selectedLayer.y += delta.y;

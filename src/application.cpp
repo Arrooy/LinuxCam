@@ -239,15 +239,21 @@ bool Application::update()
         for (size_t i = 0; i < layers.size(); ++i)
         {
             Layer& layer = layers[i];
+            if(layer.isBaseLayer)
+            {
+                // Skip the base layer itself
+                continue;
+            }
             if (layer.type == LayerType::Image && layer.img)
             {
-                // Paste each layer image onto the base image
-                tempImage->paste(*layer.img, false);
+                // Paste each layer image onto the base image at the layer's position
+                tempImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
             }
             else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
             {
-                // Paste the current GIF frame onto the base image
-                tempImage->paste(*layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()], false);
+                // Paste the current GIF frame onto the base image at the layer's position
+                auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
+                tempImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
             }
         }
         if (!cameraManager_->updateOutput(tempImage))

@@ -228,13 +228,12 @@ void Image::copyFrom(const Image& other)
 {
     if (this != &other)
     {
-        this->resize(other.size_);
+        this->resize(size_, false);
         // Copy data if both images have valid data pointers and size > 0
         if (data_ && other.data() && size_ > 0)
         {
             std::memcpy(data_.get(), other.data(), size_);
         }
-        size_ = other.size_;
         info = other.info;
     }
 }
@@ -1156,7 +1155,6 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
     // Skip if no intersection
     if (clipLeft >= clipRight || clipTop >= clipBottom)
     {
-        common::log_error("copyPixelsWithBlending - Aborting no intersection");
         return;
     }
 
@@ -1215,9 +1213,35 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
 }
 
 
+bool Image::isFullyOpaque() const {
+    if (info.pixelSizeBytes != 4) return true; // Only RGBA can be non-opaque
+    if (!data_ || size_ == 0) return false;
+    const unsigned char* d = data_.get();
+    for (size_t i = 3; i < size_; i += 4) {
+        if (d[i] != 255) return false;
+    }
+    return true;
+}
+
+void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth, size_t copyHeight) {
+    if (!src.data() || !data_) return;
+    const unsigned char* srcData = src.data();
+    unsigned char* dstData = data_.get();
+    const unsigned char pixelSize = info.pixelSizeBytes;
+    for (size_t row = 0; row < copyHeight; ++row) {
+        size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * pixelSize;
+        size_t dstRowIdx = ((dstY + row) * info.width + dstX) * pixelSize;
+        std::memcpy(dstData + dstRowIdx, srcData + srcRowIdx, copyWidth * pixelSize);
+    }
+}
+
+// TODO: FIXME: This has a high execution cost!
 Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expandCanvas)
 {
-    // TODO: FIXME: This has a high execution cost!
+    common::log_info("Image::paste - Pasting image at (%ld, %ld) with expandCanvas=%d", otherX, otherY, expandCanvas);
+    common::log_info("Image::paste - Base image size: %lux%lu", info.width, info.height);
+    common::log_info("Image::paste - Source image size: %lux%lu", other.info.width, other.info.height);
+    common::log_info("Image::paste - From %s to %s", other.info.filename.c_str(), info.filename.c_str());
     // Validation
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
     {
@@ -1262,7 +1286,18 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     bool sameCanvasSize = newWidth == info.width && newHeight == info.height && minX == baseLeft && minY == baseTop;
     if (!expandCanvas || sameCanvasSize)
     {
-        // No actual expansion needed, just paste normally
+        // Fast path: fully in-bounds, same format, fully opaque
+        bool fullyOpaque = (info.pixelSizeBytes != 4) || other.isFullyOpaque();
+        bool fullyInBounds = otherLeft >= baseLeft && otherTop >= baseTop &&
+                             otherRight <= baseRight && otherBottom <= baseBottom;
+        if (fullyOpaque && fullyInBounds) {
+            // Compute offsets
+            long dstX = otherLeft - baseLeft;
+            long dstY = otherTop - baseTop;
+            copyPixelsOptimized(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
+            return *this;
+        }
+        // Fallback to blending
         copyPixelsWithBlending(other, otherLeft, otherTop, 0, 0, info.width, info.height);
         return *this;
     }

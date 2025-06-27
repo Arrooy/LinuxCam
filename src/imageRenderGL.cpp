@@ -96,6 +96,7 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
         ImVec2 p_min, p_max;
         bool has_rect = false;
         float rect_thickness = 3.0f;
+        
         if ((layer.type == LayerType::Image && layer.img)
             || (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()))
         {

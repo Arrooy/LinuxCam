@@ -205,6 +205,7 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
         decoded_image_.reset(); // Clean up on failure
         return false;
     }
+    decoded_image_->info = metadata_; // Copy metadata to decoded image
 
     // Mark as decoded
     is_decoded_ = true;

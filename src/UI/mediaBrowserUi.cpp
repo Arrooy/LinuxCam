@@ -228,23 +228,11 @@ void MediaBrowserUI::renderSceneCompositor()
     }
     auto& layers = layerManager_->getLayers();
 
-    // // Auto-select first layer if none selected
-    // bool anySelected = false;
-    // for (auto& layer : layers) {
-    //     if (layer.selected) {
-    //         anySelected = true;
-    //         break;
-    //     }
-    // }
-    // if (!layers.empty() && !anySelected) {
-    //     layers[0].selected = true;
-    // }
-
     int removeIndex = -1;
     for (int i = 0; i < (int) layers.size(); ++i)
     {
         Layer& layer = layers[i];
-        std::string label = layer.name + (layer.type == LayerType::Text ? " (T)" : " (I)") + " #" + std::to_string(layer.getLayerNumber());
+        std::string label = layer.name + " #" + std::to_string(layer.getLayerNumber());
         ImGui::AlignTextToFramePadding();
         ImGui::PushID(i);
         ImGui::BeginGroup();
