@@ -196,8 +196,6 @@ class JPEGEncoder : public Encoder
         {
             common::log_warn("JPEGEncoder::encode - Pixel format mismatch: expected %d, got %d",
                              static_cast<int>(pixelFormat), static_cast<int>(sourcePixelFormat));
-            // Use the source image pixel format for encoding
-            sourcePixelFormat = srcImage.info.TJPixelFormat;
         }
 
         // Validate buffer size

@@ -1,6 +1,7 @@
 #include "LinuxFace/UI/mediaBrowserUi.h"
 
 #include <GL/gl.h>
+
 #include <algorithm>
 
 namespace linuxface
@@ -20,98 +21,82 @@ MediaBrowserUI::~MediaBrowserUI()
 
 bool MediaBrowserUI::render()
 {
-    // Center the window in the screen and set its size to 90% of the viewport size
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImVec2 size = ImVec2(viewport->Size.x * 0.9f, viewport->Size.y * 0.9f);
-    ImVec2 center = ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f, viewport->Pos.y + viewport->Size.y * 0.5f);
-    ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(center.x - size.x * 0.5f, center.y - size.y * 0.5f), ImGuiCond_FirstUseEver);
+    ImVec2 viewportPos = viewport->Pos;
+    ImVec2 viewportSize = viewport->Size;
 
-    std::string windowTitle = "Media Browser";
-    if (selectedLayer_)
-    {
-        windowTitle += " - Viewing: " + selectedLayer_->name;
-    }
+    // Get menu bar height (same as in UI.cpp)
+    float menuBarHeight = ImGui::GetFrameHeight();
 
-    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
-    bool show_window{true};
-    if (ImGui::Begin(windowTitle.c_str(), &show_window, windowFlags))
-    {
-        renderRightSidebar();
-    }
-    ImGui::End();
-    handleLayerDragging();
-    if (!show_window)
-    {
-        selectedLayer_ = nullptr;
-    }
+    // Adjust sidebar size and position to not overlap menu bar
+    float sidebarY = viewportPos.y + menuBarHeight;
+    float sidebarHeight = viewportSize.y - menuBarHeight;
 
-    return show_window;
-}
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+                             | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
+                             | ImGuiWindowFlags_NoScrollbar;
 
-void MediaBrowserUI::renderRightSidebar()
-{
-    // Calculate right sidebar width (20% of window)
-    ImVec2 windowSize = ImGui::GetWindowSize();
-    float totalSpacing = ImGui::GetStyle().ItemSpacing.x * 2;
-    float totalPadding = ImGui::GetStyle().WindowPadding.x * 2;
-    float availableWidth = windowSize.x - totalSpacing - totalPadding;
-    float sidebarWidth = availableWidth * 0.20f;
+    ImGui::SetNextWindowPos(ImVec2(viewportPos.x + viewportSize.x, sidebarY), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(0, sidebarHeight), ImGuiCond_Always);
+    ImGui::Begin("RightSidebar", nullptr, flags);
 
-    ImGui::BeginChild("RightSidebar", ImVec2(sidebarWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoScrollbar);
-
-    // Image Data collapsing header
     if (ImGui::CollapsingHeader("Image Data", ImGuiTreeNodeFlags_DefaultOpen))
     {
         renderImageDataContent();
     }
-
     ImGui::Spacing();
-
-    // Image Operations collapsing header
     if (ImGui::CollapsingHeader("Image Operations"))
     {
         renderImageOperationsContent();
     }
-
     ImGui::Spacing();
-
-    // Preview Controls collapsing header
     if (ImGui::CollapsingHeader("Preview Controls"))
     {
         renderPreviewControlsContent();
     }
-
     ImGui::Spacing();
-
     if (ImGui::CollapsingHeader("Scene composition", ImGuiTreeNodeFlags_DefaultOpen))
     {
         renderSceneCompositor();
     }
 
-    ImGui::EndChild();
+    // Get the actual window width after rendering
+    ImVec2 actualSidebarSize = ImGui::GetWindowSize();
+    // Immediately reposition and resize the window to be flush right and clamped
+    float sidebarX = viewportPos.x + viewportSize.x - actualSidebarSize.x;
+    ImGui::SetWindowPos(ImVec2(sidebarX, sidebarY), ImGuiCond_Always);
+    ImGui::End();
+    return true;
 }
 
 void MediaBrowserUI::renderImageDataContent()
 {
-    if (selectedLayer_ && selectedLayer_->type == LayerType::Image && selectedLayer_->img)
+    Layer* selected = getSelectedLayer();
+    if (selected)
     {
-        auto image = selectedLayer_->img;
-        ImGui::Text("Layer: %s", selectedLayer_->name.c_str());
-        ImGui::Text("File: %s", selectedLayer_->name.c_str());
-        ImGui::Text("Size: %s", common::format_size(image->size()));
-        ImGui::Text("Dimensions:");
-        ImGui::Text("  %lu x %lu", image->info.width, image->info.height);
-        ImGui::Text("Display Size:");
-        ImGui::Text("  %.0f x %.0f", image->info.width * previewScale, image->info.height * previewScale);
-        ImGui::Text("Scale: %.1fx", previewScale);
-    }
-    else if (selectedLayer_ && selectedLayer_->type == LayerType::Text)
-    {
-        ImGui::Text("Layer: %s", selectedLayer_->name.c_str());
-        ImGui::Text("Type: Text");
-        ImGui::Text("Content: %s", selectedLayer_->textContent.c_str());
-        ImGui::Text("Font size: %.1f", selectedLayer_->fontSize);
+        if (selected->type == LayerType::Image && selected->img)
+        {
+            auto image = selected->img;
+            ImGui::Text("Layer: %s", selected->name.c_str());
+            ImGui::Text("File: %s", selected->name.c_str());
+            ImGui::Text("Size: %s", common::format_size(image->size()));
+            ImGui::Text("Dimensions:");
+            ImGui::Text("  %lu x %lu", image->info.width, image->info.height);
+            ImGui::Text("Display Size:");
+            ImGui::Text("  %.0f x %.0f", image->info.width * previewScale, image->info.height * previewScale);
+            ImGui::Text("Scale: %.1fx", previewScale);
+        }
+        else if (selected->type == LayerType::Text)
+        {
+            ImGui::Text("Layer: %s", selected->name.c_str());
+            ImGui::Text("Type: Text");
+            ImGui::Text("Content: %s", selected->textContent.c_str());
+            ImGui::Text("Font size: %.1f", selected->fontSize);
+        }
+        else
+        {
+            ImGui::TextDisabled("No layer selected");
+        }
     }
     else
     {
@@ -126,14 +111,14 @@ void MediaBrowserUI::renderPreviewControlsContent()
 
     if (ImGui::Checkbox("Fit to Window", &fitToWindow))
     {
-        if (fitToWindow && selectedLayer_)
+        Layer* selected = getSelectedLayer();
+        if (fitToWindow && selected)
         {
             float width = 800, height = 600;
-
-            if (selectedLayer_->type == LayerType::Image && selectedLayer_->img)
+            if (selected->type == LayerType::Image && selected->img)
             {
-                width = static_cast<float>(selectedLayer_->img->info.width);
-                height = static_cast<float>(selectedLayer_->img->info.height);
+                width = static_cast<float>(selected->img->info.width);
+                height = static_cast<float>(selected->img->info.height);
             }
             previewScale = calculateFitScale(width, height);
         }
@@ -146,9 +131,10 @@ void MediaBrowserUI::renderPreviewControlsContent()
 
 void MediaBrowserUI::renderImageOperationsContent()
 {
-    if (selectedLayer_ && selectedLayer_->type == LayerType::Image && selectedLayer_->img)
+    Layer* selected = getSelectedLayer();
+    if (selected && selected->type == LayerType::Image && selected->img)
     {
-        auto image = selectedLayer_->img;
+        auto image = selected->img;
         if (!image)
         {
             return;
@@ -160,16 +146,19 @@ void MediaBrowserUI::renderImageOperationsContent()
         if (ImGui::Button("Grayscale"))
         {
             image->toGrayscale();
+            selected->dirty = true;
         }
         ImGui::SameLine();
         if (ImGui::Button("Flip Horizontal"))
         {
             image->flipHorizontal();
+            selected->dirty = true;
         }
         ImGui::SameLine();
         if (ImGui::Button("Flip Vertical"))
         {
             image->flipVertical();
+            selected->dirty = true;
         }
 
         ImGui::Text("Rotate:");
@@ -177,16 +166,19 @@ void MediaBrowserUI::renderImageOperationsContent()
         if (ImGui::Button("90°"))
         {
             image->rotate90();
+            selected->dirty = true;
         }
         ImGui::SameLine();
         if (ImGui::Button("180°"))
         {
             image->rotate180();
+            selected->dirty = true;
         }
         ImGui::SameLine();
         if (ImGui::Button("270°"))
         {
             image->rotate270();
+            selected->dirty = true;
         }
 
         if (newWidth == 0 || newHeight == 0)
@@ -207,22 +199,17 @@ void MediaBrowserUI::renderImageOperationsContent()
                 if (resized)
                 {
                     image->copyFrom(*resized);
+                    selected->dirty = true;
                 }
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Reset Size"))
-        {
-            newWidth = static_cast<int>(image->info.width);
-            newHeight = static_cast<int>(image->info.height);
-        }
-
         ImGui::Spacing();
         if (ImGui::Button("Reset"))
         {
-            if(!mediaManager->reloadImage(selectedLayer_->name))
+            if (!mediaManager->reloadImage(selected->name))
             {
-                common::log_error("Failed to reload image: %s", selectedLayer_->name.c_str());
+                common::log_error("Failed to reload image: %s", selected->name.c_str());
             }
         }
     }
@@ -236,92 +223,149 @@ void MediaBrowserUI::renderSceneCompositor()
 {
     renderAddTextLayerUI();
 
-    if (!layerManager_) return;
+    if (!layerManager_)
+    {
+        return;
+    }
     auto& layers = layerManager_->getLayers();
 
     // Auto-select first layer if none selected
-    if (!layers.empty() && !selectedLayer_)
+    if (!layers.empty() && selectedLayerIndex_ < 0)
     {
-        selectedLayer_ = std::make_shared<Layer>(layers[0]);
+        selectedLayerIndex_ = 0;
     }
-
     // Remove invalid selection if out of bounds
-    if (selectedLayer_)
+    if (selectedLayerIndex_ >= (int) layers.size())
     {
-        auto it = std::find_if(layers.begin(), layers.end(), [this](const Layer& l)
-                               { return selectedLayer_->name == l.name && selectedLayer_->getLayerNumber() == l.getLayerNumber(); });
-        if (it == layers.end())
-        {
-            selectedLayer_ = nullptr;
-        }
+        selectedLayerIndex_ = -1;
     }
 
     int removeIndex = -1;
     for (int i = 0; i < (int) layers.size(); ++i)
     {
         Layer& layer = layers[i];
-        std::string label = layer.name + (layer.type == LayerType::Text ? " (T)" : " (I)");
+        std::string label = layer.name + (layer.type == LayerType::Text ? " (T)" : " (I)") + " #" + std::to_string(layer.getLayerNumber());
         ImGui::AlignTextToFramePadding();
         ImGui::PushID(i);
         ImGui::BeginGroup();
-        bool isSelected = selectedLayer_ && selectedLayer_->name == layer.name && selectedLayer_->getLayerNumber() == layer.getLayerNumber();
+        bool isSelected = (selectedLayerIndex_ == i);
         if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(120, 0)))
         {
-            selectedLayer_ = std::make_shared<Layer>(layer);
+            selectedLayerIndex_ = i;
         }
         ImGui::EndGroup();
 
         ImGui::SameLine();
         ImGui::BeginGroup();
-        if (i == 0) ImGui::BeginDisabled();
+        if (i == 0)
+        {
+            ImGui::BeginDisabled();
+        }
         if (ImGui::Button("Up"))
         {
-            if (i > 0) std::swap(layers[i], layers[i - 1]);
-            if (isSelected) selectedLayer_ = std::make_shared<Layer>(layers[i > 0 ? i - 1 : i]);
-            if (layerManager_) layerManager_->markDirty();
+            if (i > 0)
+            {
+                std::swap(layers[i], layers[i - 1]);
+                if (selectedLayerIndex_ == i)
+                {
+                    selectedLayerIndex_ = i - 1;
+                }
+                else if (selectedLayerIndex_ == i - 1)
+                {
+                    selectedLayerIndex_ = i;
+                }
+            }
+            if (layerManager_)
+            {
+                layerManager_->markDirty();
+            }
         }
-        if (i == 0) ImGui::EndDisabled();
+        if (i == 0)
+        {
+            ImGui::EndDisabled();
+        }
         ImGui::SameLine();
-        if (i == static_cast<int>(layers.size()) - 1) ImGui::BeginDisabled();
+        if (i == static_cast<int>(layers.size()) - 1)
+        {
+            ImGui::BeginDisabled();
+        }
         if (ImGui::Button("Down"))
         {
-            if (i < (int)layers.size() - 1) std::swap(layers[i], layers[i + 1]);
-            if (isSelected) selectedLayer_ = std::make_shared<Layer>(layers[i < (int)layers.size() - 1 ? i + 1 : i]);
-            if (layerManager_) layerManager_->markDirty();
+            if (i < (int) layers.size() - 1)
+            {
+                std::swap(layers[i], layers[i + 1]);
+                if (selectedLayerIndex_ == i)
+                {
+                    selectedLayerIndex_ = i + 1;
+                }
+                else if (selectedLayerIndex_ == i + 1)
+                {
+                    selectedLayerIndex_ = i;
+                }
+            }
+            if (layerManager_)
+            {
+                layerManager_->markDirty();
+            }
         }
-        if (i == static_cast<int>(layers.size()) - 1) ImGui::EndDisabled();
-        ImGui::SameLine();
-        if (ImGui::SmallButton("x"))
+        if (i == static_cast<int>(layers.size()) - 1)
         {
-            removeIndex = i;
+            ImGui::EndDisabled();
+        }
+        ImGui::SameLine();
+        if (layer.isBaseLayer)
+        {
+            ImGui::BeginDisabled();
+            ImGui::SmallButton("x");
+            ImGui::EndDisabled();
+        }
+        else
+        {
+            if (ImGui::SmallButton("x"))
+            {
+                removeIndex = i;
+            }
         }
         ImGui::EndGroup();
         ImGui::PopID();
     }
     if (removeIndex >= 0 && removeIndex < (int) layers.size())
     {
-        if (selectedLayer_ && selectedLayer_->name == layers[removeIndex].name
-            && selectedLayer_->getLayerNumber() == layers[removeIndex].getLayerNumber())
+        if (selectedLayerIndex_ == removeIndex)
         {
-            selectedLayer_ = nullptr;
+            selectedLayerIndex_ = -1;
+        }
+        else if (selectedLayerIndex_ > removeIndex)
+        {
+            selectedLayerIndex_--;
         }
         layers.erase(layers.begin() + removeIndex);
-        if (!layers.empty() && !selectedLayer_)
+        if (!layers.empty() && selectedLayerIndex_ < 0)
         {
-            selectedLayer_ = std::make_shared<Layer>(layers[0]);
+            selectedLayerIndex_ = 0;
         }
-        if (layerManager_) layerManager_->markDirty();
+        if (layerManager_)
+        {
+            layerManager_->markDirty();
+        }
     }
     for (int i = 0; i < (int) layers.size(); ++i)
     {
-        layers[i].selected = (selectedLayer_ && selectedLayer_->name == layers[i].name && selectedLayer_->getLayerNumber() == layers[i].getLayerNumber());
-        if (layers[i].type == LayerType::Image && layers[i].img) layers[i].img->info.layer = i;
+        layers[i].selected = (selectedLayerIndex_ == i);
+        if (layers[i].type == LayerType::Image && layers[i].img)
+        {
+            layers[i].img->info.layer = static_cast<unsigned int>(i);
+        }
+        layers[i].setLayerNumber(i);
     }
 }
 
 void MediaBrowserUI::renderAddTextLayerUI()
 {
-    if (!layerManager_) return;
+    if (!layerManager_)
+    {
+        return;
+    }
     static char textBuf[256] = "Write here";
     ImGui::InputText("Text", textBuf, IM_ARRAYSIZE(textBuf));
     ImGui::SameLine();
@@ -335,10 +379,19 @@ void MediaBrowserUI::renderAddTextLayerUI()
         newText.y = 10;
         layerManager_->addLayer(newText);
         auto& layers = layerManager_->getLayers();
-        selectedLayer_ = std::make_shared<Layer>(layers.back());
+        selectedLayerIndex_ = layers.empty() ? -1 : (int) layers.size() - 1;
     }
 }
 
+Layer* MediaBrowserUI::getSelectedLayer()
+{
+    auto& layers = layerManager_->getLayers();
+    if (selectedLayerIndex_ >= 0 && selectedLayerIndex_ < (int) layers.size())
+    {
+        return &layers[selectedLayerIndex_];
+    }
+    return nullptr;
+}
 
 ImVec2 MediaBrowserUI::calculatePreviewSize(float originalWidth, float originalHeight)
 {
@@ -386,35 +439,5 @@ void MediaBrowserUI::resetPreviewControls()
 {
     previewScale = 1.0f;
     fitToWindow = true;
-}
-
-void MediaBrowserUI::handleLayerDragging()
-{
-    if (!layerManager_) return;
-    if (!ImGui::IsMouseDown(0))
-        return;
-
-    ImVec2 delta = ImGui::GetIO().MouseDelta;
-    if (!selectedLayer_)
-        return;
-
-    // Only allow dragging if mouse is dragging and a layer is selected
-    if (ImGui::IsMouseDragging(0))
-    {
-        selectedLayer_->x += delta.x;
-        selectedLayer_->y += delta.y;
-        // Update the layer in the LayerManager as well
-        auto& layers = layerManager_->getLayers();
-        for (auto& layer : layers)
-        {
-            if (layer.name == selectedLayer_->name && layer.getLayerNumber() == selectedLayer_->getLayerNumber())
-            {
-                layer.x = selectedLayer_->x;
-                layer.y = selectedLayer_->y;
-                layerManager_->markDirty();
-                break;
-            }
-        }
-    }
 }
 } // namespace linuxface

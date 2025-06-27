@@ -24,8 +24,6 @@ class MediaBrowserUI
     bool render();
 
   private:
-    // Handle dragging of selected layer (image or text)
-    void handleLayerDragging();
     void renderLeftSidebar();
     void renderRightSidebar();
     void renderMainArea();
@@ -36,10 +34,7 @@ class MediaBrowserUI
     void renderImagePreview(std::shared_ptr<Image> image);
     void renderGifPreview(std::shared_ptr<Gif> gif);
     void renderImageOperationsContent();
-
-    // Helper method to render collapsing headers dynamically
-    void renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
-                                const std::string& type);
+    Layer* getSelectedLayer();
 
     ImVec2 calculatePreviewSize(float originalWidth, float originalHeight);
     float calculateFitScale(float originalWidth, float originalHeight);
@@ -52,7 +47,7 @@ class MediaBrowserUI
     // UI State
     bool showImages = true;
     bool showGifs = true;
-    std::shared_ptr<Layer> selectedLayer_ = nullptr;
+    int selectedLayerIndex_ = -1; // Track the selected layer index
 
     // Preview controls
     float previewScale = 1.0f;

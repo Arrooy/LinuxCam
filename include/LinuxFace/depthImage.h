@@ -92,26 +92,24 @@ class DepthImage : public Image
 
         if (normalDataSize != expected_bytes)
         {
-            // Try to determine actual element count from byte size
-            size_t element_count = normalDataSize / sizeof(float);
-            size_t expected_elements = info.width * info.height * 3;
+            common::log_warn("DepthImage::setNormals - Expected: %zu bytes, Got: %zu bytes", static_cast<size_t>(expected_bytes), static_cast<size_t>(normalDataSize));
+        }
 
-            common::log_warn("DepthImage::setNormals - Expected: %zu bytes, Got: %zu bytes", expected_bytes,
-                             normalDataSize);
+        size_t element_count = normalDataSize / sizeof(float);
+        size_t expected_elements = info.width * info.height * 3;
 
-            common::log_warn("DepthImage::setNormals - Size mismatch. Expected %zu elements, got %zu elements",
-                             expected_elements, element_count);
+        common::log_warn("DepthImage::setNormals - Size mismatch. Expected %zu elements, got %zu elements",
+                         expected_elements, element_count);
 
-            // If we have the right number of elements, proceed anyway
-            if (element_count == expected_elements)
-            {
-                common::log_info("DepthImage::setNormals - Element count matches, proceeding");
-            }
-            else
-            {
-                common::log_error("DepthImage::setNormals - Cannot proceed with mismatched element count");
-                return;
-            }
+        // If we have the right number of elements, proceed anyway
+        if (element_count == expected_elements)
+        {
+            common::log_info("DepthImage::setNormals - Element count matches, proceeding");
+        }
+        else
+        {
+            common::log_error("DepthImage::setNormals - Cannot proceed with mismatched element count");
+            return;
         }
 
         size_t elements_to_copy = info.width * info.height * 3;

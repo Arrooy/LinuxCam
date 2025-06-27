@@ -201,24 +201,26 @@ bool Application::update()
     {
         return false;
     }
-    image->info.filename = std::string("Base");
+    // TODO: make this filename more complex.
+    image->info.filename = std::string("base");
 
     process(image);
 
     // Update or create the base layer after processing
-    Layer* baseLayer = layerManager_->getLayerByNumber(0);
+    Layer* baseLayer = layerManager_->getBaseLayer();
     if (baseLayer && baseLayer->type == LayerType::Image)
     {
         // Update the image in the base layer
         baseLayer->img = std::move(image);
-        baseLayer->dirty = true;
     }
     else
     {
         // Create the base layer if it doesn't exist
         Layer newBaseLayer;
         newBaseLayer.type = LayerType::Image;
-        newBaseLayer.name = "base";
+        newBaseLayer.name = "base" ;
+        newBaseLayer.isBaseLayer = true;
+        newBaseLayer.selected = true;
         newBaseLayer.img = std::move(image);
         newBaseLayer.dirty = true;
         if (newBaseLayer.img)

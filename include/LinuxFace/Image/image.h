@@ -246,7 +246,6 @@ class Image
 
     // Use explicit copy method instead
     void copyFrom(const Image& other);
-    [[nodiscard]] std::unique_ptr<Image> clone() const;
 
     // Fast resize with optional data preservation
     void resize(size_t newSize, bool preserveData = true);

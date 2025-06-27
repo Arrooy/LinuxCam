@@ -61,9 +61,9 @@ bool ImageRenderGL::initialize()
     vao_ = vbo_ = ebo_ = 0;
     return true;
 }
-bool ImageRenderGL::uploadImage(Image& image, bool force)
+bool ImageRenderGL::uploadImage(Image& image)
 {
-    GLuint texId = getOrCreateTexture(image, force);
+    GLuint texId = getOrCreateTexture(image);
     return texId != 0;
 }
 
@@ -104,7 +104,8 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                 auto& entry = textureCache_[key];
                 // If VAO/VBO/EBO not created or window/image size changed, (re)create them
                 bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
-                                     || entry.width != layer.img->info.width || entry.height != layer.img->info.height);
+                                     || static_cast<size_t>(entry.width) != layer.img->info.width
+                                     || static_cast<size_t>(entry.height) != layer.img->info.height);
                 if (needRecreate)
                 {
                     if (entry.vao)
@@ -124,15 +125,13 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                     glGenBuffers(1, &entry.ebo);
                     float imgW = static_cast<float>(layer.img->info.width);
                     float imgH = static_cast<float>(layer.img->info.height);
-                    float winW = static_cast<float>(windowWidth);
-                    float winH = static_cast<float>(windowHeight);
-                    float px = static_cast<float>(layer.img->info.x); // image x position in pixels
-                    float py = static_cast<float>(layer.img->info.y); // image y position in pixels
+                    float px = static_cast<float>(layer.x);
+                    float py = static_cast<float>(layer.y);
                     // Convert pixel coordinates to normalized device coordinates (NDC), with (0,0) at top-left
-                    float x0 = -1.0f + 2.0f * (px / winW);
-                    float y0 = 1.0f - 2.0f * (py / winH);
-                    float x1 = -1.0f + 2.0f * ((px + imgW) / winW);
-                    float y1 = 1.0f - 2.0f * ((py + imgH) / winH);
+                    float x0 = -1.0f + 2.0f * (px / windowWidth);
+                    float y0 = 1.0f - 2.0f * (py / windowHeight);
+                    float x1 = -1.0f + 2.0f * ((px + imgW) / windowWidth);
+                    float y1 = 1.0f - 2.0f * ((py + imgH) / windowHeight);
                     float vertices[] = {
                         x0, y1, 0.0f, 1.0f, // bottom left (note: y1)
                         x1, y1, 1.0f, 1.0f, // bottom right
@@ -160,6 +159,20 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 glBindVertexArray(0);
                 glBindTexture(GL_TEXTURE_2D, 0);
+
+                // Draw green rectangle if selected
+                if (layer.selected)
+                {
+                    ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+                    // Calculate screen coordinates
+                    float px = static_cast<float>(layer.x);
+                    float py = static_cast<float>(layer.y);
+                    float imgW = static_cast<float>(layer.img->info.width);
+                    float imgH = static_cast<float>(layer.img->info.height);
+                    ImVec2 p_min(px, py);
+                    ImVec2 p_max(px + imgW, py + imgH);
+                    draw_list->AddRect(p_min, p_max, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
+                }
             }
         }
         else if (layer.type == LayerType::Text)
@@ -284,14 +297,16 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, bool force)
     // Remove thread/context/image info logs
     if (image.info.width == 0 || image.info.height == 0 || !image.data())
     {
-        common::log_error("[getOrCreateTexture] Invalid image dimensions or data");
+        common::log_error("ImageRenderGL::getOrCreateTexture - Invalid image dimensions or data");
         return 0;
     }
     if (image.info.pixelSizeBytes != 3 && image.info.pixelSizeBytes != 4)
     {
-        common::log_warn("Image pixelSizeBytes is unusual: %d (should be 3 or 4)", image.info.pixelSizeBytes);
+        common::log_warn("Image pixelSizeBytes is unusual: %d (should be 3 or 4)",
+                         static_cast<int>(image.info.pixelSizeBytes));
     }
     GLenum format = (image.info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
+    // Use the image filename as the cache key
     std::string key = image.info.filename;
     if (force && image.info.textureId != 0)
     {
@@ -323,26 +338,27 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, bool force)
         {
             it->second.layer = image.info.layer;
         }
-        if (it->second.width == image.info.width && it->second.height == image.info.height && !force)
+        if (static_cast<size_t>(it->second.width) == image.info.width
+            && static_cast<size_t>(it->second.height) == image.info.height && !force)
         {
             glBindTexture(GL_TEXTURE_2D, it->second.texId);
             GLenum err = glGetError();
             if (err != GL_NO_ERROR)
             {
-                common::log_error("[getOrCreateTexture] OpenGL error after glBindTexture: %d", err);
+                common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glBindTexture: %d", err);
             }
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             err = glGetError();
             if (err != GL_NO_ERROR)
             {
-                common::log_error("[getOrCreateTexture] OpenGL error after glPixelStorei: %d", err);
+                common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glPixelStorei: %d", err);
             }
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.info.width, image.info.height, format, GL_UNSIGNED_BYTE,
                             image.data());
             err = glGetError();
             if (err != GL_NO_ERROR)
             {
-                common::log_error("[getOrCreateTexture] OpenGL error after glTexSubImage2D: %d", err);
+                common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glTexSubImage2D: %d", err);
             }
             glBindTexture(GL_TEXTURE_2D, 0);
             image.setTextureId(it->second.texId);
@@ -373,20 +389,20 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, bool force)
     GLenum err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("[getOrCreateTexture] OpenGL error after glBindTexture (new): %d", err);
+        common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glBindTexture (new): %d", err);
     }
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("[getOrCreateTexture] OpenGL error after glPixelStorei (new): %d", err);
+        common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glPixelStorei (new): %d", err);
     }
     glTexImage2D(GL_TEXTURE_2D, 0, format, image.info.width, image.info.height, 0, format, GL_UNSIGNED_BYTE,
                  image.data());
     err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("[getOrCreateTexture] OpenGL error after glTexImage2D (new): %d", err);
+        common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glTexImage2D (new): %d", err);
     }
     // Set filtering to GL_NEAREST for pixel-perfect rendering
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -394,7 +410,7 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, bool force)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
-    // VAO/VBO/EBO will be created in renderLayers when needed
+
     textureCache_[key] = TextureCacheEntry{
         texId, static_cast<int>(image.info.width), static_cast<int>(image.info.height), image.info.layer, 0, 0, 0};
     image.setTextureId(texId);

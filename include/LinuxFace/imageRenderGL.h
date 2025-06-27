@@ -36,7 +36,7 @@ class ImageRenderGL
     bool initialize();
 
     // Upload image data to GPU (minimal copy, reuses texture if possible)
-    bool uploadImage(Image& image, bool force = false);
+    bool uploadImage(Image& image);
 
     // Cleanup
     void shutdown();

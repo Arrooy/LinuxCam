@@ -10,8 +10,7 @@ using namespace linuxface;
 
 ImVec4 getProfileColorFromDuration(int64_t value);
 
-UI::UI(std::shared_ptr<LayerManager> layerManager)
-    : layerManager_(std::move(layerManager))
+UI::UI(std::shared_ptr<LayerManager> layerManager) : layerManager_(std::move(layerManager))
 {
     paintWebcam_ = std::make_unique<PaintWebcam>();
     // MediaBrowserUI will be constructed in connect()
@@ -73,7 +72,7 @@ void UI::loadingScreen()
     ImVec2 contentSize = ImGui::GetContentRegionAvail();
     ImVec2 textSize = ImGui::CalcTextSize(msg.c_str());
     ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
-    ImGui::TextDisabled(msg.c_str());
+    ImGui::TextDisabled("%s", msg.c_str());
     ImGui::End();
 
     render();
@@ -105,6 +104,8 @@ void UI::paint()
 
     // Paint all UI windows
     paintMainWindow();
+    // Handle layer dragging globally (for the whole window)
+    handleLayerDragging();
 }
 
 void UI::render()
@@ -214,25 +215,35 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
         {
             ImGui::AlignTextToFramePadding();
             ImGui::PushID(item.c_str());
-
-            float rowWidth = ImGui::GetContentRegionAvail().x;
             float buttonWidth = ImGui::CalcTextSize("+").x + ImGui::GetStyle().FramePadding.x * 4.0f;
-            float textWidth = rowWidth - buttonWidth - ImGui::GetStyle().ItemSpacing.x;
 
             ImGui::BeginGroup();
-            ImGui::Text(item.c_str());
+            ImGui::Text("%s", item.c_str());
             ImGui::EndGroup();
 
             if (type == "image")
             {
                 ImGui::SameLine();
                 ImGui::BeginGroup();
-                // ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x / 2);
                 if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
                 {
-                    if (!mediaManager_->addToBackground(item))
+                    auto origImage = mediaManager_->getImage(item);
+                    if (origImage)
                     {
-                        common::log_error("Failed to add image %s to background", item.c_str());
+                        auto newImage = origImage->deepCopy();
+                        if (newImage)
+                        {
+                            newImage->info.textureId = 0; // Invalidate texture
+                            Layer newLayer;
+                            newLayer.type = LayerType::Image;
+                            newLayer.name = item;
+                            newLayer.img = std::move(newImage);
+                            newLayer.dirty = true;
+                            if (layerManager_)
+                            {
+                                layerManager_->addLayer(newLayer);
+                            }
+                        }
                     }
                 }
                 ImGui::EndGroup();
@@ -409,5 +420,34 @@ ImVec4 getProfileColorFromDuration(int64_t duration)
     float a = 1.0f;
 
     return ImVec4(r, g, b, a);
+}
+
+void UI::handleLayerDragging()
+{
+    if (!layerManager_)
+    {
+        return;
+    }
+    // Find the selected layer (search all layers for .selected)
+    auto& layers = layerManager_->getLayers();
+    auto it = std::find_if(layers.begin(), layers.end(), [](const Layer& l) { return l.selected; });
+    if (it == layers.end())
+    {
+        return;
+    }
+    Layer& selectedLayer = *it;
+    if (!ImGui::IsMouseDown(0))
+    {
+        return;
+    }
+    ImVec2 delta = ImGui::GetIO().MouseDelta;
+    // Only allow dragging if mouse is dragging and a layer is selected
+    if (ImGui::IsMouseDragging(0))
+    {
+        selectedLayer.x += delta.x;
+        selectedLayer.y += delta.y;
+        // Mark the layer as dirty to trigger a redraw
+        layerManager_->markDirty();
+    }
 }
 

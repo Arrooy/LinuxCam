@@ -25,6 +25,8 @@ struct Layer {
     std::string name;
     bool selected{false};
     bool dirty{true};
+    bool isBaseLayer{false};
+
 
     // For image layers
     std::shared_ptr<Image> img{nullptr};
@@ -38,10 +40,24 @@ struct Layer {
 
     // Helper: get layer number (delegates to image if present)
     int getLayerNumber() const {
-        if (type == LayerType::Image && img) return img->info.layer;
+        if (type == LayerType::Image && img) return static_cast<int>(img->info.layer);
         // For text, use text layer number
         return 1;
     }
+
+    // Helper: set layer number (delegates to image if present)
+    void setLayerNumber(int n) {
+        if (type == LayerType::Image && img) img->info.layer = n;
+        // For text, you can add a member if needed
+    }
+
+    // Helper: get layer name
+    std::string getLayerName() const {
+        if (type == LayerType::Image && img) return img->info.filename;
+        // For text, use text layer number
+        return textContent.empty() ? "Text Layer" : textContent;
+    }
+
     // Helper: get textureId (delegates to image if present)
     unsigned int getTextureId() const {
         if (type == LayerType::Image && img) return img->info.textureId;
@@ -61,6 +77,8 @@ public:
     std::vector<Layer>& getLayers();
     const std::vector<Layer>& getLayers() const;
     Layer* getLayerByNumber(int layerNumber);
+    Layer* getLayerByName(const std::string& layerName);
+    Layer* getBaseLayer();
     void sortLayers(); // Sort by layer number ascending
 
     // Overlay cache
