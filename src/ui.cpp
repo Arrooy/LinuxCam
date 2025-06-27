@@ -150,6 +150,7 @@ void UI::paintMainWindow()
                 if (layerManager_)
                 {
                     Layer newText;
+                    newText.id = Layer::next_id++;
                     newText.type = LayerType::Text;
                     newText.textContent = add_text_layer_buffer_;
                     newText.name = add_text_layer_buffer_;
@@ -263,6 +264,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                         {
                             newImage->info.textureId = 0; // Invalidate texture
                             Layer newLayer;
+                            newLayer.id = Layer::next_id++;
                             newLayer.type = LayerType::Image;
                             newLayer.name = item;
                             newLayer.img = std::move(newImage);
@@ -284,6 +286,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                     if (origGif && !origGif->frames().empty() && layerManager_)
                     {
                         Layer newLayer;
+                        newLayer.id = Layer::next_id++;
                         newLayer.type = LayerType::Gif;
                         newLayer.name = item;
                         newLayer.gif = origGif;
@@ -556,7 +559,7 @@ void UI::handleLayerDragging()
         selectedLayer.x += delta.x;
         selectedLayer.y += delta.y;
         // Mark the layer as dirty to trigger a redraw
-        layerManager_->markDirty();
+        selectedLayer.dirty = true;
     }
 }
 

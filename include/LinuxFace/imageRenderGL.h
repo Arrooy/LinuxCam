@@ -35,9 +35,6 @@ class ImageRenderGL
     // Initialize the image renderer
     bool initialize();
 
-    // Upload image data to GPU (minimal copy, reuses texture if possible)
-    bool uploadImage(Image& image);
-
     // Cleanup
     void shutdown();
 
@@ -48,7 +45,7 @@ class ImageRenderGL
     void cleanupTextures();
 
     // Get or create a cached OpenGL texture for an image
-    GLuint getOrCreateTexture(Image& image, bool force = false);
+    GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
     // Shader creation helpers
     bool createShaders();
     GLuint compileShader(const char* source, GLenum type);
@@ -57,7 +54,7 @@ class ImageRenderGL
     GLuint vao_, vbo_, ebo_;
     GLuint shaderProgram_;
 
-    // Texture cache: maps image filename to OpenGL texture ID
+    // Texture cache: maps layer id (as string) to OpenGL texture ID and VAO/VBO/EBO
     std::unordered_map<std::string, TextureCacheEntry> textureCache_;
 };
 

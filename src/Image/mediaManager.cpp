@@ -124,12 +124,6 @@ bool MediaManager::reloadImage(const std::string& imageName)
         // Update the existing image with the new data
         image->copyFrom(*newImage);
 
-        // Update the texture in the renderer
-        if (!imageRenderGl_->uploadImage(*image))
-        {
-            common::log_error("Failed to upload reloaded image to renderer: %s", imageName.c_str());
-            return false;
-        }
         return true;
     }
 

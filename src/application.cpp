@@ -348,8 +348,6 @@ void Application::process(std::unique_ptr<Image>& image)
         }
         face.paintBoundingBox(image, Pixel(0, 255, 0));
     }
-
-    imageRender_->uploadImage(*image);
 }
 
 void Application::shutdown()

@@ -26,6 +26,10 @@ struct Layer {
     bool dirty{true};
     bool isBaseLayer{false};
 
+    // Unique identifier for this layer instance
+    size_t id = 0;
+    static size_t next_id;
+
     // For image layers
     std::shared_ptr<Image> img{nullptr};
 
@@ -70,6 +74,8 @@ struct Layer {
         return 0;
     }
 };
+// Initialize static member
+inline size_t Layer::next_id = 0;
 
 class LayerManager {
 public:

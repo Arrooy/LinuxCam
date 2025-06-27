@@ -61,11 +61,6 @@ bool ImageRenderGL::initialize()
     vao_ = vbo_ = ebo_ = 0;
     return true;
 }
-bool ImageRenderGL::uploadImage(Image& image)
-{
-    GLuint texId = getOrCreateTexture(image);
-    return texId != 0;
-}
 
 // Accept a list of layers to render (images and text)
 void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWidth, int windowHeight)
@@ -92,39 +87,62 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
     for (auto& layer : const_cast<std::vector<Layer>&>(layers))
     {
         // Animate GIFs: advance frame index every frame
-        //TODO: define a speed for the advancement of the images of the giff.
-        if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()) {
+        // TODO: define a speed for the advancement of the images of the giff.
+        if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
+        {
             layer.gifFrameIndex = (layer.gifFrameIndex + 1) % layer.gif->frames().size();
             layer.dirty = true; // Mark as dirty to force texture update if needed
         }
         ImVec2 p_min, p_max;
         bool has_rect = false;
         float rect_thickness = 3.0f;
-        if ((layer.type == LayerType::Image && layer.img) || (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()))
+        if ((layer.type == LayerType::Image && layer.img)
+            || (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()))
         {
             Image* renderImg = nullptr;
-            if (layer.type == LayerType::Image && layer.img) {
+            if (layer.type == LayerType::Image && layer.img)
+            {
                 renderImg = layer.img.get();
-            } else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()) {
+            }
+            else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
+            {
                 auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-                if (!frame) continue;
+                if (!frame)
+                {
+                    continue;
+                }
                 renderImg = frame.get();
             }
-            if (!renderImg) continue;
-            GLuint texId = getOrCreateTexture(*renderImg, layer.dirty);
-            if (layer.dirty) {
+            if (!renderImg)
+            {
+                continue;
+            }
+            GLuint texId = getOrCreateTexture(*renderImg, layer.id, layer.dirty);
+            if (layer.dirty)
+            {
                 layer.dirty = false;
             }
-            if (texId) {
-                std::string key = renderImg->info.filename;
+            if (texId)
+            {
+                std::string key = std::to_string(layer.id);
                 auto& entry = textureCache_[key];
                 bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
                                      || static_cast<size_t>(entry.width) != renderImg->info.width
                                      || static_cast<size_t>(entry.height) != renderImg->info.height);
-                if (needRecreate) {
-                    if (entry.vao) glDeleteVertexArrays(1, &entry.vao);
-                    if (entry.vbo) glDeleteBuffers(1, &entry.vbo);
-                    if (entry.ebo) glDeleteBuffers(1, &entry.ebo);
+                if (needRecreate)
+                {
+                    if (entry.vao)
+                    {
+                        glDeleteVertexArrays(1, &entry.vao);
+                    }
+                    if (entry.vbo)
+                    {
+                        glDeleteBuffers(1, &entry.vbo);
+                    }
+                    if (entry.ebo)
+                    {
+                        glDeleteBuffers(1, &entry.ebo);
+                    }
                     glGenVertexArrays(1, &entry.vao);
                     glGenBuffers(1, &entry.vbo);
                     glGenBuffers(1, &entry.ebo);
@@ -136,12 +154,7 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                     float y0 = 1.0f - 2.0f * (py / windowHeight);
                     float x1 = -1.0f + 2.0f * ((px + imgW) / windowWidth);
                     float y1 = 1.0f - 2.0f * ((py + imgH) / windowHeight);
-                    float vertices[] = {
-                        x0, y1, 0.0f, 1.0f,
-                        x1, y1, 1.0f, 1.0f,
-                        x1, y0, 1.0f, 0.0f,
-                        x0, y0, 0.0f, 0.0f
-                    };
+                    float vertices[] = {x0, y1, 0.0f, 1.0f, x1, y1, 1.0f, 1.0f, x1, y0, 1.0f, 0.0f, x0, y0, 0.0f, 0.0f};
                     unsigned int indices[] = {0, 1, 2, 2, 3, 0};
                     glBindVertexArray(entry.vao);
                     glBindBuffer(GL_ARRAY_BUFFER, entry.vbo);
@@ -302,7 +315,7 @@ GLuint ImageRenderGL::createShaderProgram(const char* vertexSource, const char* 
 }
 
 // Get or create a cached OpenGL texture for an image
-GLuint ImageRenderGL::getOrCreateTexture(Image& image, bool force)
+GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool force)
 {
     // Remove thread/context/image info logs
     if (image.info.width == 0 || image.info.height == 0 || !image.data())
@@ -317,7 +330,7 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, bool force)
     }
     GLenum format = (image.info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
     // Use the image filename as the cache key
-    std::string key = image.info.filename;
+    std::string key = std::to_string(layerId); // Use layer id as key
     if (force && image.info.textureId != 0)
     {
         // Also delete VAO/VBO/EBO if present

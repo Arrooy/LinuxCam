@@ -364,6 +364,7 @@ void MediaBrowserUI::renderAddTextLayerUI()
     if (ImGui::Button("New Text Layer"))
     {
         Layer newText;
+        newText.id = Layer::next_id++;
         newText.type = LayerType::Text;
         newText.textContent = textBuf;
         newText.name = textBuf;
