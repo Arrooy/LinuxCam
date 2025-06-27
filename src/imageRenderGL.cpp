@@ -91,52 +91,56 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
     }
     for (auto& layer : const_cast<std::vector<Layer>&>(layers))
     {
-        if (layer.type == LayerType::Image && layer.img)
+        // Animate GIFs: advance frame index every frame
+        //TODO: define a speed for the advancement of the images of the giff.
+        if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()) {
+            layer.gifFrameIndex = (layer.gifFrameIndex + 1) % layer.gif->frames().size();
+            layer.dirty = true; // Mark as dirty to force texture update if needed
+        }
+        ImVec2 p_min, p_max;
+        bool has_rect = false;
+        float rect_thickness = 3.0f;
+        if ((layer.type == LayerType::Image && layer.img) || (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()))
         {
-            GLuint texId = getOrCreateTexture(*layer.img, layer.dirty);
-            if (layer.dirty)
-            {
+            Image* renderImg = nullptr;
+            if (layer.type == LayerType::Image && layer.img) {
+                renderImg = layer.img.get();
+            } else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()) {
+                auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
+                if (!frame) continue;
+                renderImg = frame.get();
+            }
+            if (!renderImg) continue;
+            GLuint texId = getOrCreateTexture(*renderImg, layer.dirty);
+            if (layer.dirty) {
                 layer.dirty = false;
             }
-            if (texId)
-            {
-                std::string key = layer.img->info.filename;
+            if (texId) {
+                std::string key = renderImg->info.filename;
                 auto& entry = textureCache_[key];
-                // If VAO/VBO/EBO not created or window/image size changed, (re)create them
                 bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
-                                     || static_cast<size_t>(entry.width) != layer.img->info.width
-                                     || static_cast<size_t>(entry.height) != layer.img->info.height);
-                if (needRecreate)
-                {
-                    if (entry.vao)
-                    {
-                        glDeleteVertexArrays(1, &entry.vao);
-                    }
-                    if (entry.vbo)
-                    {
-                        glDeleteBuffers(1, &entry.vbo);
-                    }
-                    if (entry.ebo)
-                    {
-                        glDeleteBuffers(1, &entry.ebo);
-                    }
+                                     || static_cast<size_t>(entry.width) != renderImg->info.width
+                                     || static_cast<size_t>(entry.height) != renderImg->info.height);
+                if (needRecreate) {
+                    if (entry.vao) glDeleteVertexArrays(1, &entry.vao);
+                    if (entry.vbo) glDeleteBuffers(1, &entry.vbo);
+                    if (entry.ebo) glDeleteBuffers(1, &entry.ebo);
                     glGenVertexArrays(1, &entry.vao);
                     glGenBuffers(1, &entry.vbo);
                     glGenBuffers(1, &entry.ebo);
-                    float imgW = static_cast<float>(layer.img->info.width);
-                    float imgH = static_cast<float>(layer.img->info.height);
+                    float imgW = static_cast<float>(renderImg->info.width);
+                    float imgH = static_cast<float>(renderImg->info.height);
                     float px = static_cast<float>(layer.x);
                     float py = static_cast<float>(layer.y);
-                    // Convert pixel coordinates to normalized device coordinates (NDC), with (0,0) at top-left
                     float x0 = -1.0f + 2.0f * (px / windowWidth);
                     float y0 = 1.0f - 2.0f * (py / windowHeight);
                     float x1 = -1.0f + 2.0f * ((px + imgW) / windowWidth);
                     float y1 = 1.0f - 2.0f * ((py + imgH) / windowHeight);
                     float vertices[] = {
-                        x0, y1, 0.0f, 1.0f, // bottom left (note: y1)
-                        x1, y1, 1.0f, 1.0f, // bottom right
-                        x1, y0, 1.0f, 0.0f, // top right (note: y0)
-                        x0, y0, 0.0f, 0.0f  // top left
+                        x0, y1, 0.0f, 1.0f,
+                        x1, y1, 1.0f, 1.0f,
+                        x1, y0, 1.0f, 0.0f,
+                        x0, y0, 0.0f, 0.0f
                     };
                     unsigned int indices[] = {0, 1, 2, 2, 3, 0};
                     glBindVertexArray(entry.vao);
@@ -149,9 +153,8 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
                     glEnableVertexAttribArray(1);
                     glBindVertexArray(0);
-                    // Update cached width/height
-                    entry.width = layer.img->info.width;
-                    entry.height = layer.img->info.height;
+                    entry.width = renderImg->info.width;
+                    entry.height = renderImg->info.height;
                 }
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, texId);
@@ -159,28 +162,35 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 glBindVertexArray(0);
                 glBindTexture(GL_TEXTURE_2D, 0);
-
-                // Draw green rectangle if selected
-                if (layer.selected)
-                {
-                    ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-                    // Calculate screen coordinates
-                    float px = static_cast<float>(layer.x);
-                    float py = static_cast<float>(layer.y);
-                    float imgW = static_cast<float>(layer.img->info.width);
-                    float imgH = static_cast<float>(layer.img->info.height);
-                    ImVec2 p_min(px, py);
-                    ImVec2 p_max(px + imgW, py + imgH);
-                    draw_list->AddRect(p_min, p_max, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
-                }
+                float px = static_cast<float>(layer.x);
+                float py = static_cast<float>(layer.y);
+                float imgW = static_cast<float>(renderImg->info.width);
+                float imgH = static_cast<float>(renderImg->info.height);
+                p_min = ImVec2(px, py);
+                p_max = ImVec2(px + imgW, py + imgH);
+                has_rect = true;
             }
         }
         else if (layer.type == LayerType::Text)
         {
-            // Use ImGui for text rendering
+            float text_padding = 5.0f; // Padding for selection rectangle
+            float pad = text_padding + rect_thickness * 0.5f;
+            ImFont* font = ImGui::GetFont();
             ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-            ImVec2 pos = ImVec2(layer.x, layer.y);
-            draw_list->AddText(nullptr, layer.fontSize, pos, layer.textColor, layer.textContent.c_str());
+            // Draw text at the intended position
+            ImVec2 text_pos = ImVec2(layer.x, layer.y);
+            draw_list->AddText(font, layer.fontSize, text_pos, layer.textColor, layer.textContent.c_str());
+            ImVec2 textSize = font->CalcTextSizeA(layer.fontSize, FLT_MAX, 0.0f, layer.textContent.c_str());
+            // Rectangle centered around the text
+            p_min = ImVec2(layer.x - pad, layer.y - pad);
+            p_max = ImVec2(layer.x + textSize.x + pad, layer.y + textSize.y + pad);
+            has_rect = true;
+        }
+        // Draw green rectangle if selected (for both image and text)
+        if (layer.selected && has_rect)
+        {
+            ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+            draw_list->AddRect(p_min, p_max, IM_COL32(0, 255, 0, 255), 0.0f, 0, rect_thickness);
         }
     }
     glUseProgram(0);

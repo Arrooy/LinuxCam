@@ -114,6 +114,9 @@ class UI
     int selected_video_device_ = -1;
     char device_name_buffer_[256] = "";
 
+    // Add Text Layer modal state
+    char add_text_layer_buffer_[256] = "Write here";
+
     bool mediaBrowserVisible_{false};
 
     // Tracked camera state On/Off

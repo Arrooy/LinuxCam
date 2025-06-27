@@ -47,7 +47,6 @@ class MediaBrowserUI
     // UI State
     bool showImages = true;
     bool showGifs = true;
-    int selectedLayerIndex_ = -1; // Track the selected layer index
 
     // Preview controls
     float previewScale = 1.0f;

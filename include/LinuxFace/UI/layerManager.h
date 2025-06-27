@@ -7,16 +7,15 @@
 #include <vector>
 #include <functional>
 #include "imgui.h"
-#include "LinuxFace/Image/image.h" // For Image definition
-
-// Forward declaration to avoid include issues
-namespace linuxface { class Image; }
+#include "LinuxFace/Image/image.h"
+#include "LinuxFace/Image/gif.h"
 
 namespace linuxface {
 
 // Layer type for compositing
 enum class LayerType {
     Image,
+    Gif,
     Text
 };
 
@@ -27,9 +26,12 @@ struct Layer {
     bool dirty{true};
     bool isBaseLayer{false};
 
-
     // For image layers
     std::shared_ptr<Image> img{nullptr};
+
+    // For GIF layers
+    std::shared_ptr<Gif> gif{nullptr}; // Added for GIFs
+    size_t gifFrameIndex{0};           // Track current frame for GIFs
 
     // For text layers
     std::string textContent;
@@ -38,29 +40,33 @@ struct Layer {
     float x = 0.0f;
     float y = 0.0f;
 
-    // Helper: get layer number (delegates to image if present)
+    // Helper: get layer number (delegates to image/gif if present)
     int getLayerNumber() const {
         if (type == LayerType::Image && img) return static_cast<int>(img->info.layer);
+        if (type == LayerType::Gif && gif && !gif->frames().empty()) return static_cast<int>(gif->frames()[0]->info.layer);
         // For text, use text layer number
         return 1;
     }
 
-    // Helper: set layer number (delegates to image if present)
+    // Helper: set layer number (delegates to image/gif if present)
     void setLayerNumber(int n) {
         if (type == LayerType::Image && img) img->info.layer = n;
+        if (type == LayerType::Gif && gif && !gif->frames().empty()) gif->frames()[0]->info.layer = n;
         // For text, you can add a member if needed
     }
 
     // Helper: get layer name
     std::string getLayerName() const {
         if (type == LayerType::Image && img) return img->info.filename;
+        if (type == LayerType::Gif && gif) return gif->getFilename();
         // For text, use text layer number
         return textContent.empty() ? "Text Layer" : textContent;
     }
 
-    // Helper: get textureId (delegates to image if present)
+    // Helper: get textureId (delegates to image/gif if present)
     unsigned int getTextureId() const {
         if (type == LayerType::Image && img) return img->info.textureId;
+        if (type == LayerType::Gif && gif && !gif->frames().empty()) return gif->frames()[gifFrameIndex % gif->frames().size()]->info.textureId;
         return 0;
     }
 };

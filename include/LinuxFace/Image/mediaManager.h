@@ -20,8 +20,6 @@ class MediaManager
     std::shared_ptr<Image> getImage(const std::string& imageName);
     std::shared_ptr<Gif> getGif(const std::string& gifName);
 
-    bool addToBackground(const std::string& mediaName);
-
     // Reload image from disk
     bool reloadImage(const std::string& imageName);
   private:

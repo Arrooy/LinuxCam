@@ -68,7 +68,7 @@ void UI::loadingScreen()
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar
                      | ImGuiWindowFlags_NoBackground);
     // Show placeholder when nothing is selected
-    std::string msg = "Select an item to preview";
+    std::string msg = "Loading content, please wait...";
     ImVec2 contentSize = ImGui::GetContentRegionAvail();
     ImVec2 textSize = ImGui::CalcTextSize(msg.c_str());
     ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
@@ -136,9 +136,37 @@ void UI::paintMainWindow()
             renderCollapsingHeader("GIFs", mediaManager_->getGifNames(), "gif");
             ImGui::EndMenu();
         }
-
+        // Add new menu for text layer
+        if (ImGui::BeginMenu("Load text..."))
+        {
+            static float text_font_size = 16.0f;
+            static ImVec4 text_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            ImGui::InputText("Text", add_text_layer_buffer_, IM_ARRAYSIZE(add_text_layer_buffer_));
+            ImGui::InputFloat("Font Size", &text_font_size, 1.0f, 5.0f, "%.1f");
+            ImGui::ColorEdit4("Color", (float*) &text_color, ImGuiColorEditFlags_NoInputs);
+            ImGui::SameLine();
+            if (ImGui::Button("Add Text Layer"))
+            {
+                if (layerManager_)
+                {
+                    Layer newText;
+                    newText.type = LayerType::Text;
+                    newText.textContent = add_text_layer_buffer_;
+                    newText.name = add_text_layer_buffer_;
+                    newText.x = 100;
+                    newText.y = 100;
+                    newText.fontSize = text_font_size;
+                    newText.textColor = ImGui::ColorConvertFloat4ToU32(text_color);
+                    layerManager_->addLayer(newText);
+                }
+                // Optionally clear buffer or reset
+                strncpy(add_text_layer_buffer_, "Write here", 11);
+            }
+            ImGui::EndMenu();
+        }
         ImGui::EndMainMenuBar();
     }
+
     // Calculate base position for window stacking
     float menu_bar_height = ImGui::GetFrameHeight();
     current_y_ = menu_bar_height;
@@ -228,7 +256,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                 if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
                 {
                     auto origImage = mediaManager_->getImage(item);
-                    if (origImage)
+                    if (origImage && layerManager_)
                     {
                         auto newImage = origImage->deepCopy();
                         if (newImage)
@@ -239,11 +267,31 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                             newLayer.name = item;
                             newLayer.img = std::move(newImage);
                             newLayer.dirty = true;
-                            if (layerManager_)
-                            {
-                                layerManager_->addLayer(newLayer);
-                            }
+
+                            layerManager_->addLayer(newLayer);
                         }
+                    }
+                }
+                ImGui::EndGroup();
+            }
+            else if (type == "gif")
+            {
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+                {
+                    auto origGif = mediaManager_->getGif(item);
+                    if (origGif && !origGif->frames().empty() && layerManager_)
+                    {
+                        Layer newLayer;
+                        newLayer.type = LayerType::Gif;
+                        newLayer.name = item;
+                        newLayer.gif = origGif;
+                        newLayer.x = 100;
+                        newLayer.y = 100;
+                        newLayer.gifFrameIndex = 0;
+                        newLayer.dirty = true;
+                        layerManager_->addLayer(newLayer);
                     }
                 }
                 ImGui::EndGroup();
@@ -428,8 +476,69 @@ void UI::handleLayerDragging()
     {
         return;
     }
-    // Find the selected layer (search all layers for .selected)
+    // Prevent dragging while interacting with any ImGui item (e.g., color picker)
+    if (ImGui::IsAnyItemActive())
+    {
+        return;
+    }
     auto& layers = layerManager_->getLayers();
+    ImVec2 mousePos = ImGui::GetIO().MousePos;
+    // On mouse click, select the topmost layer under the mouse
+    if (ImGui::IsMouseClicked(0))
+    {
+        bool foundLayer = false;
+        // Iterate from topmost to bottom (reverse order)
+        for (int i = static_cast<int>(layers.size()) - 1; i >= 0; --i)
+        {
+            Layer& layer = layers[i];
+            float lx = layer.x;
+            float ly = layer.y;
+            float lw = 0, lh = 0;
+            if (layer.type == LayerType::Image && layer.img)
+            {
+                lw = static_cast<float>(layer.img->info.width);
+                lh = static_cast<float>(layer.img->info.height);
+            }
+            else if (layer.type == LayerType::Gif && layer.gif)
+            {
+                // Use the first frame's dimensions for GIFs
+                if (layer.gif->frames().empty())
+                {
+                    continue; // Skip empty GIFs
+                }
+                lw = static_cast<float>(layer.gif->frames()[0]->info.width);
+                lh = static_cast<float>(layer.gif->frames()[0]->info.height);
+            }
+            else if (layer.type == LayerType::Text)
+            {
+                // Estimate text bounding box (simple, not perfect)
+                ImVec2 textSize = ImGui::CalcTextSize(layer.textContent.c_str(), nullptr, false, -1);
+                lw = textSize.x * (layer.fontSize / 16.0f);
+                lh = textSize.y * (layer.fontSize / 16.0f);
+            }
+
+            if (mousePos.x >= lx && mousePos.x <= lx + lw && mousePos.y >= ly && mousePos.y <= ly + lh)
+            {
+                // Select this layer, deselect others
+                for (auto& l : layers)
+                {
+                    l.selected = false;
+                }
+                layer.selected = true;
+                foundLayer = true;
+                break;
+            }
+        }
+        if (!foundLayer)
+        {
+            // If no layer was found, deselect all layers
+            for (auto& l : layers)
+            {
+                l.selected = false;
+            }
+        }
+    }
+    // Find the selected layer (search all layers for .selected)
     auto it = std::find_if(layers.begin(), layers.end(), [](const Layer& l) { return l.selected; });
     if (it == layers.end())
     {

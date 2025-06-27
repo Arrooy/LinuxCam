@@ -73,6 +73,16 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
             }
             else if (extension == ".gif")
             {
+                std::shared_ptr<Gif> gif = std::make_shared<Gif>(full_path);
+                if (gif->isOpen() && gif->decodeAllFrames())
+                {
+                    gifs[filename] = gif;
+                    processingOk = true;
+                }
+                else
+                {
+                    common::log_error("Failed to decode GIF: %s", full_path.c_str());
+                }
             }
             else
             {
@@ -89,35 +99,6 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
         }
     }
     return mediaCount;
-}
-
-bool MediaManager::addToBackground(const std::string& mediaName)
-{
-    auto image = getImage(mediaName);
-    if (image)
-    {
-        image->info.layer = 1;
-        imageRenderGl_->uploadImage(*image);
-        return true;
-    }
-
-    auto gif = getGif(mediaName);
-    if (gif)
-    {
-        if (!gif->decodeAllFrames())
-        {
-            common::log_error("Failed to decode GIF frames for: %s", gif->getFilename().c_str());
-            return false;
-        }
-
-        for (const auto& frame : gif->frames())
-        {
-            imageRenderGl_->uploadImage(*frame);
-        }
-        return true;
-    }
-
-    return false;
 }
 
 bool MediaManager::reloadImage(const std::string& imageName)

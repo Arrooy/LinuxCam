@@ -229,16 +229,17 @@ void MediaBrowserUI::renderSceneCompositor()
     }
     auto& layers = layerManager_->getLayers();
 
-    // Auto-select first layer if none selected
-    if (!layers.empty() && selectedLayerIndex_ < 0)
-    {
-        selectedLayerIndex_ = 0;
-    }
-    // Remove invalid selection if out of bounds
-    if (selectedLayerIndex_ >= (int) layers.size())
-    {
-        selectedLayerIndex_ = -1;
-    }
+    // // Auto-select first layer if none selected
+    // bool anySelected = false;
+    // for (auto& layer : layers) {
+    //     if (layer.selected) {
+    //         anySelected = true;
+    //         break;
+    //     }
+    // }
+    // if (!layers.empty() && !anySelected) {
+    //     layers[0].selected = true;
+    // }
 
     int removeIndex = -1;
     for (int i = 0; i < (int) layers.size(); ++i)
@@ -248,10 +249,12 @@ void MediaBrowserUI::renderSceneCompositor()
         ImGui::AlignTextToFramePadding();
         ImGui::PushID(i);
         ImGui::BeginGroup();
-        bool isSelected = (selectedLayerIndex_ == i);
+        bool isSelected = layer.selected;
         if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(120, 0)))
         {
-            selectedLayerIndex_ = i;
+            // Deselect all, select this one
+            for (auto& l : layers) l.selected = false;
+            layer.selected = true;
         }
         ImGui::EndGroup();
 
@@ -266,13 +269,10 @@ void MediaBrowserUI::renderSceneCompositor()
             if (i > 0)
             {
                 std::swap(layers[i], layers[i - 1]);
-                if (selectedLayerIndex_ == i)
-                {
-                    selectedLayerIndex_ = i - 1;
-                }
-                else if (selectedLayerIndex_ == i - 1)
-                {
-                    selectedLayerIndex_ = i;
+                // Keep selection on the moved layer
+                if (layers[i].selected) {
+                    layers[i - 1].selected = true;
+                    layers[i].selected = false;
                 }
             }
             if (layerManager_)
@@ -294,13 +294,10 @@ void MediaBrowserUI::renderSceneCompositor()
             if (i < (int) layers.size() - 1)
             {
                 std::swap(layers[i], layers[i + 1]);
-                if (selectedLayerIndex_ == i)
-                {
-                    selectedLayerIndex_ = i + 1;
-                }
-                else if (selectedLayerIndex_ == i + 1)
-                {
-                    selectedLayerIndex_ = i;
+                // Keep selection on the moved layer
+                if (layers[i].selected) {
+                    layers[i + 1].selected = true;
+                    layers[i].selected = false;
                 }
             }
             if (layerManager_)
@@ -331,18 +328,14 @@ void MediaBrowserUI::renderSceneCompositor()
     }
     if (removeIndex >= 0 && removeIndex < (int) layers.size())
     {
-        if (selectedLayerIndex_ == removeIndex)
-        {
-            selectedLayerIndex_ = -1;
-        }
-        else if (selectedLayerIndex_ > removeIndex)
-        {
-            selectedLayerIndex_--;
-        }
+        bool wasSelected = layers[removeIndex].selected;
         layers.erase(layers.begin() + removeIndex);
-        if (!layers.empty() && selectedLayerIndex_ < 0)
-        {
-            selectedLayerIndex_ = 0;
+        // Select first layer if none selected
+        bool anySelected = false;
+        for (auto& l : layers) if (l.selected) anySelected = true;
+        if (!layers.empty() && (!anySelected || wasSelected)) {
+            for (auto& l : layers) l.selected = false;
+            layers[0].selected = true;
         }
         if (layerManager_)
         {
@@ -351,7 +344,6 @@ void MediaBrowserUI::renderSceneCompositor()
     }
     for (int i = 0; i < (int) layers.size(); ++i)
     {
-        layers[i].selected = (selectedLayerIndex_ == i);
         if (layers[i].type == LayerType::Image && layers[i].img)
         {
             layers[i].img->info.layer = static_cast<unsigned int>(i);
@@ -377,18 +369,21 @@ void MediaBrowserUI::renderAddTextLayerUI()
         newText.name = textBuf;
         newText.x = 10;
         newText.y = 10;
+        newText.selected = true;
         layerManager_->addLayer(newText);
         auto& layers = layerManager_->getLayers();
-        selectedLayerIndex_ = layers.empty() ? -1 : (int) layers.size() - 1;
+        // Deselect all except the new one
+        for (size_t i = 0; i < layers.size(); ++i) {
+            layers[i].selected = (i == layers.size() - 1);
+        }
     }
 }
 
 Layer* MediaBrowserUI::getSelectedLayer()
 {
     auto& layers = layerManager_->getLayers();
-    if (selectedLayerIndex_ >= 0 && selectedLayerIndex_ < (int) layers.size())
-    {
-        return &layers[selectedLayerIndex_];
+    for (auto& layer : layers) {
+        if (layer.selected) return &layer;
     }
     return nullptr;
 }
