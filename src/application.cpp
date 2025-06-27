@@ -218,7 +218,7 @@ bool Application::update()
         // Create the base layer if it doesn't exist
         Layer newBaseLayer;
         newBaseLayer.type = LayerType::Image;
-        newBaseLayer.name = "base" ;
+        newBaseLayer.name = "base";
         newBaseLayer.isBaseLayer = true;
         newBaseLayer.selected = true;
         newBaseLayer.img = std::move(image);
@@ -229,12 +229,27 @@ bool Application::update()
         }
         layerManager_->addLayer(newBaseLayer);
     }
-    // TODO: merge all layers into one and ouput it to virtual device.
     // Output the current base image if available
     if (baseLayer && baseLayer->img)
     {
         // Make a deep copy for output as unique_ptr
         std::unique_ptr<Image> tempImage = baseLayer->img->deepCopy();
+
+        auto& layers = layerManager_->getLayers();
+        for (size_t i = 0; i < layers.size(); ++i)
+        {
+            Layer& layer = layers[i];
+            if (layer.type == LayerType::Image && layer.img)
+            {
+                // Paste each layer image onto the base image
+                tempImage->paste(*layer.img, false);
+            }
+            else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
+            {
+                // Paste the current GIF frame onto the base image
+                tempImage->paste(*layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()], false);
+            }
+        }
         if (!cameraManager_->updateOutput(tempImage))
         {
             common::log_error("Failed to update output cameras");
@@ -353,4 +368,12 @@ void Application::process(std::unique_ptr<Image>& image)
 void Application::shutdown()
 {
     // UI and Window destructors will handle cleanup automatically
+}
+
+// Minimal stub for rasterizeTextToImage (returns nullptr, to be implemented)
+#include "LinuxFace/UI/layerManager.h"
+std::unique_ptr<Image> rasterizeTextToImage(const std::string& text, float fontSize, ImU32 color)
+{
+    // TODO: Implement text rasterization (e.g., stb_truetype, FreeType, or bitmap font)
+    return nullptr;
 }

@@ -221,8 +221,7 @@ void MediaBrowserUI::renderImageOperationsContent()
 
 void MediaBrowserUI::renderSceneCompositor()
 {
-    renderAddTextLayerUI();
-
+ 
     if (!layerManager_)
     {
         return;
@@ -349,34 +348,6 @@ void MediaBrowserUI::renderSceneCompositor()
             layers[i].img->info.layer = static_cast<unsigned int>(i);
         }
         layers[i].setLayerNumber(i);
-    }
-}
-
-void MediaBrowserUI::renderAddTextLayerUI()
-{
-    if (!layerManager_)
-    {
-        return;
-    }
-    static char textBuf[256] = "Write here";
-    ImGui::InputText("Text", textBuf, IM_ARRAYSIZE(textBuf));
-    ImGui::SameLine();
-    if (ImGui::Button("New Text Layer"))
-    {
-        Layer newText;
-        newText.id = Layer::next_id++;
-        newText.type = LayerType::Text;
-        newText.textContent = textBuf;
-        newText.name = textBuf;
-        newText.x = 10;
-        newText.y = 10;
-        newText.selected = true;
-        layerManager_->addLayer(newText);
-        auto& layers = layerManager_->getLayers();
-        // Deselect all except the new one
-        for (size_t i = 0; i < layers.size(); ++i) {
-            layers[i].selected = (i == layers.size() - 1);
-        }
     }
 }
 

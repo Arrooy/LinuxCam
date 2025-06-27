@@ -30,7 +30,6 @@ class MediaBrowserUI
     void renderImageDataContent();
     void renderPreviewControlsContent();
     void renderSceneCompositor();
-    void renderAddTextLayerUI();
     void renderImagePreview(std::shared_ptr<Image> image);
     void renderGifPreview(std::shared_ptr<Gif> gif);
     void renderImageOperationsContent();
