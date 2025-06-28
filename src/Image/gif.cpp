@@ -31,7 +31,6 @@ bool Gif::decodeAllFrames()
     // Gif library only works with RGB
     const size_t frameSize = gif_->width * gif_->height * 3;
     auto buffer = std::make_unique<uint8_t[]>(frameSize);
-    size_t size{0u};
     int i = 0;
     do
     {
@@ -50,10 +49,10 @@ bool Gif::decodeAllFrames()
         img->info.TJColorSpace = TJCS_RGB;
         img->info.TJPixelFormat = TJPF_RGB;
         img->info.filename = filename_+"_"+std::to_string(i++);
-        size += frameSize;
+        size_ += frameSize;
         frameImages_.push_back(std::move(img));
     } while (gd_get_frame(gif_));
-    common::log_info("Gif loaded using %s", common::format_size(size));
+    common::log_info("Gif loaded using %s", common::format_size(size_));
     return true;
 }
 

@@ -51,6 +51,9 @@ class ImageRenderGL
     GLuint compileShader(const char* source, GLenum type);
     GLuint createShaderProgram(const char* vertexSource, const char* fragmentSource);
 
+    // Helper to setup VAO/VBO/EBO for a quad
+    void setupQuadBuffers(TextureCacheEntry& entry, float px, float py, float imgW, float imgH, int windowWidth, int windowHeight);
+
     GLuint vao_, vbo_, ebo_;
     GLuint shaderProgram_;
 

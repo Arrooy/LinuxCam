@@ -189,8 +189,6 @@ void Application::run()
     common::log_info("Main loop ended");
 }
 
-// TODO: Each time we add a image in mediaManager, we should also add it into the process image.
-//  As a newlayer, and cache it so we only generate the image once.
 bool Application::update()
 {
     // Poll events
@@ -201,8 +199,7 @@ bool Application::update()
     {
         return false;
     }
-    // TODO: make this filename more complex.
-    image->info.filename = std::string("base");
+    image->info.filename = std::string("WebcamStream-") + std::to_string(image->info.width) + "x" + std::to_string(image->info.height) + ".jpg";
 
     process(image);
 
@@ -217,6 +214,7 @@ bool Application::update()
     {
         // Create the base layer if it doesn't exist
         Layer newBaseLayer;
+        newBaseLayer.id = Layer::next_id++;
         newBaseLayer.type = LayerType::Image;
         newBaseLayer.name = "base";
         newBaseLayer.isBaseLayer = true;
@@ -376,10 +374,3 @@ void Application::shutdown()
     // UI and Window destructors will handle cleanup automatically
 }
 
-// Minimal stub for rasterizeTextToImage (returns nullptr, to be implemented)
-#include "LinuxFace/UI/layerManager.h"
-std::unique_ptr<Image> rasterizeTextToImage(const std::string& text, float fontSize, ImU32 color)
-{
-    // TODO: Implement text rasterization (e.g., stb_truetype, FreeType, or bitmap font)
-    return nullptr;
-}

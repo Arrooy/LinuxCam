@@ -1238,10 +1238,6 @@ void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dst
 // TODO: FIXME: This has a high execution cost!
 Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expandCanvas)
 {
-    common::log_info("Image::paste - Pasting image at (%ld, %ld) with expandCanvas=%d", otherX, otherY, expandCanvas);
-    common::log_info("Image::paste - Base image size: %lux%lu", info.width, info.height);
-    common::log_info("Image::paste - Source image size: %lux%lu", other.info.width, other.info.height);
-    common::log_info("Image::paste - From %s to %s", other.info.filename.c_str(), info.filename.c_str());
     // Validation
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
     {

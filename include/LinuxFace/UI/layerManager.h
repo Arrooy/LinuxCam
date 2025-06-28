@@ -1,25 +1,29 @@
 #ifndef LAYERMANAGER_H
 #define LAYERMANAGER_H
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <functional>
-#include "imgui.h"
-#include "LinuxFace/Image/image.h"
-#include "LinuxFace/Image/gif.h"
 
-namespace linuxface {
+#include "LinuxFace/Image/gif.h"
+#include "LinuxFace/Image/image.h"
+#include "imgui.h"
+
+namespace linuxface
+{
 
 // Layer type for compositing
-enum class LayerType {
+enum class LayerType
+{
     Image,
     Gif,
     Text
 };
 
-struct Layer {
+struct Layer
+{
     LayerType type;
     std::string name;
     bool selected{false};
@@ -45,40 +49,120 @@ struct Layer {
     float y = 0.0f;
 
     // Helper: get layer number (delegates to image/gif if present)
-    int getLayerNumber() const {
-        if (type == LayerType::Image && img) return static_cast<int>(img->info.layer);
-        if (type == LayerType::Gif && gif && !gif->frames().empty()) return static_cast<int>(gif->frames()[0]->info.layer);
+    inline int getLayerNumber() const
+    {
+        if (type == LayerType::Image && img)
+        {
+            return static_cast<int>(img->info.layer);
+        }
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        {
+            return static_cast<int>(gif->frames()[0]->info.layer);
+        }
         // For text, use text layer number
         return 1;
     }
 
     // Helper: set layer number (delegates to image/gif if present)
-    void setLayerNumber(int n) {
-        if (type == LayerType::Image && img) img->info.layer = n;
-        if (type == LayerType::Gif && gif && !gif->frames().empty()) gif->frames()[0]->info.layer = n;
+    inline void setLayerNumber(int n)
+    {
+        if (type == LayerType::Image && img)
+        {
+            img->info.layer = n;
+        }
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        {
+            gif->frames()[0]->info.layer = n;
+        }
         // For text, you can add a member if needed
     }
 
     // Helper: get layer name
-    std::string getLayerName() const {
-        if (type == LayerType::Image && img) return img->info.filename;
-        if (type == LayerType::Gif && gif) return gif->getFilename();
+    inline std::string getLayerName() const
+    {
+        if (type == LayerType::Image && img)
+        {
+            return img->info.filename;
+        }
+        if (type == LayerType::Gif && gif)
+        {
+            return gif->getFilename();
+        }
         // For text, use text layer number
         return textContent.empty() ? "Text Layer" : textContent;
     }
 
     // Helper: get textureId (delegates to image/gif if present)
-    unsigned int getTextureId() const {
-        if (type == LayerType::Image && img) return img->info.textureId;
-        if (type == LayerType::Gif && gif && !gif->frames().empty()) return gif->frames()[gifFrameIndex % gif->frames().size()]->info.textureId;
+    inline unsigned int getTextureId() const
+    {
+        if (type == LayerType::Image && img)
+        {
+            return img->info.textureId;
+        }
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        {
+            return gif->frames()[gifFrameIndex % gif->frames().size()]->info.textureId;
+        }
         return 0;
+    }
+
+    inline size_t getSize() const
+    {
+        if (type == LayerType::Image && img)
+        {
+            return img->size();
+        }
+        if (type == LayerType::Gif && gif)
+        {
+            return gif->getSize();
+        }
+        return 0;
+    }
+
+    inline unsigned long getWidth() const
+    {
+        if (type == LayerType::Image && img)
+        {
+            return img->info.width;
+        }
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        {
+            return gif->frames()[0]->info.width;
+        }
+        return 0;
+    }
+
+    inline unsigned long getHeight() const
+    {
+        if (type == LayerType::Image && img)
+        {
+            return img->info.height;
+        }
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        {
+            return gif->frames()[0]->info.height;
+        }
+        return 0;
+    }
+    inline ImageFormat getFormat() const
+    {
+        if (type == LayerType::Image && img)
+        {
+            return img->info.format;
+        }
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        {
+            return gif->frames()[0]->info.format;
+        }
+        return ImageFormat::UNKNOWN;
     }
 };
 // Initialize static member
 inline size_t Layer::next_id = 0;
 
-class LayerManager {
-public:
+class LayerManager
+{
+  public:
     LayerManager();
     ~LayerManager();
 
@@ -94,12 +178,12 @@ public:
     void sortLayers(); // Sort by layer number ascending
 
     // Overlay cache
-    void markDirty(); // Marks all layers as dirty
-    bool isDirty() const; // Returns true if any layer is dirty
+    void markDirty();          // Marks all layers as dirty
+    bool isDirty() const;      // Returns true if any layer is dirty
     void setDirty(bool dirty); // Sets all layers' dirty flag
     void setLayerDirty(int layerNumber, bool dirty);
 
-private:
+  private:
     std::vector<Layer> layers_;
 };
 

@@ -62,6 +62,46 @@ bool ImageRenderGL::initialize()
     return true;
 }
 
+// Helper to setup VAO/VBO/EBO for a quad
+void ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, float px, float py, float imgW, float imgH,
+                                     int windowWidth, int windowHeight)
+{
+    // Clean up previous buffers if they exist
+    if (entry.vao)
+    {
+        glDeleteVertexArrays(1, &entry.vao);
+    }
+    if (entry.vbo)
+    {
+        glDeleteBuffers(1, &entry.vbo);
+    }
+    if (entry.ebo)
+    {
+        glDeleteBuffers(1, &entry.ebo);
+    }
+    glGenVertexArrays(1, &entry.vao);
+    glGenBuffers(1, &entry.vbo);
+    glGenBuffers(1, &entry.ebo);
+    float x0 = -1.0f + 2.0f * (px / windowWidth);
+    float y0 = 1.0f - 2.0f * (py / windowHeight);
+    float x1 = -1.0f + 2.0f * ((px + imgW) / windowWidth);
+    float y1 = 1.0f - 2.0f * ((py + imgH) / windowHeight);
+    float vertices[] = {x0, y1, 0.0f, 1.0f, x1, y1, 1.0f, 1.0f, x1, y0, 1.0f, 0.0f, x0, y0, 0.0f, 0.0f};
+    unsigned int indices[] = {0, 1, 2, 2, 3, 0};
+    glBindVertexArray(entry.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, entry.vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) 0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
+    entry.width = static_cast<int>(imgW);
+    entry.height = static_cast<int>(imgH);
+}
+
 // Accept a list of layers to render (images and text)
 void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWidth, int windowHeight)
 {
@@ -96,7 +136,7 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
         ImVec2 p_min, p_max;
         bool has_rect = false;
         float rect_thickness = 3.0f;
-        
+
         if ((layer.type == LayerType::Image && layer.img)
             || (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()))
         {
@@ -119,7 +159,7 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                 continue;
             }
             GLuint texId = getOrCreateTexture(*renderImg, layer.id, layer.dirty);
-            if (layer.dirty)
+           if (layer.dirty)
             {
                 layer.dirty = false;
             }
@@ -127,48 +167,20 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
             {
                 std::string key = std::to_string(layer.id);
                 auto& entry = textureCache_[key];
+                if(entry.texId != texId)
+                {
+                    common::log_error("Texture ID mismatch for layer %s: expected %u, got %u",
+                                      key.c_str(), entry.texId, texId);
+                                      continue; // Mismatch, skip rendering this layer
+                }
                 bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
                                      || static_cast<size_t>(entry.width) != renderImg->info.width
                                      || static_cast<size_t>(entry.height) != renderImg->info.height);
                 if (needRecreate)
                 {
-                    if (entry.vao)
-                    {
-                        glDeleteVertexArrays(1, &entry.vao);
-                    }
-                    if (entry.vbo)
-                    {
-                        glDeleteBuffers(1, &entry.vbo);
-                    }
-                    if (entry.ebo)
-                    {
-                        glDeleteBuffers(1, &entry.ebo);
-                    }
-                    glGenVertexArrays(1, &entry.vao);
-                    glGenBuffers(1, &entry.vbo);
-                    glGenBuffers(1, &entry.ebo);
-                    float imgW = static_cast<float>(renderImg->info.width);
-                    float imgH = static_cast<float>(renderImg->info.height);
-                    float px = static_cast<float>(layer.x);
-                    float py = static_cast<float>(layer.y);
-                    float x0 = -1.0f + 2.0f * (px / windowWidth);
-                    float y0 = 1.0f - 2.0f * (py / windowHeight);
-                    float x1 = -1.0f + 2.0f * ((px + imgW) / windowWidth);
-                    float y1 = 1.0f - 2.0f * ((py + imgH) / windowHeight);
-                    float vertices[] = {x0, y1, 0.0f, 1.0f, x1, y1, 1.0f, 1.0f, x1, y0, 1.0f, 0.0f, x0, y0, 0.0f, 0.0f};
-                    unsigned int indices[] = {0, 1, 2, 2, 3, 0};
-                    glBindVertexArray(entry.vao);
-                    glBindBuffer(GL_ARRAY_BUFFER, entry.vbo);
-                    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry.ebo);
-                    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-                    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) 0);
-                    glEnableVertexAttribArray(0);
-                    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
-                    glEnableVertexAttribArray(1);
-                    glBindVertexArray(0);
-                    entry.width = renderImg->info.width;
-                    entry.height = renderImg->info.height;
+                    setupQuadBuffers(entry, static_cast<float>(layer.x), static_cast<float>(layer.y),
+                                     static_cast<float>(renderImg->info.width),
+                                     static_cast<float>(renderImg->info.height), windowWidth, windowHeight);
                 }
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, texId);
@@ -176,12 +188,8 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 glBindVertexArray(0);
                 glBindTexture(GL_TEXTURE_2D, 0);
-                float px = static_cast<float>(layer.x);
-                float py = static_cast<float>(layer.y);
-                float imgW = static_cast<float>(renderImg->info.width);
-                float imgH = static_cast<float>(renderImg->info.height);
-                p_min = ImVec2(px, py);
-                p_max = ImVec2(px + imgW, py + imgH);
+                p_min = ImVec2(layer.x, layer.y);
+                p_max = ImVec2(layer.x + renderImg->info.width, layer.y + renderImg->info.height);
                 has_rect = true;
             }
         }

@@ -72,62 +72,32 @@ bool MediaBrowserUI::render()
 void MediaBrowserUI::renderImageDataContent()
 {
     Layer* selected = getSelectedLayer();
-    if (selected)
-    {
-        if (selected->type == LayerType::Image && selected->img)
-        {
-            auto image = selected->img;
-            ImGui::Text("Layer: %s", selected->name.c_str());
-            ImGui::Text("File: %s", selected->name.c_str());
-            ImGui::Text("Size: %s", common::format_size(image->size()));
-            ImGui::Text("Dimensions:");
-            ImGui::Text("  %lu x %lu", image->info.width, image->info.height);
-            ImGui::Text("Display Size:");
-            ImGui::Text("  %.0f x %.0f", image->info.width * previewScale, image->info.height * previewScale);
-            ImGui::Text("Scale: %.1fx", previewScale);
-        }
-        else if (selected->type == LayerType::Text)
-        {
-            ImGui::Text("Layer: %s", selected->name.c_str());
-            ImGui::Text("Type: Text");
-            ImGui::Text("Content: %s", selected->textContent.c_str());
-            ImGui::Text("Font size: %.1f", selected->fontSize);
-        }
-        else
-        {
-            ImGui::TextDisabled("No layer selected");
-        }
-    }
-    else
+    if (!selected)
     {
         ImGui::TextDisabled("No layer selected");
+        return;
+    }
+
+    ImGui::Text("Layer (%d): %s", selected->id, selected->name.c_str());
+    ImGui::Text("File: %s", selected->getLayerName().c_str());
+    ImGui::Text("Size: %s", common::format_size(selected->getSize()));
+    ImGui::Text("Position (x, y): (%.1f, %.1f)", selected->x, selected->y);
+    ImGui::Text("Layer number: %d", selected->getLayerNumber());
+    ImGui::Text("Dimensions: %lu x %lu", selected->getWidth(), selected->getHeight());
+    ImGui::Text("Format: %s", fromImageFormatToString(selected->getFormat()).c_str());
+
+    if (selected->type == LayerType::Gif && selected->gif)
+    {
+        ImGui::Text("GIF Frames: %zu", selected->gif->frames().size());
+        ImGui::Text("Current Frame Index: %zu", selected->gifFrameIndex);
+    }
+    else if (selected->type == LayerType::Text)
+    {
+        ImGui::Text("Content: %s", selected->textContent.c_str());
+        ImGui::Text("Font size: %.1f", selected->fontSize);
     }
 }
 
-void MediaBrowserUI::renderPreviewControlsContent()
-{
-    ImGui::Text("Scale:");
-    bool scaleChanged = ImGui::SliderFloat("##Scale", &previewScale, 0.1f, 5.0f, "%.1fx");
-
-    if (ImGui::Checkbox("Fit to Window", &fitToWindow))
-    {
-        Layer* selected = getSelectedLayer();
-        if (fitToWindow && selected)
-        {
-            float width = 800, height = 600;
-            if (selected->type == LayerType::Image && selected->img)
-            {
-                width = static_cast<float>(selected->img->info.width);
-                height = static_cast<float>(selected->img->info.height);
-            }
-            previewScale = calculateFitScale(width, height);
-        }
-    }
-    if (scaleChanged)
-    {
-        fitToWindow = false;
-    }
-}
 
 void MediaBrowserUI::renderImageOperationsContent()
 {
@@ -221,7 +191,6 @@ void MediaBrowserUI::renderImageOperationsContent()
 
 void MediaBrowserUI::renderSceneCompositor()
 {
- 
     if (!layerManager_)
     {
         return;
@@ -240,7 +209,10 @@ void MediaBrowserUI::renderSceneCompositor()
         if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(120, 0)))
         {
             // Deselect all, select this one
-            for (auto& l : layers) l.selected = false;
+            for (auto& l : layers)
+            {
+                l.selected = false;
+            }
             layer.selected = true;
         }
         ImGui::EndGroup();
@@ -257,7 +229,8 @@ void MediaBrowserUI::renderSceneCompositor()
             {
                 std::swap(layers[i], layers[i - 1]);
                 // Keep selection on the moved layer
-                if (layers[i].selected) {
+                if (layers[i].selected)
+                {
                     layers[i - 1].selected = true;
                     layers[i].selected = false;
                 }
@@ -282,7 +255,8 @@ void MediaBrowserUI::renderSceneCompositor()
             {
                 std::swap(layers[i], layers[i + 1]);
                 // Keep selection on the moved layer
-                if (layers[i].selected) {
+                if (layers[i].selected)
+                {
                     layers[i + 1].selected = true;
                     layers[i].selected = false;
                 }
@@ -319,9 +293,19 @@ void MediaBrowserUI::renderSceneCompositor()
         layers.erase(layers.begin() + removeIndex);
         // Select first layer if none selected
         bool anySelected = false;
-        for (auto& l : layers) if (l.selected) anySelected = true;
-        if (!layers.empty() && (!anySelected || wasSelected)) {
-            for (auto& l : layers) l.selected = false;
+        for (auto& l : layers)
+        {
+            if (l.selected)
+            {
+                anySelected = true;
+            }
+        }
+        if (!layers.empty() && (!anySelected || wasSelected))
+        {
+            for (auto& l : layers)
+            {
+                l.selected = false;
+            }
             layers[0].selected = true;
         }
         if (layerManager_)
@@ -342,57 +326,14 @@ void MediaBrowserUI::renderSceneCompositor()
 Layer* MediaBrowserUI::getSelectedLayer()
 {
     auto& layers = layerManager_->getLayers();
-    for (auto& layer : layers) {
-        if (layer.selected) return &layer;
+    for (auto& layer : layers)
+    {
+        if (layer.selected)
+        {
+            return &layer;
+        }
     }
     return nullptr;
 }
 
-ImVec2 MediaBrowserUI::calculatePreviewSize(float originalWidth, float originalHeight)
-{
-    float scale = previewScale;
-
-    if (fitToWindow)
-    {
-        scale = calculateFitScale(originalWidth, originalHeight);
-        // Don't modify previewScale here to avoid affecting centering calculations
-    }
-
-    return ImVec2(originalWidth * scale, originalHeight * scale);
-}
-
-float MediaBrowserUI::calculateFitScale(float originalWidth, float originalHeight)
-{
-    ImVec2 availableSize = ImGui::GetContentRegionMax();
-
-    float extra_padding = -2.5f;
-    float scaleX = (availableSize.x + extra_padding) / originalWidth;
-    float scaleY = (availableSize.y + extra_padding) / originalHeight;
-
-    float fitScale = std::min(scaleX, scaleY);
-
-    if (fitToWindow)
-    {
-        previewScale = fitScale;
-    }
-
-    return fitScale;
-}
-
-ImVec2 MediaBrowserUI::calculateCenterPosition(const ImVec2& previewSize)
-{
-    ImVec2 availableSize = ImGui::GetContentRegionMax();
-
-    // Ensure we don't get negative positions
-    float centerX = std::max(0.0f, (availableSize.x - previewSize.x) * 0.5f);
-    float centerY = std::max(0.0f, (availableSize.y - previewSize.y) * 0.5f);
-
-    return ImVec2(centerX, centerY);
-}
-
-void MediaBrowserUI::resetPreviewControls()
-{
-    previewScale = 1.0f;
-    fitToWindow = true;
-}
 } // namespace linuxface

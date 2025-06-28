@@ -38,11 +38,12 @@ class Gif
         y_ = y;
     }
     inline std::string getFilename() const { return filename_; }
+    inline size_t getSize() const { return size_; }
   private:
     gd_GIF* gif_ = nullptr;
     std::vector<std::unique_ptr<Image>> frameImages_;
     size_t index_{0};
-
+    size_t size_{0};
     std::string filename_;
 
     long x_{0}, y_{0};

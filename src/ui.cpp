@@ -262,12 +262,13 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                         auto newImage = origImage->deepCopy();
                         if (newImage)
                         {
-                            newImage->info.textureId = 0; // Invalidate texture
+                            newImage->info.textureId = 0;
                             Layer newLayer;
                             newLayer.id = Layer::next_id++;
                             newLayer.type = LayerType::Image;
                             newLayer.name = item;
                             newLayer.img = std::move(newImage);
+                            newLayer.img->setTextureId(0);
                             newLayer.dirty = true;
 
                             layerManager_->addLayer(newLayer);
