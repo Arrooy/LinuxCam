@@ -392,139 +392,16 @@ void Application::process(std::unique_ptr<Image>& image)
         face.paintBoundingBox(image, Pixel(0, 255, 0));
     }
 
-    // 2. Calculate embedding of image named adria_face.jpeg
-    std::vector<float> adria_embedding;
-    bool adria_ok = false;
-    if (arcfaceRecognizer_ && arcfaceRecognizer_->isReady() && adria_img_) {
-        // Detect face and get 5-point landmarks
-        std::vector<Face> adria_faces = scrfdDetector_ ? scrfdDetector_->detect(adria_img_) : std::vector<Face>{};
-        if (!adria_faces.empty()) {
-            std::vector<math_utils::Point> adria_landmarks = adria_faces[0].getFivePointLandmarksArcFaceOrder();
-            if (adria_landmarks.size() == 5) {
-                adria_ok = arcfaceRecognizer_->recognize(*adria_img_, adria_landmarks, adria_embedding);
-            }
-        }
-    }
-
-    // 3. Calculate embedding of webcam image (first detected face)
-    std::vector<float> webcam_embedding;
-    bool webcam_ok = false;
-    if (arcfaceRecognizer_ && arcfaceRecognizer_->isReady() && !scrfd_faces.empty())
-    {
-        std::vector<math_utils::Point> webcam_landmarks = scrfd_faces[0].getFivePointLandmarksArcFaceOrder();
-        if (webcam_landmarks.size() == 5)
-        {
-            webcam_ok = arcfaceRecognizer_->recognize(*image, webcam_landmarks, webcam_embedding);
-        }
-    }
-
-    // 2b. Calculate embedding of a.jpeg
-    std::vector<float> a_embedding;
-    bool a_ok = false;
-    if (arcfaceRecognizer_ && arcfaceRecognizer_->isReady() && a_img_) {
-        std::vector<Face> a_faces = scrfdDetector_ ? scrfdDetector_->detect(a_img_) : std::vector<Face>{};
-        if (!a_faces.empty()) {
-            std::vector<math_utils::Point> a_landmarks = a_faces[0].getFivePointLandmarksArcFaceOrder();
-            if (a_landmarks.size() == 5) {
-                a_ok = arcfaceRecognizer_->recognize(*a_img_, a_landmarks, a_embedding);
-            }
-        }
-    }
-    // 2c. Calculate embedding of b.jpeg
-    std::vector<float> b_embedding;
-    bool b_ok = false;
-    if (arcfaceRecognizer_ && arcfaceRecognizer_->isReady() && b_img_) {
-        std::vector<Face> b_faces = scrfdDetector_ ? scrfdDetector_->detect(b_img_) : std::vector<Face>{};
-        if (!b_faces.empty()) {
-            std::vector<math_utils::Point> b_landmarks = b_faces[0].getFivePointLandmarksArcFaceOrder();
-            if (b_landmarks.size() == 5) {
-                b_ok = arcfaceRecognizer_->recognize(*b_img_, b_landmarks, b_embedding);
-            }
-        }
-    }
-
-    // Debug: print first 5 values of each embedding
-    if (adria_ok) {
-        std::string s = "adria_face.jpeg embedding: ";
-        for (size_t i = 0; i < std::min<size_t>(5, adria_embedding.size()); ++i) s += std::to_string(adria_embedding[i]) + ", ";
-        common::log_info("%s", s.c_str());
-    }
-    if (a_ok) {
-        std::string s = "a.jpeg embedding: ";
-        for (size_t i = 0; i < std::min<size_t>(5, a_embedding.size()); ++i) s += std::to_string(a_embedding[i]) + ", ";
-        common::log_info("%s", s.c_str());
-    }
-    if (b_ok) {
-        std::string s = "b.jpeg embedding: ";
-        for (size_t i = 0; i < std::min<size_t>(5, b_embedding.size()); ++i) s += std::to_string(b_embedding[i]) + ", ";
-        common::log_info("%s", s.c_str());
-    }
-    if (webcam_ok) {
-        std::string s = "webcam embedding: ";
-        for (size_t i = 0; i < std::min<size_t>(5, webcam_embedding.size()); ++i) s += std::to_string(webcam_embedding[i]) + ", ";
-        common::log_info("%s", s.c_str());
-    }
-
-    // 4. Test if faces are similar (cosine similarity > 0.5 is a common threshold)
-    if (adria_ok && webcam_ok)
-    {
-        float dot = 0.0f, norm1 = 0.0f, norm2 = 0.0f;
-        for (size_t i = 0; i < adria_embedding.size(); ++i)
-        {
-            dot += adria_embedding[i] * webcam_embedding[i];
-            norm1 += adria_embedding[i] * adria_embedding[i];
-            norm2 += webcam_embedding[i] * webcam_embedding[i];
-        }
-        float similarity = dot / (std::sqrt(norm1) * std::sqrt(norm2) + 1e-6f);
-        common::log_info("ArcFace similarity (adria_face.jpeg vs webcam): %.4f", similarity);
-        if (similarity > 0.5f)
-        {
-            common::log_info("Faces are similar (likely the same person)");
-        }
-        else
-        {
-            common::log_info("Faces are NOT similar (likely different people)");
-        }
-    }
-    
-    // 4b. Test if a.jpeg is similar to webcam (should NOT be similar)
-    if (a_ok && webcam_ok) {
-        float dot = 0.0f, norm1 = 0.0f, norm2 = 0.0f;
-        for (size_t i = 0; i < a_embedding.size(); ++i) {
-            dot += a_embedding[i] * webcam_embedding[i];
-            norm1 += a_embedding[i] * a_embedding[i];
-            norm2 += webcam_embedding[i] * webcam_embedding[i];
-        }
-        float similarity = dot / (std::sqrt(norm1) * std::sqrt(norm2) + 1e-6f);
-        common::log_info("ArcFace similarity (a.jpeg vs webcam): %.4f", similarity);
-        if (similarity > 0.5f) {
-            common::log_info("a.jpeg and webcam are similar (unexpected)");
-        } else {
-            common::log_info("a.jpeg and webcam are NOT similar (expected)");
-        }
-    }
-    // 4c. Test if b.jpeg is similar to webcam (should NOT be similar)
-    if (b_ok && webcam_ok) {
-        float dot = 0.0f, norm1 = 0.0f, norm2 = 0.0f;
-        for (size_t i = 0; i < b_embedding.size(); ++i) {
-            dot += b_embedding[i] * webcam_embedding[i];
-            norm1 += b_embedding[i] * b_embedding[i];
-            norm2 += webcam_embedding[i] * webcam_embedding[i];
-        }
-        float similarity = dot / (std::sqrt(norm1) * std::sqrt(norm2) + 1e-6f);
-        common::log_info("ArcFace similarity (b.jpeg vs webcam): %.4f", similarity);
-        if (similarity > 0.5f) {
-            common::log_info("b.jpeg and webcam are similar (unexpected)");
-        } else {
-            common::log_info("b.jpeg and webcam are NOT similar (expected)");
-        }
-    }
-
-    // 1. Draw the image with landmarks drawn
-    for (auto& face : scrfd_faces)
-    {
-        face.paintAllFaceLandmarks(image, false); // Draw landmarks (not joined)
-    }
+    // std::vector<float> webcam_embedding;
+    // bool webcam_ok = false;
+    // if (arcfaceRecognizer_ && arcfaceRecognizer_->isReady() && !scrfd_faces.empty())
+    // {
+    //     std::vector<math_utils::Point> webcam_landmarks = scrfd_faces[0].getFivePointLandmarksArcFaceOrder();
+    //     if (webcam_landmarks.size() == 5)
+    //     {
+    //         webcam_ok = arcfaceRecognizer_->recognize(*image, webcam_landmarks, webcam_embedding, "aligned_webcam.ppm");
+    //     }
+    // }
 }
 
 void Application::shutdown()

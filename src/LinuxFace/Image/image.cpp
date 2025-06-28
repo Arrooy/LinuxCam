@@ -87,7 +87,7 @@ Image::Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(siz
 }
 
 // Add missing move constructor and assignment operator
-Image::Image(Image&& other) noexcept :  info(other.info), data_(std::move(other.data_)), size_(other.size_)
+Image::Image(Image&& other) noexcept : info(other.info), data_(std::move(other.data_)), size_(other.size_)
 {
     other.size_ = 0;
     other.info = {};
@@ -1213,22 +1213,39 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
 }
 
 
-bool Image::isFullyOpaque() const {
-    if (info.pixelSizeBytes != 4) return true; // Only RGBA can be non-opaque
-    if (!data_ || size_ == 0) return false;
+bool Image::isFullyOpaque() const
+{
+    if (info.pixelSizeBytes != 4)
+    {
+        return true; // Only RGBA can be non-opaque
+    }
+    if (!data_ || size_ == 0)
+    {
+        return false;
+    }
     const unsigned char* d = data_.get();
-    for (size_t i = 3; i < size_; i += 4) {
-        if (d[i] != 255) return false;
+    for (size_t i = 3; i < size_; i += 4)
+    {
+        if (d[i] != 255)
+        {
+            return false;
+        }
     }
     return true;
 }
 
-void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth, size_t copyHeight) {
-    if (!src.data() || !data_) return;
+void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,
+                                size_t copyHeight)
+{
+    if (!src.data() || !data_)
+    {
+        return;
+    }
     const unsigned char* srcData = src.data();
     unsigned char* dstData = data_.get();
     const unsigned char pixelSize = info.pixelSizeBytes;
-    for (size_t row = 0; row < copyHeight; ++row) {
+    for (size_t row = 0; row < copyHeight; ++row)
+    {
         size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * pixelSize;
         size_t dstRowIdx = ((dstY + row) * info.width + dstX) * pixelSize;
         std::memcpy(dstData + dstRowIdx, srcData + srcRowIdx, copyWidth * pixelSize);
@@ -1284,9 +1301,10 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     {
         // Fast path: fully in-bounds, same format, fully opaque
         bool fullyOpaque = (info.pixelSizeBytes != 4) || other.isFullyOpaque();
-        bool fullyInBounds = otherLeft >= baseLeft && otherTop >= baseTop &&
-                             otherRight <= baseRight && otherBottom <= baseBottom;
-        if (fullyOpaque && fullyInBounds) {
+        bool fullyInBounds =
+            otherLeft >= baseLeft && otherTop >= baseTop && otherRight <= baseRight && otherBottom <= baseBottom;
+        if (fullyOpaque && fullyInBounds)
+        {
             // Compute offsets
             long dstX = otherLeft - baseLeft;
             long dstY = otherTop - baseTop;
@@ -1329,7 +1347,7 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
 
     return *this;
 }
-
+// TODO: can be optimized further.
 std::unique_ptr<Image> Image::affineWarp(const float* M, int out_width, int out_height) const
 {
     // Create output image
@@ -1338,32 +1356,49 @@ std::unique_ptr<Image> Image::affineWarp(const float* M, int out_width, int out_
     out_img->info = info;
     out_img->info.width = out_width;
     out_img->info.height = out_height;
+    out_img->info.format = ImageFormat::RGB;
+    out_img->info.pixelSizeBytes = 3;
     unsigned char* dst = out_img->data();
     const unsigned char* src = data_.get();
     // Inverse affine for backward mapping
     float a = M[0], b = M[1], c = M[2];
     float d = M[3], e = M[4], f = M[5];
-    float det = a*e - b*d;
-    if (fabs(det) < 1e-8f) return out_img; // Singular, return blank
-    float ia = e/det, ib = -b/det, ic = (b*f-e*c)/det;
-    float id = -d/det, ie = a/det,  if_ = (d*c-a*f)/det;
+    float det = a * e - b * d;
+    if (fabs(det) < 1e-8f)
+    {
+        return out_img; // Singular, return blank
+    }
+    float ia = e / det, ib = -b / det, ic = (b * f - e * c) / det;
+    float id = -d / det, ie = a / det, if_ = (d * c - a * f) / det;
     int chans = info.pixelSizeBytes;
-    for (int y = 0; y < out_height; ++y) {
-        for (int x = 0; x < out_width; ++x) {
-            float src_x = ia*x + ib*y + ic;
-            float src_y = id*x + ie*y + if_;
+    for (int y = 0; y < out_height; ++y)
+    {
+        for (int x = 0; x < out_width; ++x)
+        {
+            float src_x = ia * x + ib * y + ic;
+            float src_y = id * x + ie * y + if_;
             int sx = static_cast<int>(src_x + 0.5f);
             int sy = static_cast<int>(src_y + 0.5f);
-            if (sx >= 0 && sx < static_cast<int>(info.width) && sy >= 0 && sy < static_cast<int>(info.height)) {
+            if (sx >= 0 && sx < static_cast<int>(info.width) && sy >= 0 && sy < static_cast<int>(info.height))
+            {
                 size_t src_idx = (sy * info.width + sx) * chans;
                 size_t dst_idx = (y * out_width + x) * chans;
-                for (int c = 0; c < chans; ++c) dst[dst_idx + c] = src[src_idx + c];
-            } else {
+                for (int c = 0; c < chans; ++c)
+                {
+                    dst[dst_idx + c] = src[src_idx + c];
+                }
+            }
+            else
+            {
                 size_t dst_idx = (y * out_width + x) * chans;
-                for (int c = 0; c < chans; ++c) dst[dst_idx + c] = 0;
+                for (int c = 0; c < chans; ++c)
+                {
+                    dst[dst_idx + c] = 0;
+                }
             }
         }
     }
+
     return out_img;
 }
 } // namespace linuxface

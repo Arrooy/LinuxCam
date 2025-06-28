@@ -10,12 +10,13 @@ ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnx_model_path) : OnnxD
 {
 }
 
-std::unique_ptr<Image> ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5)
+std::unique_ptr<Image>
+ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5)
 {
     const int target_size = 112;
     if (face_landmark_5.size() == 5)
     {
-        // ArcFace 112x112 canonical template (from face_utils)
+        // ArcFace 112x112 normalized landmark positions
         static const float template_112[5][2] = {
             {0.34191607f, 0.46157411f},
             {0.65653393f, 0.45983393f},
@@ -26,10 +27,8 @@ std::unique_ptr<Image> ArcfaceRecognizer::preprocess(const Image& input_img, con
         std::vector<math_utils::Point> template_points;
         for (int i = 0; i < 5; ++i)
         {
-            template_points.emplace_back(
-                static_cast<long>(template_112[i][0] * target_size),
-                static_cast<long>(template_112[i][1] * target_size)
-            );
+            template_points.emplace_back(static_cast<long>(template_112[i][0] * target_size),
+                                         static_cast<long>(template_112[i][1] * target_size));
         }
         // Estimate affine transform from face_landmark_5 to template_points
         // Use least squares for 2x3 affine matrix: A * src = dst
@@ -37,17 +36,16 @@ std::unique_ptr<Image> ArcfaceRecognizer::preprocess(const Image& input_img, con
         float src[10], dst[10];
         for (int i = 0; i < 5; ++i)
         {
-            src[2*i] = static_cast<float>(face_landmark_5[i].x);
-            src[2*i+1] = static_cast<float>(face_landmark_5[i].y);
-            dst[2*i] = static_cast<float>(template_points[i].x);
-            dst[2*i+1] = static_cast<float>(template_points[i].y);
+            src[2 * i] = static_cast<float>(face_landmark_5[i].x);
+            src[2 * i + 1] = static_cast<float>(face_landmark_5[i].y);
+            dst[2 * i] = static_cast<float>(template_points[i].x);
+            dst[2 * i + 1] = static_cast<float>(template_points[i].y);
         }
         // Solve for affine: dst = M * src
         // We'll use a simple least squares fit for 2x3 affine
         float M[6] = {0};
-        math_utils::estimate_affine_2d(src, dst, 5, M); // You need to implement this in math_utils
-        // Warp the image using the affine matrix M (2x3)
-        return input_img.affineWarp(M, target_size, target_size); // You need to implement affineWarp in Image
+        math_utils::estimate_affine_2d(src, dst, 5, M);
+        return input_img.affineWarp(M, target_size, target_size);
     }
     // Fallback: just scale the whole image
     return input_img.scale(target_size, target_size);
@@ -81,6 +79,7 @@ bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math
     auto output_tensors = detector_session_->Run(runOptions, input_node_names_.data(), &input_tensor, 1,
                                                  output_node_names_.data(), output_node_names_str_.size());
     float* pdata = output_tensors[0].GetTensorMutableData<float>();
+
     embedding.assign(pdata, pdata + 512);
     float norm = 0.0f;
     for (const auto& val : embedding)
