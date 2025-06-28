@@ -160,6 +160,77 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
     return static_cast<float>(intersection_area) / static_cast<float>(union_area);
 }
 
+// Estimate 2D affine transform (least squares fit) from src_pts to dst_pts
+// src: [x0, y0, x1, y1, ...], dst: [x0', y0', x1', y1', ...], n: number of points, M: output 2x3 row-major
+inline void estimate_affine_2d(const float* src, const float* dst, int n, float* M)
+{
+    // Solve for M in dst = M * src (M is 2x3)
+    // Build A and b for least squares: A * m = b
+    // m = [m00, m01, m02, m10, m11, m12]^T
+    float A[36] = {0}; // 2*n x 6
+    float b[10] = {0}; // 2*n
+    for (int i = 0; i < n; ++i) {
+        float x = src[2*i];
+        float y = src[2*i+1];
+        float xp = dst[2*i];
+        float yp = dst[2*i+1];
+        // Row for x'
+        A[2*i*6 + 0] = x;
+        A[2*i*6 + 1] = y;
+        A[2*i*6 + 2] = 1;
+        A[2*i*6 + 3] = 0;
+        A[2*i*6 + 4] = 0;
+        A[2*i*6 + 5] = 0;
+        b[2*i] = xp;
+        // Row for y'
+        A[(2*i+1)*6 + 0] = 0;
+        A[(2*i+1)*6 + 1] = 0;
+        A[(2*i+1)*6 + 2] = 0;
+        A[(2*i+1)*6 + 3] = x;
+        A[(2*i+1)*6 + 4] = y;
+        A[(2*i+1)*6 + 5] = 1;
+        b[2*i+1] = yp;
+    }
+    // Solve least squares: m = (A^T A)^-1 A^T b
+    float AtA[36] = {0};
+    float Atb[6] = {0};
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            for (int k = 0; k < 2*n; ++k) {
+                AtA[i*6+j] += A[k*6+i] * A[k*6+j];
+            }
+        }
+        for (int k = 0; k < 2*n; ++k) {
+            Atb[i] += A[k*6+i] * b[k];
+        }
+    }
+    // Solve AtA * m = Atb (Gaussian elimination)
+    float m[6] = {0};
+    // Simple Gauss-Jordan elimination for 6x6
+    float aug[6][7];
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) aug[i][j] = AtA[i*6+j];
+        aug[i][6] = Atb[i];
+    }
+    for (int i = 0; i < 6; ++i) {
+        // Find pivot
+        int pivot = i;
+        for (int j = i+1; j < 6; ++j) if (fabs(aug[j][i]) > fabs(aug[pivot][i])) pivot = j;
+        if (pivot != i) for (int j = 0; j < 7; ++j) std::swap(aug[i][j], aug[pivot][j]);
+        float div = aug[i][i];
+        if (fabs(div) < 1e-8f) continue;
+        for (int j = 0; j < 7; ++j) aug[i][j] /= div;
+        for (int j = 0; j < 6; ++j) {
+            if (j == i) continue;
+            float f = aug[j][i];
+            for (int k = 0; k < 7; ++k) aug[j][k] -= f * aug[i][k];
+        }
+    }
+    for (int i = 0; i < 6; ++i) m[i] = aug[i][6];
+    // Output
+    for (int i = 0; i < 6; ++i) M[i] = m[i];
+}
+
 } // namespace math_utils
 } // namespace linuxface
 #endif // MATH_UTILS_H

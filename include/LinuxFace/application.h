@@ -17,6 +17,7 @@
 #include "LinuxFace/onnx/rvm.h"
 #include "LinuxFace/Image/mediaManager.h"
 #include "LinuxFace/UI/layerManager.h"
+#include "LinuxFace/onnx/arcfaceRecognizer.h"
 
 namespace linuxface
 {
@@ -52,8 +53,13 @@ class Application
     std::unique_ptr<SCRFDetector> scrfdDetector_;
     std::unique_ptr<MODNetDetector> modnetDetector_;
     std::unique_ptr<RobustVideoMatting> rvmDetector_;
+    std::unique_ptr<ArcfaceRecognizer> arcfaceRecognizer_;
 
     std::shared_ptr<MediaManager> mediaManager_;
+
+    std::unique_ptr<Image> adria_img_;
+    std::unique_ptr<Image> a_img_;
+    std::unique_ptr<Image> b_img_;
 
     // Main loop methods
     bool update();

@@ -1329,4 +1329,41 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
 
     return *this;
 }
+
+std::unique_ptr<Image> Image::affineWarp(const float* M, int out_width, int out_height) const
+{
+    // Create output image
+    size_t out_size = out_width * out_height * info.pixelSizeBytes;
+    auto out_img = std::make_unique<Image>(out_size);
+    out_img->info = info;
+    out_img->info.width = out_width;
+    out_img->info.height = out_height;
+    unsigned char* dst = out_img->data();
+    const unsigned char* src = data_.get();
+    // Inverse affine for backward mapping
+    float a = M[0], b = M[1], c = M[2];
+    float d = M[3], e = M[4], f = M[5];
+    float det = a*e - b*d;
+    if (fabs(det) < 1e-8f) return out_img; // Singular, return blank
+    float ia = e/det, ib = -b/det, ic = (b*f-e*c)/det;
+    float id = -d/det, ie = a/det,  if_ = (d*c-a*f)/det;
+    int chans = info.pixelSizeBytes;
+    for (int y = 0; y < out_height; ++y) {
+        for (int x = 0; x < out_width; ++x) {
+            float src_x = ia*x + ib*y + ic;
+            float src_y = id*x + ie*y + if_;
+            int sx = static_cast<int>(src_x + 0.5f);
+            int sy = static_cast<int>(src_y + 0.5f);
+            if (sx >= 0 && sx < static_cast<int>(info.width) && sy >= 0 && sy < static_cast<int>(info.height)) {
+                size_t src_idx = (sy * info.width + sx) * chans;
+                size_t dst_idx = (y * out_width + x) * chans;
+                for (int c = 0; c < chans; ++c) dst[dst_idx + c] = src[src_idx + c];
+            } else {
+                size_t dst_idx = (y * out_width + x) * chans;
+                for (int c = 0; c < chans; ++c) dst[dst_idx + c] = 0;
+            }
+        }
+    }
+    return out_img;
+}
 } // namespace linuxface

@@ -62,7 +62,7 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
             const auto& extension = entry.path().extension();
             const auto& full_path = entry.path().string();
             bool processingOk{false};
-            if (extension == ".jpg")
+            if (extension == ".jpg" || extension == ".jpeg")
             {
                 std::shared_ptr<Image> image = ImageLoader::loadImageFromFile(full_path);
                 if (image)

@@ -50,11 +50,6 @@ bool MediaBrowserUI::render()
         renderImageOperationsContent();
     }
     ImGui::Spacing();
-    if (ImGui::CollapsingHeader("Preview Controls"))
-    {
-        renderPreviewControlsContent();
-    }
-    ImGui::Spacing();
     if (ImGui::CollapsingHeader("Scene composition", ImGuiTreeNodeFlags_DefaultOpen))
     {
         renderSceneCompositor();
@@ -78,7 +73,7 @@ void MediaBrowserUI::renderImageDataContent()
         return;
     }
 
-    ImGui::Text("Layer (%d): %s", selected->id, selected->name.c_str());
+    ImGui::Text("Layer (%zu): %s", selected->id, selected->name.c_str());
     ImGui::Text("File: %s", selected->getLayerName().c_str());
     ImGui::Text("Size: %s", common::format_size(selected->getSize()));
     ImGui::Text("Position (x, y): (%.1f, %.1f)", selected->x, selected->y);

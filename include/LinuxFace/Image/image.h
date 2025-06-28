@@ -331,6 +331,9 @@ class Image
 
     ImageMetadata info{};
 
+    // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
+    std::unique_ptr<Image> affineWarp(const float* M, int out_width, int out_height) const;
+
   private:
     // Optimized helper methods
     void copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,

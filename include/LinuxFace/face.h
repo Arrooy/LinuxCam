@@ -78,6 +78,8 @@ class Face
 
     FaceBoundingBox getBoundingBox() const { return boundingBox_; }
     void setFacePose(FacePose pose) { pose_ = pose; }
+    // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
+    std::vector<math_utils::Point> getFivePointLandmarksArcFaceOrder() const;
   private:
     void freeFaceLandmarks();
 

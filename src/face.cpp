@@ -8,8 +8,22 @@ using namespace linuxface;
 
 Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
 {
-    // Load landmarks
-    loadNewFaceLandmarks(landmarks);
+    if (landmarks.size() == 5)
+    {
+        // ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
+        // Assign 68-landmark indices for compatibility:
+        // left eye: 36, right eye: 45, nose: 33, left mouth: 48, right mouth: 54
+        landmarks_[LEYE].push_back(FaceLandmark{36, landmarks[0].p});
+        landmarks_[REYE].push_back(FaceLandmark{45, landmarks[1].p});
+        landmarks_[NOSE].push_back(FaceLandmark{33, landmarks[2].p});
+        landmarks_[OUTERMOUTH].push_back(FaceLandmark{48, landmarks[3].p}); // left mouth corner
+        landmarks_[OUTERMOUTH].push_back(FaceLandmark{54, landmarks[4].p}); // right mouth corner
+    }
+    else
+    {
+        // Load 68 landmarks
+        loadNewFaceLandmarks(landmarks);
+    }
 }
 
 Face::Face(FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
@@ -226,6 +240,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
     }
 }
 
+// TODO: remove test color
 void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness, bool testColor) const
 {
     // Convert to radians
@@ -235,7 +250,7 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickn
 
     // TODO: Set tdx tdy to the center of the face.
     auto test_offset = 0;
-    if(testColor)
+    if (testColor)
     {
         test_offset = 50;
     }
@@ -261,7 +276,7 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickn
     auto x_color = Pixel(0, 0, 255);
     auto y_color = Pixel(0, 255, 0);
     auto z_color = Pixel(255, 0, 0);
-    if(testColor)
+    if (testColor)
     {
         x_color = Pixel(200, 50, 255);
         y_color = Pixel(200, 255, 50);
@@ -273,4 +288,35 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickn
     image->paintPoints(Y, y_color);
     auto Z = math_utils::DDA(tdx, tdy, x3, y3);
     image->paintPoints(Z, z_color);
+}
+
+// Retrieve 5-point landmarks in ArcFace order
+std::vector<math_utils::Point> Face::getFivePointLandmarksArcFaceOrder() const
+{
+    // ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
+    std::vector<math_utils::Point> result(5);
+    // Find by landmark index (0-4) in their respective FaceIndex
+    // LEYE (0), REYE (1), NOSE (2), OUTERMOUTH (3,4)
+    // LEYE
+    if (landmarks_.count(LEYE) && !landmarks_.at(LEYE).empty())
+    {
+        result[0] = landmarks_.at(LEYE)[0].p;
+    }
+    // REYE
+    if (landmarks_.count(REYE) && !landmarks_.at(REYE).empty())
+    {
+        result[1] = landmarks_.at(REYE)[0].p;
+    }
+    // NOSE
+    if (landmarks_.count(NOSE) && !landmarks_.at(NOSE).empty())
+    {
+        result[2] = landmarks_.at(NOSE)[0].p;
+    }
+    // OUTERMOUTH (left and right corners)
+    if (landmarks_.count(OUTERMOUTH) && landmarks_.at(OUTERMOUTH).size() >= 2)
+    {
+        result[3] = landmarks_.at(OUTERMOUTH)[0].p;
+        result[4] = landmarks_.at(OUTERMOUTH)[1].p;
+    }
+    return result;
 }
