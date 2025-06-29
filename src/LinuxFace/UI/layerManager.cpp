@@ -94,7 +94,7 @@ bool LayerManager::isDirty() const
     }
     return false;
 }
-
+// TODO:  remove this is duplicated
 void LayerManager::setDirty(bool dirty)
 {
     for (auto& l : layers_)

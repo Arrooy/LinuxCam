@@ -18,7 +18,7 @@
 #include "LinuxFace/Image/mediaManager.h"
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/onnx/arcfaceRecognizer.h"
-
+#include "LinuxFace/onnx/inswapper.h"
 namespace linuxface
 {
 
@@ -54,6 +54,7 @@ class Application
     std::unique_ptr<MODNetDetector> modnetDetector_;
     std::unique_ptr<RobustVideoMatting> rvmDetector_;
     std::unique_ptr<ArcfaceRecognizer> arcfaceRecognizer_;
+    std::unique_ptr<InSwapper> inswapper_;
 
     std::shared_ptr<MediaManager> mediaManager_;
 
