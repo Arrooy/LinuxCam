@@ -1,6 +1,7 @@
 #include "LinuxFace/onnx/onnxDetector.h"
 
 #include "LinuxFace/math_utils.h"
+#include "config.hpp"
 
 using namespace linuxface;
 
@@ -15,10 +16,9 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
     // session_options_.SetIntraOpNumThreads(4);  // e.g., threads used inside each op
     session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options_.SetLogSeverityLevel(ORT_LOGGING_LEVEL_FATAL);
-    
-    // TODO: Add way of disabling cuda.
+
     // Try to add CUDA provider with better error handling
-    has_cuda_ = checkCudaAvailability();
+    has_cuda_ = Config::getInstance().isGPUEnabled() && checkCudaAvailability();
     if (has_cuda_)
     {
         try

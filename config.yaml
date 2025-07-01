@@ -27,3 +27,5 @@ window:
     title: "LinuxFace"
     width: 1920
     height: 1080
+
+enable_gpu: false

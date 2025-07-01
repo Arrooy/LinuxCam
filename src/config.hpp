@@ -239,16 +239,20 @@ class Config
 
     bool loadConfiguration()
     {
+        if(config_["enable_gpu"])
+        {
+            enableGPU_ = config_["enable_gpu"].as<bool>();
+        }
         return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()
                && validateAndLoadWindowConfig();
     }
 
     // Get configuration sections
     std::vector<WebcamDevice> getWebcams() const { return cameras_; }
-    std::string getMediaFolderPath() const { return external_data_.mediaFolderPath; }
-    std::string getModelFolderPath() const { return external_data_.modelFolderPath; }
-    bool preloadExternalContent() const { return external_data_.preLoading; }
-
+    std::string inline getMediaFolderPath() const { return external_data_.mediaFolderPath; }
+    std::string inline getModelFolderPath() const { return external_data_.modelFolderPath; }
+    bool inline preloadExternalContent() const { return external_data_.preLoading; }
+    bool inline isGPUEnabled() const { return enableGPU_; }
     void getWindowSize(int& width, int& height) const
     {
         width = windowWidth_;
@@ -272,6 +276,8 @@ class Config
     YAML::Node config_;
     std::vector<WebcamDevice> cameras_;
     ExternalData external_data_;
+
+    bool enableGPU_{true};
 
     unsigned int windowWidth_;
     unsigned int windowHeight_;

@@ -165,6 +165,7 @@ void UI::paintMainWindow()
             }
             ImGui::EndMenu();
         }
+
         ImGui::EndMainMenuBar();
     }
 
