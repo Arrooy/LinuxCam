@@ -319,47 +319,6 @@ inline bool estimate_affine_2d(const double* src, const double* dst, int n, doub
     return true;
 }
 
-// Utility: apply 2x3 affine transform to an image buffer (RGB, row-major)
-// src: input buffer, src_w, src_h, src_stride (bytes per row)
-// dst: output buffer, dst_w, dst_h, dst_stride (bytes per row)
-// M: 2x3 affine matrix (row-major)
-inline void affine_warp_rgb(const unsigned char* src, int src_w, int src_h, int src_stride, unsigned char* dst,
-                            int dst_w, int dst_h, int dst_stride, const double* M)
-{
-    // Inverse affine for backward mapping
-    double a = M[0], b = M[1], c = M[2];
-    double d = M[3], e = M[4], f = M[5];
-    double det = a * e - b * d;
-    if (fabs(det) < 1e-12)
-    {
-        return;
-    }
-    double ia = e / det, ib = -b / det, ic = (b * f - e * c) / det;
-    double id = -d / det, ie = a / det, if_ = (d * c - a * f) / det;
-    for (int y = 0; y < dst_h; ++y)
-    {
-        for (int x = 0; x < dst_w; ++x)
-        {
-            double src_x = ia * x + ib * y + ic;
-            double src_y = id * x + ie * y + if_;
-            int ix = static_cast<int>(lround(src_x));
-            int iy = static_cast<int>(lround(src_y));
-            unsigned char* pdst = dst + y * dst_stride + x * 3;
-            if (ix >= 0 && ix < src_w && iy >= 0 && iy < src_h)
-            {
-                const unsigned char* psrc = src + iy * src_stride + ix * 3;
-                pdst[0] = psrc[0];
-                pdst[1] = psrc[1];
-                pdst[2] = psrc[2];
-            }
-            else
-            {
-                pdst[0] = pdst[1] = pdst[2] = 0;
-            }
-        }
-    }
-}
-
 } // namespace math_utils
 } // namespace linuxface
 #endif // MATH_UTILS_H

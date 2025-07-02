@@ -1476,60 +1476,49 @@ Image::affineWarpGeneric(const double* M, int out_width, int out_height, int cha
             double src_x = ia * x + ib * y + ic;
             double src_y = id * x + ie * y + if_;
             unsigned char* pdst = dst + (y * out_width + x) * channels;
-            if (channels == 3 && bilinear)
+
+            if (bilinear)
             {
-                // Bilinear interpolation for RGB
-                int x0 = static_cast<int>(floor(src_x));
-                int y0 = static_cast<int>(floor(src_y));
+                int x0 = static_cast<int>(std::floor(src_x));
+                int y0 = static_cast<int>(std::floor(src_y));
                 int x1 = x0 + 1;
                 int y1 = y0 + 1;
-                double wx = src_x - x0;
-                double wy = src_y - y0;
-                for (int c = 0; c < 3; ++c)
+
+                if (x0 >= 0 && x1 < in_width && y0 >= 0 && y1 < in_height)
                 {
-                    double v = 0.0;
-                    for (int dyIdx = 0; dyIdx <= 1; ++dyIdx)
-                    {
-                        int sy = (dyIdx == 0) ? y0 : y1;
-                        if (sy < 0 || sy >= in_height)
-                        {
-                            continue;
-                        }
-                        double wyf = (dyIdx == 0) ? (1.0 - wy) : wy;
-                        for (int dxIdx = 0; dxIdx <= 1; ++dxIdx)
-                        {
-                            int sx = (dxIdx == 0) ? x0 : x1;
-                            if (sx < 0 || sx >= in_width)
-                            {
-                                continue;
-                            }
-                            double wxf = (dxIdx == 0) ? (1.0 - wx) : wx;
-                            unsigned long srcIdx = (sy * in_width + sx) * 3 + c;
-                            v += src[srcIdx] * wyf * wxf;
-                        }
-                    }
-                    pdst[c] = static_cast<unsigned char>(std::clamp(v, 0.0, 255.0));
-                }
-            }
-            else
-            {
-                // Nearest neighbor for all other cases (including single channel)
-                int ix = static_cast<int>(lround(src_x));
-                int iy = static_cast<int>(lround(src_y));
-                if (ix >= 0 && ix < in_width && iy >= 0 && iy < in_height)
-                {
-                    const unsigned char* psrc = src + (iy * in_width + ix) * channels;
+                    double wx = src_x - x0;
+                    double wy = src_y - y0;
+
                     for (int c = 0; c < channels; ++c)
                     {
-                        pdst[c] = psrc[c];
+                        double v = (1 - wx) * (1 - wy) * src[(y0 * in_width + x0) * channels + c]
+                                   + wx * (1 - wy) * src[(y0 * in_width + x1) * channels + c]
+                                   + (1 - wx) * wy * src[(y1 * in_width + x0) * channels + c]
+                                   + wx * wy * src[(y1 * in_width + x1) * channels + c];
+
+                        pdst[c] = static_cast<unsigned char>(std::round(std::clamp(v, 0.0, 255.0)));
                     }
                 }
                 else
                 {
-                    for (int c = 0; c < channels; ++c)
-                    {
-                        pdst[c] = 0;
-                    }
+                    // If out of bounds, set black
+                    std::fill(pdst, pdst + channels, 0);
+                }
+            }
+            else
+            {
+                // Nearest neighbor
+                int ix = static_cast<int>(std::round(src_x));
+                int iy = static_cast<int>(std::round(src_y));
+
+                if (ix >= 0 && ix < in_width && iy >= 0 && iy < in_height)
+                {
+                    const unsigned char* psrc = src + (iy * in_width + ix) * channels;
+                    std::memcpy(pdst, psrc, channels);
+                }
+                else
+                {
+                    std::fill(pdst, pdst + channels, 0);
                 }
             }
         }
