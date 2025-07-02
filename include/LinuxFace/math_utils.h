@@ -12,8 +12,8 @@ namespace math_utils
 
 struct Anchor
 {
-    float cx;
-    float cy;
+    double cx;
+    double cy;
     int stride;
 };
 struct Point
@@ -26,10 +26,10 @@ struct Point
 
 struct StridePoint
 {
-    StridePoint(float x1, float y1, float s) : cx(x1), cy(y1), stride(s) {}
-    float cx;
-    float cy;
-    float stride;
+    StridePoint(double x1, double y1, double s) : cx(x1), cy(y1), stride(s) {}
+    double cx;
+    double cy;
+    double stride;
 };
 
 template <typename T = long>
@@ -95,18 +95,15 @@ std::vector<Point> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
     T steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
 
     // calculate increment in x & y for each steps
-    float xInc = static_cast<float>(dx) / static_cast<float>(steps);
-    float yInc = static_cast<float>(dy) / static_cast<float>(steps);
-
-    // common::log_info("DDA line: (%d, %d) -> (%d, %d)", x1, y1, x2, y2);
-    // common::log_info("Steps and increment: %d, XInc %f, YInc%f", steps, xInc, yInc);
+    double xInc = static_cast<double>(dx) / static_cast<double>(steps);
+    double yInc = static_cast<double>(dy) / static_cast<double>(steps);
 
     // Put pixel for each step
-    float x = static_cast<float>(x1);
-    float y = static_cast<float>(y1);
+    double x = static_cast<double>(x1);
+    double y = static_cast<double>(y1);
     for (int i = 0; i <= steps; i++)
     {
-        const Point p = Point(round(x), round(y));
+        const Point p = Point(lround(x), lround(y));
         result.emplace_back(p);
         x += xInc; // increment in x at each step
         y += yInc; // increment in y at each step
@@ -165,7 +162,7 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
 // Estimate 2D affine transform (least squares fit) from src_pts to dst_pts
 // src: [x0, y0, x1, y1, ...], dst: [x0', y0', x1', y1', ...], n: number of points, M: output 2x3 row-major
 // Returns true if successful, false if failed (M is set to identity on failure)
-inline bool estimate_affine_2d(const float* src, const float* dst, int n, float* M)
+inline bool estimate_affine_2d(const double* src, const double* dst, int n, double* M)
 {
     // Input validation: check for NaN/Inf
     for (int i = 0; i < 2 * n; ++i)
@@ -196,10 +193,10 @@ inline bool estimate_affine_2d(const float* src, const float* dst, int n, float*
     std::vector<double> b(2 * n, 0.0);
     for (int i = 0; i < n; ++i)
     {
-        double x = static_cast<double>(src[2 * i]);
-        double y = static_cast<double>(src[2 * i + 1]);
-        double xp = static_cast<double>(dst[2 * i]);
-        double yp = static_cast<double>(dst[2 * i + 1]);
+        double x = src[2 * i];
+        double y = src[2 * i + 1];
+        double xp = dst[2 * i];
+        double yp = dst[2 * i + 1];
         // Row for x'
         A[(2 * i) * 6 + 0] = x;
         A[(2 * i) * 6 + 1] = y;
@@ -235,7 +232,7 @@ inline bool estimate_affine_2d(const float* src, const float* dst, int n, float*
         }
     }
     // Regularization (Tikhonov): add small value to diagonal
-    const double lambda = 1e-8;
+    const double lambda = 1e-10;
     for (int i = 0; i < 6; ++i)
     {
         AtA[i][i] += lambda;
@@ -317,7 +314,7 @@ inline bool estimate_affine_2d(const float* src, const float* dst, int n, float*
             M[5] = 0;
             return false;
         }
-        M[i] = static_cast<float>(aug[i][6]);
+        M[i] = aug[i][6];
     }
     return true;
 }
@@ -327,26 +324,26 @@ inline bool estimate_affine_2d(const float* src, const float* dst, int n, float*
 // dst: output buffer, dst_w, dst_h, dst_stride (bytes per row)
 // M: 2x3 affine matrix (row-major)
 inline void affine_warp_rgb(const unsigned char* src, int src_w, int src_h, int src_stride, unsigned char* dst,
-                            int dst_w, int dst_h, int dst_stride, const float* M)
+                            int dst_w, int dst_h, int dst_stride, const double* M)
 {
     // Inverse affine for backward mapping
-    float a = M[0], b = M[1], c = M[2];
-    float d = M[3], e = M[4], f = M[5];
-    float det = a * e - b * d;
-    if (fabs(det) < 1e-8f)
+    double a = M[0], b = M[1], c = M[2];
+    double d = M[3], e = M[4], f = M[5];
+    double det = a * e - b * d;
+    if (fabs(det) < 1e-12)
     {
         return;
     }
-    float ia = e / det, ib = -b / det, ic = (b * f - e * c) / det;
-    float id = -d / det, ie = a / det, if_ = (d * c - a * f) / det;
+    double ia = e / det, ib = -b / det, ic = (b * f - e * c) / det;
+    double id = -d / det, ie = a / det, if_ = (d * c - a * f) / det;
     for (int y = 0; y < dst_h; ++y)
     {
         for (int x = 0; x < dst_w; ++x)
         {
-            float src_x = ia * x + ib * y + ic;
-            float src_y = id * x + ie * y + if_;
-            int ix = static_cast<int>(roundf(src_x));
-            int iy = static_cast<int>(roundf(src_y));
+            double src_x = ia * x + ib * y + ic;
+            double src_y = id * x + ie * y + if_;
+            int ix = static_cast<int>(lround(src_x));
+            int iy = static_cast<int>(lround(src_y));
             unsigned char* pdst = dst + y * dst_stride + x * 3;
             if (ix >= 0 && ix < src_w && iy >= 0 && iy < src_h)
             {

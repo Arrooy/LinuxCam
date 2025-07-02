@@ -4,11 +4,13 @@
 #include <iostream>
 #include <memory>
 
+#include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/depthImage.h"
 #include "LinuxFace/dlibDetectors.h"
 #include "LinuxFace/inputWebcam.h"
+#include "LinuxFace/onnx/swapPipeline.h"
 #include "config.hpp"
 using namespace linuxface;
 
@@ -141,23 +143,25 @@ bool Application::initialize()
 
     // 1ms time inference
     std::string scrfd_500m_bnkps_path = models_folder + "scrfd_500m_bnkps_shape640x640.onnx";
-    scrfdDetector_ = std::make_unique<SCRFDetector>(scrfd_500m_bnkps_path);
+    scrfdDetector_ = std::make_shared<SCRFDetector>(scrfd_500m_bnkps_path);
 
     std::string modnet_onnx_path = models_folder + "modnet.onnx";
     // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
     std::string rvm_model = models_folder + "rvm_mobilenetv3_fp32.onnx";
+    // rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
 
-    rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
 
     // ArcFace recognizer initialization
     std::string arcface_model = models_folder + "arcface_w600k_r50.onnx";
-    arcfaceRecognizer_ = std::make_unique<ArcfaceRecognizer>(arcface_model);
+    arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcface_model);
 
     // InSwapper initialization
     std::string inswapper_model = models_folder + "inswapper_128.onnx";
-    inswapper_ = std::make_unique<InSwapper>(inswapper_model);
+    inswapper_ = std::make_shared<InSwapper>(inswapper_model);
 
+    // Initialize SwapPipeline after all models are loaded
+    swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
     // Pass pointer instead of reference
     ui_->connect(cameraManager_);
 
@@ -174,26 +178,12 @@ bool Application::initialize()
     mediaManager_ = std::make_shared<MediaManager>(imageRender_);
     ui_->connect(mediaManager_);
 
-    // Load adria_face.jpeg once
-    std::string adria_path = Config::getInstance().getMediaFolderPath() + "adria_face.jpeg";
-    adria_img_ = ImageLoader::loadImageFromFile(adria_path);
-    if (!adria_img_)
-    {
-        common::log_error("Failed to load adria_face.jpeg at initialization");
-    }
-
     // Load a.jpeg and b.jpeg once
-    std::string a_path = Config::getInstance().getMediaFolderPath() + "a.jpeg";
-    a_img_ = ImageLoader::loadImageFromFile(a_path);
-    if (!a_img_)
+    std::string target_path = Config::getInstance().getMediaFolderPath() + "a.jpeg";
+    target_img_ = ImageLoader::loadImageFromFile(target_path);
+    if (!target_img_)
     {
-        common::log_error("Failed to load a.jpeg at initialization");
-    }
-    std::string b_path = Config::getInstance().getMediaFolderPath() + "b.jpeg";
-    b_img_ = ImageLoader::loadImageFromFile(b_path);
-    if (!b_img_)
-    {
-        common::log_error("Failed to load b.jpeg at initialization");
+        common::log_error("Failed to load image at initialization");
     }
 
     common::log_info("Application initialized successfully");
@@ -332,10 +322,10 @@ void Application::process(std::unique_ptr<Image>& image)
     std::vector<Face> scrfd_faces;
     if (scrfdDetector_ != nullptr)
     {
-        if (scrfdDetector_->isReady())
-        {
-            scrfd_faces = scrfdDetector_->detect(image);
-        }
+        // if (scrfdDetector_->isReady())
+        // {
+        //     scrfd_faces = scrfdDetector_->detect(image);
+        // }
     }
 
     if (modnetDetector_ && modnetDetector_->isReady())
@@ -384,6 +374,21 @@ void Application::process(std::unique_ptr<Image>& image)
         face.paintBoundingBox(image, Pixel(255, 0, 0));
     }
 
+    bool swap_success = false;
+    if (swapPipeline_ && target_img_)
+    {
+        swap_success = swapPipeline_->run(image, target_img_);
+        image->pasteAt(*image, image->info.width, 0, true);
+        if (swap_success && layerManager_)
+        {
+            auto layer = layerManager_->getBaseLayer();
+            if (layer)
+            {
+                layer->dirty = true;
+            }
+        }
+    }
+
     for (auto& face : scrfd_faces)
     {
         if (fsanetDetectorVar_ && fsanetDetectorVar_->isReady())
@@ -397,67 +402,6 @@ void Application::process(std::unique_ptr<Image>& image)
             face.paintPoseAxis(image, 30, 3, true);
         }
         face.paintBoundingBox(image, Pixel(0, 255, 0));
-    }
-
-    std::vector<float> webcam_embedding;
-    bool webcam_ok = false;
-    if (arcfaceRecognizer_ && arcfaceRecognizer_->isReady() && !scrfd_faces.empty())
-    {
-        std::vector<math_utils::Point> webcam_landmarks = scrfd_faces[0].getFivePointLandmarksArcFaceOrder();
-        if (webcam_landmarks.size() == 5)
-        {
-            webcam_ok = arcfaceRecognizer_->recognize(*image, webcam_landmarks, webcam_embedding);
-        }
-    }
-
-    // --- Face swap demo: use a_img_ as source, webcam as target ---
-    static std::vector<float> a_img_embedding;
-    static std::vector<math_utils::Point> a_img_landmarks;
-    static bool a_img_embedding_ready = false;
-    if (inswapper_ && inswapper_->isReady() && a_img_ && arcfaceRecognizer_ && arcfaceRecognizer_->isReady()
-        && !scrfd_faces.empty())
-    {
-        // 1. Get landmarks for a_img_ (source) only once
-        if (!a_img_embedding_ready)
-        {
-            // Detect face in a_img_
-            std::vector<Face> a_faces = scrfdDetector_ ? scrfdDetector_->detect(a_img_) : std::vector<Face>{};
-            if (!a_faces.empty())
-            {
-                a_img_landmarks = a_faces[0].getFivePointLandmarksArcFaceOrder();
-                if (a_img_landmarks.size() == 5)
-                {
-                    arcfaceRecognizer_->recognize(*a_img_, a_img_landmarks, a_img_embedding);
-                    a_img_embedding_ready = (a_img_embedding.size() == 512);
-                }
-            }
-        }
-        // TODO: Resize back the swapped_face. Apply model to refine the face.
-        // 2. Get landmarks for webcam (target)
-        std::vector<math_utils::Point> webcam_landmarks = scrfd_faces[0].getFivePointLandmarksArcFaceOrder();
-        if (a_img_embedding_ready && webcam_landmarks.size() == 5)
-        {
-            Image swapped_face;
-            // Correct: pass webcam image as target, a_img_ embedding as source
-            bool swap_ok = inswapper_->swap(a_img_embedding, webcam_landmarks, *image, swapped_face);
-            if (swap_ok)
-            {
-                // Paste swapped face onto webcam image at the face bounding box
-                const auto& bbox = scrfd_faces[0].getBoundingBox();
-                int x = static_cast<int>(bbox.rect.x() + 150);
-                int y = static_cast<int>(bbox.rect.y());
-                //TODO FIXME: Seems like pasteAt expanding canvas is broken.
-                image->pasteAt(swapped_face, x, y, false);
-                
-                auto layer = layerManager_->getBaseLayer();
-                if(layer)
-                {
-                    layer->dirty = true;
-                }else{
-                    common::log_info("Layer not defined.");
-                }
-            }
-        }
     }
 }
 

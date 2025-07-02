@@ -26,7 +26,10 @@ void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, 
                 dst[2] = src[2];
                 break;
             case 4:
-                *reinterpret_cast<uint32_t*>(dst) = *reinterpret_cast<const uint32_t*>(src);
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                dst[3] = src[3];
                 break;
             default:
                 std::memcpy(dst, src, pixelSize);
@@ -37,12 +40,11 @@ void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, 
         // Optimized alpha blending using integer arithmetic
         const int srcAlpha = alpha;
         const int invAlpha = 255 - alpha;
-
-        for (unsigned char i = 0; i < std::min(pixelSize, static_cast<unsigned char>(3)); ++i)
+        const int c = std::min(pixelSize, static_cast<unsigned char>(3));
+        for (unsigned char i = 0; i < c; ++i)
         {
-            dst[i] = (src[i] * srcAlpha + dst[i] * invAlpha) >> 8;
+            dst[i] = (src[i] * srcAlpha + dst[i] * invAlpha) / 255;
         }
-
         if (pixelSize == 4)
         {
             dst[3] = std::max(dst[3], alpha);
@@ -228,7 +230,7 @@ void Image::copyFrom(const Image& other)
 {
     if (this != &other)
     {
-        this->resize(size_, false);
+        this->resize(other.size_, false);
         // Copy data if both images have valid data pointers and size > 0
         if (data_ && other.data() && size_ > 0)
         {
@@ -804,50 +806,116 @@ std::unique_ptr<Image> Image::crop(const math_utils::Rect<float>& rect) const
 
 bool Image::saveToDisk(const std::string& dest_path) const
 {
-    if (info.format != ImageFormat::JPEG && info.format != ImageFormat::PPM)
+    // Only support saving as JPEG or PPM (RGB/Grayscale/RGBA)
+    if (info.format != ImageFormat::JPEG && info.format != ImageFormat::PPM && info.format != ImageFormat::GRAYSCALE
+        && info.format != ImageFormat::RGB && info.format != ImageFormat::RGBA)
     {
-        common::log_error("Image::saveToDisk - Only JPEG or PPM formats are supported for saving to disk");
+        common::log_error(
+            "Image::saveToDisk - Only JPEG or PPM formats are supported for saving to disk. Image is %s. Path was %s",
+            fromImageFormatToString(info.format).c_str(), dest_path.c_str());
         return false;
     }
 
-    if (data_.get() == nullptr || size_ == 0u)
+    if (!data_ || size_ == 0u)
     {
         common::log_error("Image::saveToDisk - No data to save");
         return false;
     }
 
-    int file;
-    if ((file = open(dest_path.c_str(), O_WRONLY | O_CREAT, 0660)) < 0)
+    int file = open(dest_path.c_str(), O_WRONLY | O_CREAT, 0660);
+    if (file < 0)
     {
         common::log_error("Image::saveToDisk - Error opening file for writing: %s", dest_path.c_str());
         common::errno_log("Image::saveToDisk - Error opening file for writing");
         return false;
     }
-    if (info.format == ImageFormat::PPM)
+    common::log_info("Image::saveToDisk - Saving image to %s", dest_path.c_str());
+    // Handle PPM (RGB, RGBA, Grayscale)
+    if (info.format == ImageFormat::PPM || info.format == ImageFormat::RGB || info.format == ImageFormat::RGBA
+        || info.format == ImageFormat::GRAYSCALE)
     {
         char header[64];
         // Write the P6 header
         int header_len = std::snprintf(header, sizeof(header), "P6\n%lu %lu\n255\n", info.width, info.height);
-
-
-        // Write the header
         if (write(file, header, header_len) != header_len)
         {
             common::errno_log("Image::saveToDisk - write header failed");
             close(file);
             return false;
         }
+        size_t pixel_count = info.width * info.height;
+        // Grayscale: convert to RGB
+        if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
+        {
+            std::vector<unsigned char> rgb_data(pixel_count * 3);
+            const unsigned char* gray = data_.get();
+            for (size_t i = 0; i < pixel_count; ++i)
+            {
+                rgb_data[i * 3 + 0] = gray[i];
+                rgb_data[i * 3 + 1] = gray[i];
+                rgb_data[i * 3 + 2] = gray[i];
+            }
+            if (!common::long_write(file, rgb_data.data(), rgb_data.size()))
+            {
+                common::log_error("Image::saveToDisk - Error saving grayscale as RGB PPM. Not all bytes were stored.");
+                close(file);
+                return false;
+            }
+            close(file);
+            return true;
+        }
+        // RGBA: convert to RGB
+        if (info.format == ImageFormat::RGBA || info.pixelSizeBytes == 4)
+        {
+            std::vector<unsigned char> rgb_data(pixel_count * 3);
+            const unsigned char* rgba = data_.get();
+            for (size_t i = 0; i < pixel_count; ++i)
+            {
+                rgb_data[i * 3 + 0] = rgba[i * 4 + 0];
+                rgb_data[i * 3 + 1] = rgba[i * 4 + 1];
+                rgb_data[i * 3 + 2] = rgba[i * 4 + 2];
+            }
+            if (!common::long_write(file, rgb_data.data(), rgb_data.size()))
+            {
+                common::log_error("Image::saveToDisk - Error saving RGBA as RGB PPM. Not all bytes were stored.");
+                close(file);
+                return false;
+            }
+            close(file);
+            return true;
+        }
+        // RGB: direct write
+        if (info.format == ImageFormat::RGB || info.pixelSizeBytes == 3)
+        {
+            if (!common::long_write(file, data_.get(), pixel_count * 3))
+            {
+                common::log_error("Image::saveToDisk - Error saving RGB PPM. Not all bytes were stored.");
+                close(file);
+                return false;
+            }
+            close(file);
+            return true;
+        }
     }
 
-    if (!common::long_write(file, data_.get(), size_))
+    // JPEG: direct write (assume data_ is already JPEG encoded)
+    if (info.format == ImageFormat::JPEG)
     {
-        common::log_error("Image::saveToDisk - Error saving to file. Not all bytes where stored.");
+        if (!common::long_write(file, data_.get(), size_))
+        {
+            common::log_error("Image::saveToDisk - Error saving JPEG. Not all bytes were stored.");
+            close(file);
+            return false;
+        }
         close(file);
-        return false;
+        return true;
     }
 
+    // If we reach here, format is not supported for saving
+    common::log_error("Image::saveToDisk - Unsupported format for saving: %s",
+                      fromImageFormatToString(info.format).c_str());
     close(file);
-    return true;
+    return false;
 }
 
 void Image::changeBackgroundImage(const Image& matting, const Image& background)
@@ -1347,30 +1415,146 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
 
     return *this;
 }
-// TODO: can be optimized further.
-std::unique_ptr<Image> Image::affineWarp(const float* M, int out_width, int out_height) const
+
+std::unique_ptr<Image> Image::affineWarp(const double* M, int out_width, int out_height) const
 {
-    // Create output image
-    size_t out_size = out_width * out_height * info.pixelSizeBytes;
+    if (info.pixelSizeBytes == 3)
+    {
+        return affineWarpGeneric(M, out_width, out_height, 3, true);
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+std::unique_ptr<Image> Image::affineWarpMask(const double* M, int out_width, int out_height) const
+{
+    if (info.pixelSizeBytes == 1)
+    {
+        return affineWarpGeneric(M, out_width, out_height, 1, false);
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+// Internal helper for affine warp (supports RGB and single-channel mask)
+std::unique_ptr<Image>
+Image::affineWarpGeneric(const double* M, int out_width, int out_height, int channels, bool bilinear) const
+{
+    // Invert the affine transformation matrix for inverse mapping
+    double a = M[0], b = M[1], c = M[2];
+    double d = M[3], e = M[4], f = M[5];
+    double det = a * e - b * d;
+    if (fabs(det) < 1e-12)
+    {
+        return nullptr;
+    }
+    double ia = e / det, ib = -b / det, ic = (b * f - e * c) / det;
+    double id = -d / det, ie = a / det, if_ = (d * c - a * f) / det;
+
+    size_t out_size = out_width * out_height * channels;
     auto out_img = std::make_unique<Image>(out_size);
     out_img->info = info;
     out_img->info.width = out_width;
     out_img->info.height = out_height;
-    out_img->info.format = ImageFormat::RGB;
-    out_img->info.pixelSizeBytes = 3;
+    out_img->info.pixelSizeBytes = channels;
+    out_img->info.format = (channels == 3) ? ImageFormat::RGB : (channels == 1 ? ImageFormat::GRAYSCALE : info.format);
+
+    const int in_width = info.width;
+    const int in_height = info.height;
+
     unsigned char* dst = out_img->data();
     const unsigned char* src = data_.get();
-    if (info.pixelSizeBytes == 3)
+
+    for (int y = 0; y < out_height; ++y)
     {
-        math_utils::affine_warp_rgb(src, info.width, info.height, info.width * 3, dst, out_width, out_height,
-                                               out_width * 3, M);
-    }
-    else
-    {
-        // fallback: fill with zeros if not RGB
-        common::log_error("Image::affineWarp - Unsupported pixel format for affine warp: %d bytes per pixel",
-                          info.pixelSizeBytes);
+        for (int x = 0; x < out_width; ++x)
+        {
+            double src_x = ia * x + ib * y + ic;
+            double src_y = id * x + ie * y + if_;
+            unsigned char* pdst = dst + (y * out_width + x) * channels;
+            if (channels == 3 && bilinear)
+            {
+                // Bilinear interpolation for RGB
+                int x0 = static_cast<int>(floor(src_x));
+                int y0 = static_cast<int>(floor(src_y));
+                int x1 = x0 + 1;
+                int y1 = y0 + 1;
+                double wx = src_x - x0;
+                double wy = src_y - y0;
+                for (int c = 0; c < 3; ++c)
+                {
+                    double v = 0.0;
+                    for (int dyIdx = 0; dyIdx <= 1; ++dyIdx)
+                    {
+                        int sy = (dyIdx == 0) ? y0 : y1;
+                        if (sy < 0 || sy >= in_height)
+                        {
+                            continue;
+                        }
+                        double wyf = (dyIdx == 0) ? (1.0 - wy) : wy;
+                        for (int dxIdx = 0; dxIdx <= 1; ++dxIdx)
+                        {
+                            int sx = (dxIdx == 0) ? x0 : x1;
+                            if (sx < 0 || sx >= in_width)
+                            {
+                                continue;
+                            }
+                            double wxf = (dxIdx == 0) ? (1.0 - wx) : wx;
+                            unsigned long srcIdx = (sy * in_width + sx) * 3 + c;
+                            v += src[srcIdx] * wyf * wxf;
+                        }
+                    }
+                    pdst[c] = static_cast<unsigned char>(std::clamp(v, 0.0, 255.0));
+                }
+            }
+            else
+            {
+                // Nearest neighbor for all other cases (including single channel)
+                int ix = static_cast<int>(lround(src_x));
+                int iy = static_cast<int>(lround(src_y));
+                if (ix >= 0 && ix < in_width && iy >= 0 && iy < in_height)
+                {
+                    const unsigned char* psrc = src + (iy * in_width + ix) * channels;
+                    for (int c = 0; c < channels; ++c)
+                    {
+                        pdst[c] = psrc[c];
+                    }
+                }
+                else
+                {
+                    for (int c = 0; c < channels; ++c)
+                    {
+                        pdst[c] = 0;
+                    }
+                }
+            }
+        }
     }
     return out_img;
+}
+
+void Image::alphaBlend(const Image& src, const Image& mask)
+{
+    // Assumes all images are the same size and mask is single-channel
+    if (info.width != src.info.width || info.height != src.info.height || info.width != mask.info.width
+        || info.height != mask.info.height || info.pixelSizeBytes != 3 || src.info.pixelSizeBytes != 3
+        || mask.info.pixelSizeBytes != 1)
+    {
+        // Invalid input, do nothing
+        common::log_error("Image::alphaBlend - Image sizes or pixel formats do not match");
+        return;
+    }
+    unsigned char* dst_data = this->data();
+    const unsigned char* src_data = src.data();
+    const unsigned char* mask_data = mask.data();
+    const int npixels = info.width * info.height;
+    for (int i = 0; i < npixels; ++i)
+    {
+        PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i]);
+    }
 }
 } // namespace linuxface
