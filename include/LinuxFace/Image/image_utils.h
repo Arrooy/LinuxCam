@@ -74,7 +74,7 @@ inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& 
 {
     int width = static_cast<int>(crop_size[0]);
     int height = static_cast<int>(crop_size[1]);
-    double face_mask_blur = 0.3;
+    double face_mask_blur = 0.45;
     std::vector<int> face_mask_padding = {0, 0, 0, 0};
     int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
     int blur_area = std::max(blur_amount / 2, 1);
@@ -83,7 +83,9 @@ inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& 
     box_mask->info.height = height;
     box_mask->info.pixelSizeBytes = 1;
     box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
+
     std::fill(box_mask->data(), box_mask->data() + width * height, 255);
+
     int top_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[0] / 100.0));
     int bottom_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[2] / 100.0));
     int right_padding = std::max(blur_area, static_cast<int>(width * face_mask_padding[1] / 100.0));

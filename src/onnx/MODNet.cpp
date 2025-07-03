@@ -5,7 +5,7 @@
 using namespace linuxface;
 
 
-std::vector<Ort::Value> MODNetDetector::transform(const std::unique_ptr<Image>& image)
+Ort::Value MODNetDetector::transform(const std::unique_ptr<Image>& image)
 {
     // Create tensor with fixed dimensions instead of dynamic input_node_dims with -1
     if (input_node_dims[2] == -1 || input_node_dims[3] == -1)
@@ -25,10 +25,7 @@ std::vector<Ort::Value> MODNetDetector::transform(const std::unique_ptr<Image>& 
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
     image->toTensor(tensor_data, padding_, input_width_, input_height_, NormalizationType::ZERO_CENTER);
 
-    // Use initializer list for efficiency
-    std::vector<Ort::Value> input_result;
-    input_result.emplace_back(std::move(input_tensor));
-    return input_result;
+    return input_tensor;
 }
 
 void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& matte)
@@ -36,7 +33,7 @@ void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr
     Profiler::getInstance().start("MODNetDetector", "Matting detection");
 
     // Convert from image to tensor.
-    Ort::Value input_tensor = std::move(this->transform(image)[0]);
+    Ort::Value input_tensor = this->transform(image);
     try
     {
         auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,

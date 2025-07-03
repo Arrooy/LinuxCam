@@ -23,7 +23,7 @@ Metric3D::Metric3D(const std::string& onnx_model_path) : OnnxDetector(onnx_model
     ready_ = true;
 }
 
-std::vector<Ort::Value> Metric3D::transform(const std::unique_ptr<Image>& image)
+Ort::Value Metric3D::transform(const std::unique_ptr<Image>& image)
 {
     // Create tensor with fixed dimensions instead of dynamic input_node_dims
     std::vector<int64_t> input_shape = {1, 3, target_height_, target_width_}; // [batch, channels, height, width]
@@ -39,16 +39,13 @@ std::vector<Ort::Value> Metric3D::transform(const std::unique_ptr<Image>& image)
     // Use Metric3D specific padding
     image->toTensor(tensor_data, padding_, target_width_, target_height_, NormalizationType::NONE);
 
-    // Use initializer list for efficiency
-    std::vector<Ort::Value> input_result;
-    input_result.emplace_back(std::move(input_tensor));
-    return input_result;
+    return input_tensor;
 }
 
 std::unique_ptr<DepthImage> Metric3D::detect_depth(const std::unique_ptr<Image>& image)
 {
     Profiler::getInstance().start("Metric3D", "Depth detection");
-    Ort::Value input_tensor = std::move(this->transform(image)[0]);
+    Ort::Value input_tensor = this->transform(image);
 
     try
     {

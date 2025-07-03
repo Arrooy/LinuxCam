@@ -14,7 +14,7 @@ class MODNetDetector : public OnnxDetector
   public:
     explicit MODNetDetector(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path) {};
     ~MODNetDetector() = default;
-    std::vector<Ort::Value> transform(const std::unique_ptr<Image>& image) override;
+    Ort::Value transform(const std::unique_ptr<Image>& image) override;
     void detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& matte);
 
   private:

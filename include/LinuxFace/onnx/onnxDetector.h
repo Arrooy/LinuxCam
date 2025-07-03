@@ -15,7 +15,7 @@ class OnnxDetector
     OnnxDetector(const std::string& onnx_model_path);
     ~OnnxDetector() = default;
 
-    virtual std::vector<Ort::Value> transform(const std::unique_ptr<Image>& image) = 0;
+    virtual Ort::Value transform(const std::unique_ptr<Image>& image) = 0;
 
     int batch_size_;
     int channels_;

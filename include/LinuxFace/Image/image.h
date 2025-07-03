@@ -93,7 +93,7 @@ struct ImageMetadata
     bool is_valid{false};
     std::string filename;
     unsigned int textureId{0};
-    int layer {0}; // Layer for rendering, default is 0
+    int layer{0}; // Layer for rendering, default is 0
 };
 
 
@@ -340,6 +340,13 @@ class Image
     // Alpha blend src onto this image using mask (mask: 0=background, 255=full src)
     void alphaBlend(const Image& src, const Image& mask);
 
+    // Converts a single-channel image to RGB vector
+    std::vector<unsigned char> convertToRGB() const;
+
+    // Converts a single-channel image to RGB in-place
+    bool convertToRGBInplace();
+
+    void drawBorder(const Pixel& color, int thickness = 1);
   private:
     // Optimized helper methods
     void copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,
@@ -355,7 +362,8 @@ class Image
     scaleDownWithAreaAveraging(unsigned long newWidth, unsigned long newHeight) const;
 
     // Internal helper for affine warp (supports RGB and single-channel mask)
-    std::unique_ptr<Image> affineWarpGeneric(const double* M, int out_width, int out_height, int channels, bool bilinear) const;
+    std::unique_ptr<Image>
+    affineWarpGeneric(const double* M, int out_width, int out_height, int channels, bool bilinear) const;
 
     std::shared_ptr<unsigned char> data_;
     size_t size_{0};

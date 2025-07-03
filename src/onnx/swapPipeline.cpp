@@ -24,6 +24,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
     {
         return false;
     }
+
     // 1. Get landmarks for target_img (source) only once
     if (!target_img_embedding_ready_)
     {
@@ -101,7 +102,8 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         return false;
     }
 
-    Profiler::getInstance().start("SwapPipeline", "Crop mask creation 1"); // 40ms -> peeks to 100 if face is laterally rotated
+    Profiler::getInstance().start("SwapPipeline",
+                                  "Crop mask creation 1"); // 40ms -> peeks to 100 if face is laterally rotated
     // 4. Create a crop_mask for the swapped face
     // Use the bounding box of the detected face to create a crop_mask
     const auto& bbox = scrfd_faces[0].getBoundingBox();
@@ -117,6 +119,8 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         return false;
     }
     Profiler::getInstance().stop("SwapPipeline", "Crop mask creation 1");
+
+
     Profiler::getInstance().start("SwapPipeline", "Crop mask creation 2");
     // Compute the affine to paste the crop_mask/crop into the full image
     double paste_src[6] = {0, 0, out_width, 0, 0, out_height};
@@ -133,12 +137,41 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         return false;
     }
     Profiler::getInstance().stop("SwapPipeline", "Crop mask creation 3");
+
+
     Profiler::getInstance().start("SwapPipeline", "Alpha blending");
     // Alpha blend crop_mask onto temp_img using warped_mask
-    image->alphaBlend(*warped_swapped_face, *warped_mask);
+    auto output = image->deepCopy();
+    output->alphaBlend(*warped_swapped_face, *warped_mask);
     Profiler::getInstance().stop("SwapPipeline", "Alpha blending");
+
     worked = true;
 
+    if (debug_)
+    {
+        for (auto& face : scrfd_faces)
+        {
+            face.paintBoundingBox(image, Pixel(0, 255, 0));
+        }
+        auto scale = 0.5;
+        image->copyFrom(*image->scaleByPercentage(scale));
+        output->copyFrom(*output->scaleByPercentage(scale));
+        warped_swapped_face->copyFrom(*warped_swapped_face->scaleByPercentage(scale));
+        warped_mask->copyFrom(*warped_mask->scaleByPercentage(scale));
+        warped_mask->convertToRGBInplace();
+        crop_mask->convertToRGBInplace();
+        image->drawBorder(Pixel(255, 0, 0), 2);
+        output->drawBorder(Pixel(0, 255, 0), 2);
+        warped_swapped_face->drawBorder(Pixel(0, 0, 255), 2);
+        warped_mask->drawBorder(Pixel(255, 255, 0), 2);
+        crop_mask->drawBorder(Pixel(255, 0, 255), 2);
+        auto width = image->info.width;
+        auto height = image->info.height;
+        image->pasteAt(*output, width, image->info.y, true);
+        image->pasteAt(*warped_swapped_face, width * 2, image->info.y, true);
+        image->pasteAt(*warped_mask, width, height, true);
+        image->pasteAt(*warped_mask, width * 2, height, true);
+    }
     Profiler::getInstance().stop("SwapPipeline", "run");
     return worked;
 }

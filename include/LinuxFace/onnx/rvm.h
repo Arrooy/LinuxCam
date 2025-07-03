@@ -14,7 +14,7 @@ class RobustVideoMatting : public OnnxDetector
   public:
     explicit RobustVideoMatting(const std::string& onnx_model_path);
     ~RobustVideoMatting() = default;
-    std::vector<Ort::Value> transform(const std::unique_ptr<Image>& image) override;
+    Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
     void detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& frg, std::unique_ptr<Image>& matte);
 

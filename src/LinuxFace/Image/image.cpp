@@ -15,6 +15,13 @@ namespace linuxface
 void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, unsigned char pixelSize,
                                   unsigned char alpha) noexcept
 {
+
+    if(src [0] == 0 && src[1] == 0 && src[2] == 0)
+    {
+        // If the source pixel is black, do not blend
+        return;
+    }
+
     if (alpha == 255)
     {
         // Fast path for fully opaque pixels
@@ -768,6 +775,36 @@ void Image::paintPoints(const std::vector<math_utils::Point>& points, const Pixe
     }
 }
 
+void Image::drawBorder(const Pixel& color, int thickness)
+{
+    // Draw a border around the image
+    if (thickness <= 0)
+    {
+        return;
+    }
+
+    // Top border
+    for (unsigned long x = 0; x < info.width; ++x)
+    {
+        ppx(x, 0, color);
+    }
+    // Bottom border
+    for (unsigned long x = 0; x < info.width; ++x)
+    {
+        ppx(x, info.height - 1, color);
+    }
+    // Left border
+    for (unsigned long y = 0; y < info.height; ++y)
+    {
+        ppx(0, y, color);
+    }
+    // Right border
+    for (unsigned long y = 0; y < info.height; ++y)
+    {
+        ppx(info.width - 1, y, color);
+    }
+}
+
 std::unique_ptr<Image> Image::crop(const math_utils::Rect<float>& rect) const
 {
     // Round and clamp rectangle coordinates to fit within image bounds
@@ -847,14 +884,7 @@ bool Image::saveToDisk(const std::string& dest_path) const
         // Grayscale: convert to RGB
         if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
         {
-            std::vector<unsigned char> rgb_data(pixel_count * 3);
-            const unsigned char* gray = data_.get();
-            for (size_t i = 0; i < pixel_count; ++i)
-            {
-                rgb_data[i * 3 + 0] = gray[i];
-                rgb_data[i * 3 + 1] = gray[i];
-                rgb_data[i * 3 + 2] = gray[i];
-            }
+            std::vector<unsigned char> rgb_data = convertToRGB();
             if (!common::long_write(file, rgb_data.data(), rgb_data.size()))
             {
                 common::log_error("Image::saveToDisk - Error saving grayscale as RGB PPM. Not all bytes were stored.");
@@ -915,6 +945,50 @@ bool Image::saveToDisk(const std::string& dest_path) const
     common::log_error("Image::saveToDisk - Unsupported format for saving: %s",
                       fromImageFormatToString(info.format).c_str());
     close(file);
+    return false;
+}
+
+std::vector<unsigned char> Image::convertToRGB() const
+{
+    if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
+    {
+        size_t pixel_count = info.width * info.height;
+        std::vector<unsigned char> rgb_data(pixel_count * 3);
+        const unsigned char* gray = data_.get();
+        for (size_t i = 0; i < pixel_count; ++i)
+        {
+            rgb_data[i * 3 + 0] = gray[i];
+            rgb_data[i * 3 + 1] = gray[i];
+            rgb_data[i * 3 + 2] = gray[i];
+        }
+        return rgb_data;
+    }
+    return {};
+}
+
+bool Image::convertToRGBInplace()
+{
+    if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
+    {
+        std::vector<unsigned char> rgb_data = convertToRGB();
+        size_t i = 0;
+        size_t pixel_count = info.width * info.height * 3;
+        resize(pixel_count, true);
+        for (unsigned char pixel : rgb_data)
+        {
+            data_.get()[i] = pixel;
+            i += 1;
+        }
+        if (i != pixel_count)
+        {
+            common::log_error("Image::convertToRGB - Error converting grayscale to RGB. Size mismatch.");
+            return false;
+        }
+        info.format = ImageFormat::RGB;
+        info.pixelSizeBytes = 3;
+
+        return true;
+    }
     return false;
 }
 
@@ -1543,6 +1617,7 @@ void Image::alphaBlend(const Image& src, const Image& mask)
     const int npixels = info.width * info.height;
     for (int i = 0; i < npixels; ++i)
     {
+        // Blend each pixel using the mask
         PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i]);
     }
 }

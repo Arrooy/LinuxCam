@@ -17,7 +17,7 @@ class Metric3D : public OnnxDetector
   public:
     explicit Metric3D(const std::string& onnx_model_path);
 
-    std::vector<Ort::Value> transform(const std::unique_ptr<Image>& image) override;
+    Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
     std::unique_ptr<DepthImage> detect_depth(const std::unique_ptr<Image>& image);
 

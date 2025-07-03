@@ -11,7 +11,7 @@ class InSwapper : public OnnxDetector
   public:
     explicit InSwapper(const std::string& onnx_model_path);
     ~InSwapper() = default;
-    std::vector<Ort::Value> transform(const std::unique_ptr<Image>& image) override;
+    Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
     bool swap(const std::vector<float>& src_embedding, const std::vector<math_utils::Point>& dst_landmarks, const Image& dst_face, Image& out_image);
 

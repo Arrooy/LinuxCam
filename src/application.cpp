@@ -378,7 +378,6 @@ void Application::process(std::unique_ptr<Image>& image)
     if (swapPipeline_ && target_img_)
     {
         swap_success = swapPipeline_->run(image, target_img_);
-        image->pasteAt(*image, image->info.width, 0, true);
         if (swap_success && layerManager_)
         {
             auto layer = layerManager_->getBaseLayer();

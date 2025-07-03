@@ -73,7 +73,7 @@ bool RobustVideoMatting::isImageCompatible(const std::unique_ptr<Image>& image)
     return image->info.height == lastHeight_ && image->info.width == lastWidth_;
 }
 
-std::vector<Ort::Value> RobustVideoMatting::transform(const std::unique_ptr<Image>& image)
+Ort::Value RobustVideoMatting::transform(const std::unique_ptr<Image>& image)
 {
     // Create tensor with fixed dimensions instead of dynamic input_node_dims with -1
     if (input_node_dims[2] == -1 || input_node_dims[3] == -1)
@@ -101,10 +101,7 @@ std::vector<Ort::Value> RobustVideoMatting::transform(const std::unique_ptr<Imag
     // Note no resize.
     image->toTensor(tensor_data, padding_, image->info.width, image->info.height, NormalizationType::MINMAX);
 
-    // Use initializer list for efficiency
-    std::vector<Ort::Value> input_result;
-    input_result.emplace_back(std::move(input_tensor));
-    return input_result;
+    return input_tensor;
 }
 
 void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& frg,
@@ -113,7 +110,7 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
     Profiler::getInstance().start("RVM", "Matting detection");
 
     // Convert from image to tensor.
-    Ort::Value input_tensor = std::move(this->transform(image)[0]);
+    Ort::Value input_tensor = this->transform(image);
     try
     {
         io_binding_.BindInput(input_node_names_[0], input_tensor);

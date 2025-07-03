@@ -11,7 +11,7 @@ InSwapper::InSwapper(const std::string& onnx_model_path) : OnnxDetector(onnx_mod
     ready_ = true;
 }
 
-std::vector<Ort::Value> InSwapper::transform(const std::unique_ptr<Image>& image)
+Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
 {
     // [batch, channels, height, width]
     if (input_node_dims[2] == -1 || input_node_dims[3] == -1)
@@ -28,9 +28,7 @@ std::vector<Ort::Value> InSwapper::transform(const std::unique_ptr<Image>& image
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
     image->toTensor(tensor_data, padding_, input_width_, input_height_, NormalizationType::MINMAX);
 
-    std::vector<Ort::Value> input_result;
-    input_result.emplace_back(std::move(input_tensor));
-    return input_result;
+    return input_tensor;
 }
 
 bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<math_utils::Point>& dst_landmarks,
@@ -61,7 +59,7 @@ bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<
     Ort::Value src_tensor = Ort::Value::CreateTensor<float>(memory_info, const_cast<float*>(src_embedding.data()), 512,
                                                             emb_dims.data(), emb_dims.size());
     std::vector<Ort::Value> input_tensors;
-    input_tensors.push_back(std::move(dst_tensor[0]));
+    input_tensors.push_back(std::move(dst_tensor));
     input_tensors.push_back(std::move(src_tensor));
     // 3. Run ONNX inference
     Ort::RunOptions runOptions;
