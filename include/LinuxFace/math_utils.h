@@ -319,6 +319,25 @@ inline bool estimate_affine_2d(const double* src, const double* dst, int n, doub
     return true;
 }
 
+inline bool invert_affine(const double* M, double invM[6])
+{
+    // Invert the affine transformation matrix for inverse mapping
+    double a = M[0], b = M[1], c = M[2];
+    double d = M[3], e = M[4], f = M[5];
+    double det = a * e - b * d;
+    if (fabs(det) < 1e-12)
+    {
+        return false;
+    }
+    invM[0] = e / det;
+    invM[1] = -b / det;
+    invM[2] = (b * f - e * c) / det;
+    invM[3] = -d / det;
+    invM[4] = a / det;
+    invM[5] = (d * c - a * f) / det;
+    return true;
+}
+
 } // namespace math_utils
 } // namespace linuxface
 #endif // MATH_UTILS_H

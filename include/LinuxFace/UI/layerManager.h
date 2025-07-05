@@ -168,7 +168,7 @@ class LayerManager
 
     // Layer management
     void addLayer(const Layer& layer);
-    void removeLayer(int layerNumber);
+    void removeLayer(size_t layerId);
     void clearLayers();
     std::vector<Layer>& getLayers();
     const std::vector<Layer>& getLayers() const;

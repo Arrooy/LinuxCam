@@ -55,8 +55,8 @@ bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<
     // 2. Prepare ONNX input tensors
     auto dst_tensor = transform(aligned);
     std::vector<int64_t> emb_dims = {1, 512};
-    Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    Ort::Value src_tensor = Ort::Value::CreateTensor<float>(memory_info, const_cast<float*>(src_embedding.data()), 512,
+    // TODO: try using allocator instead.
+    Ort::Value src_tensor = Ort::Value::CreateTensor<float>(memory_info_, const_cast<float*>(src_embedding.data()), 512,
                                                             emb_dims.data(), emb_dims.size());
     std::vector<Ort::Value> input_tensors;
     input_tensors.push_back(std::move(dst_tensor));
@@ -69,7 +69,7 @@ bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<
         detector_session_->Run(runOptions, input_names.data(), input_tensors.data(), 2, output_names.data(), 1);
     float* out_data = output_tensors[0].GetTensorMutableData<float>();
     // 4. Convert output tensor to Image
-    out_image.resize(input_width_ * input_height_ * 3);
+    out_image.resize(input_width_ * input_height_ * 3, false);
     out_image.info.width = input_width_;
     out_image.info.height = input_height_;
     out_image.info.format = ImageFormat::RGB;

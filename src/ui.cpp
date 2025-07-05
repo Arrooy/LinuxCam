@@ -440,6 +440,16 @@ void UI::handleKeyboard()
                         webcam->setCurrentlySelected(false);
                     }
                 }
+                return;
+            }
+        }
+        if(ImGui::IsKeyPressed(ImGuiKey_Backspace) || ImGui::IsKeyPressed(ImGuiKey_Delete))
+        {
+            auto selected_layer = mediaBrowserUI_->getSelectedLayer();
+            if (selected_layer)
+            {
+                // Remove the selected layer
+                layerManager_->removeLayer(selected_layer->id);
             }
         }
     }

@@ -15,8 +15,7 @@ namespace linuxface
 void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, unsigned char pixelSize,
                                   unsigned char alpha) noexcept
 {
-
-    if(src [0] == 0 && src[1] == 0 && src[2] == 0)
+    if (src[0] == 0 && src[1] == 0 && src[2] == 0)
     {
         // If the source pixel is black, do not blend
         return;
@@ -116,6 +115,14 @@ Image& Image::operator=(Image&& other) noexcept
     return *this;
 }
 
+void Image::black()
+{
+    if (data_ && size_ > 0)
+    {
+        // Set all pixels to black
+        memset(data_.get(), 0, size_);
+    }
+}
 void Image::resize(size_t newSize, bool preserveData)
 {
     if (newSize == 0)
@@ -1354,6 +1361,47 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
     }
 }
 
+void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,
+                                size_t copyHeight)
+{
+    if (!src.data() || !data_)
+    {
+        return;
+    }
+
+    const unsigned char* srcData = src.data();
+    unsigned char* dstData = data_.get();
+    const unsigned char dstPixelSize = info.pixelSizeBytes;
+    const unsigned char srcPixelSize = src.info.pixelSizeBytes;
+
+    for (size_t row = 0; row < copyHeight; ++row)
+    {
+        size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * dstPixelSize;
+        size_t dstRowIdx = ((dstY + row) * info.width + dstX) * dstPixelSize;
+        if (info.pixelSizeBytes == src.info.pixelSizeBytes)
+        {
+            // If pixel sizes match, we can copy directly
+            std::memcpy(dstData + dstRowIdx, srcData + srcRowIdx, copyWidth * dstPixelSize);
+        }
+        else if (dstPixelSize == 3 && srcPixelSize == 1)
+        {
+            // Convert Grayscale to RGB
+            for (size_t row = 0; row < copyHeight; ++row)
+            {
+                size_t srcRowStart = (srcY + row) * src.info.width + srcX;
+                size_t dstRowStart = ((dstY + row) * info.width + dstX) * dstPixelSize;
+
+                for (size_t col = 0; col < copyWidth; ++col)
+                {
+                    unsigned char gray = srcData[srcRowStart + col];
+                    dstData[dstRowStart + col * 3 + 0] = gray; // R
+                    dstData[dstRowStart + col * 3 + 1] = gray; // G
+                    dstData[dstRowStart + col * 3 + 2] = gray; // B
+                }
+            }
+        }
+    }
+}
 
 bool Image::isFullyOpaque() const
 {
@@ -1376,24 +1424,6 @@ bool Image::isFullyOpaque() const
     return true;
 }
 
-void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,
-                                size_t copyHeight)
-{
-    if (!src.data() || !data_)
-    {
-        return;
-    }
-    const unsigned char* srcData = src.data();
-    unsigned char* dstData = data_.get();
-    const unsigned char pixelSize = info.pixelSizeBytes;
-    for (size_t row = 0; row < copyHeight; ++row)
-    {
-        size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * pixelSize;
-        size_t dstRowIdx = ((dstY + row) * info.width + dstX) * pixelSize;
-        std::memcpy(dstData + dstRowIdx, srcData + srcRowIdx, copyWidth * pixelSize);
-    }
-}
-
 // TODO: FIXME: This has a high execution cost!
 Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expandCanvas)
 {
@@ -1407,13 +1437,6 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     if (!other.data() || other.size() == 0 || other.info.width == 0 || other.info.height == 0)
     {
         common::log_error("Image::paste - Invalid source image to paste");
-        return *this;
-    }
-
-    if (info.pixelSizeBytes != other.info.pixelSizeBytes)
-    {
-        common::log_error("Image::paste - Pixel format mismatch: %d vs %d", info.pixelSizeBytes,
-                          other.info.pixelSizeBytes);
         return *this;
     }
 
@@ -1462,9 +1485,6 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     Image backup; // TODO: FIXME: THIS IS WRONG: MAYBE .
     backup.copyFrom(*this);
 
-    // common::log_info("Image::paste - Resizing canvas from %lux%lu to %lux%lu", info.width, info.height, newWidth,
-    //                  newHeight);
-
     // Resize this image using existing method
     size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
     this->resize(newSize);
@@ -1490,53 +1510,29 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     return *this;
 }
 
-std::unique_ptr<Image> Image::affineWarp(const double* M, int out_width, int out_height) const
+std::unique_ptr<Image> Image::affineWarpBilinear(const double* M, int out_width, int out_height) const
 {
-    if (info.pixelSizeBytes == 3)
+    if (info.pixelSizeBytes != 3)
     {
-        return affineWarpGeneric(M, out_width, out_height, 3, true);
-    }
-    else
-    {
+        common::log_error("Image::affineWarpBilinear - Only RGB images are supported");
         return nullptr;
     }
-}
 
-std::unique_ptr<Image> Image::affineWarpMask(const double* M, int out_width, int out_height) const
-{
-    if (info.pixelSizeBytes == 1)
+    // TODO: we are creating the matrix and inverting it all the time. Why not create the inverted matrix directly?
+    double invM[6];
+    if (!math_utils::invert_affine(M, invM))
     {
-        return affineWarpGeneric(M, out_width, out_height, 1, false);
-    }
-    else
-    {
+        common::log_error("Image::affineWarpGeneric - Invalid affine matrix provided");
         return nullptr;
     }
-}
 
-// Internal helper for affine warp (supports RGB and single-channel mask)
-std::unique_ptr<Image>
-Image::affineWarpGeneric(const double* M, int out_width, int out_height, int channels, bool bilinear) const
-{
-    // Invert the affine transformation matrix for inverse mapping
-    double a = M[0], b = M[1], c = M[2];
-    double d = M[3], e = M[4], f = M[5];
-    double det = a * e - b * d;
-    if (fabs(det) < 1e-12)
-    {
-        return nullptr;
-    }
-    double ia = e / det, ib = -b / det, ic = (b * f - e * c) / det;
-    double id = -d / det, ie = a / det, if_ = (d * c - a * f) / det;
-
-    size_t out_size = out_width * out_height * channels;
+    size_t out_size = out_width * out_height * info.pixelSizeBytes;
     auto out_img = std::make_unique<Image>(out_size);
     out_img->info = info;
     out_img->info.width = out_width;
     out_img->info.height = out_height;
-    out_img->info.pixelSizeBytes = channels;
-    out_img->info.format = (channels == 3) ? ImageFormat::RGB : (channels == 1 ? ImageFormat::GRAYSCALE : info.format);
-
+    out_img->info.pixelSizeBytes = info.pixelSizeBytes;
+    out_img->info.format = ImageFormat::RGB;
     const int in_width = info.width;
     const int in_height = info.height;
 
@@ -1547,56 +1543,94 @@ Image::affineWarpGeneric(const double* M, int out_width, int out_height, int cha
     {
         for (int x = 0; x < out_width; ++x)
         {
-            double src_x = ia * x + ib * y + ic;
-            double src_y = id * x + ie * y + if_;
-            unsigned char* pdst = dst + (y * out_width + x) * channels;
+            double src_x = invM[0] * x + invM[1] * y + invM[2];
+            double src_y = invM[3] * x + invM[4] * y + invM[5];
+            unsigned char* pdst = dst + (y * out_width + x) * 3;
+            int x0 = static_cast<int>(std::floor(src_x));
+            int y0 = static_cast<int>(std::floor(src_y));
+            int x1 = x0 + 1;
+            int y1 = y0 + 1;
 
-            if (bilinear)
+            if (x0 >= 0 && x1 < in_width && y0 >= 0 && y1 < in_height)
             {
-                int x0 = static_cast<int>(std::floor(src_x));
-                int y0 = static_cast<int>(std::floor(src_y));
-                int x1 = x0 + 1;
-                int y1 = y0 + 1;
+                double wx = src_x - x0;
+                double wy = src_y - y0;
 
-                if (x0 >= 0 && x1 < in_width && y0 >= 0 && y1 < in_height)
+                for (int c = 0; c < 3; ++c)
                 {
-                    double wx = src_x - x0;
-                    double wy = src_y - y0;
+                    double v = (1 - wx) * (1 - wy) * src[(y0 * in_width + x0) * 3 + c]
+                               + wx * (1 - wy) * src[(y0 * in_width + x1) * 3 + c]
+                               + (1 - wx) * wy * src[(y1 * in_width + x0) * 3 + c]
+                               + wx * wy * src[(y1 * in_width + x1) * 3 + c];
 
-                    for (int c = 0; c < channels; ++c)
-                    {
-                        double v = (1 - wx) * (1 - wy) * src[(y0 * in_width + x0) * channels + c]
-                                   + wx * (1 - wy) * src[(y0 * in_width + x1) * channels + c]
-                                   + (1 - wx) * wy * src[(y1 * in_width + x0) * channels + c]
-                                   + wx * wy * src[(y1 * in_width + x1) * channels + c];
-
-                        pdst[c] = static_cast<unsigned char>(std::round(std::clamp(v, 0.0, 255.0)));
-                    }
-                }
-                else
-                {
-                    // If out of bounds, set black
-                    std::fill(pdst, pdst + channels, 0);
+                    pdst[c] = static_cast<unsigned char>(std::round(std::clamp(v, 0.0, 255.0)));
                 }
             }
             else
             {
-                // Nearest neighbor
-                int ix = static_cast<int>(std::round(src_x));
-                int iy = static_cast<int>(std::round(src_y));
-
-                if (ix >= 0 && ix < in_width && iy >= 0 && iy < in_height)
-                {
-                    const unsigned char* psrc = src + (iy * in_width + ix) * channels;
-                    std::memcpy(pdst, psrc, channels);
-                }
-                else
-                {
-                    std::fill(pdst, pdst + channels, 0);
-                }
+                // If out of bounds, set black
+                std::memset(pdst, 0, 3);
             }
         }
     }
+
+    return out_img;
+}
+
+std::unique_ptr<Image> Image::affineWarpNearestNeighbour(const double* M, int out_width, int out_height) const
+{
+    if (info.pixelSizeBytes != 1)
+    {
+        common::log_error("Image::affineWarpNearestNeighbour - Only single-channel images are supported");
+        return nullptr;
+    }
+
+    // TODO: we are creating the matrix and inverting it all the time. Why not create the inverted matrix directly?
+    double invM[6];
+    if (!math_utils::invert_affine(M, invM))
+    {
+        common::log_error("Image::affineWarpGeneric - Invalid affine matrix provided");
+        return nullptr;
+    }
+
+    size_t out_size = out_width * out_height;
+    auto out_img = std::make_unique<Image>(out_size);
+    out_img->info = info;
+    out_img->info.width = out_width;
+    out_img->info.height = out_height;
+    out_img->info.pixelSizeBytes = 1;
+    out_img->info.format = ImageFormat::GRAYSCALE;
+    const int in_width = info.width;
+    const int in_height = info.height;
+
+    unsigned char* dst = out_img->data();
+    const unsigned char* src = data_.get();
+
+    for (int y = 0; y < out_height; ++y)
+    {
+        for (int x = 0; x < out_width; ++x)
+        {
+            double src_x = invM[0] * x + invM[1] * y + invM[2];
+            double src_y = invM[3] * x + invM[4] * y + invM[5];
+            unsigned char* pdst = dst + (y * out_width + x);
+
+
+            // Nearest neighbor
+            int ix = static_cast<int>(std::round(src_x));
+            int iy = static_cast<int>(std::round(src_y));
+
+            if (ix >= 0 && ix < in_width && iy >= 0 && iy < in_height)
+            {
+                const unsigned char* psrc = src + (iy * in_width + ix);
+                pdst[0] = *psrc; // Copy the pixel value
+            }
+            else
+            {
+                pdst[0] = 0; // Out of bounds, set to black
+            }
+        }
+    }
+
     return out_img;
 }
 

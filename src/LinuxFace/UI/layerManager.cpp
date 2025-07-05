@@ -13,10 +13,10 @@ void LayerManager::addLayer(const Layer& layer)
     layers_.push_back(layer);
 }
 
-void LayerManager::removeLayer(int layerNumber)
+void LayerManager::removeLayer(size_t layerId)
 {
     layers_.erase(std::remove_if(layers_.begin(), layers_.end(),
-                                 [layerNumber](const Layer& l) { return l.getLayerNumber() == layerNumber; }),
+                                 [layerId](const Layer& l) { return l.id == layerId; }),
                   layers_.end());
 }
 

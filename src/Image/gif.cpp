@@ -35,10 +35,8 @@ bool Gif::decodeAllFrames()
     do
     {
         // TODO: FIXME: There are 2 buffer copy here, we could simplify
-        gd_render_frame(gif_, buffer.get());
-
         auto img = std::make_unique<Image>(frameSize);
-        std::memcpy(img->data(), buffer.get(), frameSize);
+        gd_render_frame(gif_, img->data());
 
         img->info.width = gif_->width;
         img->info.height = gif_->height;

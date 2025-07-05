@@ -36,6 +36,7 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
     return input_tensor;
 }
 
+// TODO: average the face location so we dont have that much jitter in face bounding box.
 std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
 {
     Profiler::getInstance().start("SCRFD", "Face detection");

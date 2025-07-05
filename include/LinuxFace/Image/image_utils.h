@@ -36,7 +36,7 @@ inline std::unique_ptr<Image> align_face_affine(const Image& input_img, const st
     }
     double M[6] = {0};
     math_utils::estimate_affine_2d(src, dst, 5, M);
-    return input_img.affineWarp(M, target_size, target_size);
+    return input_img.affineWarpBilinear(M, target_size, target_size);
 }
 
 /**
@@ -70,72 +70,73 @@ inline std::unique_ptr<Image> align_face_affine(const Image& input_img, const st
 Original: very very slow.
 */
 // Create a mask for the crop size using the Image class (no OpenCV)
-inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
-{
-    int width = static_cast<int>(crop_size[0]);
-    int height = static_cast<int>(crop_size[1]);
-    double face_mask_blur = 0.45;
-    std::vector<int> face_mask_padding = {0, 0, 0, 0};
-    int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
-    int blur_area = std::max(blur_amount / 2, 1);
-    std::unique_ptr<Image> box_mask = std::make_unique<Image>(width * height);
-    box_mask->info.width = width;
-    box_mask->info.height = height;
-    box_mask->info.pixelSizeBytes = 1;
-    box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
 
-    std::fill(box_mask->data(), box_mask->data() + width * height, 255);
+// inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
+// {
+//     int width = static_cast<int>(crop_size[0]);
+//     int height = static_cast<int>(crop_size[1]);
+//     double face_mask_blur = 0.4;
+//     std::vector<int> face_mask_padding = {0, 0, 0, 0};
+//     int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
+//     int blur_area = std::max(blur_amount / 2, 1);
+//     std::unique_ptr<Image> box_mask = std::make_unique<Image>(width * height);
+//     box_mask->info.width = width;
+//     box_mask->info.height = height;
+//     box_mask->info.pixelSizeBytes = 1;
+//     box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
 
-    int top_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[0] / 100.0));
-    int bottom_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[2] / 100.0));
-    int right_padding = std::max(blur_area, static_cast<int>(width * face_mask_padding[1] / 100.0));
-    int left_padding = std::max(blur_area, static_cast<int>(width * face_mask_padding[3] / 100.0));
-    for (int y = 0; y < top_padding; ++y)
-    {
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-    }
-    for (int y = height - bottom_padding; y < height; ++y)
-    {
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-    }
-    for (int y = 0; y < height; ++y)
-    {
-        std::fill(box_mask->data() + y * width, box_mask->data() + y * width + left_padding, 0);
-    }
-    for (int y = 0; y < height; ++y)
-    {
-        std::fill(box_mask->data() + y * width + (width - right_padding), box_mask->data() + (y + 1) * width, 0);
-    }
-    if (blur_amount > 0)
-    {
-        std::unique_ptr<Image> blurred = box_mask->deepCopy();
-        int radius = blur_amount / 2;
-        for (int y = 0; y < height; ++y)
-        {
-            for (int x = 0; x < width; ++x)
-            {
-                int sum = 0, count = 0;
-                for (int dy = -radius; dy <= radius; ++dy)
-                {
-                    for (int dx = -radius; dx <= radius; ++dx)
-                    {
-                        int nx = x + dx, ny = y + dy;
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height)
-                        {
-                            sum += box_mask->data()[ny * width + nx];
-                            ++count;
-                        }
-                    }
-                }
-                blurred->data()[y * width + x] = static_cast<unsigned char>(sum / count);
-            }
-        }
-        blurred->info.pixelSizeBytes = 1;
-        blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
-        return blurred;
-    }
-    return box_mask;
-}
+//     std::fill(box_mask->data(), box_mask->data() + width * height, 255);
+
+//     int top_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[0] / 100.0));
+//     int bottom_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[2] / 100.0));
+//     int right_padding = std::max(blur_area, static_cast<int>(width * face_mask_padding[1] / 100.0));
+//     int left_padding = std::max(blur_area, static_cast<int>(width * face_mask_padding[3] / 100.0));
+//     for (int y = 0; y < top_padding; ++y)
+//     {
+//         std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
+//     }
+//     for (int y = height - bottom_padding; y < height; ++y)
+//     {
+//         std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
+//     }
+//     for (int y = 0; y < height; ++y)
+//     {
+//         std::fill(box_mask->data() + y * width, box_mask->data() + y * width + left_padding, 0);
+//     }
+//     for (int y = 0; y < height; ++y)
+//     {
+//         std::fill(box_mask->data() + y * width + (width - right_padding), box_mask->data() + (y + 1) * width, 0);
+//     }
+//     if (blur_amount > 0)
+//     {
+//         std::unique_ptr<Image> blurred = box_mask->deepCopy();
+//         int radius = blur_amount / 2;
+//         for (int y = 0; y < height; ++y)
+//         {
+//             for (int x = 0; x < width; ++x)
+//             {
+//                 int sum = 0, count = 0;
+//                 for (int dy = -radius; dy <= radius; ++dy)
+//                 {
+//                     for (int dx = -radius; dx <= radius; ++dx)
+//                     {
+//                         int nx = x + dx, ny = y + dy;
+//                         if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+//                         {
+//                             sum += box_mask->data()[ny * width + nx];
+//                             ++count;
+//                         }
+//                     }
+//                 }
+//                 blurred->data()[y * width + x] = static_cast<unsigned char>(sum / count);
+//             }
+//         }
+//         blurred->info.pixelSizeBytes = 1;
+//         blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
+//         return blurred;
+//     }
+//     return box_mask;
+// }
 
 /*GPT optimized.
 
@@ -234,13 +235,14 @@ width, radius);
     return blurred;
 }
 */
-/*GPT original version with only blur on padding areas.
+/*GPT original version with only blur on padding areas.*/
+/*
 inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
 {
     int width = static_cast<int>(crop_size[0]);
     int height = static_cast<int>(crop_size[1]);
-    double face_mask_blur = 0.3;
-    std::vector<int> face_mask_padding = {0, 0, 0, 0}; // top, right, bottom, left
+    double face_mask_blur = 0.45;
+    std::vector<int> face_mask_padding = {0, 0, 20, 0}; // top, right, bottom, left
 
     int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
     int radius = std::max(blur_amount / 2, 1);
@@ -308,10 +310,108 @@ inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& 
     blurred->info.pixelSizeBytes = 1;
     blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
     return blurred;
+}*/
+
+inline void fast_box_blur(unsigned char* src, unsigned char* dst, int width, int height, int radius)
+{
+    std::vector<unsigned char> temp(width * height, 0);
+
+    // Horizontal pass
+    for (int y = 0; y < height; ++y)
+    {
+        int sum = 0;
+        for (int x = -radius; x <= radius; ++x)
+        {
+            sum += src[y * width + std::clamp(x, 0, width - 1)];
+        }
+        for (int x = 0; x < width; ++x)
+        {
+            temp[y * width + x] = static_cast<unsigned char>(sum / (2 * radius + 1));
+            int left = x - radius;
+            int right = x + radius + 1;
+            if (left >= 0)
+            {
+                sum -= src[y * width + left];
+            }
+            if (right < width)
+            {
+                sum += src[y * width + right];
+            }
+        }
+    }
+
+    // Vertical pass
+    for (int x = 0; x < width; ++x)
+    {
+        int sum = 0;
+        for (int y = -radius; y <= radius; ++y)
+        {
+            sum += temp[std::clamp(y, 0, height - 1) * width + x];
+        }
+        for (int y = 0; y < height; ++y)
+        {
+            dst[y * width + x] = static_cast<unsigned char>(sum / (2 * radius + 1));
+            int top = y - radius;
+            int bottom = y + radius + 1;
+            if (top >= 0)
+            {
+                sum -= temp[top * width + x];
+            }
+            if (bottom < height)
+            {
+                sum += temp[bottom * width + x];
+            }
+        }
+    }
 }
 
-*/
+inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
+{
+    int width = static_cast<int>(crop_size[0]);
+    int height = static_cast<int>(crop_size[1]);
+    double face_mask_blur = 0.6;
+    std::vector<int> face_mask_padding = {0, 0, 0, 0};
+    int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
+    int blur_area = std::max(blur_amount / 2, 1);
 
+    std::unique_ptr<Image> box_mask = std::make_unique<Image>(width * height);
+    box_mask->info.width = width;
+    box_mask->info.height = height;
+    box_mask->info.pixelSizeBytes = 1;
+    box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
+    std::fill(box_mask->data(), box_mask->data() + width * height, 255);
+
+    int top = std::max(blur_area, static_cast<int>(height * face_mask_padding[0] / 100.0));
+    int bottom = std::max(blur_area, static_cast<int>(height * face_mask_padding[2] / 100.0));
+    int right = std::max(blur_area, static_cast<int>(width * face_mask_padding[1] / 100.0));
+    int left = std::max(blur_area, static_cast<int>(width * face_mask_padding[3] / 100.0));
+
+    // Zero out padding regions
+    for (int y = 0; y < top; ++y)
+    {
+        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
+    }
+    for (int y = height - bottom; y < height; ++y)
+    {
+        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
+    }
+    for (int y = 0; y < height; ++y)
+    {
+        std::fill(box_mask->data() + y * width, box_mask->data() + y * width + left, 0);
+        std::fill(box_mask->data() + y * width + (width - right), box_mask->data() + (y + 1) * width, 0);
+    }
+
+    if (blur_amount > 0)
+    {
+        std::unique_ptr<Image> blurred = box_mask->deepCopy();
+        fast_box_blur(box_mask->data(), blurred->data(), width, height, blur_amount / 2);
+        blurred->info.pixelSizeBytes = 1;
+        blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
+        return blurred;
+    }
+
+    return box_mask;
+}
 
 } // namespace image_utils
 } // namespace linuxface

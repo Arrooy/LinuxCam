@@ -23,6 +23,7 @@ class MediaBrowserUI
 
     bool render();
 
+    Layer* getSelectedLayer();
   private:
     void renderLeftSidebar();
     void renderRightSidebar();
@@ -33,7 +34,6 @@ class MediaBrowserUI
     void renderImagePreview(std::shared_ptr<Image> image);
     void renderGifPreview(std::shared_ptr<Gif> gif);
     void renderImageOperationsContent();
-    Layer* getSelectedLayer();
 
     ImVec2 calculatePreviewSize(float originalWidth, float originalHeight);
     float calculateFitScale(float originalWidth, float originalHeight);

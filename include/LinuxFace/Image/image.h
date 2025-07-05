@@ -332,10 +332,10 @@ class Image
     ImageMetadata info{};
 
     // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
-    std::unique_ptr<Image> affineWarp(const double* M, int out_width, int out_height) const;
+    std::unique_ptr<Image> affineWarpBilinear(const double* M, int out_width, int out_height) const;
 
     // Affine warp for single-channel mask
-    std::unique_ptr<Image> affineWarpMask(const double* M, int out_width, int out_height) const;
+    std::unique_ptr<Image> affineWarpNearestNeighbour(const double* M, int out_width, int out_height) const;
 
     // Alpha blend src onto this image using mask (mask: 0=background, 255=full src)
     void alphaBlend(const Image& src, const Image& mask);
@@ -347,6 +347,9 @@ class Image
     bool convertToRGBInplace();
 
     void drawBorder(const Pixel& color, int thickness = 1);
+
+    // Set all pixels to black (useful for clearing the image)
+    void black();
   private:
     // Optimized helper methods
     void copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,

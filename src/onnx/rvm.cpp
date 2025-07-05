@@ -197,9 +197,8 @@ void RobustVideoMatting::detect(const std::unique_ptr<Image>& image, std::unique
             // Recreate the tensor with updated data for next frame
             // Get actual shape from the output tensor
             std::vector<int64_t> tensor_shape(rec_shape.begin(), rec_shape.end());
-            Ort::MemoryInfo cpu_memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
-            rec_[rec_index] = Ort::Value::CreateTensor<float>(cpu_memory_info, rec_cpu_data_[rec_index].data(),
+            rec_[rec_index] = Ort::Value::CreateTensor<float>(memory_info_, rec_cpu_data_[rec_index].data(),
                                                               rec_cpu_data_[rec_index].size(), tensor_shape.data(),
                                                               tensor_shape.size());
 
