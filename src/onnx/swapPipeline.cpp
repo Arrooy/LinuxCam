@@ -144,10 +144,10 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             face.paintAllFaceLandmarks(image, false);
         }
         auto scale = 1; // 0.5;
-        image->copyFrom(*image->scaleByPercentage(scale));
-        output->copyFrom(*output->scaleByPercentage(scale));
-        warped_swapped_face->copyFrom(*warped_swapped_face->scaleByPercentage(scale));
-        warped_mask->copyFrom(*warped_mask->scaleByPercentage(scale));
+        image->copyFrom(*image->scale(scale));
+        output->copyFrom(*output->scale(scale));
+        warped_swapped_face->copyFrom(*warped_swapped_face->scale(scale));
+        warped_mask->copyFrom(*warped_mask->scale(scale));
         warped_mask->convertToRGBInplace();
         crop_mask->convertToRGBInplace();
         image->drawBorder(Pixel(255, 0, 0), 2);

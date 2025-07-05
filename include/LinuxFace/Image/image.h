@@ -290,7 +290,6 @@ class Image
     [[nodiscard]] std::unique_ptr<Image> scale(double factor) const;
     [[nodiscard]] std::unique_ptr<Image> scale(unsigned long newWidth, unsigned long newHeight) const;
     [[nodiscard]] std::unique_ptr<Image> scaleTo(size_t newWidth, size_t newHeight) const;
-    [[nodiscard]] std::unique_ptr<Image> scaleByPercentage(double percentage) const;
     [[nodiscard]] std::unique_ptr<Image> deepCopy() const;
 
     // Improved paste operations

@@ -265,38 +265,6 @@ std::unique_ptr<Image> Image::deepCopy() const
     return copy;
 }
 
-std::unique_ptr<Image> Image::scaleByPercentage(double percentage) const
-{
-    if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
-    {
-        common::log_error("Image::scaleByPercentage - Invalid source image");
-        return nullptr;
-    }
-
-    if (percentage <= 0.0)
-    {
-        common::log_error("Image::scaleByPercentage - Invalid percentage: %f", percentage);
-        return nullptr;
-    }
-
-    // Calculate new dimensions maintaining aspect ratio
-    unsigned long newWidth = static_cast<unsigned long>(info.width * percentage + 0.5);
-    unsigned long newHeight = static_cast<unsigned long>(info.height * percentage + 0.5);
-
-    // Ensure minimum size of 1x1
-    if (newWidth == 0)
-    {
-        newWidth = 1;
-    }
-    if (newHeight == 0)
-    {
-        newHeight = 1;
-    }
-
-    // Use existing scale method
-    return scale(newWidth, newHeight);
-}
-
 std::unique_ptr<Image> Image::scaleTo(size_t newWidth, size_t newHeight) const
 {
     return scale(static_cast<unsigned long>(newWidth), static_cast<unsigned long>(newHeight));
@@ -309,8 +277,17 @@ std::unique_ptr<Image> Image::scale(double factor) const
         return nullptr;
     }
 
-    size_t newWidth = static_cast<size_t>(info.width * factor);
-    size_t newHeight = static_cast<size_t>(info.height * factor);
+    size_t newWidth = static_cast<size_t>(info.width * factor + 0.5);
+    size_t newHeight = static_cast<size_t>(info.height * factor + 0.5);
+    // Ensure minimum size of 1x1
+    if (newWidth == 0)
+    {
+        newWidth = 1;
+    }
+    if (newHeight == 0)
+    {
+        newHeight = 1;
+    }
 
     return scaleTo(newWidth, newHeight);
 }
