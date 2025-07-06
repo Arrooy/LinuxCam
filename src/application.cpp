@@ -205,6 +205,7 @@ void Application::run()
     }
 
     cameraManager_->shutdown();
+    mediaManager_->shutdown();
 
     common::log_info("Main loop ended");
 }

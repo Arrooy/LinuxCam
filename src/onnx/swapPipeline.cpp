@@ -143,7 +143,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             face.paintBoundingBox(image, Pixel(0, 255, 0));
             face.paintAllFaceLandmarks(image, false);
         }
-        auto scale = 1; // 0.5;
+        auto scale = 0.3;
         image->copyFrom(*image->scale(scale));
         output->copyFrom(*output->scale(scale));
         warped_swapped_face->copyFrom(*warped_swapped_face->scale(scale));
