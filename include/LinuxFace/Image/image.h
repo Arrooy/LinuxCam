@@ -104,6 +104,16 @@ enum class NormalizationType
     ZERO_CENTER
 };
 
+enum class ScalingAlgorithm
+{
+    //              Quality Speed Anti-aliasing / Downscale Sharpness Consistency / Artifact-free Overall Score
+    LANCZOS,        // 9	3	9	8	7.25
+    BILINEAR,       // 5	8	5	6	6.0
+    AREA_AVERAGING, // 7	7	8	8	7.5
+    FAST_BOX,       // 2	10	2	4	4.5
+    BICUBIC,        // 8	6	7	7	7.0
+};
+
 // TODO: move this to another place.
 enum class PaddingType
 {
@@ -287,9 +297,9 @@ class Image
     [[nodiscard]] std::pair<unsigned long, unsigned long> getPosition() const noexcept { return {info.x, info.y}; }
 
     // Better scaling interface
-    [[nodiscard]] std::unique_ptr<Image> scale(double factor) const;
-    [[nodiscard]] std::unique_ptr<Image> scale(unsigned long newWidth, unsigned long newHeight) const;
-    [[nodiscard]] std::unique_ptr<Image> scaleTo(size_t newWidth, size_t newHeight) const;
+    [[nodiscard]] std::unique_ptr<Image> scale(double factor, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
+    [[nodiscard]] std::unique_ptr<Image> scale(unsigned long newWidth, unsigned long newHeight, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
+    [[nodiscard]] std::unique_ptr<Image> scaleTo(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
     [[nodiscard]] std::unique_ptr<Image> deepCopy() const;
 
     // Improved paste operations

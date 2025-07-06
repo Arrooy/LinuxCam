@@ -8,6 +8,8 @@
 #include <cstring>
 #include <vector>
 
+#include "LinuxFace/Image/image_utils.h"
+
 namespace linuxface
 {
 
@@ -265,12 +267,7 @@ std::unique_ptr<Image> Image::deepCopy() const
     return copy;
 }
 
-std::unique_ptr<Image> Image::scaleTo(size_t newWidth, size_t newHeight) const
-{
-    return scale(static_cast<unsigned long>(newWidth), static_cast<unsigned long>(newHeight));
-}
-
-std::unique_ptr<Image> Image::scale(double factor) const
+std::unique_ptr<Image> Image::scale(double factor, ScalingAlgorithm algorithm) const
 {
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
     {
@@ -289,11 +286,16 @@ std::unique_ptr<Image> Image::scale(double factor) const
         newHeight = 1;
     }
 
-    return scaleTo(newWidth, newHeight);
+    return scaleTo(newWidth, newHeight, algorithm);
+}
+
+std::unique_ptr<Image> Image::scaleTo(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm) const
+{
+    return scale(static_cast<unsigned long>(newWidth), static_cast<unsigned long>(newHeight), algorithm);
 }
 
 // Performance-optimized bilinear scaling with different algorithms for up/down scaling
-std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHeight) const
+std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHeight, ScalingAlgorithm algorithm) const
 {
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
     {
@@ -316,148 +318,35 @@ std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHei
     const double scaleX = static_cast<double>(newWidth) / info.width;
     const double scaleY = static_cast<double>(newHeight) / info.height;
 
-    if (scaleX <= 0.5 || scaleY <= 0.5)
+    // Crate resulting image
+    image_utils::ImageView<unsigned char> srcView{data_.get(), info.width, info.height, info.pixelSizeBytes};
+    auto result = std::make_unique<Image>(newWidth * newHeight * info.pixelSizeBytes);
+    image_utils::ImageView<unsigned char> dstView{result->data(), newWidth, newHeight, info.pixelSizeBytes};
+
+    switch (algorithm)
     {
-        // Significant downscaling - use area averaging to prevent aliasing
-        return scaleDownWithAreaAveraging(newWidth, newHeight);
-    }
-    else
-    {
-        // Upscaling or minor downscaling - use optimized bilinear interpolation
-        return scaleWithBilinear(newWidth, newHeight);
-    }
-}
-
-std::unique_ptr<Image> Image::scaleWithBilinear(unsigned long newWidth, unsigned long newHeight) const
-{
-    // Create scaled image
-    size_t scaledSize = newWidth * newHeight * info.pixelSizeBytes;
-    auto scaledImage = std::make_unique<Image>(scaledSize);
-
-    scaledImage->info = this->info;
-    scaledImage->info.width = newWidth;
-    scaledImage->info.height = newHeight;
-
-    const unsigned char* src = data_.get();
-    unsigned char* dst = scaledImage->data();
-
-    // Pre-calculate scaling ratios for better performance
-    const double xRatio = (info.width > 1) ? static_cast<double>(info.width - 1) / (newWidth - 1) : 0.0;
-    const double yRatio = (info.height > 1) ? static_cast<double>(info.height - 1) / (newHeight - 1) : 0.0;
-
-    // Process in blocks for better cache locality
-    const size_t blockSize = 64; // Process 64x64 blocks
-
-    for (unsigned long blockY = 0; blockY < newHeight; blockY += blockSize)
-    {
-        for (unsigned long blockX = 0; blockX < newWidth; blockX += blockSize)
-        {
-            const unsigned long endY = std::min(blockY + blockSize, newHeight);
-            const unsigned long endX = std::min(blockX + blockSize, newWidth);
-
-            for (unsigned long y = blockY; y < endY; y++)
-            {
-                for (unsigned long x = blockX; x < endX; x++)
-                {
-                    // Calculate source coordinates
-                    const double srcX = (newWidth > 1) ? x * xRatio : 0.0;
-                    const double srcY = (newHeight > 1) ? y * yRatio : 0.0;
-
-                    // Get integer and fractional parts
-                    const unsigned long x1 = static_cast<unsigned long>(srcX);
-                    const unsigned long y1 = static_cast<unsigned long>(srcY);
-                    const unsigned long x2 = std::min(x1 + 1, info.width - 1);
-                    const unsigned long y2 = std::min(y1 + 1, info.height - 1);
-
-                    const double fracX = srcX - x1;
-                    const double fracY = srcY - y1;
-
-                    const unsigned long dstIdx = (y * newWidth + x) * info.pixelSizeBytes;
-
-                    // Bilinear interpolation for each channel
-                    for (unsigned char ch = 0; ch < info.pixelSizeBytes; ch++)
-                    {
-                        const unsigned long idx1 = (y1 * info.width + x1) * info.pixelSizeBytes + ch;
-                        const unsigned long idx2 = (y1 * info.width + x2) * info.pixelSizeBytes + ch;
-                        const unsigned long idx3 = (y2 * info.width + x1) * info.pixelSizeBytes + ch;
-                        const unsigned long idx4 = (y2 * info.width + x2) * info.pixelSizeBytes + ch;
-
-                        const double p1 = src[idx1];
-                        const double p2 = src[idx2];
-                        const double p3 = src[idx3];
-                        const double p4 = src[idx4];
-
-                        // Optimized bilinear interpolation
-                        const double top = p1 + fracX * (p2 - p1);
-                        const double bottom = p3 + fracX * (p4 - p3);
-                        const double result = top + fracY * (bottom - top);
-
-                        dst[dstIdx + ch] = static_cast<unsigned char>(std::clamp(result + 0.5, 0.0, 255.0));
-                    }
-                }
-            }
-        }
+        case ScalingAlgorithm::LANCZOS:
+            image_utils::lanczosScaling(srcView, dstView);
+            break;
+        case ScalingAlgorithm::BILINEAR:
+            image_utils::bilinearScaling(srcView, dstView);
+            break;
+        case ScalingAlgorithm::AREA_AVERAGING:
+            image_utils::areaAveragingScaling(srcView, dstView);
+            break;
+        case ScalingAlgorithm::FAST_BOX:
+            image_utils::fastBoxScaling(srcView, dstView);
+            break;
+        case ScalingAlgorithm::BICUBIC:
+        default:
+            common::log_error("Image::scale - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
+            break;
     }
 
-    return scaledImage;
-}
-
-std::unique_ptr<Image> Image::scaleDownWithAreaAveraging(unsigned long newWidth, unsigned long newHeight) const
-{
-    // Area averaging for high-quality downscaling
-    size_t scaledSize = newWidth * newHeight * info.pixelSizeBytes;
-    auto scaledImage = std::make_unique<Image>(scaledSize);
-
-    scaledImage->info = this->info;
-    scaledImage->info.width = newWidth;
-    scaledImage->info.height = newHeight;
-
-    const unsigned char* src = data_.get();
-    unsigned char* dst = scaledImage->data();
-
-    const double xScale = static_cast<double>(info.width) / newWidth;
-    const double yScale = static_cast<double>(info.height) / newHeight;
-
-    for (unsigned long y = 0; y < newHeight; y++)
-    {
-        for (unsigned long x = 0; x < newWidth; x++)
-        {
-            // Calculate source region
-            const double srcX1 = x * xScale;
-            const double srcY1 = y * yScale;
-            const double srcX2 = (x + 1) * xScale;
-            const double srcY2 = (y + 1) * yScale;
-
-            // Convert to integer bounds
-            const unsigned long minX = static_cast<unsigned long>(srcX1);
-            const unsigned long minY = static_cast<unsigned long>(srcY1);
-            const unsigned long maxX = std::min(static_cast<unsigned long>(std::ceil(srcX2)), info.width);
-            const unsigned long maxY = std::min(static_cast<unsigned long>(std::ceil(srcY2)), info.height);
-
-            const unsigned long dstIdx = (y * newWidth + x) * info.pixelSizeBytes;
-
-            // Average pixels in the source region
-            for (unsigned char ch = 0; ch < info.pixelSizeBytes; ch++)
-            {
-                double sum = 0.0;
-                double weight = 0.0;
-
-                for (unsigned long sy = minY; sy < maxY; sy++)
-                {
-                    for (unsigned long sx = minX; sx < maxX; sx++)
-                    {
-                        const unsigned long srcIdx = (sy * info.width + sx) * info.pixelSizeBytes + ch;
-                        sum += src[srcIdx];
-                        weight += 1.0;
-                    }
-                }
-
-                dst[dstIdx + ch] = weight > 0 ? static_cast<unsigned char>(sum / weight + 0.5) : 0;
-            }
-        }
-    }
-
-    return scaledImage;
+    result->info = info;
+    result->info.width = newWidth;
+    result->info.height = newHeight;
+    return result;
 }
 
 void Image::move(size_t new_x, size_t new_y)
