@@ -4,6 +4,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 // clang-format on
+#include <functional>
 #include <string>
 
 class Window
@@ -23,8 +24,10 @@ class Window
 
     // Poll events and swap buffers
     void pollEvents();
-    void swapBuffers();
 
+    // Should be called every frame to handle resize debounce/throttle
+    void updateResizeEvents();
+    void swapBuffers();
 
     // Get window dimensions
     void getFramebufferSize(int& width, int& height) const;
@@ -38,9 +41,25 @@ class Window
     // Set viewport to match framebuffer size
     void setViewport();
 
+    // Called by GLFW on framebuffer resize
+    void onFramebufferResize(int width, int height);
+
+    // Set a callback to be called on framebuffer resize
+    void setResizeCallback(std::function<void(int, int)> cb);
+
   private:
     GLFWwindow* window_;
     const char* glslVersion_;
+    std::function<void(int, int)> resizeCallback_;
+
+    // For resize throttling/debouncing
+    int lastResizeWidth_ = 0;
+    int lastResizeHeight_ = 0;
+    double lastResizeCallbackTime_ = 0.0;
+    double lastResizeEventTime_ = 0.0;
+    bool resizePending_ = false;
+    static constexpr double RESIZE_THROTTLE_INTERVAL = 0.1; // seconds
+    static constexpr double RESIZE_DEBOUNCE_DELAY = 0.35;    // seconds
 
     // GLFW error callback
     static void errorCallback(int error, const char* description);

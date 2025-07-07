@@ -180,9 +180,10 @@ class LayerManager
     // Overlay cache
     void markDirty();          // Marks all layers as dirty
     bool isDirty() const;      // Returns true if any layer is dirty
-    void setDirty(bool dirty); // Sets all layers' dirty flag
     void setLayerDirty(int layerNumber, bool dirty);
 
+    // Invalidate all textures
+    void invalidateTextures();
   private:
     std::vector<Layer> layers_;
 };

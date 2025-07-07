@@ -4,22 +4,22 @@
 #include <memory>
 
 #include "LinuxFace/Image/gif.h"
+#include "LinuxFace/Image/mediaManager.h"
+#include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/cameraManager.h"
 #include "LinuxFace/detectors.h"
+#include "LinuxFace/imageLoader.h"
 #include "LinuxFace/imageRenderGL.h"
+#include "LinuxFace/onnx/MODNet.h"
+#include "LinuxFace/onnx/arcfaceRecognizer.h"
 #include "LinuxFace/onnx/fsanet.h"
+#include "LinuxFace/onnx/inswapper.h"
+#include "LinuxFace/onnx/rvm.h"
 #include "LinuxFace/onnx/scrfd.h"
+#include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/profiler.h"
 #include "LinuxFace/ui.h"
 #include "LinuxFace/window.h"
-#include "LinuxFace/imageLoader.h"
-#include "LinuxFace/onnx/MODNet.h"
-#include "LinuxFace/onnx/rvm.h"
-#include "LinuxFace/Image/mediaManager.h"
-#include "LinuxFace/UI/layerManager.h"
-#include "LinuxFace/onnx/arcfaceRecognizer.h"
-#include "LinuxFace/onnx/inswapper.h"
-#include "LinuxFace/onnx/swapPipeline.h"
 namespace linuxface
 {
 
@@ -39,6 +39,8 @@ class Application
     void shutdown();
 
   private:
+    // Connect window resize to layerManager texture invalidation
+    void connectWindowResize();
     Window window_;
     std::unique_ptr<UI> ui_;
 

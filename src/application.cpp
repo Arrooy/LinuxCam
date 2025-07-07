@@ -43,8 +43,24 @@ void signalHandler(int signal)
     }
 }
 
+
 Application::Application() : profiler_(Profiler::getInstance())
 {
+}
+
+// Helper to connect window resize to layerManager
+void Application::connectWindowResize()
+{
+    if (!layerManager_)
+        return;
+    window_.setResizeCallback(
+        [this](int /*width*/, int /*height*/)
+        {
+            if (layerManager_)
+            {
+                layerManager_->invalidateTextures();
+            }
+        });
 }
 
 Application::~Application()
@@ -64,6 +80,9 @@ bool Application::initialize()
     }
 
     layerManager_ = std::make_shared<LayerManager>();
+
+    // Connect window resize to layerManager texture invalidation
+    connectWindowResize();
 
     // Initialize UI with LayerManager
     ui_ = std::make_unique<UI>(layerManager_);

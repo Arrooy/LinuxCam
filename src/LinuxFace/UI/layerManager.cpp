@@ -94,12 +94,13 @@ bool LayerManager::isDirty() const
     }
     return false;
 }
-// TODO:  remove this is duplicated
-void LayerManager::setDirty(bool dirty)
+
+// Invalidate all textures (mark as dirty)
+void LayerManager::invalidateTextures()
 {
     for (auto& l : layers_)
     {
-        l.dirty = dirty;
+        l.dirty = true;
     }
 }
 
