@@ -697,9 +697,9 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
                 double sum = 0.0;
                 double totalWeight = 0.0;
 
-                for (unsigned long sy = clampedMinY; sy < clampedMaxY; sy++)
+                for (int sy = clampedMinY; sy < clampedMaxY; sy++)
                 {
-                    for (unsigned long sx = clampedMinX; sx < clampedMaxX; sx++)
+                    for (int sx = clampedMinX; sx < clampedMaxX; sx++)
                     {
                         // Calculate the overlap area between source pixel and destination region
                         const double pixelX1 = static_cast<double>(sx);

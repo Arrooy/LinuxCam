@@ -168,13 +168,63 @@ void MediaBrowserUI::renderImageOperationsContent()
                 }
             }
         }
-        ImGui::SameLine();
+
+        // Slider-based resize
+        ImGui::Separator();
+        ImGui::Text("Resize with Slider:");
+
+        static bool sliderActive = false;
+        static float resizeScale = 1.0f;
+
+        bool sliderChanged = ImGui::SliderFloat("Scale", &resizeScale, 0.1f, 3.0f, "%.2f");
+
+        if (sliderChanged && !sliderActive)
+        {
+            sliderActive = true;
+        }
+
+        if (sliderActive && !ImGui::IsItemActive())
+        {
+            // User released the slider, apply the resize
+            sliderActive = false;
+            int targetWidth = static_cast<int>(image->info.width * resizeScale);
+            int targetHeight = static_cast<int>(image->info.height * resizeScale);
+
+            if (targetWidth > 0 && targetHeight > 0)
+            {
+                auto resized = image->scaleTo(static_cast<size_t>(targetWidth), static_cast<size_t>(targetHeight));
+                if (resized)
+                {
+                    image->copyFrom(*resized);
+                    selected->dirty = true;
+                    // Update input fields to match new size
+                    newWidth = targetWidth;
+                    newHeight = targetHeight;
+                }
+            }
+        }
+
+        // Show preview dimensions while dragging
+        if (sliderActive || ImGui::IsItemActive())
+        {
+            int previewWidth = static_cast<int>(image->info.width * resizeScale);
+            int previewHeight = static_cast<int>(image->info.height * resizeScale);
+            ImGui::Text("Preview: %dx%d", previewWidth, previewHeight);
+        }
+
         ImGui::Spacing();
         if (ImGui::Button("Reset"))
         {
             if (!mediaManager->reloadImage(selected->name))
             {
                 common::log_error("Failed to reload image: %s", selected->name.c_str());
+            }
+            else
+            {
+                // Force recreation of texture and geometry by marking layer as dirty
+                selected->dirty = true;
+                // Also reset the image pointer to the reloaded one
+                selected->img = mediaManager->getImage(selected->name);
             }
         }
     }

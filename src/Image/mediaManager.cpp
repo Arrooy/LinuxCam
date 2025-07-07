@@ -135,15 +135,16 @@ bool MediaManager::reloadImage(const std::string& imageName)
             return false;
         }
 
-        std::unique_ptr<Image> newImage;
-        if (!loader.getImage(newImage))
+        std::unique_ptr<Image> reloadedImage;
+        if (!loader.getImage(reloadedImage))
         {
             common::log_error("Failed to decode reloaded image: %s", imageName.c_str());
             return false;
         }
 
-        // Update the existing image with the new data
-        image->copyFrom(*newImage);
+        // Replace the shared_ptr with the newly loaded image
+        image = std::shared_ptr<Image>(reloadedImage.release());
+        image->info.textureId = 0; // Reset texture ID to force re-upload
 
         return true;
     }

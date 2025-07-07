@@ -314,10 +314,6 @@ std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHei
         return deepCopy();
     }
 
-    // Choose scaling algorithm based on scale ratio
-    const double scaleX = static_cast<double>(newWidth) / info.width;
-    const double scaleY = static_cast<double>(newHeight) / info.height;
-
     // Crate resulting image
     image_utils::ImageView<unsigned char> srcView{data_.get(), info.width, info.height, info.pixelSizeBytes};
     auto result = std::make_unique<Image>(newWidth * newHeight * info.pixelSizeBytes);
