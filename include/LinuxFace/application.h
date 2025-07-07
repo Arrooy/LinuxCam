@@ -20,6 +20,7 @@
 #include "LinuxFace/onnx/arcfaceRecognizer.h"
 #include "LinuxFace/onnx/inswapper.h"
 #include "LinuxFace/onnx/swapPipeline.h"
+#include "LinuxFace/onnx/mediaPipe_FaceLandmarks.h"
 namespace linuxface
 {
 
@@ -57,6 +58,8 @@ class Application
     std::shared_ptr<ArcfaceRecognizer> arcfaceRecognizer_;
     std::shared_ptr<InSwapper> inswapper_;
     std::unique_ptr<SwapPipeline> swapPipeline_;
+
+    std::shared_ptr<MediaPipeFaceLandmarks> mediaPipeLandmarks_;
 
     std::shared_ptr<MediaManager> mediaManager_;
 

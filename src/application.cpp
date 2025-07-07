@@ -160,6 +160,10 @@ bool Application::initialize()
     std::string inswapper_model = models_folder + "inswapper_128.onnx";
     inswapper_ = std::make_shared<InSwapper>(inswapper_model);
 
+    // MediaPipe Face Landmarks initialization
+    std::string mediapipe_landmarks_model = models_folder + "MediaPipe-Face-Detection_FaceLandmarkDetector.onnx";
+    mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipe_landmarks_model);
+
     // Initialize SwapPipeline after all models are loaded
     swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
     // Pass pointer instead of reference
