@@ -160,12 +160,8 @@ void MediaBrowserUI::renderImageOperationsContent()
         {
             if (newWidth > 0 && newHeight > 0)
             {
-                auto resized = image->scaleTo(static_cast<size_t>(newWidth), static_cast<size_t>(newHeight));
-                if (resized)
-                {
-                    image->copyFrom(*resized);
-                    selected->dirty = true;
-                }
+                image->scaleToInPlace(static_cast<size_t>(newWidth), static_cast<size_t>(newHeight));
+                selected->dirty = true;
             }
         }
 
@@ -192,15 +188,11 @@ void MediaBrowserUI::renderImageOperationsContent()
 
             if (targetWidth > 0 && targetHeight > 0)
             {
-                auto resized = image->scaleTo(static_cast<size_t>(targetWidth), static_cast<size_t>(targetHeight));
-                if (resized)
-                {
-                    image->copyFrom(*resized);
-                    selected->dirty = true;
-                    // Update input fields to match new size
-                    newWidth = targetWidth;
-                    newHeight = targetHeight;
-                }
+                image->scaleToInPlace(static_cast<size_t>(targetWidth), static_cast<size_t>(targetHeight));
+                selected->dirty = true;
+                // Update input fields to match new size
+                newWidth = image->info.width;
+                newHeight = image->info.height;
             }
         }
 

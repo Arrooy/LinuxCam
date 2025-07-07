@@ -10,8 +10,7 @@
 
 #include "LinuxFace/Image/image_utils.h"
 
-namespace linuxface
-{
+using namespace linuxface;
 
 // Optimized pixel operations
 void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, unsigned char pixelSize,
@@ -267,9 +266,88 @@ std::unique_ptr<Image> Image::deepCopy() const
     return copy;
 }
 
-std::unique_ptr<Image> Image::scale(double factor, ScalingAlgorithm algorithm) const
+void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
+                      unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth, unsigned long dstHeight,
+                      ScalingAlgorithm algorithm) const
+{
+    // Use non-const T for both src and dst to match template requirements
+    image_utils::ImageView<unsigned char> srcView{const_cast<unsigned char*>(srcData), srcWidth, srcHeight, pixelSize};
+    image_utils::ImageView<unsigned char> dstView{dstData, dstWidth, dstHeight, pixelSize};
+    switch (algorithm)
+    {
+        case ScalingAlgorithm::LANCZOS:
+            image_utils::lanczosScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            break;
+        case ScalingAlgorithm::BILINEAR:
+            image_utils::bilinearScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            break;
+        case ScalingAlgorithm::AREA_AVERAGING:
+            image_utils::areaAveragingScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            break;
+        case ScalingAlgorithm::FAST_BOX:
+            image_utils::fastBoxScaling<unsigned char>(srcView, dstView);
+            break;
+        case ScalingAlgorithm::BICUBIC:
+        default:
+            common::log_error("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
+            break;
+    }
+}
+
+// In-place scaling methods
+void Image::scaleInPlace(double factor, ScalingAlgorithm algorithm)
+{
+    if (!data_ || size_ == 0 || info.width == 0 || info.height == 0 || factor == 1.0)
+    {
+        return;
+    }
+    size_t newWidth = static_cast<size_t>(info.width * factor + 0.5);
+    size_t newHeight = static_cast<size_t>(info.height * factor + 0.5);
+    if (newWidth == 0)
+    {
+        newWidth = 1;
+    }
+    if (newHeight == 0)
+    {
+        newHeight = 1;
+    }
+    scaleToInPlace(newWidth, newHeight, algorithm);
+}
+
+void Image::scaleInPlace(unsigned long newWidth, unsigned long newHeight, ScalingAlgorithm algorithm)
+{
+    scaleToInPlace(static_cast<size_t>(newWidth), static_cast<size_t>(newHeight), algorithm);
+}
+
+void Image::scaleToInPlace(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm)
 {
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
+    {
+        return;
+    }
+    if (newWidth == 0 || newHeight == 0)
+    {
+        return;
+    }
+
+    if (newWidth == info.width && newHeight == info.height)
+    {
+        return;
+    }
+
+    std::vector<unsigned char> result(newWidth * newHeight * info.pixelSizeBytes);
+    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes, result.data(), newWidth, newHeight,
+                     algorithm);
+
+    resize(newWidth * newHeight * info.pixelSizeBytes, false);
+    std::memcpy(data_.get(), result.data(), newWidth * newHeight * info.pixelSizeBytes);
+    info.width = newWidth;
+    info.height = newHeight;
+}
+
+std::unique_ptr<Image> Image::scale(double factor, ScalingAlgorithm algorithm) const
+{
+    if (!data_ || size_ == 0 || info.width == 0 || info.height == 0 || factor == 1.0)
     {
         return nullptr;
     }
@@ -314,31 +392,9 @@ std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHei
         return deepCopy();
     }
 
-    // Crate resulting image
-    image_utils::ImageView<unsigned char> srcView{data_.get(), info.width, info.height, info.pixelSizeBytes};
     auto result = std::make_unique<Image>(newWidth * newHeight * info.pixelSizeBytes);
-    image_utils::ImageView<unsigned char> dstView{result->data(), newWidth, newHeight, info.pixelSizeBytes};
-
-    switch (algorithm)
-    {
-        case ScalingAlgorithm::LANCZOS:
-            image_utils::lanczosScaling(srcView, dstView);
-            break;
-        case ScalingAlgorithm::BILINEAR:
-            image_utils::bilinearScaling(srcView, dstView);
-            break;
-        case ScalingAlgorithm::AREA_AVERAGING:
-            image_utils::areaAveragingScaling(srcView, dstView);
-            break;
-        case ScalingAlgorithm::FAST_BOX:
-            image_utils::fastBoxScaling(srcView, dstView);
-            break;
-        case ScalingAlgorithm::BICUBIC:
-        default:
-            common::log_error("Image::scale - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
-            break;
-    }
-
+    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes,
+                    result->data(), newWidth, newHeight, algorithm);
     result->info = info;
     result->info.width = newWidth;
     result->info.height = newHeight;
@@ -350,7 +406,6 @@ void Image::move(size_t new_x, size_t new_y)
     info.x = new_x;
     info.y = new_y;
 }
-
 
 Image& Image::paste(const Image& other, bool expandCanvas)
 {
@@ -1517,4 +1572,3 @@ void Image::alphaBlend(const Image& src, const Image& mask)
         PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i]);
     }
 }
-} // namespace linuxface

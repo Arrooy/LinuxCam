@@ -28,6 +28,7 @@ ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_uti
     {
         return aligned;
     }
+    common::log_warn("ArcfaceRecognizer: Failed to align face, using fallback scaling.");
     // Fallback: just scale the whole image
     return input_img.scale(target_size, target_size);
 }
