@@ -1118,6 +1118,36 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
 }
 
 
+inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point& center, float radius, Pixel color)
+{
+    // Bresenham's circle algorithm
+    int x = static_cast<int>(radius);
+    int y = 0;
+    int err = 0;
+
+    while (x >= y)
+    {
+        // Paint the 8 octants of the circle
+        image->ppx(center.x + x, center.y + y, color);
+        image->ppx(center.x + y, center.y + x, color);
+        image->ppx(center.x - y, center.y + x, color);
+        image->ppx(center.x - x, center.y + y, color);
+        image->ppx(center.x - x, center.y - y, color);
+        image->ppx(center.x - y, center.y - x, color);
+        image->ppx(center.x + y, center.y - x, color);
+        image->ppx(center.x + x, center.y - y, color);
+
+        if (err <= 0)
+        {
+            err += 2 * ++y + 1;
+        }
+        if (err > 0)
+        {
+            err -= 2 * --x + 1;
+        }
+    }
+}
+
 } // namespace image_utils
 } // namespace linuxface
 

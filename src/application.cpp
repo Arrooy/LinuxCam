@@ -182,8 +182,8 @@ bool Application::initialize()
     mediaManager_ = std::make_shared<MediaManager>(imageRender_);
     ui_->connect(mediaManager_);
 
-    // Load a.jpeg and b.jpeg once
-    std::string target_path = Config::getInstance().getMediaFolderPath() + "a.jpeg";
+    // Load target faceswap image once
+    std::string target_path = Config::getInstance().getMediaFolderPath() + "albert2.jpeg";
     target_img_ = ImageLoader::loadImageFromFile(target_path);
     if (!target_img_)
     {

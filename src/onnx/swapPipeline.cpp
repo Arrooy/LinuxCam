@@ -38,6 +38,15 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
                 arcface_->recognize(*target_img, target_img_landmarks_, target_img_embedding_);
                 target_img_embedding_ready_ = (target_img_embedding_.size() == 512);
             }
+            if (debug_)
+            {
+                debug_target_image_ = std::move(target_img->deepCopy());
+                target_faces[0].paintBoundingBox(debug_target_image_, Pixel(255, 0, 0));
+                target_faces[0].paintAllFaceLandmarks(debug_target_image_, false, 5.0f);
+                debug_target_image_aligned_ = arcface_->preprocess(*target_img, target_img_landmarks_);
+                debug_target_image_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
+                // debug_target_image_aligned_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
+            }
         }
         if (!target_img_embedding_ready_)
         {
@@ -138,7 +147,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
                 face.paintBoundingBox(image, Pixel(0, 255, 0));
                 face.paintAllFaceLandmarks(image, false);
             }
-            auto scale = 0.3;
+            auto scale = 0.7;
             image->scaleInPlace(scale);
             output->scaleInPlace(scale);
             warped_swapped_face->scaleInPlace(scale);
@@ -154,8 +163,10 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
 
             auto width = image->info.width;
             auto height = image->info.height;
-            image->pasteAt(*output, width, image->info.y, true);
-            image->pasteAt(*warped_swapped_face, width * 2, image->info.y, true);
+            image->pasteAt(*output, image->info.width, image->info.y, true);
+            image->pasteAt(*debug_target_image_, image->info.width, 0, true);
+            image->pasteAt(*debug_target_image_aligned_, image->info.width, 0, true);
+            image->pasteAt(*warped_swapped_face, 0, height, true);
             image->pasteAt(*warped_mask, width, height, true);
             image->pasteAt(*crop_mask, width * 2, height, true);
         }

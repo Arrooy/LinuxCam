@@ -1572,3 +1572,4 @@ void Image::alphaBlend(const Image& src, const Image& mask)
         PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i]);
     }
 }
+

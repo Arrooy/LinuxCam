@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/math_utils.h"
 
 using namespace linuxface;
@@ -115,8 +116,14 @@ Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id) const
     return UNKNOWN;
 }
 
-void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints) const
+void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, float radius) const
 {
+    if (landmarks_.empty())
+    {
+        common::log_warn("Face::paintAllFaceLandmarks: No landmarks to paint.");
+        return; // No landmarks to paint
+    }
+
     for (auto const& face_part : landmarks_)
     {
         Pixel c(0, 255, 255);
@@ -124,7 +131,7 @@ void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints)
         {
             c = Pixel(0, 255, 0);
         }
-        paintFaceIndex(image, face_part.first, joinPoints, c);
+        paintFaceIndex(image, face_part.first, joinPoints, c, radius);
     }
 }
 
@@ -220,7 +227,8 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
     }
 }
 
-void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color) const
+void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color,
+                          float radius) const
 {
     std::vector<FaceLandmark> points = landmarks_.at(facepart);
     math_utils::Point lastPoint(-1, -1);
@@ -236,7 +244,18 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
             }
             lastPoint = l.p;
         }
-        image->ppx(l.p.x, l.p.y, color);
+        else
+        {
+            if (radius < 1.0f)
+            {
+                image->ppx(l.p.x, l.p.y, color);
+            }
+            else
+            {
+                // Paint a circle around the landmark point
+                image_utils::paintCircle(image, l.p, radius, color);
+            }
+        }
     }
 }
 
