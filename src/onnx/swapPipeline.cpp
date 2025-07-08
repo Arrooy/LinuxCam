@@ -77,18 +77,11 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         Profiler::getInstance().stop("SwapPipeline", "swap face");
         Profiler::getInstance().start("SwapPipeline", "Affine Warp and Crop face"); // 10ms in 1080px!
         // 3. Estimate affine transformation from template to webcam landmarks
-        static const double template_128[5][2] = {
-            {0.34191607, 0.46157411},
-            {0.65653393, 0.45983393},
-            {0.50022500, 0.64050536},
-            {0.37097589, 0.82469196},
-            {0.63151696, 0.82325089}
-        };
         double src_points[10], dst_points[10];
         for (int i = 0; i < 5; ++i)
         {
-            src_points[2 * i] = template_128[i][0] * swapped_face.info.width;
-            src_points[2 * i + 1] = template_128[i][1] * swapped_face.info.height;
+            src_points[2 * i] = image_utils::template_128[i][0] * swapped_face.info.width;
+            src_points[2 * i + 1] = image_utils::template_128[i][1] * swapped_face.info.height;
             dst_points[2 * i] = webcam_landmarks[i].x;
             dst_points[2 * i + 1] = webcam_landmarks[i].y;
         }

@@ -1426,7 +1426,7 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
 
     return *this;
 }
-
+// TODO: SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM EDGE.
 std::unique_ptr<Image> Image::affineWarpBilinear(const double* M, int out_width, int out_height) const
 {
     if (info.pixelSizeBytes != 3)

@@ -74,6 +74,14 @@ struct Rect
         return (width() <= allowedMaxWidth) && (height() <= allowedMaxHeight) && (width() > 0) && (height() > 0);
     }
 
+    void addPadding(T left, T top, T right, T bottom)
+    {
+        l -= left;
+        t -= top;
+        r += right;
+        b += bottom;
+    }
+
     T l;
     T t;
     T r;

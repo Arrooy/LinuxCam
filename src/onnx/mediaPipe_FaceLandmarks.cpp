@@ -40,10 +40,23 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
         detector_session_->Run(Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1, output_names.data(), 2);
     // scores: float[1]
     float* score_ptr = output_tensors[0].GetTensorMutableData<float>();
-    result.score = score_ptr[0];
+    if (score_ptr == nullptr)
+    {
+        result.score = 0.0f; // Handle case where score is not available
+    }
+    else
+    {
+        result.score = score_ptr[0];
+    }
     // landmarks: float[1,468,3]
     float* lmk_ptr = output_tensors[1].GetTensorMutableData<float>();
     result.landmarks.resize(468, std::vector<float>(3, 0.0f));
+    if(lmk_ptr == nullptr)
+    {
+        common::log_error("MediaPipeFaceLandmarks: Landmarks tensor is null.");
+        return result; // Return empty result if landmarks are not available
+    }
+
     for (int i = 0; i < 468; ++i)
     {
         for (int j = 0; j < 3; ++j)

@@ -12,9 +12,45 @@ namespace linuxface
 namespace image_utils
 {
 
-// Align face using 5 landmarks and a template (returns nullptr if not possible)
-inline std::unique_ptr<Image> align_face_affine(const Image& input_img, const std::vector<math_utils::Point>& landmarks,
-                                                const double template_points[5][2], int target_size)
+const double template_112[5][2] = {
+    {0.34191607, 0.46157411},
+    {0.65653393, 0.45983393},
+    {0.50022500, 0.64050536},
+    {0.37097589, 0.82469196},
+    {0.63151696, 0.82325089}
+};
+
+const double template_128[5][2] = {
+    {0.36167656, 0.40387734},
+    {0.63696719, 0.40235469},
+    {0.50019687, 0.56044219},
+    {0.38710391, 0.72160547},
+    {0.61507734, 0.72034453}
+};
+
+const double template_192[5][2] = {
+    {0.40625,  0.390625},
+    {0.59375,  0.390625},
+    {0.5,      0.46875 },
+    {0.442708, 0.598958},
+    {0.557292, 0.598958}
+};
+
+const double template_512[5][2] = {
+    {0.37691676, 0.46864664},
+    {0.62285697, 0.46912813},
+    {0.50123859, 0.61331904},
+    {0.39308822, 0.72541100},
+    {0.61150205, 0.72490465}
+};
+
+
+// Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
+// If align_to_template is true: aligns landmarks to template (like align_face_affine)
+// If false: unaligns template to landmarks (like unalign_face_affine)
+inline std::unique_ptr<Image>
+affine_face_transform(const Image& input_img, const std::vector<math_utils::Point>& landmarks,
+                      const double template_points[5][2], int target_size, bool align_to_template = true)
 {
     if (landmarks.size() != 5)
     {
@@ -29,10 +65,20 @@ inline std::unique_ptr<Image> align_face_affine(const Image& input_img, const st
     double src[10], dst[10];
     for (int i = 0; i < 5; ++i)
     {
-        src[2 * i] = static_cast<double>(landmarks[i].x);
-        src[2 * i + 1] = static_cast<double>(landmarks[i].y);
-        dst[2 * i] = static_cast<double>(template_pts[i].x);
-        dst[2 * i + 1] = static_cast<double>(template_pts[i].y);
+        if (align_to_template)
+        {
+            src[2 * i] = static_cast<double>(landmarks[i].x);
+            src[2 * i + 1] = static_cast<double>(landmarks[i].y);
+            dst[2 * i] = static_cast<double>(template_pts[i].x);
+            dst[2 * i + 1] = static_cast<double>(template_pts[i].y);
+        }
+        else
+        {
+            src[2 * i] = static_cast<double>(template_pts[i].x);
+            src[2 * i + 1] = static_cast<double>(template_pts[i].y);
+            dst[2 * i] = static_cast<double>(landmarks[i].x);
+            dst[2 * i + 1] = static_cast<double>(landmarks[i].y);
+        }
     }
     double M[6] = {0};
     math_utils::estimate_affine_2d(src, dst, 5, M);

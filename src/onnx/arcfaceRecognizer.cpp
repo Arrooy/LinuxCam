@@ -15,15 +15,8 @@ ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnx_model_path) : OnnxD
 std::unique_ptr<Image>
 ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5)
 {
-    static const double template_112[5][2] = {
-        {0.34191607, 0.46157411},
-        {0.65653393, 0.45983393},
-        {0.50022500, 0.64050536},
-        {0.37097589, 0.82469196},
-        {0.63151696, 0.82325089}
-    };
     const int target_size = 112;
-    auto aligned = image_utils::align_face_affine(input_img, face_landmark_5, template_112, target_size);
+    auto aligned = image_utils::affine_face_transform(input_img, face_landmark_5, image_utils::template_112, target_size);
     if (aligned)
     {
         return aligned;
