@@ -4,23 +4,24 @@
 #include <memory>
 
 #include "LinuxFace/Image/gif.h"
+#include "LinuxFace/Image/mediaManager.h"
+#include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/cameraManager.h"
 #include "LinuxFace/detectors.h"
+#include "LinuxFace/imageLoader.h"
 #include "LinuxFace/imageRenderGL.h"
+#include "LinuxFace/onnx/MODNet.h"
+#include "LinuxFace/onnx/arcfaceRecognizer.h"
 #include "LinuxFace/onnx/fsanet.h"
+#include "LinuxFace/onnx/inswapper.h"
+#include "LinuxFace/onnx/mediaPipe_FaceLandmarks.h"
+#include "LinuxFace/onnx/pfld.h"
+#include "LinuxFace/onnx/rvm.h"
 #include "LinuxFace/onnx/scrfd.h"
+#include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/profiler.h"
 #include "LinuxFace/ui.h"
 #include "LinuxFace/window.h"
-#include "LinuxFace/imageLoader.h"
-#include "LinuxFace/onnx/MODNet.h"
-#include "LinuxFace/onnx/rvm.h"
-#include "LinuxFace/Image/mediaManager.h"
-#include "LinuxFace/UI/layerManager.h"
-#include "LinuxFace/onnx/arcfaceRecognizer.h"
-#include "LinuxFace/onnx/inswapper.h"
-#include "LinuxFace/onnx/swapPipeline.h"
-#include "LinuxFace/onnx/mediaPipe_FaceLandmarks.h"
 namespace linuxface
 {
 
@@ -60,6 +61,7 @@ class Application
     std::unique_ptr<SwapPipeline> swapPipeline_;
 
     std::shared_ptr<MediaPipeFaceLandmarks> mediaPipeLandmarks_;
+    std::shared_ptr<PFLDDetector> pfldDetector_;
 
     std::shared_ptr<MediaManager> mediaManager_;
 

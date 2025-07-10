@@ -36,12 +36,24 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     }
     Profiler::getInstance().start("MediaPipeFaceLandmarks", "detect landmarks");
     Ort::Value input_tensor = transform(image);
-    std::vector<const char*> input_names = {"image"};
-    std::vector<const char*> output_names = {"scores", "landmarks"};
+    std::vector<const char*> input_names = {"input_1"};
+    std::vector<const char*> output_names = {"conv2d_30", "conv2d_20"};
     auto output_tensors =
         detector_session_->Run(Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1, output_names.data(), 2);
     // scores: float[1]
-    float* score_ptr = output_tensors[0].GetTensorMutableData<float>();
+    auto score_tensor = std::move(output_tensors[0]);
+    if(score_tensor.IsTensor() == false ||
+       score_tensor.GetTensorTypeAndShapeInfo().GetShape()[0] != 1)
+    {
+        common::log_error("MediaPipeFaceLandmarks: Score tensor is not valid.");
+        auto shape = score_tensor.GetTensorTypeAndShapeInfo().GetShape();
+        for(const auto& dim : shape)
+        {
+            common::log_error("MediaPipeFaceLandmarks: Score tensor dimension: %ld", dim);
+        }
+        return result; // Return empty result if score is not available
+    }
+    float* score_ptr = score_tensor.GetTensorMutableData<float>();
     if (score_ptr == nullptr)
     {
         result.score = 0.0f; // Handle case where score is not available
@@ -63,7 +75,7 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     {
         for (int j = 0; j < 3; ++j)
         {
-            result.landmarks[i][j] = lmk_ptr[i * 3 + j];
+            result.landmarks[i][j] = lmk_ptr[i * 3 + j] / 192.0f;
         }
     }
     Profiler::getInstance().stop("MediaPipeFaceLandmarks", "detect landmarks");

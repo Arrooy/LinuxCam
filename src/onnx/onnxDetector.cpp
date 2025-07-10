@@ -169,11 +169,11 @@ bool OnnxDetector::readModelInputSize()
         auto output_tensor_info = ouput_type_info.GetTensorTypeAndShapeInfo();
         std::vector<int64_t> output_dims = output_tensor_info.GetShape();
         output_node_names_str_.push_back(names[i]);
-        // common::log_info("OnnxDetector::readModelInputSize - Output name: %s", names[i].c_str());
-        // for (size_t i = 0; i < output_dims.size(); ++i)
-        // {
-        //     common::log_info("OnnxDetector::readModelInputSize - Detected shape: %d", output_dims[i]);
-        // }
+        common::log_info("OnnxDetector::readModelInputSize - Output name: %s", names[i].c_str());
+        for (size_t i = 0; i < output_dims.size(); ++i)
+        {
+            common::log_info("OnnxDetector::readModelInputSize - Detected shape: %d", output_dims[i]);
+        }
     }
     input_node_names_.reserve(input_node_names_str_.size());
     output_node_names_.reserve(output_node_names_str_.size());

@@ -69,7 +69,8 @@ class Face
     FaceIndex get_facepart_from_landmark_id(unsigned long id) const;
 
     void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, float radius = 1) const;
-    void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color, float radius = 1) const;
+    void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color,
+                        float radius = 1) const;
 
     void paintBoundingBox(std::unique_ptr<Image>& image, Pixel color = Pixel(0, 255, 0)) const;
     void paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const;
@@ -77,6 +78,16 @@ class Face
     void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness, bool testColor = false) const;
 
     FaceBoundingBox getBoundingBox() const { return boundingBox_; }
+    std::vector<FaceLandmark> getLandmarks() const
+    {
+        std::vector<FaceLandmark> allLandmarks;
+        for (const auto& facepart : landmarks_)
+        {
+            const auto& partLandmarks = facepart.second;
+            allLandmarks.insert(allLandmarks.end(), partLandmarks.begin(), partLandmarks.end());
+        }
+        return allLandmarks;
+    }
     void setFacePose(FacePose pose) { pose_ = pose; }
     // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
     std::vector<math_utils::Point> getFivePointLandmarksArcFaceOrder() const;
