@@ -4,7 +4,7 @@
 
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/math_utils.h"
-
+#include "LinuxFace/onnx/scrfd.h"
 using namespace linuxface;
 
 Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
@@ -14,11 +14,13 @@ Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : b
         // ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
         // Assign 68-landmark indices for compatibility:
         // left eye: 36, right eye: 45, nose: 33, left mouth: 48, right mouth: 54
-        landmarks_[LEYE].push_back(FaceLandmark{36, landmarks[0].p});
-        landmarks_[REYE].push_back(FaceLandmark{45, landmarks[1].p});
-        landmarks_[NOSE].push_back(FaceLandmark{33, landmarks[2].p});
-        landmarks_[OUTERMOUTH].push_back(FaceLandmark{48, landmarks[3].p}); // left mouth corner
-        landmarks_[OUTERMOUTH].push_back(FaceLandmark{54, landmarks[4].p}); // right mouth corner
+        landmarks_[LEYE].push_back(FaceLandmark{SCRFDetector::LandmarkIndex::LEYE, landmarks[0].p});
+        landmarks_[REYE].push_back(FaceLandmark{SCRFDetector::LandmarkIndex::REYE, landmarks[1].p});
+        landmarks_[NOSE].push_back(FaceLandmark{SCRFDetector::LandmarkIndex::NOSE, landmarks[2].p});
+        landmarks_[OUTERMOUTH].push_back(
+            FaceLandmark{SCRFDetector::LandmarkIndex::LMOUTH, landmarks[3].p}); // left mouth corner
+        landmarks_[OUTERMOUTH].push_back(
+            FaceLandmark{SCRFDetector::LandmarkIndex::RMOUTH, landmarks[4].p}); // right mouth corner
     }
     else
     {
@@ -316,6 +318,7 @@ std::vector<math_utils::Point> Face::getFivePointLandmarksArcFaceOrder() const
     std::vector<math_utils::Point> result(5);
     // Find by landmark index (0-4) in their respective FaceIndex
     // LEYE (0), REYE (1), NOSE (2), OUTERMOUTH (3,4)
+
     // LEYE
     if (landmarks_.count(LEYE) && !landmarks_.at(LEYE).empty())
     {
@@ -338,4 +341,22 @@ std::vector<math_utils::Point> Face::getFivePointLandmarksArcFaceOrder() const
         result[4] = landmarks_.at(OUTERMOUTH)[1].p;
     }
     return result;
+}
+
+math_utils::Point Face::getLandmarkByIndex(unsigned int id) const
+{
+    // Find the landmark by its index
+    for (const auto& face_part : landmarks_)
+    {
+        for (const auto& landmark : face_part.second)
+        {
+            if (landmark.i == id)
+            {
+                return landmark.p;
+            }
+        }
+    }
+    common::log_error("Face::getLandmarkByIndex: Landmark with index {} not found", id);
+    // If not found, return an invalid point
+    return math_utils::Point(-1, -1);
 }

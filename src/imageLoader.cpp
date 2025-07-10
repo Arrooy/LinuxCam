@@ -206,6 +206,7 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
         return false;
     }
     decoded_image_->info = metadata_; // Copy metadata to decoded image
+    decoded_image_->info.format = ImageFormat::RGB;
 
     // Mark as decoded
     is_decoded_ = true;

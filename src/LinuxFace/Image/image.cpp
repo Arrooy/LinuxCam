@@ -267,8 +267,8 @@ std::unique_ptr<Image> Image::deepCopy() const
 }
 
 void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
-                      unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth, unsigned long dstHeight,
-                      ScalingAlgorithm algorithm) const
+                             unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth,
+                             unsigned long dstHeight, ScalingAlgorithm algorithm) const
 {
     // Use non-const T for both src and dst to match template requirements
     image_utils::ImageView<unsigned char> srcView{const_cast<unsigned char*>(srcData), srcWidth, srcHeight, pixelSize};
@@ -393,8 +393,8 @@ std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHei
     }
 
     auto result = std::make_unique<Image>(newWidth * newHeight * info.pixelSizeBytes);
-    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes,
-                    result->data(), newWidth, newHeight, algorithm);
+    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes, result->data(), newWidth, newHeight,
+                     algorithm);
     result->info = info;
     result->info.width = newWidth;
     result->info.height = newHeight;
@@ -783,14 +783,16 @@ bool Image::saveToDisk(const std::string& dest_path) const
         return false;
     }
 
-    int file = open(dest_path.c_str(), O_WRONLY | O_CREAT, 0660);
+    // Use O_TRUNC to overwrite file if it exists
+    int file = open(dest_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0660);
     if (file < 0)
     {
         common::log_error("Image::saveToDisk - Error opening file for writing: %s", dest_path.c_str());
         common::errno_log("Image::saveToDisk - Error opening file for writing");
         return false;
     }
-    common::log_info("Image::saveToDisk - Saving image to %s", dest_path.c_str());
+    common::log_info("Image::saveToDisk - Saving image to %s with size %lux%lu", dest_path.c_str(), info.width,
+                     info.height);
     // Handle PPM (RGB, RGBA, Grayscale)
     if (info.format == ImageFormat::PPM || info.format == ImageFormat::RGB || info.format == ImageFormat::RGBA
         || info.format == ImageFormat::GRAYSCALE)
@@ -850,6 +852,10 @@ bool Image::saveToDisk(const std::string& dest_path) const
             close(file);
             return true;
         }
+        // If pixel size is not 1, 3, or 4, error
+        common::log_error("Image::saveToDisk - Unsupported pixel size for PPM: %d", info.pixelSizeBytes);
+        close(file);
+        return false;
     }
 
     // JPEG: direct write (assume data_ is already JPEG encoded)

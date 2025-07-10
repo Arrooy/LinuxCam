@@ -80,6 +80,7 @@ class Face
     void setFacePose(FacePose pose) { pose_ = pose; }
     // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
     std::vector<math_utils::Point> getFivePointLandmarksArcFaceOrder() const;
+    math_utils::Point getLandmarkByIndex(unsigned int id) const;
   private:
     void freeFaceLandmarks();
 

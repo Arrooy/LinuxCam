@@ -56,6 +56,7 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
 
     try
     {
+        common::log_info("OnnxDetector: Loading ONNX model from %s", onnx_model_path.c_str());
         // Create ONNX Runtime detector_session_ for the detector
         detector_session_ = std::make_unique<Ort::Session>(env_, onnx_model_path.c_str(), session_options_);
 

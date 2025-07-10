@@ -1,7 +1,9 @@
 #ifndef IMAGE_UTILS_H
 #define IMAGE_UTILS_H
 
+#include <array>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "LinuxFace/Image/image.h"
@@ -28,12 +30,29 @@ const double template_128[5][2] = {
     {0.61507734, 0.72034453}
 };
 
-const double template_192[5][2] = {
+const double template_192_old[5][2] = {
     {0.40625,  0.390625},
     {0.59375,  0.390625},
     {0.5,      0.46875 },
     {0.442708, 0.598958},
     {0.557292, 0.598958}
+};
+const double template_192[5][2] = {
+    {0.35546875, 0.396484375},
+    {0.64453125, 0.396484375},
+    {0.5,        0.482421875},
+    {0.37109375, 0.611328125},
+    {0.62890625, 0.611328125}
+};
+
+// Alternative template with slightly different proportions
+// that may work better with certain face shapes
+const double template_192_alt[5][2] = {
+    {0.36328125, 0.40234375},
+    {0.63671875, 0.40234375},
+    {0.5,        0.48828125},
+    {0.3828125,  0.61328125},
+    {0.6171875,  0.61328125}
 };
 
 const double template_512[5][2] = {
@@ -46,22 +65,16 @@ const double template_512[5][2] = {
 
 
 // Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
-// If align_to_template is true: aligns landmarks to template (like align_face_affine)
-// If false: unaligns template to landmarks (like unalign_face_affine)
-inline std::unique_ptr<Image>
+// Now returns both the aligned image and the affine matrix used
+inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
 affine_face_transform(const Image& input_img, const std::vector<math_utils::Point>& landmarks,
                       const double template_points[5][2], int target_size, bool align_to_template = true)
 {
     if (landmarks.size() != 5)
     {
-        return nullptr;
+        return std::make_pair(nullptr, std::array<double, 6>{1.0, 0.0, 0.0, 0.0, 1.0, 0.0});
     }
-    std::vector<math_utils::Point> template_pts;
-    for (int i = 0; i < 5; ++i)
-    {
-        template_pts.emplace_back(static_cast<long>(template_points[i][0] * target_size),
-                                  static_cast<long>(template_points[i][1] * target_size));
-    }
+
     double src[10], dst[10];
     for (int i = 0; i < 5; ++i)
     {
@@ -69,20 +82,25 @@ affine_face_transform(const Image& input_img, const std::vector<math_utils::Poin
         {
             src[2 * i] = static_cast<double>(landmarks[i].x);
             src[2 * i + 1] = static_cast<double>(landmarks[i].y);
-            dst[2 * i] = static_cast<double>(template_pts[i].x);
-            dst[2 * i + 1] = static_cast<double>(template_pts[i].y);
+            dst[2 * i] = static_cast<double>(template_points[i][0] * target_size);
+            dst[2 * i + 1] = static_cast<double>(template_points[i][1] * target_size);
         }
         else
         {
-            src[2 * i] = static_cast<double>(template_pts[i].x);
-            src[2 * i + 1] = static_cast<double>(template_pts[i].y);
+            src[2 * i] = static_cast<double>(template_points[i][0] * target_size);
+            src[2 * i + 1] = static_cast<double>(template_points[i][1] * target_size);
             dst[2 * i] = static_cast<double>(landmarks[i].x);
             dst[2 * i + 1] = static_cast<double>(landmarks[i].y);
         }
     }
     double M[6] = {0};
     math_utils::estimate_affine_2d(src, dst, 5, M);
-    return input_img.affineWarpBilinear(M, target_size, target_size);
+    std::array<double, 6> arrM;
+    for (int i = 0; i < 6; ++i)
+    {
+        arrM[i] = M[i];
+    }
+    return {input_img.affineWarpBilinear(M, target_size, target_size), arrM};
 }
 
 /**
@@ -1115,6 +1133,41 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
             }
         }
     }
+}
+
+// Transform a vector of math_utils::Point using a 2x3 affine matrix (row-major)
+inline std::vector<math_utils::Point>
+transform_points_affine(const std::vector<math_utils::Point>& points, const double M[6])
+{
+    std::vector<math_utils::Point> result;
+    result.reserve(points.size());
+    for (const auto& pt : points)
+    {
+        double x = static_cast<double>(pt.x);
+        double y = static_cast<double>(pt.y);
+        double x_new = M[0] * x + M[1] * y + M[2];
+        double y_new = M[3] * x + M[4] * y + M[5];
+        result.emplace_back(static_cast<long>(std::round(x_new)), static_cast<long>(std::round(y_new)));
+    }
+    return result;
+}
+
+// Transform a vector of (x, y) pairs using a 2x3 affine matrix (row-major)
+inline std::vector<std::pair<double, double>>
+transform_points_affine(const std::vector<std::pair<double, double>>& points, const double M[6])
+{
+    std::vector<std::pair<double, double>> result;
+    result.reserve(points.size());
+    for (size_t i = 0; i < points.size(); ++i)
+    {
+        const auto& pt = points[i];
+        double x = pt.first;
+        double y = pt.second;
+        double x_new = M[0] * x + M[1] * y + M[2];
+        double y_new = M[3] * x + M[4] * y + M[5];
+        result.emplace_back(x_new, y_new);
+    }
+    return result;
 }
 
 

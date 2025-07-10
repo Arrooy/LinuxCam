@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "LinuxFace/common.h"
+#include "LinuxFace/profiler.h"
 
 using namespace linuxface;
 
@@ -33,6 +34,7 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     {
         return result;
     }
+    Profiler::getInstance().start("MediaPipeFaceLandmarks", "detect landmarks");
     Ort::Value input_tensor = transform(image);
     std::vector<const char*> input_names = {"image"};
     std::vector<const char*> output_names = {"scores", "landmarks"};
@@ -50,12 +52,12 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     }
     // landmarks: float[1,468,3]
     float* lmk_ptr = output_tensors[1].GetTensorMutableData<float>();
-    result.landmarks.resize(468, std::vector<float>(3, 0.0f));
     if(lmk_ptr == nullptr)
     {
         common::log_error("MediaPipeFaceLandmarks: Landmarks tensor is null.");
         return result; // Return empty result if landmarks are not available
     }
+    result.landmarks.resize(468, std::vector<float>(3, 0.0f));
 
     for (int i = 0; i < 468; ++i)
     {
@@ -64,5 +66,6 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
             result.landmarks[i][j] = lmk_ptr[i * 3 + j];
         }
     }
+    Profiler::getInstance().stop("MediaPipeFaceLandmarks", "detect landmarks");
     return result;
 }
