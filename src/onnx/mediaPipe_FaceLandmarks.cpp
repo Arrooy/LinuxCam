@@ -11,7 +11,6 @@ MediaPipeFaceLandmarks::MediaPipeFaceLandmarks(const std::string& onnx_model_pat
 {
     // Model expects input [1,3,192,192] named "image"
     // Output: "scores" [1], "landmarks" [1,468,3]
-    ready_ = true;
 }
 
 Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image)
@@ -21,7 +20,7 @@ Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image
     Ort::Value input_tensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    padding_ = TensorPadding::no_padding();
+    padding_ = TensorPadding::scrfd();
     // No padding, normalization as needed (MINMAX for now)
     image->toTensor(tensor_data, padding_, 192, 192, NormalizationType::MINMAX);
     return input_tensor;
@@ -36,8 +35,8 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     }
     Profiler::getInstance().start("MediaPipeFaceLandmarks", "detect landmarks");
     Ort::Value input_tensor = transform(image);
-    std::vector<const char*> input_names = {"input_1"};
-    std::vector<const char*> output_names = {"conv2d_30", "conv2d_20"};
+    std::vector<const char*> input_names = {"image"};
+    std::vector<const char*> output_names = {"scores", "landmarks"};
     auto output_tensors =
         detector_session_->Run(Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1, output_names.data(), 2);
     // scores: float[1]
@@ -75,7 +74,7 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     {
         for (int j = 0; j < 3; ++j)
         {
-            result.landmarks[i][j] = lmk_ptr[i * 3 + j] / 192.0f;
+            result.landmarks[i][j] = lmk_ptr[i * 3 + j];
         }
     }
     Profiler::getInstance().stop("MediaPipeFaceLandmarks", "detect landmarks");

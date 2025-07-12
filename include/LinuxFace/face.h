@@ -15,8 +15,8 @@ struct FaceLandmark
 {
     // Index of the landmark
     unsigned int i;
-    // Location of the landmark
-    math_utils::Point p;
+    // 3D location of the landmark
+    math_utils::Point3D p;
 };
 
 struct FaceBoundingBox
@@ -68,7 +68,7 @@ class Face
 
     FaceIndex get_facepart_from_landmark_id(unsigned long id) const;
 
-    void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, float radius = 1) const;
+    void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, Pixel c, float radius = 1) const;
     void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color,
                         float radius = 1) const;
 
@@ -89,9 +89,11 @@ class Face
         return allLandmarks;
     }
     void setFacePose(FacePose pose) { pose_ = pose; }
-    // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
-    std::vector<math_utils::Point> getFivePointLandmarksArcFaceOrder() const;
-    math_utils::Point getLandmarkByIndex(unsigned int id) const;
+    // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth] (3D)
+    std::vector<math_utils::Point3D> getFivePointLandmarksArcFaceOrder() const;
+    // Retrieve 5-point landmarks in ArcFace order (2D)
+    std::vector<math_utils::Point> getFivePointLandmarksArcFaceOrder2D() const;
+    math_utils::Point3D getLandmarkByIndex(unsigned int id) const;
   private:
     void freeFaceLandmarks();
 

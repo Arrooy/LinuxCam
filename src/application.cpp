@@ -132,8 +132,13 @@ bool Application::initialize()
     }
 
     // Just here for benchmarking.
-    // faceDetector_ = std::make_unique<DlibFaceDetector>();
+    faceDetector_ = std::make_unique<DlibFaceDetector>();
     std::string models_folder = Config::getInstance().getModelFolderPath();
+
+    // DlibShapeDetector initialization (landmarks)
+    std::string dlib_shape_model = models_folder + "shape_predictor_68_face_landmarks.dat";
+    dlibShapeDetector_ = std::make_unique<DlibShapeDetector>(dlib_shape_model);
+
     std::string var_onnx_path = models_folder + "fsanet-var.onnx";
     // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
@@ -162,8 +167,8 @@ bool Application::initialize()
     inswapper_ = std::make_shared<InSwapper>(inswapper_model);
 
     // MediaPipe Face Landmarks initialization
-    // std::string mediapipe_landmarks_model = models_folder + "MediaPipe-Face-Detection_FaceLandmarkDetector.onnx";
-    std::string mediapipe_landmarks_model = models_folder + "face_landmark_barracuda.onnx";
+    std::string mediapipe_landmarks_model = models_folder + "MediaPipeFaceLandmarkDetector.onnx";
+    // std::string mediapipe_landmarks_model = models_folder + "face_landmark_barracuda.onnx";
     mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipe_landmarks_model);
 
     // Initialize SwapPipeline after all models are loaded
@@ -295,6 +300,18 @@ bool Application::update()
             common::log_error("Failed to update output cameras");
         }
     }
+    static bool saving = false;
+    // Check for space key press to capture and save webcam image
+    if (window_.isKeyPressed(GLFW_KEY_SPACE) && !saving)
+    {
+        saving = true;
+        captureAndSaveWebcamImageWithTimestamp();
+    }
+    else
+    {
+        saving = false;
+    }
+
     ui_->handleKeyboard();
 
     // Start new UI frame
@@ -328,6 +345,8 @@ void Application::render()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
+    auto raw = image->deepCopy();
+ 
     std::vector<Face> dlib_faces;
     if (faceDetector_ != nullptr)
     {
@@ -340,6 +359,24 @@ void Application::process(std::unique_ptr<Image>& image)
         if (scrfdDetector_->isReady())
         {
             scrfd_faces = scrfdDetector_->detect(image);
+            for(const auto& face : scrfd_faces)
+            {
+                face.paintBoundingBox(image, Pixel(200,200,200));
+                face.paintAllFaceLandmarks(image, false, Pixel(200,200,200), 1.5f);
+            }
+        }
+    }
+
+    // Dlib landmark detection using SCRFD face
+    if (dlibShapeDetector_ && !scrfd_faces.empty())
+    {
+        std::vector<math_utils::Rect<float>> rects;
+        rects.push_back(scrfd_faces[0].getBoundingBox().rect);
+        auto dlib_landmark_faces = dlibShapeDetector_->detect(image, rects);
+        for (const auto& face : dlib_landmark_faces)
+        {
+            face.paintBoundingBox(image, Pixel(255, 0, 0));
+            face.paintAllFaceLandmarks(image, false, Pixel(255,0,0), 1.5f);
         }
     }
 
@@ -383,110 +420,82 @@ void Application::process(std::unique_ptr<Image>& image)
         Profiler::getInstance().stop("RVM", "App paste");
     }
 
-    // Paint results:
-    for (const auto& face : dlib_faces)
+    if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
     {
-        face.paintBoundingBox(image, Pixel(255, 0, 0));
+        FaceBoundingBox bbx = scrfd_faces[0].getBoundingBox();
+        // Lets add some padding of the image.
+        // bbx.rect.addPadding(20.0f, 60.0f, 20.0f, 20.0f);
+        auto face_image = raw->crop(bbx.rect); // TODO care cose it could be smaller than 192x192
+        if (!face_image)
+        {
+            common::log_error("Failed to crop face image for MediaPipe landmarks detection");
+        }
+        else
+        {
+            // 1. Draw five-point landmarks used for alignment on the original image
+            auto five_pts_2d = scrfd_faces[0].getFivePointLandmarksArcFaceOrder2D();
+            // for (size_t i = 0; i < five_pts.size(); ++i)
+            // {
+            //     image->ppx(five_pts[i].x, five_pts[i].y, Pixel(0, 255, 255));
+            //     common::log_info("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
+            //                      (float) five_pts[i].y);
+            // }
+
+            // 2. Affine align
+            auto [aligned_image, affine] =
+                image_utils::affine_face_transform(*raw, five_pts_2d, image_utils::template_192, 192, true);
+            if (!aligned_image)
+            {
+                common::log_error("Failed to wrap face image for MediaPipe landmarks detection");
+                return;
+            }
+            auto result = mediaPipeLandmarks_->detect(aligned_image);
+
+            if (result.score > 0.5)
+            {
+                // 4. Map landmarks back to original image
+                double invM[6];
+                if (!math_utils::invert_affine(affine.data(), invM))
+                {
+                    common::log_error("Failed to invert affine for MediaPipe unalignment");
+                    return;
+                }
+
+                double w = aligned_image->info.width;
+                double h = aligned_image->info.height;
+                std::vector<std::pair<double, double>> aligned_pts;
+                std::vector<float> aligned_z;
+                for (const auto& landmark : result.landmarks)
+                {
+                    aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
+                    aligned_z.push_back(landmark[2]);
+                }
+                auto unaligned_pts = image_utils::transform_points_affine(aligned_pts, invM);
+                for (size_t i = 0; i < unaligned_pts.size(); ++i)
+                {
+                    double x = static_cast<double>(unaligned_pts[i].first);
+                    double y = static_cast<double>(unaligned_pts[i].second);
+                    float z = aligned_z[i];
+                    if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
+                    {
+                        common::log_warn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
+                        continue;
+                    }
+                    image->ppx(x, y, Pixel(0, 0, 255));
+                    image_utils::paintCircle(image, math_utils::Point3D(x, y, z), 1.5f, Pixel(0, 0, 255));
+                }
+                auto layer = layerManager_->getBaseLayer();
+                if (layer)
+                {
+                    layer->dirty = true;
+                }
+            }
+            else
+            {
+                common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+            }
+        }
     }
-
-    auto raw = image->deepCopy();
-    // const auto size = 192 * 2;
-    // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
-    // {
-    //     FaceBoundingBox bbx = scrfd_faces[0].getBoundingBox();
-    //     // Lets add some padding of the image.
-    //     // bbx.rect.addPadding(20.0f, 60.0f, 20.0f, 20.0f);
-    //     auto face_image = raw->crop(bbx.rect); // TODO care cose it could be smaller than 192x192
-    //     if (!face_image)
-    //     {
-    //         common::log_error("Failed to crop face image for MediaPipe landmarks detection");
-    //     }
-    //     else
-    //     {
-    //         // 1. Draw five-point landmarks used for alignment on the original image
-    //         auto five_pts = scrfd_faces[0].getFivePointLandmarksArcFaceOrder();
-    //         // for (size_t i = 0; i < five_pts.size(); ++i)
-    //         // {
-    //         //     image->ppx(five_pts[i].x, five_pts[i].y, Pixel(0, 255, 255));
-    //         //     common::log_info("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
-    //         //                      (float) five_pts[i].y);
-    //         // }
-
-    //         // 2. Affine align
-    //         auto [aligned_image, affine] =
-    //             image_utils::affine_face_transform(*raw, five_pts, image_utils::template_192, 192, true);
-    //         if (!aligned_image)
-    //         {
-    //             common::log_error("Failed to wrap face image for MediaPipe landmarks detection");
-    //             return;
-    //         }
-    //         // Log affine matrix
-    //         common::log_info("Affine matrix: %.6f %.6f %.6f | %.6f %.6f %.6f", affine[0], affine[1], affine[2],
-    //                          affine[3], affine[4], affine[5]);
-    //         auto result = mediaPipeLandmarks_->detect(aligned_image);
-
-    //         if (result.score > 0.5)
-    //         {
-    //             // Show aligned image
-    //             aligned_image->scaleInPlace(2.0f, ScalingAlgorithm::AREA_AVERAGING);
-    //             image->pasteAt(*aligned_image, size * 2, 480, true);
-    //             // 3. Draw predicted landmarks on aligned image
-    //             for (size_t i = 0; i < result.landmarks.size(); ++i)
-    //             {
-    //                 double x = result.landmarks[i][0] * aligned_image->info.width;
-    //                 double y = result.landmarks[i][1] * aligned_image->info.height;
-    //                 aligned_image->ppx(x, y, Pixel(255, 0, 0));
-    //                 image_utils::paintCircle(aligned_image, math_utils::Point(x, y), 1.0f, Pixel(255, 0, 0));
-    //             }
-
-    //             // Show aligned image with landmarks
-    //             image->pasteAt(*aligned_image, size * 3, 480, true);
-
-    //             // 4. Map landmarks back to original image
-    //             double invM[6];
-    //             if (!math_utils::invert_affine(affine.data(), invM))
-    //             {
-    //                 common::log_error("Failed to invert affine for MediaPipe unalignment");
-    //                 return;
-    //             }
-    //             common::log_info("Inverse affine: %.6f %.6f %.6f | %.6f %.6f %.6f", invM[0], invM[1], invM[2], invM[3],
-    //                              invM[4], invM[5]);
-
-    //             double w = aligned_image->info.width / 2.0;
-    //             double h = aligned_image->info.height / 2.0;
-    //             std::vector<std::pair<double, double>> aligned_pts;
-    //             for (const auto& landmark : result.landmarks)
-    //             {
-    //                 aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
-    //             }
-    //             auto unaligned_pts = image_utils::transform_points_affine(aligned_pts, invM);
-    //             auto result = raw->deepCopy();
-
-    //             for (size_t i = 0; i < unaligned_pts.size(); ++i)
-    //             {
-    //                 double x = static_cast<double>(unaligned_pts[i].first);
-    //                 double y = static_cast<double>(unaligned_pts[i].second);
-    //                 if (x < 0 || x >= result->info.width || y < 0 || y >= result->info.height)
-    //                 {
-    //                     common::log_warn("MediaPipe landmark out of bounds: (%f, %f)", x, y);
-    //                     continue;
-    //                 }
-    //                 result->ppx(x, y, Pixel(255, 0, 0));
-    //                 image_utils::paintCircle(result, math_utils::Point(x, y), 1.0f, Pixel(255, 0, 0));
-    //             }
-    //             image->pasteAt(*result, 640, 0, true);
-    //             auto layer = layerManager_->getBaseLayer();
-    //             if (layer)
-    //             {
-    //                 layer->dirty = true;
-    //             }
-    //         }
-    //         else
-    //         {
-    //             common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
-    //         }
-    //     }
-    // }
 
 
     // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
@@ -608,16 +617,11 @@ void Application::process(std::unique_ptr<Image>& image)
     {
         // Use the first detected face for demo
         Face& face = scrfd_faces[0];
-        
         pfldDetector_->detect(raw, face);
         // Draw landmarks on the image
-        for (const auto& pt : face.getLandmarks())
-        {
-            common::log_info("PFLD Landmark: (%.1f, %.1f)", pt.p.x, pt.p.y);
-            // image_utils::paintCircle(image, math_utils::Point(pt.p.x, pt.p.y), 2.0f, Pixel(50, 255, 255));
-        }
+        face.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 1.5f);
     }
-    exit(1);
+    
     // bool swap_success = false;
     // if (swapPipeline_ && target_img_)
     // {
@@ -653,3 +657,44 @@ void Application::shutdown()
     // UI and Window destructors will handle cleanup automatically
 }
 
+// Capture an image from webcam, process it, and save both raw and processed images with timestamp
+void Application::captureAndSaveWebcamImageWithTimestamp()
+{
+    std::unique_ptr<Image> image;
+    if (!cameraManager_->updateInput(image) || !image)
+    {
+        common::log_error("Failed to capture image from webcam");
+        return;
+    }
+
+    // Get timestamp (seconds since epoch, as integer)
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    // Use the raw time_t value for filename (no formatting)
+    std::string timestamp = std::to_string(static_cast<long long>(now_time_t));
+
+    // Save raw image as PPM
+    std::string raw_filename = std::string("webcam_raw_") + timestamp + ".ppm";
+    if (!image->saveToDisk(raw_filename))
+    {
+        common::log_error("Failed to save raw webcam image to %s", raw_filename.c_str());
+    }
+    else
+    {
+        common::log_info("Saved raw webcam image: %s", raw_filename.c_str());
+    }
+
+    // Process image (in-place)
+    process(image);
+
+    // Save processed image as PPM
+    std::string processed_filename = std::string("webcam_processed_") + timestamp + ".ppm";
+    if (!image->saveToDisk(processed_filename))
+    {
+        common::log_error("Failed to save processed webcam image to %s", processed_filename.c_str());
+    }
+    else
+    {
+        common::log_info("Saved processed webcam image: %s", processed_filename.c_str());
+    }
+}

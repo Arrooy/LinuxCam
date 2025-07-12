@@ -1171,7 +1171,7 @@ transform_points_affine(const std::vector<std::pair<double, double>>& points, co
 }
 
 
-inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point& center, float radius, Pixel color)
+inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D& center, float radius, Pixel color)
 {
     // Bresenham's circle algorithm
     int x = static_cast<int>(radius);

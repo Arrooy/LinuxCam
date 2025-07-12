@@ -37,6 +37,7 @@ class Window
 
     // Set viewport to match framebuffer size
     void setViewport();
+    bool isKeyPressed(int key) const;
 
   private:
     GLFWwindow* window_;

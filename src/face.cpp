@@ -118,7 +118,7 @@ Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id) const
     return UNKNOWN;
 }
 
-void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, float radius) const
+void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, Pixel c, float radius) const
 {
     if (landmarks_.empty())
     {
@@ -128,7 +128,6 @@ void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints,
 
     for (auto const& face_part : landmarks_)
     {
-        Pixel c(0, 255, 255);
         if (face_part.first == FaceIndex::SILHOUETTE)
         {
             c = Pixel(0, 255, 0);
@@ -187,7 +186,7 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
     {
         for (const FaceLandmark& landmark : landmarks_.at(facepart))
         {
-            const math_utils::Point& p = landmark.p;
+            const math_utils::Point3D& p = landmark.p;
             long index = static_cast<long>((p.x + p.y * image->info.width) * image->info.pixelSizeBytes);
             if (index == i)
             {
@@ -233,7 +232,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
                           float radius) const
 {
     std::vector<FaceLandmark> points = landmarks_.at(facepart);
-    math_utils::Point lastPoint(-1, -1);
+    math_utils::Point3D lastPoint(-1, -1, -1);
     for (const FaceLandmark& l : points)
     {
         if (joinPoints)
@@ -241,7 +240,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
             if (lastPoint.x != -1 && lastPoint.y != -1)
             {
                 // We know a last point. Proceed with DDA and paint it
-                std::vector<math_utils::Point> points = math_utils::DDA(lastPoint.x, lastPoint.y, l.p.x, l.p.y);
+                std::vector<math_utils::Point> points = math_utils::DDA(static_cast<double>(lastPoint.x), static_cast<double>(lastPoint.y), l.p.x, l.p.y);
                 image->paintPoints(points, color);
             }
             lastPoint = l.p;
@@ -311,30 +310,16 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickn
     image->paintPoints(Z, z_color);
 }
 
-// Retrieve 5-point landmarks in ArcFace order
-std::vector<math_utils::Point> Face::getFivePointLandmarksArcFaceOrder() const
+// Retrieve 5-point landmarks in ArcFace order (3D)
+std::vector<math_utils::Point3D> Face::getFivePointLandmarksArcFaceOrder() const
 {
-    // ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
-    std::vector<math_utils::Point> result(5);
-    // Find by landmark index (0-4) in their respective FaceIndex
-    // LEYE (0), REYE (1), NOSE (2), OUTERMOUTH (3,4)
-
-    // LEYE
+    std::vector<math_utils::Point3D> result(5);
     if (landmarks_.count(LEYE) && !landmarks_.at(LEYE).empty())
-    {
         result[0] = landmarks_.at(LEYE)[0].p;
-    }
-    // REYE
     if (landmarks_.count(REYE) && !landmarks_.at(REYE).empty())
-    {
         result[1] = landmarks_.at(REYE)[0].p;
-    }
-    // NOSE
     if (landmarks_.count(NOSE) && !landmarks_.at(NOSE).empty())
-    {
         result[2] = landmarks_.at(NOSE)[0].p;
-    }
-    // OUTERMOUTH (left and right corners)
     if (landmarks_.count(OUTERMOUTH) && landmarks_.at(OUTERMOUTH).size() >= 2)
     {
         result[3] = landmarks_.at(OUTERMOUTH)[0].p;
@@ -343,20 +328,26 @@ std::vector<math_utils::Point> Face::getFivePointLandmarksArcFaceOrder() const
     return result;
 }
 
-math_utils::Point Face::getLandmarkByIndex(unsigned int id) const
+// Retrieve 5-point landmarks in ArcFace order (2D)
+std::vector<math_utils::Point> Face::getFivePointLandmarksArcFaceOrder2D() const
 {
-    // Find the landmark by its index
+    std::vector<math_utils::Point> result;
+    auto pts3d = getFivePointLandmarksArcFaceOrder();
+    result.reserve(pts3d.size());
+    for (const auto& pt : pts3d)
+        result.emplace_back(static_cast<long>(pt.x), static_cast<long>(pt.y));
+    return result;
+}
+
+math_utils::Point3D Face::getLandmarkByIndex(unsigned int id) const
+{
     for (const auto& face_part : landmarks_)
     {
         for (const auto& landmark : face_part.second)
         {
             if (landmark.i == id)
-            {
                 return landmark.p;
-            }
         }
     }
-    common::log_error("Face::getLandmarkByIndex: Landmark with index {} not found", id);
-    // If not found, return an invalid point
-    return math_utils::Point(-1, -1);
+    return math_utils::Point3D(-1, -1, -1);
 }

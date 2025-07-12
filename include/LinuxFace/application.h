@@ -8,6 +8,7 @@
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/cameraManager.h"
 #include "LinuxFace/detectors.h"
+
 #include "LinuxFace/imageLoader.h"
 #include "LinuxFace/imageRenderGL.h"
 #include "LinuxFace/onnx/MODNet.h"
@@ -51,6 +52,7 @@ class Application
     Profiler& profiler_;
 
     std::unique_ptr<FaceDetector> faceDetector_;
+    std::unique_ptr<ShapeDetector> dlibShapeDetector_;
     std::unique_ptr<FsanetDetector> fsanetDetectorVar_;
     std::unique_ptr<FsanetDetector> fsanetDetectorConv_;
     std::shared_ptr<SCRFDetector> scrfdDetector_;
@@ -73,6 +75,7 @@ class Application
     bool update();
     void process(std::unique_ptr<Image>& image);
     void render();
+    void captureAndSaveWebcamImageWithTimestamp();
 };
 
 } // namespace linuxface

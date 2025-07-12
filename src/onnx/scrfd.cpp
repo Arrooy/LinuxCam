@@ -278,9 +278,8 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
                 const float kps_t = kps_offsets[j + 1];
                 const float kps_x = std::max(0.0f, std::min(((cx + kps_l) * s - dw_f) * inv_ratio, img_width_minus_1));
                 const float kps_y = std::max(0.0f, std::min(((cy + kps_t) * s - dh_f) * inv_ratio, img_height_minus_1));
-
                 face_landmarks.emplace_back(FaceLandmark{
-                    j >> 1, {static_cast<long>(kps_x), static_cast<long>(kps_y)}
+                    j >> 1, math_utils::Point3D(kps_x, kps_y, 0.0)
                 });
             }
             stride_faces.emplace_back(std::move(face_landmarks), face_box);

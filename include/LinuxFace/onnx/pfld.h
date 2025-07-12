@@ -13,8 +13,10 @@ class PFLDDetector : public OnnxDetector
     ~PFLDDetector() = default;
     // Receives the full image and a Face, fills landmarks in the Face
     void detect(const std::unique_ptr<Image>& image, Face& face);
+
   private:
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
+    TensorPadding pfld_padding_;
 };
 } // namespace linuxface
 

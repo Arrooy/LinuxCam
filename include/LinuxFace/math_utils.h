@@ -24,6 +24,14 @@ struct Point
     long y;
 };
 
+struct Point3D
+{
+    Point3D(double x1, double y1, double z1 = 0.0) : x(x1), y(y1), z(z1) {}
+    Point3D() = default;
+    double x;
+    double y;
+    double z;
+};
 struct StridePoint
 {
     StridePoint(double x1, double y1, double s) : cx(x1), cy(y1), stride(s) {}

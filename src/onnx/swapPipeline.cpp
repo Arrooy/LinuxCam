@@ -32,7 +32,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         std::vector<Face> target_faces = scrfd_->detect(target_img);
         if (!target_faces.empty())
         {
-            target_img_landmarks_ = target_faces[0].getFivePointLandmarksArcFaceOrder();
+            target_img_landmarks_ = target_faces[0].getFivePointLandmarksArcFaceOrder2D();
             if (target_img_landmarks_.size() == 5)
             {
                 arcface_->recognize(*target_img, target_img_landmarks_, target_img_embedding_);
@@ -42,7 +42,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             {
                 debug_target_image_ = std::move(target_img->deepCopy());
                 target_faces[0].paintBoundingBox(debug_target_image_, Pixel(255, 0, 0));
-                target_faces[0].paintAllFaceLandmarks(debug_target_image_, false, 5.0f);
+                target_faces[0].paintAllFaceLandmarks(debug_target_image_, false, Pixel(255,0,0), 5.0f);
                 debug_target_image_aligned_ = arcface_->preprocess(*target_img, target_img_landmarks_);
                 debug_target_image_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
                 // debug_target_image_aligned_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
@@ -66,7 +66,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
     bool worked = false;
     for (const auto& face : scrfd_faces)
     {
-        std::vector<math_utils::Point> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder();
+        std::vector<math_utils::Point> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (webcam_landmarks.size() != 5)
         {
             common::log_error("SwapPipeline: Detected face does not have 5 landmarks. It has %d landmarks.",
@@ -145,7 +145,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             for (auto& face : scrfd_faces)
             {
                 face.paintBoundingBox(image, Pixel(0, 255, 0));
-                face.paintAllFaceLandmarks(image, false);
+                face.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 2.0f);
             }
             auto scale = 1;
             if(scale != 1)

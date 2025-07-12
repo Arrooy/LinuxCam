@@ -1,5 +1,5 @@
-#include "LinuxFace/window.h"
 
+#include "LinuxFace/window.h"
 #include <iostream>
 
 #include "LinuxFace/common.h"
@@ -126,4 +126,11 @@ void Window::setViewport()
 void Window::errorCallback(int error, const char* description)
 {
     common::log_error("GLFW Error %d: %s", error, description);
+}
+
+bool Window::isKeyPressed(int key) const
+{
+    if (!window_)
+        return false;
+    return glfwGetKey(window_, key) == GLFW_PRESS;
 }
