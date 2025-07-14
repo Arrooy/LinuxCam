@@ -32,6 +32,12 @@ enum class ImageFormat
     PPM, // Portable Pixmap
 };
 
+enum class ImageLayout
+{
+    HWC, // Height-Width-Channel
+    CHW  // Channel-Height-Width
+};
+
 inline std::string fromImageFormatToString(const ImageFormat& format)
 {
     switch (format)

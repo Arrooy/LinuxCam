@@ -63,6 +63,22 @@ const double template_512[5][2] = {
     {0.61150205, 0.72490465}
 };
 
+// Helper function to calculate destination index based on layout
+template<ImageLayout layout>
+constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned char ch, 
+                                   unsigned long width, unsigned long height, 
+                                   unsigned char channels)
+{
+    if constexpr (layout == ImageLayout::HWC)
+    {
+        return (y * width + x) * channels + ch;
+    }
+    else // CHW
+    {
+        return ch * (height * width) + y * width + x;
+    }
+}
+
 
 // Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
 // Now returns both the aligned image and the affine matrix used
@@ -602,7 +618,8 @@ struct ImageView
 };
 
 
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE>
+template <typename T, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
 void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
 {
     // Handle edge cases
@@ -648,8 +665,6 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
                     const double fracX = srcX - x1;
                     const double fracY = srcY - y1;
 
-                    const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes;
-
                     // Bilinear interpolation for each channel
                     for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
                     {
@@ -687,7 +702,10 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
                             const double maxVal = static_cast<double>(NormalizationTraits<T>::max_value());
                             scaledValue = static_cast<T>(std::clamp(result + 0.5, minVal, maxVal));
                         }
-                        dst.data[dstIdx + ch] = scaledValue;
+                        // Calculate destination index based on output layout
+                        const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+
+                        dst.data[dstIdx] = scaledValue;
 
                         // Collect statistics if needed
                         if (needsStats)
@@ -715,7 +733,8 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
 }
 
 
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE>
+template <typename T, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
 void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
 {
     // Handle edge cases
@@ -752,8 +771,6 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
             const int clampedMinY = std::max(minY, 0);
             const int clampedMaxX = std::min(maxX, static_cast<int>(src.width));
             const int clampedMaxY = std::min(maxY, static_cast<int>(src.height));
-
-            const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes;
 
             // Average pixels in the source region
             for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
@@ -803,7 +820,9 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
                     const double maxVal = static_cast<double>(NormalizationTraits<T>::max_value());
                     scaledValue = static_cast<T>(std::clamp(result + 0.5, minVal, maxVal));
                 }
-                dst.data[dstIdx + ch] = scaledValue;
+                // Calculate destination index based on output layout
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                dst.data[dstIdx] = scaledValue;
 
                 // Collect statistics if needed
                 if (needsStats)
@@ -851,8 +870,10 @@ class LanczosKernel
     }
 };
 
+
 // Optimized separable Lanczos Scaling
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE>
+template <typename T, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
 void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
 {
     // Handle edge cases
@@ -1002,7 +1023,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
                     scaledValue = static_cast<T>(std::clamp(sum + 0.5, minVal, maxVal));
                 }
 
-                const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes + ch;
+                // Calculate destination index based on output layout
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
                 dst.data[dstIdx] = scaledValue;
             }
         }
@@ -1053,7 +1075,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
 }
 
 // Fast box filter for extreme Scaling (when speed is critical)
-template <typename T>
+template <typename T, ImageLayout outputLayout = ImageLayout::HWC>
 void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
 {
     const double xScale = static_cast<double>(src.width) / dst.width;
@@ -1088,8 +1110,8 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
                             sum += static_cast<int>(src.data[srcIdx]);
                         }
                     }
-
-                    const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes + ch;
+                    // Calculate destination index based on output layout
+                    const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
                     dst.data[dstIdx] = static_cast<T>(sum / totalSamples);
                 }
             }
@@ -1127,7 +1149,8 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
                         }
                     }
 
-                    const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes + ch;
+                    // Calculate destination index based on output layout
+                    const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
                     dst.data[dstIdx] = static_cast<T>(count > 0 ? sum / count : 0);
                 }
             }
