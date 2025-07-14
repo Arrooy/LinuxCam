@@ -1201,9 +1201,59 @@ inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D
     }
 }
 
-inline std::unique_ptr<Image> convertToRawImage(float * src, unsigned long width, unsigned long height)
+
+// Helper: Convert HWC float* (height, width, channels) to CHW float* (channels, height, width)
+// src: input float array in HWC order, shape [height, width, channels]
+// dst: output float array in CHW order, shape [channels, height, width]
+// width, height: image dimensions
+// channels: number of channels (usually 3 for RGB)
+template <typename T>
+void hwc_to_chw(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
 {
-    size_t dataSize = width * height * 3;
+    for (unsigned long h = 0; h < height; ++h)
+    {
+        for (unsigned long w = 0; w < width; ++w)
+        {
+            for (unsigned long c = 0; c < channels; ++c)
+            {
+                // HWC index: (h * width + w) * channels + c
+                // CHW index: c * (height * width) + h * width + w
+                dst[c * (height * width) + h * width + w] = src[(h * width + w) * channels + c];
+            }
+        }
+    }
+}
+template <typename T>
+void chw_to_hwc(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
+{
+    for (unsigned long h = 0; h < height; ++h)
+    {
+        for (unsigned long w = 0; w < width; ++w)
+        {
+            for (unsigned long c = 0; c < channels; ++c)
+            {
+                // CHW index: c * (height * width) + h * width + w
+                // HWC index: (h * width + w) * channels + c
+                dst[(h * width + w) * channels + c] = src[c * (height * width) + h * width + w];
+            }
+        }
+    }
+}
+
+template <NormalizationType normalizationType = NormalizationType::NONE>
+std::unique_ptr<Image> convertToRawImage(float * src, unsigned long width, unsigned long height)
+{
+    if (src == nullptr || width == 0 || height == 0)
+    {
+        common::log_error("Invalid parameters for converting to raw image");
+        return nullptr;
+    }
+
+    // Convert CHW (channels, height, width) to HWC (height, width, channels)
+    size_t dataSize = width * height * 3; // Assuming RGB format
+    std::vector<float> hwc_data(dataSize);
+    chw_to_hwc(src, hwc_data.data(), width, height, 3);
+
     auto image = std::make_unique<Image>(dataSize);
     image->info.width = width;
     image->info.height = height;
@@ -1212,9 +1262,31 @@ inline std::unique_ptr<Image> convertToRawImage(float * src, unsigned long width
     image->info.filename = "raw_image_from_float";
     image->info.x = 0;
     image->info.y = 0;
-    for (size_t i = 0; i < dataSize; ++i)
+
+    if constexpr (normalizationType == NormalizationType::MINMAX)
     {
-        image->data()[i] = static_cast<unsigned char>(src[i]);
+        // Assume input is in [0,1], scale to [0,255] for visualization
+        for (size_t i = 0; i < dataSize; ++i)
+        {
+            image->data()[i] = static_cast<unsigned char>(std::clamp(hwc_data[i] * 255.0f, 0.0f, 255.0f));
+        }
+    }
+    else if constexpr (normalizationType == NormalizationType::ZERO_CENTER)
+    {
+        // Assume input is zero-centered in [-1,1], scale to [0,255] for visualization
+        for (size_t i = 0; i < dataSize; ++i)
+        {
+            float val = (hwc_data[i] + 1.0f) * 0.5f * 255.0f; // Map [-1,1] to [0,255]
+            image->data()[i] = static_cast<unsigned char>(std::clamp(val, 0.0f, 255.0f));
+        }
+    }
+    else
+    {
+        // Fill the image data directly
+        for (size_t i = 0; i < dataSize; ++i)
+        {
+            image->data()[i] = static_cast<unsigned char>(hwc_data[i]);
+        }
     }
 
     return image;

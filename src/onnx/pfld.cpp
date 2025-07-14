@@ -29,7 +29,7 @@ Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
     // Use a member TensorPadding to store the transform for landmark mapping
     pfld_padding_ = TensorPadding::scrfd();
     image->toTensor(tensor_data, pfld_padding_, target_width, target_height, NormalizationType::MINMAX);
-    auto test = image_utils::convertToRawImage(tensor_data, target_width, target_height);
+    auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, target_width, target_height);
     if(test)
     {
         if(!test->saveToDisk("pfld_input_tensor.ppm"))
@@ -96,7 +96,7 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     }
     Ort::Value& landmarks_tensor = output_tensors.at(output_index); // (1, 212)
     const float* data = landmarks_tensor.GetTensorData<float>();
-    int num_landmarks = 106;
+    unsigned int num_landmarks = 106;
     face.loadNewFaceLandmarks({});
 
     // 5. Map landmarks from aligned face back to original image using inverse affine

@@ -23,7 +23,7 @@ Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image
     padding_ = TensorPadding::scrfd();
     // No padding, normalization as needed (MINMAX for now)
     image->toTensor(tensor_data, padding_, 192, 192, NormalizationType::MINMAX);
-    auto test = image_utils::convertToRawImage(tensor_data, 192, 192);
+    auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, 192, 192);
     if(test)
     {
         if(!test->saveToDisk("media_pipe_input_tensor.ppm"))
