@@ -1201,6 +1201,24 @@ inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D
     }
 }
 
+inline std::unique_ptr<Image> convertToRawImage(float * src, unsigned long width, unsigned long height)
+{
+    size_t dataSize = width * height * 3;
+    auto image = std::make_unique<Image>(dataSize);
+    image->info.width = width;
+    image->info.height = height;
+    image->info.pixelSizeBytes = 3;
+    image->info.format = ImageFormat::RGB;
+    image->info.filename = "raw_image_from_float";
+    image->info.x = 0;
+    image->info.y = 0;
+    for (size_t i = 0; i < dataSize; ++i)
+    {
+        image->data()[i] = static_cast<unsigned char>(src[i]);
+    }
+
+    return image;
+}
 } // namespace image_utils
 } // namespace linuxface
 

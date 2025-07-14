@@ -4,7 +4,7 @@
 
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-
+#include "LinuxFace/Image/image_utils.h"
 using namespace linuxface;
 
 MediaPipeFaceLandmarks::MediaPipeFaceLandmarks(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path)
@@ -23,6 +23,14 @@ Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image
     padding_ = TensorPadding::scrfd();
     // No padding, normalization as needed (MINMAX for now)
     image->toTensor(tensor_data, padding_, 192, 192, NormalizationType::MINMAX);
+    auto test = image_utils::convertToRawImage(tensor_data, 192, 192);
+    if(test)
+    {
+        if(!test->saveToDisk("media_pipe_input_tensor.ppm"))
+        {
+            common::log_info("MediaPipeFaceLandmarks: Not Saved test image to disk.");
+        }
+    }
     return input_tensor;
 }
 

@@ -29,6 +29,14 @@ Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
     // Use a member TensorPadding to store the transform for landmark mapping
     pfld_padding_ = TensorPadding::scrfd();
     image->toTensor(tensor_data, pfld_padding_, target_width, target_height, NormalizationType::MINMAX);
+    auto test = image_utils::convertToRawImage(tensor_data, target_width, target_height);
+    if(test)
+    {
+        if(!test->saveToDisk("pfld_input_tensor.ppm"))
+        {
+            common::log_info("PFLDDetector: Not Saved test image to disk.");
+        }
+    }
     return input_tensor;
 }
 
