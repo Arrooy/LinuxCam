@@ -276,18 +276,20 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
     switch (algorithm)
     {
         case ScalingAlgorithm::LANCZOS:
-            image_utils::lanczosScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::lanczosScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::BILINEAR:
-            image_utils::bilinearScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::bilinearScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::AREA_AVERAGING:
-            image_utils::areaAveragingScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::areaAveragingScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::FAST_BOX:
-            image_utils::fastBoxScaling<unsigned char>(srcView, dstView);
+            image_utils::fastBoxScaling<unsigned char,unsigned char>(srcView, dstView);
             break;
         case ScalingAlgorithm::BICUBIC:
+            image_utils::bicubicScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
+            break;
         default:
             common::log_error("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
             break;
@@ -440,13 +442,10 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int new_width, i
 
     // Step 1: Compute scale ratio (preserve aspect ratio)
     float r = std::min(static_cast<float>(new_width) / origW, static_cast<float>(new_height) / origH);
-
     const int resizedW = static_cast<int>(origW * r);
     const int resizedH = static_cast<int>(origH * r);
-
     const int offsetX = (new_width - resizedW) / 2;
     const int offsetY = (new_height - resizedH) / 2;
-
     const int paddedSize = new_width * new_height;
 
     // Store transform metadata in the padding object
@@ -1578,4 +1577,3 @@ void Image::alphaBlend(const Image& src, const Image& mask)
         PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i]);
     }
 }
-

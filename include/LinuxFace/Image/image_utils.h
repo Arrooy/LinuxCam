@@ -618,9 +618,9 @@ struct ImageView
 };
 
 
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE,
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
 ImageLayout outputLayout = ImageLayout::HWC>
-void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
+void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
@@ -634,7 +634,7 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
     const double xRatio = static_cast<double>(src.width) / dst.width;
     const double yRatio = static_cast<double>(src.height) / dst.height;
 
-    ImageStats<T> stats;
+    ImageStats<K> stats;
     const bool needsStats = (normalizationType != NormalizationType::NONE);
 
     // Process in blocks for better cache locality
@@ -680,27 +680,27 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
                         const unsigned long idx3 = (clampedY2 * src.width + clampedX1) * src.pixelBytes + ch;
                         const unsigned long idx4 = (clampedY2 * src.width + clampedX2) * src.pixelBytes + ch;
 
-                        const double p1 = src.data[idx1];
-                        const double p2 = src.data[idx2];
-                        const double p3 = src.data[idx3];
-                        const double p4 = src.data[idx4];
+                        const double p1 = static_cast<double>(src.data[idx1]);
+                        const double p2 = static_cast<double>(src.data[idx2]);
+                        const double p3 = static_cast<double>(src.data[idx3]);
+                        const double p4 = static_cast<double>(src.data[idx4]);
 
                         // Optimized bilinear interpolation
                         const double top = p1 + fracX * (p2 - p1);
                         const double bottom = p3 + fracX * (p4 - p3);
                         const double result = top + fracY * (bottom - top);
 
-                        T scaledValue;
-                        if constexpr (std::is_floating_point_v<T>)
+                        K scaledValue;
+                        if constexpr (std::is_floating_point_v<K>)
                         {
-                            scaledValue = static_cast<T>(result);
+                            scaledValue = static_cast<K>(result);
                         }
                         else
                         {
                             // Use traits for proper clamping range
-                            const double minVal = static_cast<double>(NormalizationTraits<T>::min_value());
-                            const double maxVal = static_cast<double>(NormalizationTraits<T>::max_value());
-                            scaledValue = static_cast<T>(std::clamp(result + 0.5, minVal, maxVal));
+                            const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                            const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                            scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                         }
                         // Calculate destination index based on output layout
                         const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
@@ -722,7 +722,7 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
     if constexpr (normalizationType != NormalizationType::NONE)
     {
         stats.finalize();
-        Normalizer<T, normalizationType> normalizer;
+        Normalizer<K, normalizationType> normalizer;
 
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
@@ -733,9 +733,9 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
 }
 
 
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE,
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
 ImageLayout outputLayout = ImageLayout::HWC>
-void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
+void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
@@ -747,7 +747,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
     const double xScale = static_cast<double>(src.width) / dst.width;
     const double yScale = static_cast<double>(src.height) / dst.height;
 
-    ImageStats<T> stats;
+    ImageStats<K> stats;
     const bool needsStats = (normalizationType != NormalizationType::NONE);
 
     for (unsigned long y = 0; y < dst.height; y++)
@@ -808,17 +808,17 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
 
                 // Calculate final pixel value
                 double result = (totalWeight > 0.0) ? (sum / totalWeight) : 0.0;
-                T scaledValue;
-                if constexpr (std::is_floating_point_v<T>)
+                K scaledValue;
+                if constexpr (std::is_floating_point_v<K>)
                 {
-                    scaledValue = static_cast<T>(result);
+                    scaledValue = static_cast<K>(result);
                 }
                 else
                 {
                     // Use traits for proper clamping range
-                    const double minVal = static_cast<double>(NormalizationTraits<T>::min_value());
-                    const double maxVal = static_cast<double>(NormalizationTraits<T>::max_value());
-                    scaledValue = static_cast<T>(std::clamp(result + 0.5, minVal, maxVal));
+                    const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                    const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                 }
                 // Calculate destination index based on output layout
                 const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
@@ -836,7 +836,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
     if constexpr (normalizationType != NormalizationType::NONE)
     {
         stats.finalize();
-        Normalizer<T, normalizationType> normalizer;
+        Normalizer<K, normalizationType> normalizer;
 
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
@@ -872,9 +872,9 @@ class LanczosKernel
 
 
 // Optimized separable Lanczos Scaling
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE,
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
 ImageLayout outputLayout = ImageLayout::HWC>
-void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
+void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
@@ -1011,16 +1011,16 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
                 }
 
                 // Convert to output type with proper clamping
-                T scaledValue;
-                if constexpr (std::is_floating_point_v<T>)
+                K scaledValue;
+                if constexpr (std::is_floating_point_v<K>)
                 {
-                    scaledValue = static_cast<T>(sum);
+                    scaledValue = static_cast<K>(sum);
                 }
                 else
                 {
-                    const double minVal = static_cast<double>(std::numeric_limits<T>::min());
-                    const double maxVal = static_cast<double>(std::numeric_limits<T>::max());
-                    scaledValue = static_cast<T>(std::clamp(sum + 0.5, minVal, maxVal));
+                    const double minVal = static_cast<double>(std::numeric_limits<K>::min());
+                    const double maxVal = static_cast<double>(std::numeric_limits<K>::max());
+                    scaledValue = static_cast<K>(std::clamp(sum + 0.5, minVal, maxVal));
                 }
 
                 // Calculate destination index based on output layout
@@ -1034,8 +1034,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
     if constexpr (normalizationType == NormalizationType::MINMAX)
     {
         const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
-        T minVal = dst.data[0];
-        T maxVal = dst.data[0];
+        K minVal = dst.data[0];
+        K maxVal = dst.data[0];
 
         for (size_t i = 1; i < totalPixels; i++)
         {
@@ -1045,10 +1045,10 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
 
         if (maxVal > minVal)
         {
-            const double scale = static_cast<double>(std::numeric_limits<T>::max()) / (maxVal - minVal);
+            const double scale = static_cast<double>(std::numeric_limits<K>::max()) / (maxVal - minVal);
             for (size_t i = 0; i < totalPixels; i++)
             {
-                dst.data[i] = static_cast<T>((dst.data[i] - minVal) * scale);
+                dst.data[i] = static_cast<K>((dst.data[i] - minVal) * scale);
             }
         }
     }
@@ -1056,7 +1056,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
     {
         common::log_warn("NON TESTED: Applying zero-centering normalization");
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
-        ImageStats<T> stats;
+        ImageStats<K> stats;
 
         // Calculate mean
         for (size_t i = 0; i < totalPixels; i++)
@@ -1066,7 +1066,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
         stats.finalize();
 
         // Apply zero-centering
-        Normalizer<T, NormalizationType::ZERO_CENTER> normalizer;
+        Normalizer<K, NormalizationType::ZERO_CENTER> normalizer;
         for (size_t i = 0; i < totalPixels; i++)
         {
             dst.data[i] = normalizer(dst.data[i], stats);
@@ -1075,8 +1075,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
 }
 
 // Fast box filter for extreme Scaling (when speed is critical)
-template <typename T, ImageLayout outputLayout = ImageLayout::HWC>
-void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
+template <typename T,typename K, ImageLayout outputLayout = ImageLayout::HWC>
+void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     const double xScale = static_cast<double>(src.width) / dst.width;
     const double yScale = static_cast<double>(src.height) / dst.height;
@@ -1112,7 +1112,7 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
                     }
                     // Calculate destination index based on output layout
                     const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
-                    dst.data[dstIdx] = static_cast<T>(sum / totalSamples);
+                    dst.data[dstIdx] = static_cast<K>(sum / totalSamples);
                 }
             }
         }
@@ -1151,9 +1151,99 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
 
                     // Calculate destination index based on output layout
                     const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
-                    dst.data[dstIdx] = static_cast<T>(count > 0 ? sum / count : 0);
+                    dst.data[dstIdx] = static_cast<K>(count > 0 ? sum / count : 0);
                 }
             }
+        }
+    }
+}
+
+// Bicubic kernel helper
+inline float cubicHermite(float A, float B, float C, float D, float t) {
+    float a = -A / 2.0f + (3.0f * B) / 2.0f - (3.0f * C) / 2.0f + D / 2.0f;
+    float b = A - (5.0f * B) / 2.0f + 2.0f * C - D / 2.0f;
+    float c = -A / 2.0f + C / 2.0f;
+    float d = B;
+    return a * t * t * t + b * t * t + c * t + d;
+}
+
+// Bicubic scaling for RGB/Grayscale images
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
+void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst) {
+    // Handle edge cases
+    if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
+    {
+        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height, dst.width, dst.height);
+        return;
+    }
+
+    const double xRatio = static_cast<double>(src.width) / dst.width;
+    const double yRatio = static_cast<double>(src.height) / dst.height;
+
+    ImageStats<K> stats;
+    const bool needsStats = (normalizationType != NormalizationType::NONE);
+
+    for (unsigned long y = 0; y < dst.height; ++y)
+    {
+        for (unsigned long x = 0; x < dst.width; ++x)
+        {
+            const double srcX = (x + 0.5) * xRatio - 0.5;
+            const double srcY = (y + 0.5) * yRatio - 0.5;
+
+            const int xInt = static_cast<int>(std::floor(srcX));
+            const int yInt = static_cast<int>(std::floor(srcY));
+            const double fracX = srcX - xInt;
+            const double fracY = srcY - yInt;
+
+            for (unsigned char ch = 0; ch < src.pixelBytes; ++ch)
+            {
+                double col[4];
+                for (int m = -1; m <= 2; ++m)
+                {
+                    double row[4];
+                    for (int n = -1; n <= 2; ++n)
+                    {
+                        int px = std::clamp(xInt + n, 0, static_cast<int>(src.width) - 1);
+                        int py = std::clamp(yInt + m, 0, static_cast<int>(src.height) - 1);
+                        row[n + 1] = static_cast<double>(src.data[(py * src.width + px) * src.pixelBytes + ch]);
+                    }
+                    col[m + 1] = cubicHermite(row[0], row[1], row[2], row[3], fracX);
+                }
+                double value = cubicHermite(col[0], col[1], col[2], col[3], fracY);
+
+                K scaledValue;
+                if constexpr (std::is_floating_point_v<K>)
+                {
+                    scaledValue = static_cast<K>(value);
+                }
+                else
+                {
+                    const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                    const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    scaledValue = static_cast<K>(std::clamp(value + 0.5, minVal, maxVal));
+                }
+                // Calculate destination index based on output layout
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                dst.data[dstIdx] = scaledValue;
+
+                if (needsStats)
+                {
+                    stats.update(scaledValue);
+                }
+            }
+        }
+    }
+
+    // Apply normalization if needed
+    if constexpr (normalizationType != NormalizationType::NONE)
+    {
+        stats.finalize();
+        Normalizer<K, normalizationType> normalizer;
+        const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
+        for (size_t i = 0; i < totalPixels; i++)
+        {
+            dst.data[i] = normalizer(dst.data[i], stats);
         }
     }
 }
