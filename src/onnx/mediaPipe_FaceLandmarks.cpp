@@ -23,14 +23,17 @@ Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image
     padding_ = TensorPadding::scrfd();
     // No padding, normalization as needed (MINMAX for now)
     image->toTensor(tensor_data, padding_, 192, 192, NormalizationType::MINMAX);
-    auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, 192, 192);
-    if(test)
-    {
-        if(!test->saveToDisk("media_pipe_input_tensor.ppm"))
-        {
-            common::log_info("MediaPipeFaceLandmarks: Not Saved test image to disk.");
-        }
-    }
+    // auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, 192, 192);
+    // if(test)
+    // {
+    //     if(!test->saveToDisk("media_pipe_input_tensor.ppm"))
+    //     {
+    //         common::log_info("MediaPipeFaceLandmarks: Not Saved test image to disk.");
+    //     }
+    // }
+    // common::log_info("MediaPipeFaceLandmarks: Input image dimensions: %ldx%ld", image->info.width, image->info.height);
+    // common::log_info("MediaPipeFaceLandmarks: Input tensor prepared with dimensions: %ldx%ld", input_node_dims[3], input_node_dims[2]);
+    // image->saveToDisk("media_pipe_input_image.ppm");
     return input_tensor;
 }
 

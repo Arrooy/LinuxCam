@@ -66,7 +66,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
     bool worked = false;
     for (const auto& face : scrfd_faces)
     {
-        std::vector<math_utils::Point> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder2D();
+        std::vector<math_utils::Point<>> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (webcam_landmarks.size() != 5)
         {
             common::log_error("SwapPipeline: Detected face does not have 5 landmarks. It has %d landmarks.",

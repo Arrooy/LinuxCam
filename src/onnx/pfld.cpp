@@ -29,14 +29,14 @@ Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
     // Use a member TensorPadding to store the transform for landmark mapping
     pfld_padding_ = TensorPadding::scrfd();
     image->toTensor(tensor_data, pfld_padding_, target_width, target_height, NormalizationType::MINMAX);
-    auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, target_width, target_height);
-    if(test)
-    {
-        if(!test->saveToDisk("pfld_input_tensor.ppm"))
-        {
-            common::log_info("PFLDDetector: Not Saved test image to disk.");
-        }
-    }
+    // auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, target_width, target_height);
+    // if(test)
+    // {
+    //     if(!test->saveToDisk("pfld_input_tensor.ppm"))
+    //     {
+    //         common::log_info("PFLDDetector: Not Saved test image to disk.");
+    //     }
+    // }
     return input_tensor;
 }
 
@@ -44,7 +44,7 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
 {
     Profiler::getInstance().start("PFLDDetector", "detect landmarks");
     // 1. Get 5-point landmarks in ArcFace order (left eye, right eye, nose, left mouth, right mouth)
-    std::vector<math_utils::Point> five_pts = face.getFivePointLandmarksArcFaceOrder2D();
+    std::vector<math_utils::Point<>> five_pts = face.getFivePointLandmarksArcFaceOrder2D();
     if (five_pts.size() != 5) {
         common::log_error("PFLDDetector: Need 5-point landmarks for alignment");
         return;
@@ -53,7 +53,7 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     // 2. Align face using affine transform to canonical template (reuse ArcFace/SwapPipeline logic)
     constexpr int pfld_input_size = 112; // PFLD expects 112x112 input
     // Use template_112 from image_utils (should be normalized [0,1] coordinates)
-    std::vector<math_utils::Point> template_pts(5);
+    std::vector<math_utils::Point<>> template_pts(5);
     for (int i = 0; i < 5; ++i) {
         template_pts[i].x = image_utils::template_112[i][0] * pfld_input_size;
         template_pts[i].y = image_utils::template_112[i][1] * pfld_input_size;
@@ -105,14 +105,14 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
         common::log_error("PFLDDetector: Failed to invert affine for landmark mapping");
         return;
     }
-    std::vector<math_utils::Point> aligned_pts(num_landmarks);
+    std::vector<math_utils::Point<>> aligned_pts(num_landmarks);
     for (unsigned int i = 0; i < num_landmarks; ++i)
     {
         float x = std::min(std::max(0.f, data[2 * i]), 1.0f) * pfld_input_size;
         float y = std::min(std::max(0.f, data[2 * i + 1]), 1.0f) * pfld_input_size;
-        aligned_pts[i] = math_utils::Point(x, y);
+        aligned_pts[i] = math_utils::Point<>(x, y);
     }
-    std::vector<math_utils::Point> mapped_pts = image_utils::transform_points_affine(aligned_pts, inv_affineM);
+    std::vector<math_utils::Point<>> mapped_pts = image_utils::transform_points_affine(aligned_pts, inv_affineM);
     std::vector<FaceLandmark> pfld_landmarks;
     pfld_landmarks.reserve(num_landmarks);
     for (unsigned int i = 0; i < num_landmarks; ++i)

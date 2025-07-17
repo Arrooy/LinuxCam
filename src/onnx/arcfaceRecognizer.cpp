@@ -13,7 +13,7 @@ ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnx_model_path) : OnnxD
 }
 
 std::unique_ptr<Image>
-ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5)
+ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5)
 {
     const int target_size = 112;
     auto [aligned, affine] = image_utils::affine_face_transform(input_img, face_landmark_5, image_utils::template_112, target_size);
@@ -41,7 +41,7 @@ Ort::Value ArcfaceRecognizer::transform(const std::unique_ptr<Image>& img_rs)
     return input_tensor;
 }
 
-bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5,
+bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5,
                                   std::vector<float>& embedding)
 {
     Profiler::getInstance().start("ArcfaceRecognizer", "recognize");

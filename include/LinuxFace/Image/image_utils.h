@@ -83,7 +83,7 @@ constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned c
 // Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
 // Now returns both the aligned image and the affine matrix used
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
-affine_face_transform(const Image& input_img, const std::vector<math_utils::Point>& landmarks,
+affine_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
                       const double template_points[5][2], int target_size, bool align_to_template = true)
 {
     if (landmarks.size() != 5)
@@ -1249,10 +1249,10 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst) {
 }
 
 // Transform a vector of math_utils::Point using a 2x3 affine matrix (row-major)
-inline std::vector<math_utils::Point>
-transform_points_affine(const std::vector<math_utils::Point>& points, const double M[6])
+inline std::vector<math_utils::Point<>>
+transform_points_affine(const std::vector<math_utils::Point<>>& points, const double M[6])
 {
-    std::vector<math_utils::Point> result;
+    std::vector<math_utils::Point<>> result;
     result.reserve(points.size());
     for (const auto& pt : points)
     {

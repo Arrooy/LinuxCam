@@ -17,11 +17,11 @@ class ArcfaceRecognizer : public OnnxDetector
     ~ArcfaceRecognizer() = default;
 
     // Extracts a normalized embedding from an image and 5-point landmarks
-    bool recognize(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5,
+    bool recognize(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5,
                    std::vector<float>& embedding);
     // TODO: MADE PUBLIC FOR TESTING.
     // Preprocess input image using 5-point landmarks
-    std::unique_ptr<Image> preprocess(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5);
+    std::unique_ptr<Image> preprocess(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5);
   private:
     Ort::Value transform(const std::unique_ptr<Image>& img_rs) override;
 };

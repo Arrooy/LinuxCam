@@ -31,7 +31,7 @@ Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
     return input_tensor;
 }
 
-bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<math_utils::Point>& dst_landmarks,
+bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<math_utils::Point<>>& dst_landmarks,
                      const Image& dst_face, Image& out_image)
 {
     Profiler::getInstance().start("InSwapper", "Swap");

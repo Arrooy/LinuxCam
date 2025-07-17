@@ -92,7 +92,7 @@ class Face
     // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth] (3D)
     std::vector<math_utils::Point3D> getFivePointLandmarksArcFaceOrder() const;
     // Retrieve 5-point landmarks in ArcFace order (2D)
-    std::vector<math_utils::Point> getFivePointLandmarksArcFaceOrder2D() const;
+    std::vector<math_utils::Point<>> getFivePointLandmarksArcFaceOrder2D() const;
     math_utils::Point3D getLandmarkByIndex(unsigned int id) const;
   private:
     void freeFaceLandmarks();

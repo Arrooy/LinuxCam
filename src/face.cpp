@@ -138,7 +138,7 @@ void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints,
 
 void Face::paintBoundingBox(std::unique_ptr<Image>& image, Pixel color) const
 {
-    std::vector<math_utils::Point> points;
+    std::vector<math_utils::Point<>> points;
 
     // Clamp bounding box coordinates to image bounds
     int imageWidth = static_cast<int>(image->info.width);
@@ -240,7 +240,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
             if (lastPoint.x != -1 && lastPoint.y != -1)
             {
                 // We know a last point. Proceed with DDA and paint it
-                std::vector<math_utils::Point> points = math_utils::DDA(static_cast<double>(lastPoint.x), static_cast<double>(lastPoint.y), l.p.x, l.p.y);
+                std::vector<math_utils::Point<>> points = math_utils::DDA(static_cast<double>(lastPoint.x), static_cast<double>(lastPoint.y), l.p.x, l.p.y);
                 image->paintPoints(points, color);
             }
             lastPoint = l.p;
@@ -329,9 +329,9 @@ std::vector<math_utils::Point3D> Face::getFivePointLandmarksArcFaceOrder() const
 }
 
 // Retrieve 5-point landmarks in ArcFace order (2D)
-std::vector<math_utils::Point> Face::getFivePointLandmarksArcFaceOrder2D() const
+std::vector<math_utils::Point<>> Face::getFivePointLandmarksArcFaceOrder2D() const
 {
-    std::vector<math_utils::Point> result;
+    std::vector<math_utils::Point<>> result;
     auto pts3d = getFivePointLandmarksArcFaceOrder();
     result.reserve(pts3d.size());
     for (const auto& pt : pts3d)

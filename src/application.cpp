@@ -132,7 +132,7 @@ bool Application::initialize()
     }
 
     // Just here for benchmarking.
-    faceDetector_ = std::make_unique<DlibFaceDetector>();
+    // faceDetector_ = std::make_unique<DlibFaceDetector>();
     std::string models_folder = Config::getInstance().getModelFolderPath();
 
     // DlibShapeDetector initialization (landmarks)
@@ -354,24 +354,21 @@ void Application::process(std::unique_ptr<Image>& image)
     }
 
     std::vector<Face> scrfd_faces;
-    if (scrfdDetector_ != nullptr)
+    if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
     {
-        if (scrfdDetector_->isReady())
+        scrfd_faces = scrfdDetector_->detect(image);
+        for(const auto& face : scrfd_faces)
         {
-            scrfd_faces = scrfdDetector_->detect(image);
-            for(const auto& face : scrfd_faces)
-            {
-                face.paintBoundingBox(image, Pixel(200,200,200));
-                face.paintAllFaceLandmarks(image, false, Pixel(200,200,200), 1.5f);
-            }
+            face.paintBoundingBox(image, Pixel(200,200,200));
+            face.paintAllFaceLandmarks(image, false, Pixel(200,200,200), 1.5f);
         }
     }
 
-    // Dlib landmark detection using SCRFD face
-    if (dlibShapeDetector_ && !scrfd_faces.empty())
+    // Dlib landmark detection using dlib face
+    if (dlibShapeDetector_ && !dlib_faces.empty())
     {
         std::vector<math_utils::Rect<float>> rects;
-        rects.push_back(scrfd_faces[0].getBoundingBox().rect);
+        rects.push_back(dlib_faces[0].getBoundingBox().rect);
         auto dlib_landmark_faces = dlibShapeDetector_->detect(image, rects);
         for (const auto& face : dlib_landmark_faces)
         {
@@ -420,207 +417,287 @@ void Application::process(std::unique_ptr<Image>& image)
         Profiler::getInstance().stop("RVM", "App paste");
     }
 
-    if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
-    {
-        FaceBoundingBox bbx = scrfd_faces[0].getBoundingBox();
-        // Lets add some padding of the image.
-        // bbx.rect.addPadding(20.0f, 60.0f, 20.0f, 20.0f);
-        auto face_image = raw->crop(bbx.rect); // TODO care cose it could be smaller than 192x192
-        if (!face_image)
-        {
-            common::log_error("Failed to crop face image for MediaPipe landmarks detection");
-        }
-        else
-        {
-            // 1. Draw five-point landmarks used for alignment on the original image
-            auto five_pts_2d = scrfd_faces[0].getFivePointLandmarksArcFaceOrder2D();
-            // for (size_t i = 0; i < five_pts.size(); ++i)
-            // {
-            //     image->ppx(five_pts[i].x, five_pts[i].y, Pixel(0, 255, 255));
-            //     common::log_info("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
-            //                      (float) five_pts[i].y);
-            // }
-
-            // 2. Affine align
-            auto [aligned_image, affine] =
-                image_utils::affine_face_transform(*raw, five_pts_2d, image_utils::template_192, 192, true);
-            if (!aligned_image)
-            {
-                common::log_error("Failed to wrap face image for MediaPipe landmarks detection");
-                return;
-            }
-            auto result = mediaPipeLandmarks_->detect(aligned_image);
-
-            if (result.score > 0.5)
-            {
-                // 4. Map landmarks back to original image
-                double invM[6];
-                if (!math_utils::invert_affine(affine.data(), invM))
-                {
-                    common::log_error("Failed to invert affine for MediaPipe unalignment");
-                    return;
-                }
-
-                double w = aligned_image->info.width;
-                double h = aligned_image->info.height;
-                std::vector<std::pair<double, double>> aligned_pts;
-                std::vector<float> aligned_z;
-                for (const auto& landmark : result.landmarks)
-                {
-                    aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
-                    aligned_z.push_back(landmark[2]);
-                }
-                auto unaligned_pts = image_utils::transform_points_affine(aligned_pts, invM);
-                for (size_t i = 0; i < unaligned_pts.size(); ++i)
-                {
-                    double x = static_cast<double>(unaligned_pts[i].first);
-                    double y = static_cast<double>(unaligned_pts[i].second);
-                    float z = aligned_z[i];
-                    if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
-                    {
-                        common::log_warn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
-                        continue;
-                    }
-                    image->ppx(x, y, Pixel(0, 0, 255));
-                    image_utils::paintCircle(image, math_utils::Point3D(x, y, z), 1.5f, Pixel(0, 0, 255));
-                }
-                auto layer = layerManager_->getBaseLayer();
-                if (layer)
-                {
-                    layer->dirty = true;
-                }
-            }
-            else
-            {
-                common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
-            }
-        }
-    }
-
-
     // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
     // {
-    //     auto face = scrfd_faces[0];
-    //     auto left_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::LEYE);
-    //     auto right_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::REYE);
-    //     // Average eye centers
-    //     double eye_cx = (left_eye.x + right_eye.x) / 2.0f;
-    //     double eye_cy = (left_eye.y + right_eye.y) / 2.0f;
-
-    //     // Rotation angle
-    //     double dx = right_eye.x - left_eye.x;
-    //     double dy = right_eye.y - left_eye.y;
-    //     double rotation = std::atan2(dy, dx); // negative because y-down image coordinates
-
-    //     // Interocular distance
-    //     double eye_dist = std::sqrt(dx * dx + dy * dy);
-
-    //     // ROI size (tweak constants as needed)
-    //     double roi_width = eye_dist * 2.2f;
-    //     double roi_height = eye_dist * 6.0f;
-    //     common::log_info("Interocular distance: %.2f, ROI size: %.2f x %.2f", eye_dist, roi_width, roi_height);
-    //     common::log_info("Bounding box: (%f, %f, %f, %f)", face.getBoundingBox().rect.x(),
-    //                      face.getBoundingBox().rect.y(), face.getBoundingBox().rect.width(),
-    //                      face.getBoundingBox().rect.height());
-    //     // Print differences:
-    //     common::log_info("Diff is (%f, %f, %f, %f)", face.getBoundingBox().rect.width() - roi_width,
-    //                      face.getBoundingBox().rect.height() - roi_height,
-    //                      face.getBoundingBox().rect.x() - (eye_cx - roi_width / 2),
-    //                      face.getBoundingBox().rect.y() - (eye_cy - roi_height / 2));
-
-    //     common::log_info("Eye coordinates: left(%.2f, %.2f), right(%.2f, %.2f)", left_eye.x, left_eye.y, right_eye.x,
-    //                      right_eye.y);
-    //     common::log_info("Eye distance: %.2f pixels", eye_dist);
-    //     common::log_info("ROI dimensions: %.2f x %.2f", roi_width, roi_height);
-    //     // Center of ROI
-    //     double cx = eye_cx;
-    //     double cy = eye_cy + roi_height * (1.0f / 7.0f);
-
-    //     double cos_r = std::cos(rotation);
-    //     double sin_r = std::sin(rotation);
-
-    //     // Top-left, top-right, bottom-left corners of ROI
-    //     double src[6] = {
-    //         cx - roi_width / 2 * cos_r + roi_height / 2 * sin_r, // x0 (top-left)
-    //         cy - roi_width / 2 * sin_r - roi_height / 2 * cos_r, // y0
-
-    //         cx + roi_width / 2 * cos_r + roi_height / 2 * sin_r, // x1 (top-right)
-    //         cy + roi_width / 2 * sin_r - roi_height / 2 * cos_r, // y1
-
-    //         cx - roi_width / 2 * cos_r - roi_height / 2 * sin_r, // x2 (bottom-left)
-    //         cy - roi_width / 2 * sin_r + roi_height / 2 * cos_r  // y2
-    //     };
-    //     double dst[6] = {
-    //         0.0,   0.0,  // top-left → (0,0)
-    //         192.0, 0.0,  // top-right → (192,0)
-    //         0.0,   192.0 // bottom-left → (0,192)
-    //     };
-    //     double M[6];
-    //     math_utils::estimate_affine_2d(src, dst, 3, M);
-    //     auto aligned_face = raw->affineWarpBilinear(M, 192, 192);
-
-    //     auto result = mediaPipeLandmarks_->detect(aligned_face);
-
-    //     aligned_face->scaleInPlace(2.0f, ScalingAlgorithm::AREA_AVERAGING);
-    //     image->pasteAt(*aligned_face, 0, 480, true);
-    //     if (result.score > 0.5)
+    //     FaceBoundingBox bbx = scrfd_faces[0].getBoundingBox();
+    //     // Lets add some padding of the image.
+    //     // bbx.rect.addPadding(20.0f, 60.0f, 20.0f, 20.0f);
+    //     auto face_image = raw->crop(bbx.rect); // TODO care cose it could be smaller than 192x192
+    //     if (!face_image)
     //     {
-    //         // Draw predicted landmarks on aligned image
-    //         for (size_t i = 0; i < result.landmarks.size(); ++i)
-    //         {
-    //             double x = result.landmarks[i][0] * aligned_face->info.width;
-    //             double y = result.landmarks[i][1] * aligned_face->info.height;
-    //             if (x < 0 || x >= aligned_face->info.width || y < 0 || y >= aligned_face->info.height)
-    //             {
-    //                 continue;
-    //             }
-
-    //             aligned_face->ppx(x, y, Pixel(0, 0, 255));
-    //             image_utils::paintCircle(aligned_face, math_utils::Point(x, y), 1.0f, Pixel(0, 0, 255));
-    //         }
-    //         // Show aligned image with landmarks
-    //         image->pasteAt(*aligned_face, aligned_face->info.width, 480, true);
-    //         double invM[6];
-    //         if (!math_utils::invert_affine(M, invM))
-    //         {
-    //             common::log_error("Failed to invert affine for MediaPipe unalignment");
-    //             return;
-    //         }
-    //         double w = aligned_face->info.width / 2.0;
-    //         double h = aligned_face->info.height / 2.0;
-    //         std::vector<std::pair<double, double>> aligned_pts;
-    //         for (const auto& landmark : result.landmarks)
-    //         {
-    //             aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
-    //         }
-    //         auto unaligned_pts = image_utils::transform_points_affine(aligned_pts, invM);
-    //         for (size_t i = 0; i < unaligned_pts.size(); ++i)
-    //         {
-    //             double x = static_cast<double>(unaligned_pts[i].first);
-    //             double y = static_cast<double>(unaligned_pts[i].second);
-    //             if (x < 0 || x >= raw->info.width || y < 0 || y >= raw->info.height)
-    //             {
-    //                 common::log_warn("MediaPipe landmark out of bounds: (%f, %f)", x, y);
-    //                 continue;
-    //             }
-    //             image->ppx(x, y, Pixel(0, 0, 255));
-    //             image_utils::paintCircle(image, math_utils::Point(x, y), 1.0f, Pixel(0, 0, 255));
-    //         }
+    //         common::log_error("Failed to crop face image for MediaPipe landmarks detection");
     //     }
     //     else
     //     {
-    //         common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+    //         common::log_info("Crop image: %ldx%ld", face_image->info.width, face_image->info.height);
+    //         face_image->saveToDisk("face_image_crop.ppm");
+
+    //         // 1. Draw five-point landmarks used for alignment on the original image
+    //         auto five_pts_2d = scrfd_faces[0].getFivePointLandmarksArcFaceOrder2D();
+    //         // for (size_t i = 0; i < five_pts.size(); ++i)
+    //         // {
+    //         //     image->ppx(five_pts[i].x, five_pts[i].y, Pixel(0, 255, 255));
+    //         //     common::log_info("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
+    //         //                      (float) five_pts[i].y);
+    //         // }
+
+    //         // 2. Affine align
+    //         auto [aligned_image, affine] =
+    //             image_utils::affine_face_transform(*raw, five_pts_2d, image_utils::template_192, 192, true);
+    //         if (!aligned_image)
+    //         {
+    //             common::log_error("Failed to wrap face image for MediaPipe landmarks detection");
+    //             return;
+    //         }
+    //         auto test = aligned_image->deepCopy();
+    //         test->drawBorder(Pixel(255, 100, 50), 2);
+    //         image->pasteAt(*test, 640, 0, true);
+    //         auto result = mediaPipeLandmarks_->detect(aligned_image);
+
+    //         if (result.score > 0.5)
+    //         {
+    //             // 4. Map landmarks back to original image
+    //             double invM[6];
+    //             if (!math_utils::invert_affine(affine.data(), invM))
+    //             {
+    //                 common::log_error("Failed to invert affine for MediaPipe unalignment");
+    //                 return;
+    //             }
+
+    //             double w = aligned_image->info.width;
+    //             double h = aligned_image->info.height;
+    //             std::vector<std::pair<double, double>> aligned_pts;
+    //             std::vector<float> aligned_z;
+    //             for (const auto& landmark : result.landmarks)
+    //             {
+    //                 aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
+    //                 aligned_z.push_back(landmark[2]);
+    //             }
+    //             auto unaligned_pts = image_utils::transform_points_affine(aligned_pts, invM);
+    //             for (size_t i = 0; i < unaligned_pts.size(); ++i)
+    //             {
+    //                 double x = static_cast<double>(unaligned_pts[i].first);
+    //                 double y = static_cast<double>(unaligned_pts[i].second);
+    //                 float z = aligned_z[i];
+    //                 if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
+    //                 {
+    //                     common::log_warn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
+    //                     continue;
+    //                 }
+    //                 image->ppx(x, y, Pixel(0, 0, 255));
+    //                 image_utils::paintCircle(image, math_utils::Point3D(x, y, z), 1.5f, Pixel(0, 0, 255));
+    //             }
+    //             auto layer = layerManager_->getBaseLayer();
+    //             if (layer)
+    //             {
+    //                 layer->dirty = true;
+    //             }
+    //         }
+    //         else
+    //         {
+    //             common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+    //         }
     //     }
     // }
-    // PFLD Landmarks detection (using SCRFD face)
-    if (pfldDetector_ && pfldDetector_->isReady() && !scrfd_faces.empty())
+
+    if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
     {
-        // Use the first detected face for demo
-        Face& face = scrfd_faces[0];
-        pfldDetector_->detect(raw, face);
-        // Draw landmarks on the image
-        face.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 1.5f);
+        auto face = scrfd_faces[0];
+
+        auto left_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::LEYE);
+        auto right_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::REYE);
+
+        math_utils::Point<double> eye_center = {(left_eye.x + right_eye.x) / 2.0,
+                                                (left_eye.y + right_eye.y) / 2.0};
+        double bbox_scale_factor = 1.7; // Scale factor for bounding box size
+        double dx = right_eye.x - left_eye.x;
+        double dy = right_eye.y - left_eye.y;
+        double angleRad = -std::atan2(dy, dx); // rotate to horizontal
+        double eye_dist = std::sqrt(dx * dx + dy * dy);
+
+        // Use bounding box from SCRFD
+        auto bbox = face.getBoundingBox().rect;
+
+        // Store original image dimensions
+        unsigned long orig_width = raw->info.width;
+        unsigned long orig_height = raw->info.height;
+
+        // Compute center of the bounding box in original coordinates
+        math_utils::Point<double> face_center_original = {
+            bbox.l + bbox.width() / 2.0,
+            bbox.t + bbox.height() / 2.0
+        };
+
+        auto aligned_face = raw->deepCopy();
+
+        // Rotate the whole image
+        auto translation_offset = aligned_face->rotate(angleRad, eye_center);
+
+        common::log_info("Original image size: %lu x %lu", orig_width, orig_height);
+        common::log_info("Rotated image size: %lu x %lu", aligned_face->info.width, aligned_face->info.height);
+        common::log_info("Translation offset: (%.1f, %.1f)", translation_offset.x, translation_offset.y);
+
+        auto test_rot = aligned_face->deepCopy();
+        test_rot->scaleInPlace(0.2f, ScalingAlgorithm::AREA_AVERAGING);
+        image->pasteAt(*test_rot, 640, 0, true);
+
+        // Calculate where the eye center should be in the rotated image
+        // We need to simulate the same transformation that the rotation function does
+        double cosA = std::cos(angleRad);
+        double sinA = std::sin(angleRad);
+        
+        // Calculate the corners of the original image relative to the eye center
+        double corners[4][2] = {
+            { -eye_center.x, -eye_center.y },  // top-left
+            { orig_width - 1 - eye_center.x, -eye_center.y },  // top-right
+            { -eye_center.x, orig_height - 1 - eye_center.y },  // bottom-left
+            { orig_width - 1 - eye_center.x, orig_height - 1 - eye_center.y }  // bottom-right
+        };
+        
+        // Find the bounding box of rotated corners
+        double minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        for (int i = 0; i < 4; ++i) {
+            double x = corners[i][0] * cosA - corners[i][1] * sinA;
+            double y = corners[i][0] * sinA + corners[i][1] * cosA;
+            minX = std::min(minX, x);
+            minY = std::min(minY, y);
+            maxX = std::max(maxX, x);
+            maxY = std::max(maxY, y);
+        }
+        
+        // The eye center in the rotated image should be at the origin of the rotated coordinate system
+        // adjusted by the translation to fit all pixels
+        math_utils::Point<double> eye_center_rotated = {
+            0.0 - minX,  // eye center becomes origin, then shift by -minX
+            0.0 - minY   // eye center becomes origin, then shift by -minY
+        };
+
+        // Now calculate where the face center should be in the rotated image
+        // First, get face center relative to eye center in original image
+        double face_dx = face_center_original.x - eye_center.x;
+        double face_dy = face_center_original.y - eye_center.y;
+        
+        // Rotate this relative vector
+        math_utils::Point<double> face_center_rotated_relative = {
+            cosA * face_dx - sinA * face_dy,
+            sinA * face_dx + cosA * face_dy
+        };
+        
+        // Add to the rotated eye center position
+        math_utils::Point<double> final_face_center = {
+            face_center_rotated_relative.x + eye_center_rotated.x,
+            face_center_rotated_relative.y + eye_center_rotated.y
+        };
+
+        // Calculate box size based on eye distance for more robust sizing
+        double base_box_size = eye_dist * 3.0; // Base size relative to eye distance
+        double bbox_box_size = std::max(bbox.width(), bbox.height()) * bbox_scale_factor;
+        double box_size = std::max(base_box_size, bbox_box_size);
+
+        // Ensure the box fits within the rotated image bounds
+        double max_box_size = std::min(aligned_face->info.width, aligned_face->info.height) * 0.9;
+        box_size = std::min(box_size, max_box_size);
+
+        // Calculate crop rectangle bounds
+        double half_box = box_size / 2.0;
+        double crop_left = final_face_center.x - half_box;
+        double crop_top = final_face_center.y - half_box;
+        double crop_right = final_face_center.x + half_box;
+        double crop_bottom = final_face_center.y + half_box;
+
+        // Ensure crop rectangle is within image bounds
+        if (crop_left < 0 || crop_top < 0 || 
+            crop_right > aligned_face->info.width || crop_bottom > aligned_face->info.height)
+        {
+            // Adjust the center to keep the crop within bounds
+            if (crop_left < 0) {
+                final_face_center.x = half_box;
+            } else if (crop_right > aligned_face->info.width) {
+                final_face_center.x = aligned_face->info.width - half_box;
+            }
+            
+            if (crop_top < 0) {
+                final_face_center.y = half_box;
+            } else if (crop_bottom > aligned_face->info.height) {
+                final_face_center.y = aligned_face->info.height - half_box;
+            }
+            
+            // Recalculate crop bounds
+            crop_left = final_face_center.x - half_box;
+            crop_top = final_face_center.y - half_box;
+            
+            common::log_warn("Adjusted crop center to fit within image bounds: (%.1f, %.1f)", 
+                            final_face_center.x, final_face_center.y);
+        }
+
+        // Create crop rectangle
+        math_utils::Point<float> left_corner {
+            static_cast<float>(crop_left),
+            static_cast<float>(crop_top)
+        };
+
+        math_utils::Rect<float> crop_rect = {
+            left_corner,
+            static_cast<float>(box_size),
+            static_cast<float>(box_size)
+        };
+        
+        // Log all the coordinate transformations for debugging
+        common::log_info("Eye center original: (%.1f, %.1f)", eye_center.x, eye_center.y);
+        common::log_info("Calculated minX, minY: (%.1f, %.1f)", minX, minY);
+        common::log_info("Eye center rotated: (%.1f, %.1f)", eye_center_rotated.x, eye_center_rotated.y);
+        common::log_info("Face center original: (%.1f, %.1f)", face_center_original.x, face_center_original.y);
+        common::log_info("Face center relative to eye: (%.1f, %.1f)", face_dx, face_dy);
+        common::log_info("Face center rotated relative: (%.1f, %.1f)", face_center_rotated_relative.x, face_center_rotated_relative.y);
+        common::log_info("Final face center: (%.1f, %.1f)", final_face_center.x, final_face_center.y);
+        common::log_info("Box size: %.1f", box_size);
+        common::log_info("Crop rect: [%.1f, %.1f, %.1f, %.1f]", crop_rect.l, crop_rect.t, crop_rect.width(), crop_rect.height());
+        common::log_info("Crop bounds: left=%.1f, top=%.1f, right=%.1f, bottom=%.1f", 
+                        crop_left, crop_top, crop_left + box_size, crop_top + box_size);
+
+        aligned_face = aligned_face->crop(crop_rect);
+        if (!aligned_face)
+        {
+            common::log_error("Failed to crop aligned face image for MediaPipe landmarks detection");
+            return;
+        }
+
+        image->pasteAt(*aligned_face, 0, 480, true);
+        common::log_info("Aligned face size: %ldx%ld", aligned_face->info.width, aligned_face->info.height);
+
+        auto result = mediaPipeLandmarks_->detect(aligned_face);
+        if (result.score > 0.5)
+        {
+            // Draw predicted landmarks on aligned image
+            for (size_t i = 0; i < result.landmarks.size(); ++i)
+            {
+                double x = result.landmarks[i][0] * aligned_face->info.width;
+                double y = result.landmarks[i][1] * aligned_face->info.height;
+                if (x < 0 || x >= aligned_face->info.width || y < 0 || y >= aligned_face->info.height)
+                {
+                    continue;
+                }
+
+                aligned_face->ppx(x, y, Pixel(0, 0, 255));
+                image_utils::paintCircle(aligned_face, math_utils::Point3D(x, y, 0), 1.0f, Pixel(0, 0, 255));
+            }
+            // Show aligned image with landmarks
+            image->pasteAt(*aligned_face, aligned_face->info.width, 480, true);
+        }
+        else
+        {
+            common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+        }
     }
+    // PFLD Landmarks detection (using SCRFD face)
+    // if (pfldDetector_ && pfldDetector_->isReady() && !scrfd_faces.empty())
+    // {
+    //     // Use the first detected face for demo
+    //     Face& face = scrfd_faces[0];
+    //     pfldDetector_->detect(raw, face);
+    //     // Draw landmarks on the image
+    //     face.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 1.5f);
+    // }
     
     // bool swap_success = false;
     // if (swapPipeline_ && target_img_)
