@@ -9,124 +9,42 @@
 #include <vector>
 
 #include "LinuxFace/Image/image_utils.h"
+#include "LinuxFace/Image/pixel_conversion.h"
 
 using namespace linuxface;
+using namespace linuxface::pixel_conversion;
 
-// Optimized pixel operations
+// Optimized pixel operations using centralized conversion logic
 void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize,
                                   unsigned char srcAlpha, unsigned char dstPixelSize, unsigned char dstAlpha) noexcept
 {
-    // Helper lambdas for each conversion
-    auto copyRGB = [](unsigned char* d, const unsigned char* s)
+    // Skip transparent pixels for RGBA formats
+    if (srcPixelSize == 4 && srcAlpha == 0)
     {
-        d[0] = s[0];
-        d[1] = s[1];
-        d[2] = s[2];
-    };
-    auto copyRGBA = [](unsigned char* d, const unsigned char* s)
-    {
-        d[0] = s[0];
-        d[1] = s[1];
-        d[2] = s[2];
-        d[3] = s[3];
-    };
-    auto setRGBA = [](unsigned char* d, const unsigned char* s)
-    {
-        d[0] = s[0];
-        d[1] = s[1];
-        d[2] = s[2];
-        d[3] = 255;
-    };
-    auto setRGBGray = [](unsigned char* d, unsigned char gray)
-    {
-        d[0] = gray;
-        d[1] = gray;
-        d[2] = gray;
-    };
-    auto setRGBAGray = [](unsigned char* d, unsigned char gray)
-    {
-        d[0] = gray;
-        d[1] = gray;
-        d[2] = gray;
-        d[3] = 255;
-    };
-    auto blendRGB = [](unsigned char* d, const unsigned char* s, unsigned char alpha)
-    {
-        for (int i = 0; i < 3; ++i)
-        {
-            d[i] = static_cast<unsigned char>((alpha * s[i] + (255 - alpha) * d[i]) / 255);
-        }
-    };
-    auto blendGray = [](unsigned char* d, unsigned char s, unsigned char alpha)
-    { d[0] = static_cast<unsigned char>((alpha * s + (255 - alpha) * d[0]) / 255); };
+        return;
+    }
 
-    // Fast path: direct copy for matching formats
-    if (srcPixelSize == dstPixelSize)
+    // Determine conversion type and apply optimized conversion
+    ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+
+    // Special handling for RGBA->RGBA blending
+    if (convType == ConversionType::DIRECT_COPY && srcPixelSize == 4)
     {
-        if (srcPixelSize == 4)
-        {
-            if (srcAlpha == 255)
-            {
-                copyRGBA(dst, src);
-                return;
-            }
-            if (srcAlpha == 0)
-            {
-                return;
-            }
-            blendRGB(dst, src, srcAlpha);
-            dst[3] = 255;
-            return;
-        }
-        if (srcPixelSize == 3)
-        {
-            copyRGB(dst, src);
-            return;
-        }
-        if (srcPixelSize == 1)
-        {
-            blendGray(dst, src[0], srcAlpha);
-            return;
-        }
-    }
-    // RGBA -> RGB
-    if (srcPixelSize == 4 && dstPixelSize == 3)
-    {
-        if (srcAlpha == 255)
-        {
-            copyRGB(dst, src);
-            return;
-        }
-        if (srcAlpha == 0)
-        {
-            return;
-        }
-        blendRGB(dst, src, srcAlpha);
+        bool needsBlending = (srcAlpha != 255 && srcAlpha != 0);
+        convertPixel(src, dst, convType, srcAlpha, needsBlending);
         return;
     }
-    // RGB -> RGBA
-    if (srcPixelSize == 3 && dstPixelSize == 4)
+
+    // For grayscale blending with alpha
+    if (srcPixelSize == 1 && srcAlpha != 255 && srcAlpha != 0)
     {
-        setRGBA(dst, src);
+        // Blend grayscale with alpha
+        dst[0] = static_cast<unsigned char>((srcAlpha * src[0] + (255 - srcAlpha) * dst[0]) / 255);
         return;
     }
-    // Grayscale -> RGB
-    if (srcPixelSize == 1 && dstPixelSize == 3)
-    {
-        setRGBGray(dst, src[0]);
-        return;
-    }
-    // Grayscale -> RGBA
-    if (srcPixelSize == 1 && dstPixelSize == 4)
-    {
-        setRGBAGray(dst, src[0]);
-        return;
-    }
-    // Fallback: copy as much as possible
-    for (unsigned char i = 0; i < std::min(srcPixelSize, dstPixelSize); ++i)
-    {
-        dst[i] = src[i];
-    }
+
+    // Use unified conversion for all other cases
+    convertPixel(src, dst, convType, srcAlpha, false);
 }
 
 // Constructors with improved memory management
@@ -167,18 +85,28 @@ Image::Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(siz
 
 Image::Image(Pixel color, size_t width, size_t height)
 {
-    size_ = width * height * 3;
-    data_ = std::shared_ptr<unsigned char>(new unsigned char[size_], std::default_delete<unsigned char[]>());
-    // Set default format to RGB
-    info.format = ImageFormat::RGB;
-    info.pixelSizeBytes = 3;
+    // Determine format based on alpha value
+    bool hasAlpha = (color.a != 255);
+    info.pixelSizeBytes = hasAlpha ? 4 : 3;
+    info.format = hasAlpha ? ImageFormat::RGBA : ImageFormat::RGB;
     info.width = width;
     info.height = height;
 
+    size_ = width * height * info.pixelSizeBytes;
+    data_ = std::shared_ptr<unsigned char>(new unsigned char[size_], std::default_delete<unsigned char[]>());
 
-    for (int i = 0; i < size_; i += 3)
+    // Fill with the color
+    unsigned char* d = data_.get();
+    for (size_t i = 0; i < width * height; ++i)
     {
-        this->pidx(i, color.r, color.g, color.b, color.a);
+        size_t idx = i * info.pixelSizeBytes;
+        d[idx + 0] = color.r;
+        d[idx + 1] = color.g;
+        d[idx + 2] = color.b;
+        if (hasAlpha)
+        {
+            d[idx + 3] = color.a;
+        }
     }
 }
 
@@ -986,6 +914,40 @@ std::vector<unsigned char> Image::convertToRGB() const
     return {};
 }
 
+bool Image::convertToRGBAInplace()
+{
+    if (info.format == ImageFormat::RGB && info.pixelSizeBytes == 3)
+    {
+        size_t pixel_count = info.width * info.height;
+        size_t new_size = pixel_count * 4;
+
+        // Create new RGBA data
+        auto new_data =
+            std::shared_ptr<unsigned char>(new unsigned char[new_size], std::default_delete<unsigned char[]>());
+
+        // Convert RGB to RGBA by adding alpha=255
+        const unsigned char* rgb = data_.get();
+        unsigned char* rgba = new_data.get();
+
+        for (size_t i = 0; i < pixel_count; ++i)
+        {
+            rgba[i * 4 + 0] = rgb[i * 3 + 0]; // R
+            rgba[i * 4 + 1] = rgb[i * 3 + 1]; // G
+            rgba[i * 4 + 2] = rgb[i * 3 + 2]; // B
+            rgba[i * 4 + 3] = 255;            // A
+        }
+
+        // Update image properties
+        data_ = std::move(new_data);
+        size_ = new_size;
+        info.format = ImageFormat::RGBA;
+        info.pixelSizeBytes = 4;
+
+        return true;
+    }
+    return false;
+}
+
 bool Image::convertToRGBInplace()
 {
     if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
@@ -1071,7 +1033,7 @@ void Image::toGrayscale()
             unsigned char r = data_.get()[idx];
             unsigned char g = data_.get()[idx + 1];
             unsigned char b = data_.get()[idx + 2];
-            unsigned char gray = static_cast<unsigned char>(0.299f * r + 0.587f * g + 0.114f * b);
+            unsigned char gray = pixel_conversion::rgbToGrayscale(r, g, b);
             data_.get()[idx] = gray;
             data_.get()[idx + 1] = gray;
             data_.get()[idx + 2] = gray;
@@ -1310,16 +1272,20 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
         return;
     }
 
-    // Calculate intersection with canvas
+    // Use signed arithmetic for proper bounds handling
     long srcLeft = srcGlobalX;
     long srcTop = srcGlobalY;
     long srcRight = srcLeft + static_cast<long>(src.info.width);
     long srcBottom = srcTop + static_cast<long>(src.info.height);
+    long canvasLeft = canvasX;
+    long canvasTop = canvasY;
+    long canvasRight = canvasLeft + static_cast<long>(canvasWidth);
+    long canvasBottom = canvasTop + static_cast<long>(canvasHeight);
 
-    long clipLeft = std::max(srcLeft, canvasX);
-    long clipTop = std::max(srcTop, canvasY);
-    long clipRight = std::min(srcRight, canvasX + static_cast<long>(canvasWidth));
-    long clipBottom = std::min(srcBottom, canvasY + static_cast<long>(canvasHeight));
+    long clipLeft = std::max(srcLeft, canvasLeft);
+    long clipTop = std::max(srcTop, canvasTop);
+    long clipRight = std::min(srcRight, canvasRight);
+    long clipBottom = std::min(srcBottom, canvasBottom);
 
     // Skip if no intersection
     if (clipLeft >= clipRight || clipTop >= clipBottom)
@@ -1329,68 +1295,52 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
 
     const unsigned char* srcData = src.data();
     unsigned char* dstData = data_.get();
-    const unsigned char pixelSize = info.pixelSizeBytes;
+    const unsigned char dstPixelSize = info.pixelSizeBytes;
+    const unsigned char srcPixelSize = src.info.pixelSizeBytes;
 
-    // Copy pixels row by row
+    // Determine conversion type once for the entire operation
+    ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+
     for (long y = clipTop; y < clipBottom; y++)
     {
-        // Calculate row start indices for optimization
-        long srcRowStart = (y - srcTop) * src.info.width;
-        long dstRowStart = (y - canvasY) * canvasWidth;
-
+        long srcRow = y - srcTop;
+        long dstRow = y - canvasTop;
         for (long x = clipLeft; x < clipRight; x++)
         {
-            // Calculate column offsets
-            unsigned long srcCol = static_cast<unsigned long>(x - srcLeft);
-            unsigned long dstCol = static_cast<unsigned long>(x - canvasX);
+            long srcCol = x - srcLeft;
+            long dstCol = x - canvasLeft;
 
-            // Calculate final indices
-            unsigned long srcIdx = (srcRowStart + srcCol) * src.info.pixelSizeBytes;
-            unsigned long dstIdx = (dstRowStart + dstCol) * info.pixelSizeBytes;
-
-            // Bounds checking
-            if (srcIdx + pixelSize > src.size() || dstIdx + pixelSize > size_)
+            // Bounds check before calculating indices
+            if (srcRow < 0 || srcRow >= static_cast<long>(src.info.height) || srcCol < 0
+                || srcCol >= static_cast<long>(src.info.width) || dstRow < 0
+                || dstRow >= static_cast<long>(canvasHeight) || dstCol < 0 || dstCol >= static_cast<long>(canvasWidth))
             {
-                common::log_error("Image::copyPixelsWithBlending - Index out of bounds");
                 continue;
             }
 
+            size_t srcIdx = (static_cast<size_t>(srcRow) * src.info.width + static_cast<size_t>(srcCol)) * srcPixelSize;
+            size_t dstIdx = (static_cast<size_t>(dstRow) * canvasWidth + static_cast<size_t>(dstCol)) * dstPixelSize;
 
-            // Handle different pixel formats
-            if (src.info.pixelSizeBytes == 4 && info.pixelSizeBytes == 4) // RGBA -> RGBA
+            // Bounds check for buffer access
+            if (srcIdx + srcPixelSize > src.size() || dstIdx + dstPixelSize > size_)
+            {
+                continue;
+            }
+
+            // Handle RGBA->RGBA blending with alpha transparency
+            if (convType == ConversionType::DIRECT_COPY && srcPixelSize == 4)
             {
                 unsigned char srcAlpha = srcData[srcIdx + 3];
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 4, srcAlpha, 4, dstData[dstIdx + 3]);
-            }
-            else if (src.info.pixelSizeBytes == 4 && info.pixelSizeBytes == 3) // RGBA -> RGB
-            {
-                unsigned char srcAlpha = srcData[srcIdx + 3];
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 4, srcAlpha, 3, 255);
-            }
-            else if (src.info.pixelSizeBytes == 3 && info.pixelSizeBytes == 4) // RGB -> RGBA
-            {
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 3, 255, 4, dstData[dstIdx + 3]);
-            }
-            else if (src.info.pixelSizeBytes == 3 && info.pixelSizeBytes == 3) // RGB -> RGB
-            {
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 3, 255, 3, 255);
-            }
-            else if (src.info.pixelSizeBytes == 1 && info.pixelSizeBytes == 4) // Grayscale -> RGBA
-            {
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 1, 255, 4, dstData[dstIdx + 3]);
-            }
-            else if (src.info.pixelSizeBytes == 1 && info.pixelSizeBytes == 3) // Grayscale -> RGB
-            {
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 1, 255, 3, 255);
-            }
-            else if (src.info.pixelSizeBytes == 1 && info.pixelSizeBytes == 1) // Grayscale -> Grayscale
-            {
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 1, 255, 1, 255);
+                if (srcAlpha == 0)
+                {
+                    continue; // Skip completely transparent pixels
+                }
+                convertPixel(&srcData[srcIdx], &dstData[dstIdx], convType, srcAlpha, srcAlpha != 255);
             }
             else
             {
-                common::log_error("Image::paste - Unsupported pixel format");
-                std::memcpy(dstData + dstIdx, srcData + srcIdx, std::min(src.info.pixelSizeBytes, info.pixelSizeBytes));
+                // Use centralized conversion for all other format combinations
+                convertPixel(&srcData[srcIdx], &dstData[dstIdx], convType);
             }
         }
     }
@@ -1409,32 +1359,28 @@ void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dst
     const unsigned char dstPixelSize = info.pixelSizeBytes;
     const unsigned char srcPixelSize = src.info.pixelSizeBytes;
 
+    // Determine conversion type once for the entire operation
+    ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+
+    // Optimize for direct copy cases
+    if (convType == ConversionType::DIRECT_COPY)
+    {
+        for (size_t row = 0; row < copyHeight; ++row)
+        {
+            size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
+            size_t dstRowIdx = ((dstY + row) * info.width + dstX) * dstPixelSize;
+            copyPixelBlock(srcData, dstData, srcRowIdx, dstRowIdx, copyWidth, srcPixelSize);
+        }
+        return;
+    }
+
+    // Use row-based conversion for better performance
     for (size_t row = 0; row < copyHeight; ++row)
     {
-        size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * dstPixelSize;
-        size_t dstRowIdx = ((dstY + row) * info.width + dstX) * dstPixelSize;
-        if (info.pixelSizeBytes == src.info.pixelSizeBytes)
-        {
-            // If pixel sizes match, we can copy directly
-            std::memcpy(dstData + dstRowIdx, srcData + srcRowIdx, copyWidth * dstPixelSize);
-        }
-        else if (dstPixelSize == 3 && srcPixelSize == 1)
-        {
-            // Convert Grayscale to RGB
-            for (size_t row = 0; row < copyHeight; ++row)
-            {
-                size_t srcRowStart = (srcY + row) * src.info.width + srcX;
-                size_t dstRowStart = ((dstY + row) * info.width + dstX) * dstPixelSize;
+        size_t srcRowStart = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
+        size_t dstRowStart = ((dstY + row) * info.width + dstX) * dstPixelSize;
 
-                for (size_t col = 0; col < copyWidth; ++col)
-                {
-                    unsigned char gray = srcData[srcRowStart + col];
-                    dstData[dstRowStart + col * 3 + 0] = gray; // R
-                    dstData[dstRowStart + col * 3 + 1] = gray; // G
-                    dstData[dstRowStart + col * 3 + 2] = gray; // B
-                }
-            }
-        }
+        convertPixelRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, convType);
     }
 }
 
@@ -1514,7 +1460,7 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
             else
             {
                 // Only blend the region corresponding to the pasted image
-                copyPixelsWithBlending(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
+                copyPixelsWithBlending(other, 0, 0, dstX, dstY, info.width, info.height);
             }
             return *this;
         }

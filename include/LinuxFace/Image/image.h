@@ -373,6 +373,9 @@ class Image
     // Converts a single-channel image to RGB in-place
     bool convertToRGBInplace();
 
+    // Converts RGB to RGBA in-place
+    bool convertToRGBAInplace();
+
     void drawBorder(const Pixel& color, int thickness = 1);
 
     // Set all pixels to black (useful for clearing the image)
