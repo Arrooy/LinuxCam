@@ -22,6 +22,8 @@
 #include "LinuxFace/profiler.h"
 #include "LinuxFace/ui.h"
 #include "LinuxFace/window.h"
+#include "LinuxFace/wflw_test.h"
+
 namespace linuxface
 {
 
@@ -70,8 +72,8 @@ class Application
 
     std::unique_ptr<Image> adria_img_;
     std::unique_ptr<Image> target_img_;
-    std::unique_ptr<Image> b_img_;
-    std::unique_ptr<Image> fake_background_;
+    
+    WFLWExample example_;
 
     // Main loop methods
     bool update();

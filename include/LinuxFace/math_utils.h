@@ -335,6 +335,148 @@ inline bool estimate_affine_2d(const double* src, const double* dst, int n, doub
     return true;
 }
 
+inline bool estimate_similarity_2d(const double* src, const double* dst, int n, double* M)
+{
+    if (n < 2)
+    {
+        std::memset(M, 0, sizeof(double) * 6);
+        M[0] = M[4] = 1.0;
+        return false;
+    }
+
+    // Compute centroids
+    double src_mean_x = 0, src_mean_y = 0;
+    double dst_mean_x = 0, dst_mean_y = 0;
+
+    for (int i = 0; i < n; ++i)
+    {
+        src_mean_x += src[2 * i];
+        src_mean_y += src[2 * i + 1];
+        dst_mean_x += dst[2 * i];
+        dst_mean_y += dst[2 * i + 1];
+    }
+    src_mean_x /= n;
+    src_mean_y /= n;
+    dst_mean_x /= n;
+    dst_mean_y /= n;
+
+    // Center points
+    double mu_src[2] = {src_mean_x, src_mean_y};
+    double mu_dst[2] = {dst_mean_x, dst_mean_y};
+
+    double cov_xx = 0, cov_xy = 0, cov_yx = 0, cov_yy = 0;
+    double src_var = 0;
+
+    for (int i = 0; i < n; ++i)
+    {
+        double xs = src[2 * i] - mu_src[0];
+        double ys = src[2 * i + 1] - mu_src[1];
+        double xd = dst[2 * i] - mu_dst[0];
+        double yd = dst[2 * i + 1] - mu_dst[1];
+
+        cov_xx += xd * xs;
+        cov_xy += xd * ys;
+        cov_yx += yd * xs;
+        cov_yy += yd * ys;
+
+        src_var += xs * xs + ys * ys;
+    }
+
+    if (src_var == 0)
+    {
+        std::memset(M, 0, sizeof(double) * 6);
+        M[0] = M[4] = 1.0;
+        return false;
+    }
+
+    // Compute scale and rotation
+    double scale = (cov_xx + cov_yy) / src_var;
+    double r00 = (cov_xx + cov_yy) / (cov_xx + cov_yy);  // normalized to 1
+    double r01 = (cov_xy - cov_yx) / (cov_xx + cov_yy);
+    double r10 = (cov_yx - cov_xy) / (cov_xx + cov_yy);
+    double r11 = r00;
+
+    double norm = std::sqrt(r00 * r00 + r10 * r10);
+    if (norm < 1e-10)
+    {
+        std::memset(M, 0, sizeof(double) * 6);
+        M[0] = M[4] = 1.0;
+        return false;
+    }
+
+    r00 = scale * r00 / norm;
+    r01 = scale * r01 / norm;
+    r10 = scale * r10 / norm;
+    r11 = scale * r11 / norm;
+
+    // Translation
+    double tx = mu_dst[0] - (r00 * mu_src[0] + r01 * mu_src[1]);
+    double ty = mu_dst[1] - (r10 * mu_src[0] + r11 * mu_src[1]);
+
+    M[0] = r00;
+    M[1] = r01;
+    M[2] = tx;
+    M[3] = r10;
+    M[4] = r11;
+    M[5] = ty;
+
+    return true;
+}
+
+inline bool estimate_procrustes_similarity(const double* src, const double* dst, int n, double* M)
+{
+    if (n < 2) return false;
+
+    // 1. Compute centroids
+    double sx=0, sy=0, dx=0, dy=0;
+    for (int i=0; i<n; ++i) {
+        sx += src[2*i]; sy += src[2*i+1];
+        dx += dst[2*i]; dy += dst[2*i+1];
+    }
+    sx /= n; sy /= n; dx /= n; dy /= n;
+
+    // 2. Centered coordinates
+    std::vector<double> s(2*n), d(2*n);
+    for (int i=0; i<n; ++i) {
+        s[2*i] = src[2*i] - sx;
+        s[2*i+1] = src[2*i+1] - sy;
+        d[2*i] = dst[2*i] - dx;
+        d[2*i+1] = dst[2*i+1] - dy;
+    }
+
+    // 3. Compute covariance and variance
+    double var_s = 0, cov_xx=0, cov_xy=0, cov_yx=0, cov_yy=0;
+    for (int i=0; i<n; ++i) {
+        double xs=s[2*i], ys=s[2*i+1];
+        double xd=d[2*i], yd=d[2*i+1];
+        var_s += xs*xs + ys*ys;
+        cov_xx += xd*xs;
+        cov_xy += xd*ys;
+        cov_yx += yd*xs;
+        cov_yy += yd*ys;
+    }
+    if (var_s == 0) return false;
+
+    // 4. Compute rotation & scale
+    double trace = cov_xx + cov_yy;
+    // double det = cov_xx*cov_yy - cov_xy*cov_yx;
+    double scale = trace / var_s;
+    double theta = atan2(cov_xy - cov_yx, cov_xx + cov_yy);  // rotation angle
+
+    double cs = cos(theta), sn = sin(theta);
+
+    // 5. Build 2×3 matrix
+    M[0] = scale * cs;
+    M[1] = -scale * sn;
+    M[2] = dx - M[0] * sx - M[1] * sy;
+    M[3] = scale * sn;
+    M[4] = scale * cs;
+    M[5] = dy - M[3] * sx - M[4] * sy;
+
+    return true;
+}
+
+
 inline bool invert_affine(const double* M, double invM[6])
 {
     // Invert the affine transformation matrix for inverse mapping

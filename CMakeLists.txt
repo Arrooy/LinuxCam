@@ -222,6 +222,10 @@ endif()
 
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 
+# Temp add opencv
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
 # Define the main executable
 add_executable(LinuxFace
     ${SRC_FILES}
@@ -240,6 +244,7 @@ target_link_libraries(LinuxFace
     yaml-cpp::yaml-cpp
     gifdec
     ${ONNXRUNTIME_LIB}
+    ${OpenCV_LIBS}
 )
 
 # Ensure include directory is set *after* it exists

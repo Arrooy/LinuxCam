@@ -13,6 +13,7 @@ struct ExternalData
 {
     std::string mediaFolderPath;
     std::string modelFolderPath;
+    std::string WFLWFolderPath;
     bool preLoading{false};
 };
 
@@ -189,6 +190,14 @@ class Config
         // TODO: Make sure it finishes with only one "/"
         external_data_.modelFolderPath = images["models_folder_path"].as<std::string>() + "/";
 
+        if (!images["WFLW_folder_path"])
+        {
+            common::log_error("Missing WFLW_folder_path field in external_data section");
+            return false;
+        }
+
+        external_data_.WFLWFolderPath = images["WFLW_folder_path"].as<std::string>() + "/";
+
         if (!images["preload_content"])
         {
             common::log_error("Missing preload_content field in external_data section");
@@ -239,7 +248,7 @@ class Config
 
     bool loadConfiguration()
     {
-        if(config_["enable_gpu"])
+        if (config_["enable_gpu"])
         {
             enableGPU_ = config_["enable_gpu"].as<bool>();
         }
@@ -251,6 +260,8 @@ class Config
     std::vector<WebcamDevice> getWebcams() const { return cameras_; }
     std::string inline getMediaFolderPath() const { return external_data_.mediaFolderPath; }
     std::string inline getModelFolderPath() const { return external_data_.modelFolderPath; }
+    std::string inline getWFLWFolderPath() const { return external_data_.WFLWFolderPath; }
+
     bool inline preloadExternalContent() const { return external_data_.preLoading; }
     bool inline isGPUEnabled() const { return enableGPU_; }
     void getWindowSize(int& width, int& height) const

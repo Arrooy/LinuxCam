@@ -64,10 +64,9 @@ const double template_512[5][2] = {
 };
 
 // Helper function to calculate destination index based on layout
-template<ImageLayout layout>
-constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned char ch, 
-                                   unsigned long width, unsigned long height, 
-                                   unsigned char channels)
+template <ImageLayout layout>
+constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned char ch, unsigned long width,
+                                    unsigned long height, unsigned char channels)
 {
     if constexpr (layout == ImageLayout::HWC)
     {
@@ -80,11 +79,11 @@ constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned c
 }
 
 
-// Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
-// Now returns both the aligned image and the affine matrix used
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
-affine_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
-                      const double template_points[5][2], int target_size, bool align_to_template = true)
+face_transform(const std::vector<math_utils::Point<>>& landmarks,
+               const double template_points[5][2], int target_size,
+               std::function<bool(const double*, const double*, int, double*)> estimate_transform,
+               std::function<std::unique_ptr<Image>(const double*, int, int)> warp_fn, bool align_to_template = true)
 {
     if (landmarks.size() != 5)
     {
@@ -110,13 +109,52 @@ affine_face_transform(const Image& input_img, const std::vector<math_utils::Poin
         }
     }
     double M[6] = {0};
-    math_utils::estimate_affine_2d(src, dst, 5, M);
+    estimate_transform(src, dst, 5, M);
     std::array<double, 6> arrM;
     for (int i = 0; i < 6; ++i)
     {
         arrM[i] = M[i];
     }
-    return {input_img.affineWarpBilinear(M, target_size, target_size), arrM};
+    return {warp_fn(M, target_size, target_size), arrM};
+}
+
+// Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
+// Now returns both the aligned image and the affine matrix used
+inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
+affine_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
+                      const double template_points[5][2], int target_size, bool align_to_template = true)
+{
+    return face_transform(
+        landmarks, template_points, target_size, math_utils::estimate_affine_2d,
+        [&](const double* M, int out_width, int out_height)
+        { return input_img.affineWarpBilinear(M, out_width, out_height); }, align_to_template);
+}
+
+inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
+similarity_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
+                          const double template_points[5][2], int target_size, bool align_to_template = true)
+{
+    return face_transform(
+        landmarks, template_points, target_size, math_utils::estimate_similarity_2d,
+        [&](const double* M, int out_width, int out_height)
+        { return input_img.affineWarpBilinear(M, out_width, out_height); }, align_to_template);
+}
+
+
+inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
+procrustes_similarity_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
+                          const double template_points[5][2], int target_size, bool align_to_template = true)
+{
+    return face_transform(
+        landmarks, template_points, target_size, math_utils::estimate_procrustes_similarity,
+        [&](const double* M, int out_width, int out_height)
+        { return input_img.affineWarpBilinear(M, out_width, out_height); }, align_to_template);
+}
+
+// Rotate, translate and scale the image to fit the landmarks
+inline std::unique_ptr<Image> simple_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks, int target_size)
+{
+// TODO:
 }
 
 /**
@@ -619,7 +657,7 @@ struct ImageView
 
 
 template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
-ImageLayout outputLayout = ImageLayout::HWC>
+          ImageLayout outputLayout = ImageLayout::HWC>
 void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
@@ -703,7 +741,8 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                             scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                         }
                         // Calculate destination index based on output layout
-                        const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                        const size_t dstIdx =
+                            calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
 
                         dst.data[dstIdx] = scaledValue;
 
@@ -734,7 +773,7 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
 
 
 template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
-ImageLayout outputLayout = ImageLayout::HWC>
+          ImageLayout outputLayout = ImageLayout::HWC>
 void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
@@ -873,7 +912,7 @@ class LanczosKernel
 
 // Optimized separable Lanczos Scaling
 template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
-ImageLayout outputLayout = ImageLayout::HWC>
+          ImageLayout outputLayout = ImageLayout::HWC>
 void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
@@ -1075,7 +1114,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
 }
 
 // Fast box filter for extreme Scaling (when speed is critical)
-template <typename T,typename K, ImageLayout outputLayout = ImageLayout::HWC>
+template <typename T, typename K, ImageLayout outputLayout = ImageLayout::HWC>
 void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     const double xScale = static_cast<double>(src.width) / dst.width;
@@ -1111,7 +1150,8 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
                         }
                     }
                     // Calculate destination index based on output layout
-                    const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                    const size_t dstIdx =
+                        calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
                     dst.data[dstIdx] = static_cast<K>(sum / totalSamples);
                 }
             }
@@ -1150,7 +1190,8 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
                     }
 
                     // Calculate destination index based on output layout
-                    const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                    const size_t dstIdx =
+                        calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
                     dst.data[dstIdx] = static_cast<K>(count > 0 ? sum / count : 0);
                 }
             }
@@ -1159,7 +1200,8 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 }
 
 // Bicubic kernel helper
-inline float cubicHermite(float A, float B, float C, float D, float t) {
+inline float cubicHermite(float A, float B, float C, float D, float t)
+{
     float a = -A / 2.0f + (3.0f * B) / 2.0f - (3.0f * C) / 2.0f + D / 2.0f;
     float b = A - (5.0f * B) / 2.0f + 2.0f * C - D / 2.0f;
     float c = -A / 2.0f + C / 2.0f;
@@ -1169,12 +1211,14 @@ inline float cubicHermite(float A, float B, float C, float D, float t) {
 
 // Bicubic scaling for RGB/Grayscale images
 template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
-ImageLayout outputLayout = ImageLayout::HWC>
-void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst) {
+          ImageLayout outputLayout = ImageLayout::HWC>
+void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
+{
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
     {
-        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height, dst.width, dst.height);
+        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
+                          dst.width, dst.height);
         return;
     }
 
@@ -1354,7 +1398,7 @@ void chw_to_hwc(const T* src, T* dst, unsigned long width, unsigned long height,
 }
 
 template <NormalizationType normalizationType = NormalizationType::NONE>
-std::unique_ptr<Image> convertToRawImage(float * src, unsigned long width, unsigned long height)
+std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsigned long height)
 {
     if (src == nullptr || width == 0 || height == 0)
     {
