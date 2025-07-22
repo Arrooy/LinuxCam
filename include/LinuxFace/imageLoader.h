@@ -22,6 +22,7 @@ class ImageFormatDetector
     static bool isJPEG(const std::vector<unsigned char>& data);
     static bool isPNG(const std::vector<unsigned char>& data);
     static bool isBMP(const std::vector<unsigned char>& data);
+    static bool isPPM(const std::vector<unsigned char>& data);
 };
 
 class ImageLoader

@@ -80,8 +80,7 @@ constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned c
 
 
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
-face_transform(const std::vector<math_utils::Point<>>& landmarks,
-               const double template_points[5][2], int target_size,
+face_transform(const std::vector<math_utils::Point<>>& landmarks, const double template_points[5][2], int target_size,
                std::function<bool(const double*, const double*, int, double*)> estimate_transform,
                std::function<std::unique_ptr<Image>(const double*, int, int)> warp_fn, bool align_to_template = true)
 {
@@ -143,7 +142,7 @@ similarity_face_transform(const Image& input_img, const std::vector<math_utils::
 
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
 procrustes_similarity_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
-                          const double template_points[5][2], int target_size, bool align_to_template = true)
+                                     const double template_points[5][2], int target_size, bool align_to_template = true)
 {
     return face_transform(
         landmarks, template_points, target_size, math_utils::estimate_procrustes_similarity,
@@ -152,9 +151,10 @@ procrustes_similarity_face_transform(const Image& input_img, const std::vector<m
 }
 
 // Rotate, translate and scale the image to fit the landmarks
-inline std::unique_ptr<Image> simple_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks, int target_size)
+inline std::unique_ptr<Image>
+simple_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks, int target_size)
 {
-// TODO:
+    // TODO:
 }
 
 /**
@@ -1330,30 +1330,31 @@ transform_points_affine(const std::vector<std::pair<double, double>>& points, co
 
 inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D& center, float radius, Pixel color)
 {
-    // Bresenham's circle algorithm
-    int x = static_cast<int>(radius);
-    int y = 0;
-    int err = 0;
+    int cx = static_cast<int>(std::round(center.x));
+    int cy = static_cast<int>(std::round(center.y));
+    int r = static_cast<int>(std::round(radius));
+    int w = static_cast<int>(image->info.width);
+    int h = static_cast<int>(image->info.height);
 
-    while (x >= y)
+    // Always paint the center pixel if in bounds
+    if (cx >= 0 && cx < w && cy >= 0 && cy < h)
     {
-        // Paint the 8 octants of the circle
-        image->ppx(center.x + x, center.y + y, color);
-        image->ppx(center.x + y, center.y + x, color);
-        image->ppx(center.x - y, center.y + x, color);
-        image->ppx(center.x - x, center.y + y, color);
-        image->ppx(center.x - x, center.y - y, color);
-        image->ppx(center.x - y, center.y - x, color);
-        image->ppx(center.x + y, center.y - x, color);
-        image->ppx(center.x + x, center.y - y, color);
+        image->ppx(cx, cy, color);
+    }
 
-        if (err <= 0)
+    for (int y = -r; y <= r; ++y)
+    {
+        for (int x = -r; x <= r; ++x)
         {
-            err += 2 * ++y + 1;
-        }
-        if (err > 0)
-        {
-            err -= 2 * --x + 1;
+            if (x * x + y * y <= r * r)
+            {
+                int px = cx + x;
+                int py = cy + y;
+                if (px >= 0 && px < w && py >= 0 && py < h)
+                {
+                    image->ppx(px, py, color);
+                }
+            }
         }
     }
 }

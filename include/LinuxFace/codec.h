@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <functional>
 
-#include "LinuxFace/codecFactory.h"
 #include "LinuxFace/Image/image.h"
+#include "LinuxFace/codecFactory.h"
 
 namespace linuxface
 {
@@ -822,6 +822,146 @@ class YUYV422Decoder : public YUV422
     static YUV422Block YUYV422BlockOrder(const uint8_t* block)
     {
         return {.y0 = block[0], .u = block[1], .v = block[3], .y1 = block[2]};
+    }
+};
+class PPMDecoder : public Decoder
+{
+  public:
+    PPMDecoder() {}
+    ~PPMDecoder() override = default;
+
+    bool decode(const Image& srcImage, Image& outImage) override
+    {
+        // Parse header
+        size_t header_end = 0;
+        unsigned long width = 0, height = 0;
+        unsigned int maxval = 0;
+        if (!parseHeader(srcImage.data(), srcImage.size(), header_end, width, height, maxval))
+        {
+            common::log_error("PPMDecoder::decode - Failed to parse PPM header");
+            return false;
+        }
+        size_t pixel_data_size = width * height * 3;
+        if (srcImage.size() < header_end + pixel_data_size)
+        {
+            common::log_error("PPMDecoder::decode - Not enough data for pixel array");
+            return false;
+        }
+        outImage.resize(pixel_data_size);
+        memcpy(outImage.data(), srcImage.data() + header_end, pixel_data_size);
+        outImage.info.width = width;
+        outImage.info.height = height;
+        outImage.info.pixelSizeBytes = 3;
+        outImage.info.format = ImageFormat::RGB;
+        outImage.info.TJPixelFormat = TJPF_RGB;
+        outImage.info.is_valid = true;
+        return true;
+    }
+
+    bool decodeHeader(Image& srcImage, unsigned long& raw_needed_size) override
+    {
+        size_t header_end = 0;
+        unsigned long width = 0, height = 0;
+        unsigned int maxval = 0;
+        bool header_ok = parseHeader(srcImage.data(), srcImage.size(), header_end, width, height, maxval);
+        if (!header_ok)
+        {
+            common::log_error("PPMDecoder::decodeHeader - Failed to parse header");
+            common::log_error("PPMDecoder::decodeHeader - Raw size: %zu", srcImage.size());
+            return false;
+        }
+        size_t pixel_data_size = width * height * 3;
+        if (srcImage.size() < header_end + pixel_data_size)
+        {
+            common::log_error("PPMDecoder::decodeHeader - Invalid header. Not enough data for pixel array");
+            return false;
+        }
+        common::log_info("PPMDecoder::decodeHeader - Parsed header: width=%lu height=%lu maxval=%u header_end=%zu", width, height, maxval, header_end);
+        srcImage.info.width = width;
+        srcImage.info.height = height;
+        srcImage.info.pixelSizeBytes = 3;
+        srcImage.info.format = ImageFormat::PPM;
+        srcImage.info.TJPixelFormat = TJPF_RGB;
+        raw_needed_size = pixel_data_size;
+        return true;
+    }
+
+  private:
+    // Minimal P6 PPM header parser
+    bool parseHeader(const unsigned char* data, size_t size, size_t& header_end, unsigned long& width,
+                 unsigned long& height, unsigned int& maxval)
+    {
+        if (size < 3 || data[0] != 'P' || data[1] != '6')
+        {
+            common::log_error("PPMDecoder::parseHeader - Not a P6 PPM file");
+            return false;
+        }
+        size_t pos = 2;
+        // Helper to skip whitespace and comments
+        auto skipWhitespaceAndComments = [&](size_t& p) {
+            while (p < size) {
+                // Skip whitespace
+                while (p < size && (data[p] == ' ' || data[p] == '\n' || data[p] == '\r' || data[p] == '\t')) {
+                    p++;
+                }
+                // Skip comment lines
+                if (p < size && data[p] == '#') {
+                    while (p < size && data[p] != '\n') {
+                        p++;
+                    }
+                } else {
+                    break;
+                }
+            }
+        };
+        // Read width, height, maxval
+        auto readInt = [&](size_t& p, unsigned long& out) {
+            out = 0;
+            skipWhitespaceAndComments(p);
+            if (p >= size)
+            {
+                common::log_error("PPMDecoder::parseHeader - Unexpected end of file while reading int");
+                return false;
+            }
+            bool found_digit = false;
+            while (p < size && data[p] >= '0' && data[p] <= '9')
+            {
+                out = out * 10 + (data[p] - '0');
+                p++;
+                found_digit = true;
+            }
+            if (!found_digit) {
+                common::log_error("PPMDecoder::parseHeader - No digits found for int");
+                return false;
+            }
+            return true;
+        };
+        if (!readInt(pos, width) || width == 0)
+        {
+            common::log_error("PPMDecoder::parseHeader - Failed to read width or width is zero");
+            return false;
+        }
+        if (!readInt(pos, height) || height == 0)
+        {
+            common::log_error("PPMDecoder::parseHeader - Failed to read height or height is zero");
+            return false;
+        }
+        unsigned long maxv = 0;
+        if (!readInt(pos, maxv) || maxv == 0)
+        {
+            common::log_error("PPMDecoder::parseHeader - Failed to read maxval or maxval is zero");
+            return false;
+        }
+        maxval = static_cast<unsigned int>(maxv);
+        // Skip single whitespace after maxval and comments
+        skipWhitespaceAndComments(pos);
+        if (pos >= size) {
+            common::log_error("PPMDecoder::parseHeader - Header ends past file size");
+            return false;
+        }
+        header_end = pos;
+        common::log_info("PPMDecoder::parseHeader - width=%lu height=%lu maxval=%u header_end=%zu", width, height, maxval, header_end);
+        return true;
     }
 };
 } // namespace linuxface

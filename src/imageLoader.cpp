@@ -33,6 +33,11 @@ ImageFormat ImageFormatDetector::detectFormat(const std::vector<unsigned char>& 
         return ImageFormat::BMP;
     }
 
+    if (isPPM(data))
+    {
+        return ImageFormat::PPM;
+    }
+
     return ImageFormat::UNKNOWN;
 }
 
@@ -62,6 +67,10 @@ ImageFormat ImageFormatDetector::detectFormatFromPath(const std::string& path)
     else if (extension == ".bmp")
     {
         return ImageFormat::BMP;
+    }
+    else if (extension == ".ppm")
+    {
+        return ImageFormat::PPM;
     }
 
     return ImageFormat::UNKNOWN;
@@ -99,6 +108,13 @@ bool ImageFormatDetector::isBMP(const std::vector<unsigned char>& data)
 
     // BMP files start with "BM"
     return data[0] == 0x42 && data[1] == 0x4D;
+}
+
+bool ImageFormatDetector::isPPM(const std::vector<unsigned char>& data)
+{
+    // Minimal check for P6 PPM header
+    // Only return true if header matches exactly 'P6' and not just any 'P' file
+    return data.size() > 2 && data[0] == 'P' && data[1] == '6';
 }
 
 // ImageLoader Implementation
@@ -270,7 +286,9 @@ bool ImageLoader::extractMetadata()
     {
         case ImageFormat::JPEG:
             temp_decoder = std::make_unique<JPEGDecoder>();
-            metadata_.TJPixelFormat = TJPF_RGB; //TODO: could be RGBA
+            break;
+        case ImageFormat::PPM:
+            temp_decoder = std::make_unique<PPMDecoder>();
             break;
         case ImageFormat::PNG:
             // temp_decoder = std::make_unique<PngDecoder>();
@@ -291,6 +309,7 @@ bool ImageLoader::extractMetadata()
     if (temp_decoder->decodeHeader(temp_image, raw_needed_size))
     {
         metadata_ = temp_image.info; // Copy metadata from decoded header
+
         metadata_.is_valid = true;
         return true;
     }
@@ -305,12 +324,15 @@ bool ImageLoader::createDecoder()
         case ImageFormat::JPEG:
             decoder_ = std::make_unique<JPEGDecoder>();
             break;
-        // case ImageFormat::PNG:
-        //     decoder_ = std::make_unique<PngDecoder>();
-        //     break;
-        // case ImageFormat::BMP:
-        //     decoder_ = std::make_unique<BmpDecoder>();
-        //     break;
+        case ImageFormat::PPM:
+            decoder_ = std::make_unique<PPMDecoder>();
+            break;
+        case ImageFormat::PNG:
+            // decoder_ = std::make_unique<PngDecoder>();
+            // break;
+        case ImageFormat::BMP:
+            // decoder_ = std::make_unique<BmpDecoder>();
+            // break;
         default:
             common::log_error("Unsupported image format: %d", static_cast<int>(metadata_.format));
             return false;

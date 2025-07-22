@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.14.0)
 project(LinuxFace)
+
+option(BUILD_TESTING "Build the tests for the project" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -221,18 +223,27 @@ endif()
 
 
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
+list(REMOVE_ITEM SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
 # Temp add opencv
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
-# Define the main executable
-add_executable(LinuxFace
-    ${SRC_FILES}
+# Create a static library for main code
+add_library(linuxface STATIC ${SRC_FILES})
+
+# Set include directories for the library
+# (same as for main executable)
+target_include_directories(linuxface PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    "${LIBJPEG_TURBO_INSTALL_DIR}/include"
 )
 
-# Link dependencies
-target_link_libraries(LinuxFace
+# Link dependencies for the library
+target_link_libraries(linuxface
     dlib::dlib
     libjpeg
     turbojpeg
@@ -247,17 +258,44 @@ target_link_libraries(LinuxFace
     ${OpenCV_LIBS}
 )
 
+# Define the main executable
+add_executable(LinuxFace src/main.cpp)
+target_include_directories(LinuxFace PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    "${LIBJPEG_TURBO_INSTALL_DIR}/include"
+)
+target_link_libraries(LinuxFace PRIVATE linuxface)
+
 # Ensure include directory is set *after* it exists
 add_dependencies(LinuxFace libjpeg_include_dir)
 
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    "${LIBJPEG_TURBO_INSTALL_DIR}/include"
-    ${PROJECT_SOURCE_DIR}/include
-)
+# Tests executable links to the library
+if(BUILD_TESTING)
+    message(STATUS "Building with tests enabled")
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.17.0
+    )
+    FetchContent_MakeAvailable(googletest)
 
+    enable_testing()
+    include(GoogleTest)
 
-# Strip symbols in Release mode
-target_link_options(LinuxFace PRIVATE $<$<CONFIG:RELEASE>:-s>)
+    # Automatically find all test source files
+    file(GLOB_RECURSE TEST_SRC_FILES CONFIGURE_DEPENDS "tests/*.cpp")
+
+    add_executable(linuxface_tests ${TEST_SRC_FILES})
+
+    target_include_directories(linuxface_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        "${LIBJPEG_TURBO_INSTALL_DIR}/include"
+    )
+
+    # Only link the static library and gtest_main
+    target_link_libraries(linuxface_tests PRIVATE linuxface gtest_main)
+
+    gtest_discover_tests(linuxface_tests)
+endif()

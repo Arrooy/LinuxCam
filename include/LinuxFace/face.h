@@ -21,8 +21,8 @@ struct FaceLandmark
 
 struct FaceBoundingBox
 {
-    FaceBoundingBox() = default;
-    FaceBoundingBox(float left, float top, float right, float bottom) : rect(left, top, right, bottom) {}
+    FaceBoundingBox() : rect(0.0f, 0.0f, 0.0f, 0.0f), score(0.0f) {}
+    FaceBoundingBox(float left, float top, float right, float bottom) : rect(left, top, right, bottom), score(0.0f) {}
 
     // Location of the bounding box
     math_utils::Rect<float> rect;

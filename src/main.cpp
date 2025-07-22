@@ -1,19 +1,11 @@
-#include <dlib/dnn.h>
 #include <fcntl.h>
-// #include <onnxruntime_cxx_api.h>
 #include <unistd.h>
 
 #include <cstdio>
 #include <cstring>
 #include <string>
 
-#include "LinuxFace/JPEGManager.h"
 #include "LinuxFace/application.h"
-#include "LinuxFace/cameraManager.h"
-#include "LinuxFace/common.h"
-#include "LinuxFace/detectors.h"
-#include "LinuxFace/face.h"
-#include "LinuxFace/math_utils.h"
 #include "config.hpp"
 
 using namespace linuxface;
