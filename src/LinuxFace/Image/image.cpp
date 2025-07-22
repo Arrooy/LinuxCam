@@ -13,54 +13,119 @@
 using namespace linuxface;
 
 // Optimized pixel operations
-void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, unsigned char pixelSize,
-                                  unsigned char alpha) noexcept
+void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize,
+                                  unsigned char srcAlpha, unsigned char dstPixelSize, unsigned char dstAlpha) noexcept
 {
-    if (pixelSize == 4) {
-        unsigned char srcA = src[3];
-        if (srcA == 0) {
-            return;
+    // Helper lambdas for each conversion
+    auto copyRGB = [](unsigned char* d, const unsigned char* s)
+    {
+        d[0] = s[0];
+        d[1] = s[1];
+        d[2] = s[2];
+    };
+    auto copyRGBA = [](unsigned char* d, const unsigned char* s)
+    {
+        d[0] = s[0];
+        d[1] = s[1];
+        d[2] = s[2];
+        d[3] = s[3];
+    };
+    auto setRGBA = [](unsigned char* d, const unsigned char* s)
+    {
+        d[0] = s[0];
+        d[1] = s[1];
+        d[2] = s[2];
+        d[3] = 255;
+    };
+    auto setRGBGray = [](unsigned char* d, unsigned char gray)
+    {
+        d[0] = gray;
+        d[1] = gray;
+        d[2] = gray;
+    };
+    auto setRGBAGray = [](unsigned char* d, unsigned char gray)
+    {
+        d[0] = gray;
+        d[1] = gray;
+        d[2] = gray;
+        d[3] = 255;
+    };
+    auto blendRGB = [](unsigned char* d, const unsigned char* s, unsigned char alpha)
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            d[i] = static_cast<unsigned char>((alpha * s[i] + (255 - alpha) * d[i]) / 255);
         }
-        if (srcA == 255) {
-            for (unsigned char i = 0; i < 4; ++i) {
-                dst[i] = src[i];
+    };
+    auto blendGray = [](unsigned char* d, unsigned char s, unsigned char alpha)
+    { d[0] = static_cast<unsigned char>((alpha * s + (255 - alpha) * d[0]) / 255); };
+
+    // Fast path: direct copy for matching formats
+    if (srcPixelSize == dstPixelSize)
+    {
+        if (srcPixelSize == 4)
+        {
+            if (srcAlpha == 255)
+            {
+                copyRGBA(dst, src);
+                return;
             }
+            if (srcAlpha == 0)
+            {
+                return;
+            }
+            blendRGB(dst, src, srcAlpha);
+            dst[3] = 255;
             return;
         }
-        // Blend RGB using src alpha, set alpha to 255
-        for (unsigned char i = 0; i < 3; ++i) {
-            dst[i] = static_cast<unsigned char>((srcA * src[i] + (255 - srcA) * dst[i]) / 255);
+        if (srcPixelSize == 3)
+        {
+            copyRGB(dst, src);
+            return;
         }
-        dst[3] = 255;
+        if (srcPixelSize == 1)
+        {
+            blendGray(dst, src[0], srcAlpha);
+            return;
+        }
+    }
+    // RGBA -> RGB
+    if (srcPixelSize == 4 && dstPixelSize == 3)
+    {
+        if (srcAlpha == 255)
+        {
+            copyRGB(dst, src);
+            return;
+        }
+        if (srcAlpha == 0)
+        {
+            return;
+        }
+        blendRGB(dst, src, srcAlpha);
         return;
     }
-    if (alpha == 0) {
-        // Fully transparent: do nothing
+    // RGB -> RGBA
+    if (srcPixelSize == 3 && dstPixelSize == 4)
+    {
+        setRGBA(dst, src);
         return;
     }
-    if (alpha == 255) {
-        // Fully opaque: copy src to dst
-        for (unsigned char i = 0; i < pixelSize; ++i) {
-            dst[i] = src[i];
-            // TODO: remove for with direct code.
-        }
+    // Grayscale -> RGB
+    if (srcPixelSize == 1 && dstPixelSize == 3)
+    {
+        setRGBGray(dst, src[0]);
         return;
     }
-    // Blend for RGBA or RGB
-    if (pixelSize == 4) {
-        // RGBA: blend RGB, preserve alpha
-        for (unsigned char i = 0; i < 3; ++i) {
-            dst[i] = static_cast<unsigned char>((alpha * src[i] + (255 - alpha) * dst[i]) / 255);
-        }
-        dst[3] = 255; // Result is always opaque after blending
-    } else if (pixelSize == 3) {
-        // RGB: blend
-        for (unsigned char i = 0; i < 3; ++i) {
-            dst[i] = static_cast<unsigned char>((alpha * src[i] + (255 - alpha) * dst[i]) / 255);
-        }
-    } else {
-        // Grayscale or other: blend first channel
-        dst[0] = static_cast<unsigned char>((alpha * src[0] + (255 - alpha) * dst[0]) / 255);
+    // Grayscale -> RGBA
+    if (srcPixelSize == 1 && dstPixelSize == 4)
+    {
+        setRGBAGray(dst, src[0]);
+        return;
+    }
+    // Fallback: copy as much as possible
+    for (unsigned char i = 0; i < std::min(srcPixelSize, dstPixelSize); ++i)
+    {
+        dst[i] = src[i];
     }
 }
 
@@ -109,9 +174,9 @@ Image::Image(Pixel color, size_t width, size_t height)
     info.pixelSizeBytes = 3;
     info.width = width;
     info.height = height;
-    
 
-    for (int i = 0; i < size_; i+=3)
+
+    for (int i = 0; i < size_; i += 3)
     {
         this->pidx(i, color.r, color.g, color.b, color.a);
     }
@@ -126,7 +191,8 @@ Image::Image(Image&& other) noexcept : info(other.info), data_(std::move(other.d
 
 Image& Image::operator=(Image&& other) noexcept
 {
-    if (this == &other) {
+    if (this == &other)
+    {
         // Self-assignment: clear the object to a valid empty state
         data_.reset();
         size_ = 0;
@@ -1291,25 +1357,40 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
 
 
             // Handle different pixel formats
-            if (pixelSize == 4) // RGBA
+            if (src.info.pixelSizeBytes == 4 && info.pixelSizeBytes == 4) // RGBA -> RGBA
             {
                 unsigned char srcAlpha = srcData[srcIdx + 3];
-                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, pixelSize, srcAlpha);
+                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 4, srcAlpha, 4, dstData[dstIdx + 3]);
             }
-            else if (pixelSize == 3) // RGB
+            else if (src.info.pixelSizeBytes == 4 && info.pixelSizeBytes == 3) // RGBA -> RGB
             {
-                PixelOperations::setPixelRGB(dstData, dstIdx, srcData[srcIdx], srcData[srcIdx + 1],
-                                             srcData[srcIdx + 2]);
+                unsigned char srcAlpha = srcData[srcIdx + 3];
+                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 4, srcAlpha, 3, 255);
             }
-            else if (pixelSize == 1) // Grayscale
+            else if (src.info.pixelSizeBytes == 3 && info.pixelSizeBytes == 4) // RGB -> RGBA
             {
-                dstData[dstIdx] = srcData[srcIdx];
+                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 3, 255, 4, dstData[dstIdx + 3]);
+            }
+            else if (src.info.pixelSizeBytes == 3 && info.pixelSizeBytes == 3) // RGB -> RGB
+            {
+                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 3, 255, 3, 255);
+            }
+            else if (src.info.pixelSizeBytes == 1 && info.pixelSizeBytes == 4) // Grayscale -> RGBA
+            {
+                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 1, 255, 4, dstData[dstIdx + 3]);
+            }
+            else if (src.info.pixelSizeBytes == 1 && info.pixelSizeBytes == 3) // Grayscale -> RGB
+            {
+                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 1, 255, 3, 255);
+            }
+            else if (src.info.pixelSizeBytes == 1 && info.pixelSizeBytes == 1) // Grayscale -> Grayscale
+            {
+                PixelOperations::blendPixels(dstData + dstIdx, srcData + srcIdx, 1, 255, 1, 255);
             }
             else
             {
                 common::log_error("Image::paste - Unsupported pixel format");
-                // Fallback to memcpy for other formats
-                std::memcpy(dstData + dstIdx, srcData + srcIdx, pixelSize);
+                std::memcpy(dstData + dstIdx, srcData + srcIdx, std::min(src.info.pixelSizeBytes, info.pixelSizeBytes));
             }
         }
     }
@@ -1422,12 +1503,16 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
         bool fullyOpaque = (info.pixelSizeBytes != 4) || other.isFullyOpaque();
         bool fullyInBounds =
             otherLeft >= baseLeft && otherTop >= baseTop && otherRight <= baseRight && otherBottom <= baseBottom;
-        if (fullyInBounds) {
+        if (fullyInBounds)
+        {
             long dstX = otherLeft - baseLeft;
             long dstY = otherTop - baseTop;
-            if (fullyOpaque) {
+            if (fullyOpaque)
+            {
                 copyPixelsOptimized(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
-            } else {
+            }
+            else
+            {
                 // Only blend the region corresponding to the pasted image
                 copyPixelsWithBlending(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
             }
@@ -1609,6 +1694,6 @@ void Image::alphaBlend(const Image& src, const Image& mask)
     for (int i = 0; i < npixels; ++i)
     {
         // Blend each pixel using the mask
-        PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i]);
+        PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i], 3, 255);
     }
 }

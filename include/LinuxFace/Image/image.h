@@ -230,8 +230,8 @@ class PixelOperations
     }
 
     // Alpha blending optimized for different pixel formats
-    static void
-    blendPixels(unsigned char* dst, const unsigned char* src, unsigned char pixelSize, unsigned char alpha) noexcept;
+    static void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize,
+                            unsigned char srcAlpha, unsigned char dstPixelSize, unsigned char dstAlpha = 255) noexcept;
 };
 
 // Image class with proper resource management
@@ -306,13 +306,17 @@ class Image
     [[nodiscard]] std::pair<unsigned long, unsigned long> getPosition() const noexcept { return {info.x, info.y}; }
 
     // Better scaling interface
-    [[nodiscard]] std::unique_ptr<Image> scale(double factor, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
-    [[nodiscard]] std::unique_ptr<Image> scale(unsigned long newWidth, unsigned long newHeight, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
-    [[nodiscard]] std::unique_ptr<Image> scaleTo(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
+    [[nodiscard]] std::unique_ptr<Image>
+    scale(double factor, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
+    [[nodiscard]] std::unique_ptr<Image> scale(unsigned long newWidth, unsigned long newHeight,
+                                               ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
+    [[nodiscard]] std::unique_ptr<Image>
+    scaleTo(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX) const;
 
     // In-place scaling methods
     void scaleInPlace(double factor, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX);
-    void scaleInPlace(unsigned long newWidth, unsigned long newHeight, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX);
+    void scaleInPlace(unsigned long newWidth, unsigned long newHeight,
+                      ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX);
     void scaleToInPlace(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm = ScalingAlgorithm::FAST_BOX);
     [[nodiscard]] std::unique_ptr<Image> deepCopy() const;
 
@@ -383,8 +387,8 @@ class Image
     Image& pasteImpl(const Image& other, long x, long y, bool expandCanvas);
 
     void scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
-                      unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth, unsigned long dstHeight,
-                      ScalingAlgorithm algorithm) const;
+                          unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth,
+                          unsigned long dstHeight, ScalingAlgorithm algorithm) const;
 
     // Internal helper for affine warp (supports RGB and single-channel mask)
     std::unique_ptr<Image>
