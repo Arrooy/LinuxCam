@@ -9,11 +9,15 @@
 #include "LinuxFace/cameraManager.h"
 #include "LinuxFace/detectors.h"
 #include "LinuxFace/imageLoader.h"
+
+#include "LinuxFace/imageLoader.h"
 #include "LinuxFace/imageRenderGL.h"
 #include "LinuxFace/onnx/MODNet.h"
 #include "LinuxFace/onnx/arcfaceRecognizer.h"
 #include "LinuxFace/onnx/fsanet.h"
 #include "LinuxFace/onnx/inswapper.h"
+#include "LinuxFace/onnx/mediaPipe_FaceLandmarks.h"
+#include "LinuxFace/onnx/pfld.h"
 #include "LinuxFace/onnx/rvm.h"
 #include "LinuxFace/onnx/scrfd.h"
 #include "LinuxFace/onnx/swapPipeline.h"
@@ -51,6 +55,7 @@ class Application
     Profiler& profiler_;
 
     std::unique_ptr<FaceDetector> faceDetector_;
+    std::unique_ptr<ShapeDetector> dlibShapeDetector_;
     std::unique_ptr<FsanetDetector> fsanetDetectorVar_;
     std::unique_ptr<FsanetDetector> fsanetDetectorConv_;
     std::shared_ptr<SCRFDetector> scrfdDetector_;
@@ -59,6 +64,9 @@ class Application
     std::shared_ptr<ArcfaceRecognizer> arcfaceRecognizer_;
     std::shared_ptr<InSwapper> inswapper_;
     std::unique_ptr<SwapPipeline> swapPipeline_;
+
+    std::shared_ptr<MediaPipeFaceLandmarks> mediaPipeLandmarks_;
+    std::shared_ptr<PFLDDetector> pfldDetector_;
 
     std::shared_ptr<MediaManager> mediaManager_;
 
@@ -70,6 +78,7 @@ class Application
     bool update();
     void process(std::unique_ptr<Image>& image);
     void render();
+    void captureAndSaveWebcamImageWithTimestamp();
 };
 
 } // namespace linuxface

@@ -16,14 +16,23 @@ struct Anchor
     double cy;
     int stride;
 };
+template<typename T=long>
 struct Point
 {
-    Point(long x1, long y1) : x(x1), y(y1) {}
+    Point(T x1, T y1) : x(x1), y(y1) {}
     Point() = default;
-    long x;
-    long y;
+    T x;
+    T y;
 };
 
+struct Point3D
+{
+    Point3D(double x1, double y1, double z1 = 0.0) : x(x1), y(y1), z(z1) {}
+    Point3D() = default;
+    double x;
+    double y;
+    double z;
+};
 struct StridePoint
 {
     StridePoint(double x1, double y1, double s) : cx(x1), cy(y1), stride(s) {}
@@ -38,7 +47,7 @@ struct Rect
     Rect() = default;
     Rect(T left, T top, T right, T bottom) : l(left), t(top), r(right), b(bottom) {}
 
-    Rect(Point leftTopCorner, T w, T h)
+    Rect(Point<T> leftTopCorner, T w, T h)
         : l(static_cast<T>(leftTopCorner.x)),
           t(static_cast<T>(leftTopCorner.y)),
           r(static_cast<T>(leftTopCorner.x + w)),
@@ -46,7 +55,7 @@ struct Rect
     {
     }
 
-    Rect(Point leftTopCorner, Point rightBottomCorner)
+    Rect(Point<T> leftTopCorner, Point<T> rightBottomCorner)
         : l(static_cast<T>(leftTopCorner.x)),
           t(static_cast<T>(leftTopCorner.y)),
           r(static_cast<T>(rightBottomCorner.x)),
@@ -63,7 +72,7 @@ struct Rect
 
     bool contains(T x, T y) const { return !(x < l || x > r || y < t || y > b); }
 
-    bool contains(const Point& p) const { return contains(static_cast<T>(p.x), static_cast<T>(p.y)); }
+    bool contains(const Point<T>& p) const { return contains(static_cast<T>(p.x), static_cast<T>(p.y)); }
 
     // Check if this rectangle is within bounds of maximum dimensions by given factor
     bool isWithinBounds(T maxWidth, T maxHeight, float scaleFactor = 1.2f) const
@@ -72,6 +81,14 @@ struct Rect
         const T allowedMaxHeight = static_cast<T>(maxHeight * scaleFactor);
 
         return (width() <= allowedMaxWidth) && (height() <= allowedMaxHeight) && (width() > 0) && (height() > 0);
+    }
+
+    void addPadding(T left, T top, T right, T bottom)
+    {
+        l -= left;
+        t -= top;
+        r += right;
+        b += bottom;
     }
 
     T l;
@@ -83,9 +100,9 @@ struct Rect
 
 // function for line generation
 template <typename T>
-std::vector<Point> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
+std::vector<Point<long>> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
 {
-    std::vector<Point> result;
+    std::vector<Point<long>> result;
 
     // calculate dx & dy
     T dx = x2 - x1;
@@ -103,8 +120,7 @@ std::vector<Point> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
     double y = static_cast<double>(y1);
     for (int i = 0; i <= steps; i++)
     {
-        const Point p = Point(lround(x), lround(y));
-        result.emplace_back(p);
+        result.emplace_back(Point(lround(x), lround(y)));
         x += xInc; // increment in x at each step
         y += yInc; // increment in y at each step
     }
@@ -336,6 +352,22 @@ inline bool invert_affine(const double* M, double invM[6])
     invM[4] = a / det;
     invM[5] = (d * c - a * f) / det;
     return true;
+}
+
+template <typename T>
+math_utils::Point<T> rotate_point(const math_utils::Point<T>& pt,
+                                       const math_utils::Point<T>& origin,
+                                       double angleRad)
+{
+    T dx = pt.x - origin.x;
+    T dy = pt.y - origin.y;
+    double cosA = std::cos(angleRad);
+    double sinA = std::sin(angleRad);
+
+    return {
+        cosA * dx - sinA * dy + origin.x,
+        sinA * dx + cosA * dy + origin.y
+    };
 }
 
 } // namespace math_utils

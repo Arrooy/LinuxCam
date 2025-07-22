@@ -1,7 +1,9 @@
 #ifndef IMAGE_UTILS_H
 #define IMAGE_UTILS_H
 
+#include <array>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "LinuxFace/Image/image.h"
@@ -12,31 +14,109 @@ namespace linuxface
 namespace image_utils
 {
 
-// Align face using 5 landmarks and a template (returns nullptr if not possible)
-inline std::unique_ptr<Image> align_face_affine(const Image& input_img, const std::vector<math_utils::Point>& landmarks,
-                                                const double template_points[5][2], int target_size)
+const double template_112[5][2] = {
+    {0.34191607, 0.46157411},
+    {0.65653393, 0.45983393},
+    {0.50022500, 0.64050536},
+    {0.37097589, 0.82469196},
+    {0.63151696, 0.82325089}
+};
+
+const double template_128[5][2] = {
+    {0.36167656, 0.40387734},
+    {0.63696719, 0.40235469},
+    {0.50019687, 0.56044219},
+    {0.38710391, 0.72160547},
+    {0.61507734, 0.72034453}
+};
+
+const double template_192_old[5][2] = {
+    {0.40625,  0.390625},
+    {0.59375,  0.390625},
+    {0.5,      0.46875 },
+    {0.442708, 0.598958},
+    {0.557292, 0.598958}
+};
+const double template_192[5][2] = {
+    {0.35546875, 0.396484375},
+    {0.64453125, 0.396484375},
+    {0.5,        0.482421875},
+    {0.37109375, 0.611328125},
+    {0.62890625, 0.611328125}
+};
+
+// Alternative template with slightly different proportions
+// that may work better with certain face shapes
+const double template_192_alt[5][2] = {
+    {0.36328125, 0.40234375},
+    {0.63671875, 0.40234375},
+    {0.5,        0.48828125},
+    {0.3828125,  0.61328125},
+    {0.6171875,  0.61328125}
+};
+
+const double template_512[5][2] = {
+    {0.37691676, 0.46864664},
+    {0.62285697, 0.46912813},
+    {0.50123859, 0.61331904},
+    {0.39308822, 0.72541100},
+    {0.61150205, 0.72490465}
+};
+
+// Helper function to calculate destination index based on layout
+template<ImageLayout layout>
+constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned char ch, 
+                                   unsigned long width, unsigned long height, 
+                                   unsigned char channels)
+{
+    if constexpr (layout == ImageLayout::HWC)
+    {
+        return (y * width + x) * channels + ch;
+    }
+    else // CHW
+    {
+        return ch * (height * width) + y * width + x;
+    }
+}
+
+
+// Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
+// Now returns both the aligned image and the affine matrix used
+inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
+affine_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
+                      const double template_points[5][2], int target_size, bool align_to_template = true)
 {
     if (landmarks.size() != 5)
     {
-        return nullptr;
+        return std::make_pair(nullptr, std::array<double, 6>{1.0, 0.0, 0.0, 0.0, 1.0, 0.0});
     }
-    std::vector<math_utils::Point> template_pts;
-    for (int i = 0; i < 5; ++i)
-    {
-        template_pts.emplace_back(static_cast<long>(template_points[i][0] * target_size),
-                                  static_cast<long>(template_points[i][1] * target_size));
-    }
+
     double src[10], dst[10];
     for (int i = 0; i < 5; ++i)
     {
-        src[2 * i] = static_cast<double>(landmarks[i].x);
-        src[2 * i + 1] = static_cast<double>(landmarks[i].y);
-        dst[2 * i] = static_cast<double>(template_pts[i].x);
-        dst[2 * i + 1] = static_cast<double>(template_pts[i].y);
+        if (align_to_template)
+        {
+            src[2 * i] = static_cast<double>(landmarks[i].x);
+            src[2 * i + 1] = static_cast<double>(landmarks[i].y);
+            dst[2 * i] = static_cast<double>(template_points[i][0] * target_size);
+            dst[2 * i + 1] = static_cast<double>(template_points[i][1] * target_size);
+        }
+        else
+        {
+            src[2 * i] = static_cast<double>(template_points[i][0] * target_size);
+            src[2 * i + 1] = static_cast<double>(template_points[i][1] * target_size);
+            dst[2 * i] = static_cast<double>(landmarks[i].x);
+            dst[2 * i + 1] = static_cast<double>(landmarks[i].y);
+        }
     }
     double M[6] = {0};
     math_utils::estimate_affine_2d(src, dst, 5, M);
-    return input_img.affineWarpBilinear(M, target_size, target_size);
+    std::array<double, 6> arrM;
+    for (int i = 0; i < 6; ++i)
+    {
+        arrM[i] = M[i];
+    }
+    return {input_img.affineWarpBilinear(M, target_size, target_size), arrM};
 }
 
 /**
@@ -538,8 +618,9 @@ struct ImageView
 };
 
 
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE>
-void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
+void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
@@ -553,7 +634,7 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
     const double xRatio = static_cast<double>(src.width) / dst.width;
     const double yRatio = static_cast<double>(src.height) / dst.height;
 
-    ImageStats<T> stats;
+    ImageStats<K> stats;
     const bool needsStats = (normalizationType != NormalizationType::NONE);
 
     // Process in blocks for better cache locality
@@ -584,8 +665,6 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
                     const double fracX = srcX - x1;
                     const double fracY = srcY - y1;
 
-                    const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes;
-
                     // Bilinear interpolation for each channel
                     for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
                     {
@@ -601,29 +680,32 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
                         const unsigned long idx3 = (clampedY2 * src.width + clampedX1) * src.pixelBytes + ch;
                         const unsigned long idx4 = (clampedY2 * src.width + clampedX2) * src.pixelBytes + ch;
 
-                        const double p1 = src.data[idx1];
-                        const double p2 = src.data[idx2];
-                        const double p3 = src.data[idx3];
-                        const double p4 = src.data[idx4];
+                        const double p1 = static_cast<double>(src.data[idx1]);
+                        const double p2 = static_cast<double>(src.data[idx2]);
+                        const double p3 = static_cast<double>(src.data[idx3]);
+                        const double p4 = static_cast<double>(src.data[idx4]);
 
                         // Optimized bilinear interpolation
                         const double top = p1 + fracX * (p2 - p1);
                         const double bottom = p3 + fracX * (p4 - p3);
                         const double result = top + fracY * (bottom - top);
 
-                        T scaledValue;
-                        if constexpr (std::is_floating_point_v<T>)
+                        K scaledValue;
+                        if constexpr (std::is_floating_point_v<K>)
                         {
-                            scaledValue = static_cast<T>(result);
+                            scaledValue = static_cast<K>(result);
                         }
                         else
                         {
                             // Use traits for proper clamping range
-                            const double minVal = static_cast<double>(NormalizationTraits<T>::min_value());
-                            const double maxVal = static_cast<double>(NormalizationTraits<T>::max_value());
-                            scaledValue = static_cast<T>(std::clamp(result + 0.5, minVal, maxVal));
+                            const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                            const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                            scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                         }
-                        dst.data[dstIdx + ch] = scaledValue;
+                        // Calculate destination index based on output layout
+                        const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+
+                        dst.data[dstIdx] = scaledValue;
 
                         // Collect statistics if needed
                         if (needsStats)
@@ -640,7 +722,7 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
     if constexpr (normalizationType != NormalizationType::NONE)
     {
         stats.finalize();
-        Normalizer<T, normalizationType> normalizer;
+        Normalizer<K, normalizationType> normalizer;
 
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
@@ -651,8 +733,9 @@ void bilinearScaling(const ImageView<T>& src, ImageView<T>& dst)
 }
 
 
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE>
-void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
+void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
@@ -664,7 +747,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
     const double xScale = static_cast<double>(src.width) / dst.width;
     const double yScale = static_cast<double>(src.height) / dst.height;
 
-    ImageStats<T> stats;
+    ImageStats<K> stats;
     const bool needsStats = (normalizationType != NormalizationType::NONE);
 
     for (unsigned long y = 0; y < dst.height; y++)
@@ -688,8 +771,6 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
             const int clampedMinY = std::max(minY, 0);
             const int clampedMaxX = std::min(maxX, static_cast<int>(src.width));
             const int clampedMaxY = std::min(maxY, static_cast<int>(src.height));
-
-            const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes;
 
             // Average pixels in the source region
             for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
@@ -727,19 +808,21 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
 
                 // Calculate final pixel value
                 double result = (totalWeight > 0.0) ? (sum / totalWeight) : 0.0;
-                T scaledValue;
-                if constexpr (std::is_floating_point_v<T>)
+                K scaledValue;
+                if constexpr (std::is_floating_point_v<K>)
                 {
-                    scaledValue = static_cast<T>(result);
+                    scaledValue = static_cast<K>(result);
                 }
                 else
                 {
                     // Use traits for proper clamping range
-                    const double minVal = static_cast<double>(NormalizationTraits<T>::min_value());
-                    const double maxVal = static_cast<double>(NormalizationTraits<T>::max_value());
-                    scaledValue = static_cast<T>(std::clamp(result + 0.5, minVal, maxVal));
+                    const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                    const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                 }
-                dst.data[dstIdx + ch] = scaledValue;
+                // Calculate destination index based on output layout
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                dst.data[dstIdx] = scaledValue;
 
                 // Collect statistics if needed
                 if (needsStats)
@@ -753,7 +836,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<T>& dst)
     if constexpr (normalizationType != NormalizationType::NONE)
     {
         stats.finalize();
-        Normalizer<T, normalizationType> normalizer;
+        Normalizer<K, normalizationType> normalizer;
 
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
@@ -787,9 +870,11 @@ class LanczosKernel
     }
 };
 
+
 // Optimized separable Lanczos Scaling
-template <typename T, NormalizationType normalizationType = NormalizationType::NONE>
-void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
+void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
@@ -926,19 +1011,20 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
                 }
 
                 // Convert to output type with proper clamping
-                T scaledValue;
-                if constexpr (std::is_floating_point_v<T>)
+                K scaledValue;
+                if constexpr (std::is_floating_point_v<K>)
                 {
-                    scaledValue = static_cast<T>(sum);
+                    scaledValue = static_cast<K>(sum);
                 }
                 else
                 {
-                    const double minVal = static_cast<double>(std::numeric_limits<T>::min());
-                    const double maxVal = static_cast<double>(std::numeric_limits<T>::max());
-                    scaledValue = static_cast<T>(std::clamp(sum + 0.5, minVal, maxVal));
+                    const double minVal = static_cast<double>(std::numeric_limits<K>::min());
+                    const double maxVal = static_cast<double>(std::numeric_limits<K>::max());
+                    scaledValue = static_cast<K>(std::clamp(sum + 0.5, minVal, maxVal));
                 }
 
-                const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes + ch;
+                // Calculate destination index based on output layout
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
                 dst.data[dstIdx] = scaledValue;
             }
         }
@@ -948,8 +1034,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
     if constexpr (normalizationType == NormalizationType::MINMAX)
     {
         const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
-        T minVal = dst.data[0];
-        T maxVal = dst.data[0];
+        K minVal = dst.data[0];
+        K maxVal = dst.data[0];
 
         for (size_t i = 1; i < totalPixels; i++)
         {
@@ -959,10 +1045,10 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
 
         if (maxVal > minVal)
         {
-            const double scale = static_cast<double>(std::numeric_limits<T>::max()) / (maxVal - minVal);
+            const double scale = static_cast<double>(std::numeric_limits<K>::max()) / (maxVal - minVal);
             for (size_t i = 0; i < totalPixels; i++)
             {
-                dst.data[i] = static_cast<T>((dst.data[i] - minVal) * scale);
+                dst.data[i] = static_cast<K>((dst.data[i] - minVal) * scale);
             }
         }
     }
@@ -970,7 +1056,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
     {
         common::log_warn("NON TESTED: Applying zero-centering normalization");
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
-        ImageStats<T> stats;
+        ImageStats<K> stats;
 
         // Calculate mean
         for (size_t i = 0; i < totalPixels; i++)
@@ -980,7 +1066,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
         stats.finalize();
 
         // Apply zero-centering
-        Normalizer<T, NormalizationType::ZERO_CENTER> normalizer;
+        Normalizer<K, NormalizationType::ZERO_CENTER> normalizer;
         for (size_t i = 0; i < totalPixels; i++)
         {
             dst.data[i] = normalizer(dst.data[i], stats);
@@ -989,8 +1075,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<T>& dst)
 }
 
 // Fast box filter for extreme Scaling (when speed is critical)
-template <typename T>
-void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
+template <typename T,typename K, ImageLayout outputLayout = ImageLayout::HWC>
+void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 {
     const double xScale = static_cast<double>(src.width) / dst.width;
     const double yScale = static_cast<double>(src.height) / dst.height;
@@ -1024,9 +1110,9 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
                             sum += static_cast<int>(src.data[srcIdx]);
                         }
                     }
-
-                    const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes + ch;
-                    dst.data[dstIdx] = static_cast<T>(sum / totalSamples);
+                    // Calculate destination index based on output layout
+                    const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                    dst.data[dstIdx] = static_cast<K>(sum / totalSamples);
                 }
             }
         }
@@ -1063,15 +1149,261 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<T>& dst)
                         }
                     }
 
-                    const unsigned long dstIdx = (y * dst.width + x) * src.pixelBytes + ch;
-                    dst.data[dstIdx] = static_cast<T>(count > 0 ? sum / count : 0);
+                    // Calculate destination index based on output layout
+                    const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                    dst.data[dstIdx] = static_cast<K>(count > 0 ? sum / count : 0);
                 }
             }
         }
     }
 }
 
+// Bicubic kernel helper
+inline float cubicHermite(float A, float B, float C, float D, float t) {
+    float a = -A / 2.0f + (3.0f * B) / 2.0f - (3.0f * C) / 2.0f + D / 2.0f;
+    float b = A - (5.0f * B) / 2.0f + 2.0f * C - D / 2.0f;
+    float c = -A / 2.0f + C / 2.0f;
+    float d = B;
+    return a * t * t * t + b * t * t + c * t + d;
+}
 
+// Bicubic scaling for RGB/Grayscale images
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
+ImageLayout outputLayout = ImageLayout::HWC>
+void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst) {
+    // Handle edge cases
+    if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
+    {
+        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height, dst.width, dst.height);
+        return;
+    }
+
+    const double xRatio = static_cast<double>(src.width) / dst.width;
+    const double yRatio = static_cast<double>(src.height) / dst.height;
+
+    ImageStats<K> stats;
+    const bool needsStats = (normalizationType != NormalizationType::NONE);
+
+    for (unsigned long y = 0; y < dst.height; ++y)
+    {
+        for (unsigned long x = 0; x < dst.width; ++x)
+        {
+            const double srcX = (x + 0.5) * xRatio - 0.5;
+            const double srcY = (y + 0.5) * yRatio - 0.5;
+
+            const int xInt = static_cast<int>(std::floor(srcX));
+            const int yInt = static_cast<int>(std::floor(srcY));
+            const double fracX = srcX - xInt;
+            const double fracY = srcY - yInt;
+
+            for (unsigned char ch = 0; ch < src.pixelBytes; ++ch)
+            {
+                double col[4];
+                for (int m = -1; m <= 2; ++m)
+                {
+                    double row[4];
+                    for (int n = -1; n <= 2; ++n)
+                    {
+                        int px = std::clamp(xInt + n, 0, static_cast<int>(src.width) - 1);
+                        int py = std::clamp(yInt + m, 0, static_cast<int>(src.height) - 1);
+                        row[n + 1] = static_cast<double>(src.data[(py * src.width + px) * src.pixelBytes + ch]);
+                    }
+                    col[m + 1] = cubicHermite(row[0], row[1], row[2], row[3], fracX);
+                }
+                double value = cubicHermite(col[0], col[1], col[2], col[3], fracY);
+
+                K scaledValue;
+                if constexpr (std::is_floating_point_v<K>)
+                {
+                    scaledValue = static_cast<K>(value);
+                }
+                else
+                {
+                    const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                    const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    scaledValue = static_cast<K>(std::clamp(value + 0.5, minVal, maxVal));
+                }
+                // Calculate destination index based on output layout
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                dst.data[dstIdx] = scaledValue;
+
+                if (needsStats)
+                {
+                    stats.update(scaledValue);
+                }
+            }
+        }
+    }
+
+    // Apply normalization if needed
+    if constexpr (normalizationType != NormalizationType::NONE)
+    {
+        stats.finalize();
+        Normalizer<K, normalizationType> normalizer;
+        const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
+        for (size_t i = 0; i < totalPixels; i++)
+        {
+            dst.data[i] = normalizer(dst.data[i], stats);
+        }
+    }
+}
+
+// Transform a vector of math_utils::Point using a 2x3 affine matrix (row-major)
+inline std::vector<math_utils::Point<>>
+transform_points_affine(const std::vector<math_utils::Point<>>& points, const double M[6])
+{
+    std::vector<math_utils::Point<>> result;
+    result.reserve(points.size());
+    for (const auto& pt : points)
+    {
+        double x = static_cast<double>(pt.x);
+        double y = static_cast<double>(pt.y);
+        double x_new = M[0] * x + M[1] * y + M[2];
+        double y_new = M[3] * x + M[4] * y + M[5];
+        result.emplace_back(static_cast<long>(std::round(x_new)), static_cast<long>(std::round(y_new)));
+    }
+    return result;
+}
+
+// Transform a vector of (x, y) pairs using a 2x3 affine matrix (row-major)
+inline std::vector<std::pair<double, double>>
+transform_points_affine(const std::vector<std::pair<double, double>>& points, const double M[6])
+{
+    std::vector<std::pair<double, double>> result;
+    result.reserve(points.size());
+    for (size_t i = 0; i < points.size(); ++i)
+    {
+        const auto& pt = points[i];
+        double x = pt.first;
+        double y = pt.second;
+        double x_new = M[0] * x + M[1] * y + M[2];
+        double y_new = M[3] * x + M[4] * y + M[5];
+        result.emplace_back(x_new, y_new);
+    }
+    return result;
+}
+
+
+inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D& center, float radius, Pixel color)
+{
+    // Bresenham's circle algorithm
+    int x = static_cast<int>(radius);
+    int y = 0;
+    int err = 0;
+
+    while (x >= y)
+    {
+        // Paint the 8 octants of the circle
+        image->ppx(center.x + x, center.y + y, color);
+        image->ppx(center.x + y, center.y + x, color);
+        image->ppx(center.x - y, center.y + x, color);
+        image->ppx(center.x - x, center.y + y, color);
+        image->ppx(center.x - x, center.y - y, color);
+        image->ppx(center.x - y, center.y - x, color);
+        image->ppx(center.x + y, center.y - x, color);
+        image->ppx(center.x + x, center.y - y, color);
+
+        if (err <= 0)
+        {
+            err += 2 * ++y + 1;
+        }
+        if (err > 0)
+        {
+            err -= 2 * --x + 1;
+        }
+    }
+}
+
+
+// Helper: Convert HWC float* (height, width, channels) to CHW float* (channels, height, width)
+// src: input float array in HWC order, shape [height, width, channels]
+// dst: output float array in CHW order, shape [channels, height, width]
+// width, height: image dimensions
+// channels: number of channels (usually 3 for RGB)
+template <typename T>
+void hwc_to_chw(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
+{
+    for (unsigned long h = 0; h < height; ++h)
+    {
+        for (unsigned long w = 0; w < width; ++w)
+        {
+            for (unsigned long c = 0; c < channels; ++c)
+            {
+                // HWC index: (h * width + w) * channels + c
+                // CHW index: c * (height * width) + h * width + w
+                dst[c * (height * width) + h * width + w] = src[(h * width + w) * channels + c];
+            }
+        }
+    }
+}
+template <typename T>
+void chw_to_hwc(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
+{
+    for (unsigned long h = 0; h < height; ++h)
+    {
+        for (unsigned long w = 0; w < width; ++w)
+        {
+            for (unsigned long c = 0; c < channels; ++c)
+            {
+                // CHW index: c * (height * width) + h * width + w
+                // HWC index: (h * width + w) * channels + c
+                dst[(h * width + w) * channels + c] = src[c * (height * width) + h * width + w];
+            }
+        }
+    }
+}
+
+template <NormalizationType normalizationType = NormalizationType::NONE>
+std::unique_ptr<Image> convertToRawImage(float * src, unsigned long width, unsigned long height)
+{
+    if (src == nullptr || width == 0 || height == 0)
+    {
+        common::log_error("Invalid parameters for converting to raw image");
+        return nullptr;
+    }
+
+    // Convert CHW (channels, height, width) to HWC (height, width, channels)
+    size_t dataSize = width * height * 3; // Assuming RGB format
+    std::vector<float> hwc_data(dataSize);
+    chw_to_hwc(src, hwc_data.data(), width, height, 3);
+
+    auto image = std::make_unique<Image>(dataSize);
+    image->info.width = width;
+    image->info.height = height;
+    image->info.pixelSizeBytes = 3;
+    image->info.format = ImageFormat::RGB;
+    image->info.filename = "raw_image_from_float";
+    image->info.x = 0;
+    image->info.y = 0;
+
+    if constexpr (normalizationType == NormalizationType::MINMAX)
+    {
+        // Assume input is in [0,1], scale to [0,255] for visualization
+        for (size_t i = 0; i < dataSize; ++i)
+        {
+            image->data()[i] = static_cast<unsigned char>(std::clamp(hwc_data[i] * 255.0f, 0.0f, 255.0f));
+        }
+    }
+    else if constexpr (normalizationType == NormalizationType::ZERO_CENTER)
+    {
+        // Assume input is zero-centered in [-1,1], scale to [0,255] for visualization
+        for (size_t i = 0; i < dataSize; ++i)
+        {
+            float val = (hwc_data[i] + 1.0f) * 0.5f * 255.0f; // Map [-1,1] to [0,255]
+            image->data()[i] = static_cast<unsigned char>(std::clamp(val, 0.0f, 255.0f));
+        }
+    }
+    else
+    {
+        // Fill the image data directly
+        for (size_t i = 0; i < dataSize; ++i)
+        {
+            image->data()[i] = static_cast<unsigned char>(hwc_data[i]);
+        }
+    }
+
+    return image;
+}
 } // namespace image_utils
 } // namespace linuxface
 

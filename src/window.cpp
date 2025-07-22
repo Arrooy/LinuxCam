@@ -1,5 +1,5 @@
-#include "LinuxFace/window.h"
 
+#include "LinuxFace/window.h"
 #include <iostream>
 
 #include "LinuxFace/common.h"
@@ -184,4 +184,11 @@ void Window::errorCallback(int error, const char* description)
 void Window::setResizeCallback(std::function<void(int, int)> cb)
 {
     resizeCallback_ = std::move(cb);
+}
+
+bool Window::isKeyPressed(int key) const
+{
+    if (!window_)
+        return false;
+    return glfwGetKey(window_, key) == GLFW_PRESS;
 }

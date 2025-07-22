@@ -31,7 +31,7 @@ Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
     return input_tensor;
 }
 
-bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<math_utils::Point>& dst_landmarks,
+bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<math_utils::Point<>>& dst_landmarks,
                      const Image& dst_face, Image& out_image)
 {
     Profiler::getInstance().start("InSwapper", "Swap");
@@ -39,15 +39,9 @@ bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<
     {
         return false;
     }
-    static const double template_128[5][2] = {
-        {0.34191607, 0.46157411},
-        {0.65653393, 0.45983393},
-        {0.50022500, 0.64050536},
-        {0.37097589, 0.82469196},
-        {0.63151696, 0.82325089}
-    };
+
     const int target_size = input_width_;
-    std::unique_ptr<Image> aligned = image_utils::align_face_affine(dst_face, dst_landmarks, template_128, target_size);
+    auto [aligned, affine] = image_utils::affine_face_transform(dst_face, dst_landmarks, image_utils::template_128, target_size);
     if (!aligned)
     {
         return false;

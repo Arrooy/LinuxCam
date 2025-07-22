@@ -2,7 +2,7 @@
 
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-
+#include "LinuxFace/Image/image_utils.h"
 using namespace linuxface;
 
 SCRFDetector::SCRFDetector(const std::string& onnx_model_path)
@@ -32,7 +32,6 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
     float* tensor_data = input_tensor.GetTensorMutableData<float>();
     auto tensor_padding = TensorPadding::scrfd();
     image->toTensor(tensor_data, tensor_padding, target_width, target_height, NormalizationType::MINMAX);
-
     return input_tensor;
 }
 
@@ -194,8 +193,9 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
                                                      float img_width, float img_height, std::vector<Face>& faces)
 {
     // generate center points.
-    const float new_height = 640; // TODO: make dinamic.
-    const float new_width = 640;
+    const float new_height = static_cast<float>(input_node_dims.at(2)); // e.g 640
+    const float new_width = static_cast<float>(input_node_dims.at(3));  // e.g 640
+
     float ratio = std::min(static_cast<float>(new_width) / img_width, static_cast<float>(new_height) / img_height);
 
     const int resizedW = static_cast<int>(img_width * ratio);
@@ -278,9 +278,8 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
                 const float kps_t = kps_offsets[j + 1];
                 const float kps_x = std::max(0.0f, std::min(((cx + kps_l) * s - dw_f) * inv_ratio, img_width_minus_1));
                 const float kps_y = std::max(0.0f, std::min(((cy + kps_t) * s - dh_f) * inv_ratio, img_height_minus_1));
-
                 face_landmarks.emplace_back(FaceLandmark{
-                    j >> 1, {static_cast<long>(kps_x), static_cast<long>(kps_y)}
+                    j >> 1, math_utils::Point3D(kps_x, kps_y, 0.0)
                 });
             }
             stride_faces.emplace_back(std::move(face_landmarks), face_box);

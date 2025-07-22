@@ -32,6 +32,12 @@ enum class ImageFormat
     PPM, // Portable Pixmap
 };
 
+enum class ImageLayout
+{
+    HWC, // Height-Width-Channel
+    CHW  // Channel-Height-Width
+};
+
 inline std::string fromImageFormatToString(const ImageFormat& format)
 {
     switch (format)
@@ -326,12 +332,13 @@ class Image
     void toGrayscale();
     void flipHorizontal();
     void flipVertical();
-    void rotate(float angleDegrees);
+
+    math_utils::Point<double> rotate(double angleRad, math_utils::Point<double> center);
     void rotate90();
     void rotate180();
     void rotate270();
     void changeBackgroundImage(const Image& matting, const Image& background);
-    void paintPoints(const std::vector<math_utils::Point>& points, const Pixel& color);
+    void paintPoints(const std::vector<math_utils::Point<>>& points, const Pixel& color);
 
     // In-place transformations (for better performance when creating new images isn't needed)
     void flipHorizontalInPlace();

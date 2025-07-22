@@ -15,6 +15,16 @@ namespace linuxface
 class SCRFDetector : public OnnxDetector
 {
   public:
+
+    enum LandmarkIndex
+    {
+        LEYE = 36,
+        REYE = 45,
+        NOSE = 33,
+        LMOUTH = 48, // left mouth corner
+        RMOUTH = 54, // right mouth corner
+    };
+
     explicit SCRFDetector(const std::string& onnx_model_path);
     ~SCRFDetector() = default;
     Ort::Value transform(const std::unique_ptr<Image>& image) override;

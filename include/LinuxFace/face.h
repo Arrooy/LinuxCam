@@ -15,8 +15,8 @@ struct FaceLandmark
 {
     // Index of the landmark
     unsigned int i;
-    // Location of the landmark
-    math_utils::Point p;
+    // 3D location of the landmark
+    math_utils::Point3D p;
 };
 
 struct FaceBoundingBox
@@ -68,8 +68,9 @@ class Face
 
     FaceIndex get_facepart_from_landmark_id(unsigned long id) const;
 
-    void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints) const;
-    void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color) const;
+    void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, Pixel c, float radius = 1) const;
+    void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color,
+                        float radius = 1) const;
 
     void paintBoundingBox(std::unique_ptr<Image>& image, Pixel color = Pixel(0, 255, 0)) const;
     void paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const;
@@ -77,9 +78,22 @@ class Face
     void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness, bool testColor = false) const;
 
     FaceBoundingBox getBoundingBox() const { return boundingBox_; }
+    std::vector<FaceLandmark> getLandmarks() const
+    {
+        std::vector<FaceLandmark> allLandmarks;
+        for (const auto& facepart : landmarks_)
+        {
+            const auto& partLandmarks = facepart.second;
+            allLandmarks.insert(allLandmarks.end(), partLandmarks.begin(), partLandmarks.end());
+        }
+        return allLandmarks;
+    }
     void setFacePose(FacePose pose) { pose_ = pose; }
-    // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth]
-    std::vector<math_utils::Point> getFivePointLandmarksArcFaceOrder() const;
+    // Retrieve 5-point landmarks in ArcFace order: [left eye, right eye, nose, left mouth, right mouth] (3D)
+    std::vector<math_utils::Point3D> getFivePointLandmarksArcFaceOrder() const;
+    // Retrieve 5-point landmarks in ArcFace order (2D)
+    std::vector<math_utils::Point<>> getFivePointLandmarksArcFaceOrder2D() const;
+    math_utils::Point3D getLandmarkByIndex(unsigned int id) const;
   private:
     void freeFaceLandmarks();
 

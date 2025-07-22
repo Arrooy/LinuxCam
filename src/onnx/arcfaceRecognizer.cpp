@@ -13,20 +13,13 @@ ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnx_model_path) : OnnxD
 }
 
 std::unique_ptr<Image>
-ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5)
+ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5)
 {
-    static const double template_112[5][2] = {
-        {0.34191607, 0.46157411},
-        {0.65653393, 0.45983393},
-        {0.50022500, 0.64050536},
-        {0.37097589, 0.82469196},
-        {0.63151696, 0.82325089}
-    };
     const int target_size = 112;
-    auto aligned = image_utils::align_face_affine(input_img, face_landmark_5, template_112, target_size);
+    auto [aligned, affine] = image_utils::affine_face_transform(input_img, face_landmark_5, image_utils::template_112, target_size);
     if (aligned)
     {
-        return aligned;
+        return std::move(aligned);
     }
     common::log_warn("ArcfaceRecognizer: Failed to align face, using fallback scaling.");
     // Fallback: just scale the whole image
@@ -48,7 +41,7 @@ Ort::Value ArcfaceRecognizer::transform(const std::unique_ptr<Image>& img_rs)
     return input_tensor;
 }
 
-bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math_utils::Point>& face_landmark_5,
+bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5,
                                   std::vector<float>& embedding)
 {
     Profiler::getInstance().start("ArcfaceRecognizer", "recognize");

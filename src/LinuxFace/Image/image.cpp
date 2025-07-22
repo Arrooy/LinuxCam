@@ -267,8 +267,8 @@ std::unique_ptr<Image> Image::deepCopy() const
 }
 
 void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
-                      unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth, unsigned long dstHeight,
-                      ScalingAlgorithm algorithm) const
+                             unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth,
+                             unsigned long dstHeight, ScalingAlgorithm algorithm) const
 {
     // Use non-const T for both src and dst to match template requirements
     image_utils::ImageView<unsigned char> srcView{const_cast<unsigned char*>(srcData), srcWidth, srcHeight, pixelSize};
@@ -276,18 +276,20 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
     switch (algorithm)
     {
         case ScalingAlgorithm::LANCZOS:
-            image_utils::lanczosScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::lanczosScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::BILINEAR:
-            image_utils::bilinearScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::bilinearScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::AREA_AVERAGING:
-            image_utils::areaAveragingScaling<unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::areaAveragingScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::FAST_BOX:
-            image_utils::fastBoxScaling<unsigned char>(srcView, dstView);
+            image_utils::fastBoxScaling<unsigned char,unsigned char>(srcView, dstView);
             break;
         case ScalingAlgorithm::BICUBIC:
+            image_utils::bicubicScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
+            break;
         default:
             common::log_error("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
             break;
@@ -393,8 +395,8 @@ std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHei
     }
 
     auto result = std::make_unique<Image>(newWidth * newHeight * info.pixelSizeBytes);
-    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes,
-                    result->data(), newWidth, newHeight, algorithm);
+    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes, result->data(), newWidth, newHeight,
+                     algorithm);
     result->info = info;
     result->info.width = newWidth;
     result->info.height = newHeight;
@@ -440,13 +442,10 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int new_width, i
 
     // Step 1: Compute scale ratio (preserve aspect ratio)
     float r = std::min(static_cast<float>(new_width) / origW, static_cast<float>(new_height) / origH);
-
     const int resizedW = static_cast<int>(origW * r);
     const int resizedH = static_cast<int>(origH * r);
-
     const int offsetX = (new_width - resizedW) / 2;
     const int offsetY = (new_height - resizedH) / 2;
-
     const int paddedSize = new_width * new_height;
 
     // Store transform metadata in the padding object
@@ -686,9 +685,9 @@ void Image::fromTensor(const float* tensorData, std::vector<int64_t> tensorShape
     }
 }
 
-void Image::paintPoints(const std::vector<math_utils::Point>& points, const Pixel& color)
+void Image::paintPoints(const std::vector<math_utils::Point<>>& points, const Pixel& color)
 {
-    for (const math_utils::Point& p : points)
+    for (const math_utils::Point<>& p : points)
     {
         // Check image bounds
         if (p.x < 0 || p.x >= static_cast<long>(info.width) || p.y < 0 || p.y >= static_cast<long>(info.height))
@@ -783,14 +782,16 @@ bool Image::saveToDisk(const std::string& dest_path) const
         return false;
     }
 
-    int file = open(dest_path.c_str(), O_WRONLY | O_CREAT, 0660);
+    // Use O_TRUNC to overwrite file if it exists
+    int file = open(dest_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0660);
     if (file < 0)
     {
         common::log_error("Image::saveToDisk - Error opening file for writing: %s", dest_path.c_str());
         common::errno_log("Image::saveToDisk - Error opening file for writing");
         return false;
     }
-    common::log_info("Image::saveToDisk - Saving image to %s", dest_path.c_str());
+    common::log_info("Image::saveToDisk - Saving image to %s with size %lux%lu", dest_path.c_str(), info.width,
+                     info.height);
     // Handle PPM (RGB, RGBA, Grayscale)
     if (info.format == ImageFormat::PPM || info.format == ImageFormat::RGB || info.format == ImageFormat::RGBA
         || info.format == ImageFormat::GRAYSCALE)
@@ -850,6 +851,10 @@ bool Image::saveToDisk(const std::string& dest_path) const
             close(file);
             return true;
         }
+        // If pixel size is not 1, 3, or 4, error
+        common::log_error("Image::saveToDisk - Unsupported pixel size for PPM: %d", info.pixelSizeBytes);
+        close(file);
+        return false;
     }
 
     // JPEG: direct write (assume data_ is already JPEG encoded)
@@ -1030,94 +1035,93 @@ void Image::flipVertical()
     }
 }
 
-void Image::rotate(float angleDegrees)
+
+// // Compute center of the image
+// float cx = (info.width - 1) / 2.0f;
+// float cy = (info.height - 1) / 2.0f;
+
+math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<double> center)
 {
     if (!data_ || info.width == 0 || info.height == 0)
-    {
-        return;
-    }
+        return {0.0, 0.0};
 
-    float angleRad = angleDegrees * static_cast<float>(M_PI) / 180.0f;
-    float cosA = std::cos(angleRad);
-    float sinA = std::sin(angleRad);
+    double cosA = std::cos(angleRad);
+    double sinA = std::sin(angleRad);
 
-    // Compute center of the image
-    float cx = (info.width - 1) / 2.0f;
-    float cy = (info.height - 1) / 2.0f;
-
-    // Compute bounding box for rotated image
-    float corners[4][2] = {
-        {0 - cx,                                  0 - cy                                  },
-        {static_cast<float>(info.width - 1) - cx, 0 - cy                                  },
-        {0 - cx,                                  static_cast<float>(info.height - 1) - cy},
-        {static_cast<float>(info.width - 1) - cx, static_cast<float>(info.height - 1) - cy}
+    // Compute corners relative to center
+    double corners[4][2] = {
+        { -center.x,               -center.y },
+        { info.width - 1 - center.x, -center.y },
+        { -center.x,               info.height - 1 - center.y },
+        { info.width - 1 - center.x, info.height - 1 - center.y }
     };
-    float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+
+    double minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
     for (int i = 0; i < 4; ++i)
     {
-        float x = corners[i][0] * cosA - corners[i][1] * sinA;
-        float y = corners[i][0] * sinA + corners[i][1] * cosA;
+        double x = corners[i][0] * cosA - corners[i][1] * sinA;
+        double y = corners[i][0] * sinA + corners[i][1] * cosA;
         minX = std::min(minX, x);
         minY = std::min(minY, y);
         maxX = std::max(maxX, x);
         maxY = std::max(maxY, y);
     }
-    unsigned long newWidth = static_cast<unsigned long>(std::ceil(maxX - minX + 1));
-    unsigned long newHeight = static_cast<unsigned long>(std::ceil(maxY - minY + 1));
+
+    unsigned long newWidth  = static_cast<unsigned long>(std::ceil(maxX - minX));
+    unsigned long newHeight = static_cast<unsigned long>(std::ceil(maxY - minY));
     size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
     std::vector<unsigned char> rotated(newSize, 0);
 
-    // For each pixel in the destination image, map back to the source
     for (unsigned long y = 0; y < newHeight; ++y)
     {
         for (unsigned long x = 0; x < newWidth; ++x)
         {
-            // Map (x, y) in dest to (srcX, srcY) in source
-            float dx = x + minX;
-            float dy = y + minY;
-            float srcX = cosA * dx + sinA * dy + cx;
-            float srcY = -sinA * dx + cosA * dy + cy;
+            // Map back to original image
+            double dx = x + minX;
+            double dy = y + minY;
 
-            // Bilinear interpolation
+            double srcX = cosA * dx + sinA * dy + center.x;
+            double srcY = -sinA * dx + cosA * dy + center.y;
+
             int x0 = static_cast<int>(std::floor(srcX));
             int y0 = static_cast<int>(std::floor(srcY));
             int x1 = x0 + 1;
             int y1 = y0 + 1;
-            float wx = srcX - x0;
-            float wy = srcY - y0;
+            double wx = srcX - x0;
+            double wy = srcY - y0;
 
             for (unsigned char c = 0; c < info.pixelSizeBytes; ++c)
             {
-                float v = 0.0f;
-                for (int dyIdx = 0; dyIdx <= 1; ++dyIdx)
+                float val = 0.0f;
+                for (int j = 0; j <= 1; ++j)
                 {
-                    int sy = (dyIdx == 0) ? y0 : y1;
-                    if (sy < 0 || sy >= static_cast<int>(info.height))
+                    int sy = (j == 0) ? y0 : y1;
+                    if (sy < 0 || sy >= static_cast<int>(info.height)) continue;
+                    double wyf = (j == 0) ? (1.0 - wy) : wy;
+
+                    for (int i = 0; i <= 1; ++i)
                     {
-                        continue;
-                    }
-                    float wyf = (dyIdx == 0) ? (1.0f - wy) : wy;
-                    for (int dxIdx = 0; dxIdx <= 1; ++dxIdx)
-                    {
-                        int sx = (dxIdx == 0) ? x0 : x1;
-                        if (sx < 0 || sx >= static_cast<int>(info.width))
-                        {
-                            continue;
-                        }
-                        float wxf = (dxIdx == 0) ? (1.0f - wx) : wx;
-                        unsigned long srcIdx = (sy * info.width + sx) * info.pixelSizeBytes + c;
-                        v += data_.get()[srcIdx] * wyf * wxf;
+                        int sx = (i == 0) ? x0 : x1;
+                        if (sx < 0 || sx >= static_cast<int>(info.width)) continue;
+                        double wxf = (i == 0) ? (1.0 - wx) : wx;
+
+                        size_t srcIdx = (sy * info.width + sx) * info.pixelSizeBytes + c;
+                        val += data_.get()[srcIdx] * wyf * wxf;
                     }
                 }
-                unsigned long dstIdx = (y * newWidth + x) * info.pixelSizeBytes + c;
-                rotated[dstIdx] = static_cast<unsigned char>(std::clamp(v, 0.0f, 255.0f));
+                size_t dstIdx = (y * newWidth + x) * info.pixelSizeBytes + c;
+                rotated[dstIdx] = static_cast<unsigned char>(std::clamp(val, 0.0f, 255.0f));
             }
         }
     }
-    resize(newSize);
+
+    // Resize internal buffer and update info
+    data_.reset(new unsigned char[newSize]);
+    size_ = newSize;
     std::memcpy(data_.get(), rotated.data(), newSize);
     info.width = newWidth;
     info.height = newHeight;
+    return {-minX , -minY};
 }
 
 void Image::rotate90()
@@ -1426,7 +1430,7 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
 
     return *this;
 }
-
+// TODO: SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM EDGE.
 std::unique_ptr<Image> Image::affineWarpBilinear(const double* M, int out_width, int out_height) const
 {
     if (info.pixelSizeBytes != 3)

@@ -40,6 +40,7 @@ class Window
 
     // Set viewport to match framebuffer size
     void setViewport();
+    bool isKeyPressed(int key) const;
 
     // Called by GLFW on framebuffer resize
     void onFramebufferResize(int width, int height);

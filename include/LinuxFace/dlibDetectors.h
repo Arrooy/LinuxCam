@@ -4,6 +4,7 @@
 #include <dlib/image_processing/frontal_face_detector.h>
 #include <dlib/pixel.h>
 #include <dlib/image_processing/generic_image.h>
+#include <dlib/image_processing/shape_predictor.h>
 
 #include "LinuxFace/detectors.h"
 #include "LinuxFace/face.h"
@@ -78,11 +79,19 @@ class DlibFaceDetector : public FaceDetector
     dlib::frontal_face_detector detector_;
 };
 
+
+// DlibShapeDetector: detects facial landmarks using dlib's shape_predictor
 class DlibShapeDetector : public ShapeDetector
 {
-    DlibShapeDetector();
+public:
+    explicit DlibShapeDetector(const std::string& model_path = "../models/shape_predictor_68_face_landmarks.dat");
     ~DlibShapeDetector();
+    // Given an image and bounding boxes, returns Face objects with landmarks
     virtual std::vector<Face> detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) override;
+
+private:
+    std::unique_ptr<dlib::shape_predictor> predictor_;
+    std::string model_path_;
 };
 
 } // namespace linuxface
