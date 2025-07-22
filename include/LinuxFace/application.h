@@ -9,8 +9,6 @@
 #include "LinuxFace/cameraManager.h"
 #include "LinuxFace/detectors.h"
 #include "LinuxFace/imageLoader.h"
-
-#include "LinuxFace/imageLoader.h"
 #include "LinuxFace/imageRenderGL.h"
 #include "LinuxFace/onnx/MODNet.h"
 #include "LinuxFace/onnx/arcfaceRecognizer.h"

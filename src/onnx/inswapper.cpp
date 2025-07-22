@@ -71,6 +71,7 @@ bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<
     TensorPadding pad = TensorPadding::no_padding();
     out_image.fromTensor(out_data, {1, 3, input_height_, input_width_}, input_width_, input_height_, pad,
                          NormalizationType::MINMAX);
+    out_image.saveToDisk("swapped_face_raw.ppm");
     Profiler::getInstance().stop("InSwapper", "Swap");
     return true;
 }

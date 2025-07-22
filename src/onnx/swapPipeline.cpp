@@ -32,9 +32,20 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         std::vector<Face> target_faces = scrfd_->detect(target_img);
         if (!target_faces.empty())
         {
+            common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)",
+                         99, target_faces[0].getBoundingBox().rect.x(), target_faces[0].getBoundingBox().rect.y(),
+                         target_faces[0].getBoundingBox().rect.width(), target_faces[0].getBoundingBox().rect.height());
             target_img_landmarks_ = target_faces[0].getFivePointLandmarksArcFaceOrder2D();
             if (target_img_landmarks_.size() == 5)
             {
+                
+                // print keypoints
+                common::log_info("Target image landmarks: ");
+                for (const auto& landmark : target_img_landmarks_)
+                {
+                    common::log_info("  - (%ld, %ld)", landmark.x, landmark.y);
+                }
+
                 arcface_->recognize(*target_img, target_img_landmarks_, target_img_embedding_);
                 target_img_embedding_ready_ = (target_img_embedding_.size() == 512);
             }
@@ -64,14 +75,24 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         return false;
     }
     bool worked = false;
+    int i = 0;
     for (const auto& face : scrfd_faces)
     {
+        // print bounding box coords
+        common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)",
+                         i, face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
+                         face.getBoundingBox().rect.width(), face.getBoundingBox().rect.height());
         std::vector<math_utils::Point<>> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (webcam_landmarks.size() != 5)
         {
             common::log_error("SwapPipeline: Detected face does not have 5 landmarks. It has %d landmarks.",
                               static_cast<int>(webcam_landmarks.size()));
             return false;
+        }
+        common::log_info("Source image landmarks %d",i++);
+        for (const auto& landmark : webcam_landmarks)
+        {
+            common::log_info("  - (%ld, %ld)", landmark.x, landmark.y);
         }
         Profiler::getInstance().stop("SwapPipeline", "detect image faces");
         Profiler::getInstance().start("SwapPipeline", "swap face");

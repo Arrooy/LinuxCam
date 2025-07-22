@@ -69,13 +69,13 @@ ImageFormat ImageFormatDetector::detectFormatFromPath(const std::string& path)
 
 bool ImageFormatDetector::isJPEG(const std::vector<unsigned char>& data)
 {
-    if (data.size() < 4)
+    if (data.size() < 2)
     {
         return false;
     }
 
-    // JPEG files start with FF D8 and end with FF D9
-    return data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF && (data[3] & 0xF0) == 0xE0;
+    // JPEG files start with FF D8 (SOI marker)
+    return data[0] == 0xFF && data[1] == 0xD8;
 }
 
 bool ImageFormatDetector::isPNG(const std::vector<unsigned char>& data)
@@ -251,6 +251,7 @@ bool ImageLoader::extractMetadata()
 {
     if (raw_data_.empty())
     {
+        common::log_info("ImageLoader::extractMetadata - Raw data is empty");
         return false;
     }
 
@@ -258,6 +259,7 @@ bool ImageLoader::extractMetadata()
     metadata_.format = ImageFormatDetector::detectFormat(raw_data_);
     if (metadata_.format == ImageFormat::UNKNOWN)
     {
+        common::log_info("ImageLoader::extractMetadata - Unknown image format");
         return false;
     }
 

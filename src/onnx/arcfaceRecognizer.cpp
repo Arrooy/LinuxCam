@@ -55,7 +55,7 @@ bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math
     auto output_tensors = detector_session_->Run(runOptions, input_node_names_.data(), &input_tensor, 1,
                                                  output_node_names_.data(), output_node_names_str_.size());
     float* pdata = output_tensors[0].GetTensorMutableData<float>();
-
+    embedding.clear();
     embedding.assign(pdata, pdata + 512);
     float norm = 0.0f;
     for (const auto& val : embedding)
@@ -66,6 +66,19 @@ bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math
     for (auto& val : embedding)
     {
         val /= norm;
+    }
+    // print embedding for debugging
+    {
+        // Print embedding in numpy array format for easy copy-paste to Python
+        std::string np_array = "np.array([";
+        for (size_t i = 0; i < embedding.size(); ++i)
+        {
+            np_array += std::to_string(embedding[i]);
+            if (i != embedding.size() - 1)
+                np_array += ", ";
+        }
+        np_array += "])";
+        common::log_info("%s", np_array.c_str());
     }
     Profiler::getInstance().stop("ArcfaceRecognizer", "recognize");
     return true;
