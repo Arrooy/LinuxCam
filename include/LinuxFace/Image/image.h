@@ -250,6 +250,9 @@ class Image
     // Constructor for non-owning reference (for V4L2 buffers)
     Image(unsigned char* buffer, size_t size, bool takeOwnership);
 
+    // Plain color constructor.
+    Image(Pixel color, size_t width, size_t height);
+
     // Move constructor and assignment
     Image(Image&& other) noexcept;
     Image& operator=(Image&& other) noexcept;

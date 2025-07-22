@@ -95,6 +95,23 @@ Image::Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(siz
     }
 }
 
+Image::Image(Pixel color, size_t width, size_t height)
+{
+    size_ = width * height * 3;
+    data_ = std::shared_ptr<unsigned char>(new unsigned char[size_], std::default_delete<unsigned char[]>());
+    // Set default format to RGB
+    info.format = ImageFormat::RGB;
+    info.pixelSizeBytes = 3;
+    info.width = width;
+    info.height = height;
+    
+
+    for (int i = 0; i < size_; i+=3)
+    {
+        this->pidx(i, color.r, color.g, color.b, color.a);
+    }
+}
+
 // Add missing move constructor and assignment operator
 Image::Image(Image&& other) noexcept : info(other.info), data_(std::move(other.data_)), size_(other.size_)
 {
@@ -276,19 +293,19 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
     switch (algorithm)
     {
         case ScalingAlgorithm::LANCZOS:
-            image_utils::lanczosScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::lanczosScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::BILINEAR:
-            image_utils::bilinearScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::bilinearScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::AREA_AVERAGING:
-            image_utils::areaAveragingScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::areaAveragingScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::FAST_BOX:
-            image_utils::fastBoxScaling<unsigned char,unsigned char>(srcView, dstView);
+            image_utils::fastBoxScaling<unsigned char, unsigned char>(srcView, dstView);
             break;
         case ScalingAlgorithm::BICUBIC:
-            image_utils::bicubicScaling<unsigned char,unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::bicubicScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         default:
             common::log_error("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
@@ -1043,17 +1060,19 @@ void Image::flipVertical()
 math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<double> center)
 {
     if (!data_ || info.width == 0 || info.height == 0)
+    {
         return {0.0, 0.0};
+    }
 
     double cosA = std::cos(angleRad);
     double sinA = std::sin(angleRad);
 
     // Compute corners relative to center
     double corners[4][2] = {
-        { -center.x,               -center.y },
-        { info.width - 1 - center.x, -center.y },
-        { -center.x,               info.height - 1 - center.y },
-        { info.width - 1 - center.x, info.height - 1 - center.y }
+        {-center.x,                 -center.y                 },
+        {info.width - 1 - center.x, -center.y                 },
+        {-center.x,                 info.height - 1 - center.y},
+        {info.width - 1 - center.x, info.height - 1 - center.y}
     };
 
     double minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
@@ -1067,7 +1086,7 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
         maxY = std::max(maxY, y);
     }
 
-    unsigned long newWidth  = static_cast<unsigned long>(std::ceil(maxX - minX));
+    unsigned long newWidth = static_cast<unsigned long>(std::ceil(maxX - minX));
     unsigned long newHeight = static_cast<unsigned long>(std::ceil(maxY - minY));
     size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
     std::vector<unsigned char> rotated(newSize, 0);
@@ -1096,13 +1115,19 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
                 for (int j = 0; j <= 1; ++j)
                 {
                     int sy = (j == 0) ? y0 : y1;
-                    if (sy < 0 || sy >= static_cast<int>(info.height)) continue;
+                    if (sy < 0 || sy >= static_cast<int>(info.height))
+                    {
+                        continue;
+                    }
                     double wyf = (j == 0) ? (1.0 - wy) : wy;
 
                     for (int i = 0; i <= 1; ++i)
                     {
                         int sx = (i == 0) ? x0 : x1;
-                        if (sx < 0 || sx >= static_cast<int>(info.width)) continue;
+                        if (sx < 0 || sx >= static_cast<int>(info.width))
+                        {
+                            continue;
+                        }
                         double wxf = (i == 0) ? (1.0 - wx) : wx;
 
                         size_t srcIdx = (sy * info.width + sx) * info.pixelSizeBytes + c;
@@ -1121,7 +1146,7 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
     std::memcpy(data_.get(), rotated.data(), newSize);
     info.width = newWidth;
     info.height = newHeight;
-    return {-minX , -minY};
+    return {-minX, -minY};
 }
 
 void Image::rotate90()

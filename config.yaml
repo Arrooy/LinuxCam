@@ -28,4 +28,4 @@ window:
     width: 640
     height: 480
 
-enable_gpu: false
+enable_gpu: true

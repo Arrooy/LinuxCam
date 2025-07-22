@@ -176,7 +176,7 @@ bool Application::initialize()
     // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
     std::string rvm_model = models_folder + "rvm_mobilenetv3_fp32.onnx";
-    // rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
+    rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
 
 
     // ArcFace recognizer initialization
@@ -374,7 +374,7 @@ void Application::process(std::unique_ptr<Image>& image)
     std::vector<Face> dlib_faces;
     if (faceDetector_ != nullptr)
     {
-        dlib_faces = faceDetector_->detect(image);
+        // dlib_faces = faceDetector_->detect(image);
     }
 
     std::vector<Face> scrfd_faces;
@@ -408,37 +408,6 @@ void Application::process(std::unique_ptr<Image>& image)
         matting->info.x = image->info.width;
         matting->info.y = 0;
         image->paste(*matting, true);
-    }
-
-    if (rvmDetector_ && rvmDetector_->isReady())
-    {
-        // If resize occurs, rvm is not able to handle that, we just reset it.
-        if (!rvmDetector_->isImageCompatible(image))
-        {
-            rvmDetector_.reset();
-            rvmDetector_ = std::make_unique<RobustVideoMatting>(Config::getInstance().getModelFolderPath()
-                                                                + "rvm_mobilenetv3_fp32.onnx");
-        }
-
-        Profiler::getInstance().start("RVM", "App deep copy");
-        std::unique_ptr<Image> matting = image->deepCopy();
-        std::unique_ptr<Image> foreground = image->deepCopy();
-        Profiler::getInstance().stop("RVM", "App deep copy");
-
-        rvmDetector_->detect(image, foreground, matting);
-        Profiler::getInstance().start("RVM", "App paste");
-        // // use matting layer with foreground layer
-        // if (testImg_ && !image->isCompatible(*testImg_))
-        // {
-        //     testImg_ = testImg_->scale(image->info.width, image->info.height);
-        //     common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
-        // }
-        // foreground->changeBackgroundImage(*matting, *testImg_);
-        // foreground->info.x = 0;
-        // foreground->info.y = image->info.height;
-        // image->paste(*foreground, true);
-
-        Profiler::getInstance().stop("RVM", "App paste");
     }
 
     // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
@@ -737,6 +706,37 @@ void Application::process(std::unique_ptr<Image>& image)
         }
     }
 
+    if (rvmDetector_ && rvmDetector_->isReady())
+    {
+        // If resize occurs, rvm is not able to handle that, we just reset it.
+        if (!rvmDetector_->isImageCompatible(image))
+        {
+            rvmDetector_.reset();
+            rvmDetector_ = std::make_unique<RobustVideoMatting>(Config::getInstance().getModelFolderPath()
+                                                                + "rvm_mobilenetv3_fp32.onnx");
+        }
+
+        Profiler::getInstance().start("RVM", "App deep copy");
+        std::unique_ptr<Image> matting = image->deepCopy();
+        // std::unique_ptr<Image> foreground = image->deepCopy();
+        Profiler::getInstance().stop("RVM", "App deep copy");
+
+        rvmDetector_->detect(image, image, matting);
+        Profiler::getInstance().start("RVM", "App paste");
+
+        // // use matting layer with foreground layer
+        if (fake_background_ && !image->isCompatible(*fake_background_))
+        {
+            fake_background_ = fake_background_->scale(image->info.width, image->info.height);
+            common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
+        }
+        image->changeBackgroundImage(*matting, *fake_background_);
+        // foreground->info.x = 0;
+        // foreground->info.y = image->info.height;
+        // image->paste(*foreground, true);
+
+        Profiler::getInstance().stop("RVM", "App paste");
+    }
     // for (auto& face : scrfd_faces)
     // {
     //     if (fsanetDetectorVar_ && fsanetDetectorVar_->isReady())

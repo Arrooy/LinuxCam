@@ -71,6 +71,7 @@ class Application
     std::unique_ptr<Image> adria_img_;
     std::unique_ptr<Image> target_img_;
     std::unique_ptr<Image> b_img_;
+    std::unique_ptr<Image> fake_background_;
 
     // Main loop methods
     bool update();
