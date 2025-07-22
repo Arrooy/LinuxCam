@@ -373,6 +373,7 @@ class Image
 
     // Set all pixels to black (useful for clearing the image)
     void black();
+    bool isFullyOpaque() const;
   private:
     // Optimized helper methods
     void copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,
@@ -380,7 +381,6 @@ class Image
     void copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGlobalY, long canvasX, long canvasY,
                                 size_t canvasWidth, size_t canvasHeight);
     Image& pasteImpl(const Image& other, long x, long y, bool expandCanvas);
-    bool isFullyOpaque() const;
 
     void scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
                       unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth, unsigned long dstHeight,

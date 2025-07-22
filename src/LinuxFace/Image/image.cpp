@@ -16,46 +16,51 @@ using namespace linuxface;
 void PixelOperations::blendPixels(unsigned char* dst, const unsigned char* src, unsigned char pixelSize,
                                   unsigned char alpha) noexcept
 {
-    if (src[0] == 0 && src[1] == 0 && src[2] == 0)
-    {
-        // If the source pixel is black, do not blend
+    if (pixelSize == 4) {
+        unsigned char srcA = src[3];
+        if (srcA == 0) {
+            return;
+        }
+        if (srcA == 255) {
+            for (unsigned char i = 0; i < 4; ++i) {
+                dst[i] = src[i];
+            }
+            return;
+        }
+        // Blend RGB using src alpha, set alpha to 255
+        for (unsigned char i = 0; i < 3; ++i) {
+            dst[i] = static_cast<unsigned char>((srcA * src[i] + (255 - srcA) * dst[i]) / 255);
+        }
+        dst[3] = 255;
         return;
     }
-
-    if (alpha == 255)
-    {
-        // Fast path for fully opaque pixels
-        switch (pixelSize)
-        {
-            case 3:
-                dst[0] = src[0];
-                dst[1] = src[1];
-                dst[2] = src[2];
-                break;
-            case 4:
-                dst[0] = src[0];
-                dst[1] = src[1];
-                dst[2] = src[2];
-                dst[3] = src[3];
-                break;
-            default:
-                std::memcpy(dst, src, pixelSize);
-        }
+    if (alpha == 0) {
+        // Fully transparent: do nothing
+        return;
     }
-    else if (alpha > 0)
-    {
-        // Optimized alpha blending using integer arithmetic
-        const int srcAlpha = alpha;
-        const int invAlpha = 255 - alpha;
-        const int c = std::min(pixelSize, static_cast<unsigned char>(3));
-        for (unsigned char i = 0; i < c; ++i)
-        {
-            dst[i] = (src[i] * srcAlpha + dst[i] * invAlpha) / 255;
+    if (alpha == 255) {
+        // Fully opaque: copy src to dst
+        for (unsigned char i = 0; i < pixelSize; ++i) {
+            dst[i] = src[i];
+            // TODO: remove for with direct code.
         }
-        if (pixelSize == 4)
-        {
-            dst[3] = std::max(dst[3], alpha);
+        return;
+    }
+    // Blend for RGBA or RGB
+    if (pixelSize == 4) {
+        // RGBA: blend RGB, preserve alpha
+        for (unsigned char i = 0; i < 3; ++i) {
+            dst[i] = static_cast<unsigned char>((alpha * src[i] + (255 - alpha) * dst[i]) / 255);
         }
+        dst[3] = 255; // Result is always opaque after blending
+    } else if (pixelSize == 3) {
+        // RGB: blend
+        for (unsigned char i = 0; i < 3; ++i) {
+            dst[i] = static_cast<unsigned char>((alpha * src[i] + (255 - alpha) * dst[i]) / 255);
+        }
+    } else {
+        // Grayscale or other: blend first channel
+        dst[0] = static_cast<unsigned char>((alpha * src[0] + (255 - alpha) * dst[0]) / 255);
     }
 }
 
@@ -121,15 +126,18 @@ Image::Image(Image&& other) noexcept : info(other.info), data_(std::move(other.d
 
 Image& Image::operator=(Image&& other) noexcept
 {
-    if (this != &other)
-    {
-        data_ = std::move(other.data_);
-        size_ = other.size_;
-        info = other.info;
-
-        other.size_ = 0;
-        other.info = {};
+    if (this == &other) {
+        // Self-assignment: clear the object to a valid empty state
+        data_.reset();
+        size_ = 0;
+        info = {};
+        return *this;
     }
+    data_ = std::move(other.data_);
+    size_ = other.size_;
+    info = other.info;
+    other.size_ = 0;
+    other.info = {};
     return *this;
 }
 
@@ -1271,8 +1279,8 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
             unsigned long dstCol = static_cast<unsigned long>(x - canvasX);
 
             // Calculate final indices
-            unsigned long srcIdx = (srcRowStart + srcCol) * pixelSize;
-            unsigned long dstIdx = (dstRowStart + dstCol) * pixelSize;
+            unsigned long srcIdx = (srcRowStart + srcCol) * src.info.pixelSizeBytes;
+            unsigned long dstIdx = (dstRowStart + dstCol) * info.pixelSizeBytes;
 
             // Bounds checking
             if (srcIdx + pixelSize > src.size() || dstIdx + pixelSize > size_)
@@ -1414,15 +1422,18 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
         bool fullyOpaque = (info.pixelSizeBytes != 4) || other.isFullyOpaque();
         bool fullyInBounds =
             otherLeft >= baseLeft && otherTop >= baseTop && otherRight <= baseRight && otherBottom <= baseBottom;
-        if (fullyOpaque && fullyInBounds)
-        {
-            // Compute offsets
+        if (fullyInBounds) {
             long dstX = otherLeft - baseLeft;
             long dstY = otherTop - baseTop;
-            copyPixelsOptimized(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
+            if (fullyOpaque) {
+                copyPixelsOptimized(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
+            } else {
+                // Only blend the region corresponding to the pasted image
+                copyPixelsWithBlending(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
+            }
             return *this;
         }
-        // Fallback to blending
+        // Fallback to blending (legacy, for partial overlap)
         copyPixelsWithBlending(other, otherLeft, otherTop, 0, 0, info.width, info.height);
         return *this;
     }
