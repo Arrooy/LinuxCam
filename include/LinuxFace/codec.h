@@ -106,6 +106,7 @@ class JPEGDecoder : public Decoder
         image.info.height = static_cast<unsigned long>(height);
         image.info.TJSampleFormat = static_cast<TJSAMP>(sample_format);
         image.info.TJColorSpace = static_cast<TJCS>(color_space);
+        image.info.TJPixelFormat = TJPF_RGB; // Default to RGB
         return true;
     }
 

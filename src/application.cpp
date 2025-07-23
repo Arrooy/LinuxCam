@@ -250,15 +250,15 @@ bool Application::initialize()
         // You can further process the landmarks here...
     }
 
-    std::unique_ptr<Image> testa = ImageLoader::loadImageFromFile(Config::getInstance().getMediaFolderPath() + "image_.jpeg");
-    testa->saveToDisk("image.ppm");
-    return false;
-    std::unique_ptr<Image> test = std::make_unique<Image>();
-    test->copyFrom(*example_.image);
-    process(test);
-    example_.image->saveToDisk("input.ppm");
-    test->saveToDisk("output.ppm");
-    return false;
+    // std::unique_ptr<Image> testa = ImageLoader::loadImageFromFile(Config::getInstance().getMediaFolderPath() + "image_.jpeg");
+    // testa->saveToDisk("image.ppm");
+    // return false;
+    // std::unique_ptr<Image> test = std::make_unique<Image>();
+    // test->copyFrom(*example_.image);
+    // process(test);
+    // example_.image->saveToDisk("input.ppm");
+    // test->saveToDisk("output.ppm");
+    // return false;
 
     common::log_info("Application initialized successfully");
     return true;
