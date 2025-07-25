@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -115,4 +116,114 @@ TEST(ImageUtilsEdgeCaseTest, TransformPointsAffineEmpty)
     double M[6] = {1, 0, 0, 0, 1, 0};
     auto out = transform_points_affine(pts, M);
     EXPECT_TRUE(out.empty());
+}
+
+TEST(ImageUtilsResizeTest, BilinearScaling)
+{
+    using namespace linuxface::image_utils;
+    unsigned char src_data[4 * 4 * 3];
+    for (int i = 0; i < 4 * 4 * 3; ++i)
+    {
+        src_data[i] = i % 256;
+    }
+    unsigned char dst_data[2 * 2 * 3] = {0};
+    ImageView<unsigned char> src{src_data, 4, 4, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 3};
+    bilinearScaling<unsigned char, unsigned char>(src, dst);
+    EXPECT_EQ(dst.width, 2);
+    EXPECT_EQ(dst.height, 2);
+    int nonzero = 0;
+    for (int i = 0; i < 2 * 2 * 3; ++i)
+    {
+        nonzero += dst_data[i] > 0 ? 1 : 0;
+    }
+    EXPECT_GT(nonzero, 0);
+}
+
+TEST(ImageUtilsResizeTest, AreaAveragingScaling)
+{
+    using namespace linuxface::image_utils;
+    unsigned char src_data[4 * 4 * 3];
+    for (int i = 0; i < 4 * 4 * 3; ++i)
+    {
+        src_data[i] = (i * 2) % 256;
+    }
+    unsigned char dst_data[2 * 2 * 3] = {0};
+    ImageView<unsigned char> src{src_data, 4, 4, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 3};
+    areaAveragingScaling<unsigned char, unsigned char>(src, dst);
+    EXPECT_EQ(dst.width, 2);
+    EXPECT_EQ(dst.height, 2);
+    int nonzero = 0;
+    for (int i = 0; i < 2 * 2 * 3; ++i)
+    {
+        nonzero += dst_data[i] > 0 ? 1 : 0;
+    }
+    EXPECT_GT(nonzero, 0);
+}
+
+TEST(ImageUtilsResizeTest, LanczosScaling)
+{
+    using namespace linuxface::image_utils;
+    unsigned char src_data[4 * 4 * 3];
+    for (int i = 0; i < 4 * 4 * 3; ++i)
+    {
+        src_data[i] = (i * 3) % 256;
+    }
+    unsigned char dst_data[2 * 2 * 3] = {0};
+    ImageView<unsigned char> src{src_data, 4, 4, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 3};
+    lanczosScaling<unsigned char, unsigned char>(src, dst);
+    EXPECT_EQ(dst.width, 2);
+    EXPECT_EQ(dst.height, 2);
+    int nonzero = 0;
+    for (int i = 0; i < 2 * 2 * 3; ++i)
+    {
+        nonzero += dst_data[i] > 0 ? 1 : 0;
+    }
+    EXPECT_GT(nonzero, 0);
+}
+
+TEST(ImageUtilsResizeTest, FastBoxScaling)
+{
+    using namespace linuxface::image_utils;
+    unsigned char src_data[4 * 4 * 3];
+    for (int i = 0; i < 4 * 4 * 3; ++i)
+    {
+        src_data[i] = (i * 5) % 256;
+    }
+    unsigned char dst_data[2 * 2 * 3] = {0};
+    ImageView<unsigned char> src{src_data, 4, 4, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 3};
+    fastBoxScaling<unsigned char, unsigned char>(src, dst);
+    EXPECT_EQ(dst.width, 2);
+    EXPECT_EQ(dst.height, 2);
+    int nonzero = 0;
+    for (int i = 0; i < 2 * 2 * 3; ++i)
+    {
+        nonzero += dst_data[i] > 0 ? 1 : 0;
+    }
+    EXPECT_GT(nonzero, 0);
+}
+
+TEST(ImageUtilsResizeTest, BicubicScaling)
+{
+    using namespace linuxface::image_utils;
+    unsigned char src_data[4 * 4 * 3];
+    for (int i = 0; i < 4 * 4 * 3; ++i)
+    {
+        src_data[i] = (i * 7) % 256;
+    }
+    unsigned char dst_data[2 * 2 * 3] = {0};
+    ImageView<unsigned char> src{src_data, 4, 4, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 3};
+    bicubicScaling<unsigned char, unsigned char>(src, dst);
+    EXPECT_EQ(dst.width, 2);
+    EXPECT_EQ(dst.height, 2);
+    int nonzero = 0;
+    for (int i = 0; i < 2 * 2 * 3; ++i)
+    {
+        nonzero += dst_data[i] > 0 ? 1 : 0;
+    }
+    EXPECT_GT(nonzero, 0);
 }

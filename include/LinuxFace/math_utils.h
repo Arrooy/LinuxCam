@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <vector>
+#include <type_traits>
 
 namespace linuxface
 {
@@ -21,7 +22,7 @@ template <typename T = long>
 struct Point
 {
     Point(T x1, T y1) : x(x1), y(y1) {}
-    Point() = default;
+    Point() : x(T{}), y(T{}) {}
     T x;
     T y;
 };
@@ -29,7 +30,7 @@ struct Point
 struct Point3D
 {
     Point3D(double x1, double y1, double z1 = 0.0) : x(x1), y(y1), z(z1) {}
-    Point3D() = default;
+    Point3D() : x(0.0), y(0.0), z(0.0) {}
     double x;
     double y;
     double z;
@@ -45,7 +46,7 @@ struct StridePoint
 template <typename T = long>
 struct Rect
 {
-    Rect() = default;
+    Rect() : l(T{}), t(T{}), r(T{}), b(T{}) {}
     Rect(T left, T top, T right, T bottom) : l(left), t(top), r(right), b(bottom) {}
 
     Rect(Point<T> leftTopCorner, T w, T h)
@@ -68,8 +69,20 @@ struct Rect
     inline T y() const { return t; }
 
     // Assuming r >= l and b >= t
-    inline T width() const { return r - l + 1; }
-    inline T height() const { return b - t + 1; }
+    inline T width() const { 
+        if constexpr (std::is_floating_point_v<T>) {
+            return r - l; 
+        } else {
+            return r - l + 1; 
+        }
+    }
+    inline T height() const { 
+        if constexpr (std::is_floating_point_v<T>) {
+            return b - t; 
+        } else {
+            return b - t + 1; 
+        }
+    }
 
     bool contains(T x, T y) const { return !(x < l || x > r || y < t || y > b); }
 
@@ -107,25 +120,42 @@ std::vector<Point<long>> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
     T dx = x2 - x1;
     T dy = y2 - y1;
     T steps = std::round(std::max(std::abs(dx), std::abs(dy)));
+    
+    if (steps == 0) {
+        // Same start and end point
+        result.emplace_back(Point<long>(std::lround(x1), std::lround(y1)));
+        return result;
+    }
+    
     double xInc = static_cast<double>(dx) / static_cast<double>(steps);
     double yInc = static_cast<double>(dy) / static_cast<double>(steps);
     double x = static_cast<double>(x1);
     double y = static_cast<double>(y1);
+    
     for (int i = 0; i < steps; i++)
     {
         result.emplace_back(Point<long>(std::lround(x), std::lround(y)));
         x += xInc;
         y += yInc;
     }
-    // Clamp last point to floor of end coordinates for float input
+    
+    // Add final point, but check for duplicates
+    Point<long> finalPoint;
     if constexpr (std::is_floating_point_v<T>)
     {
-        result.emplace_back(Point<long>(static_cast<long>(std::floor(x2)), static_cast<long>(std::floor(y2))));
+        finalPoint = Point<long>(static_cast<long>(std::floor(x2)), static_cast<long>(std::floor(y2)));
     }
     else
     {
-        result.emplace_back(Point<long>(x2, y2));
+        finalPoint = Point<long>(x2, y2);
     }
+    
+    // Only add final point if it's different from the last point
+    if (result.empty() || result.back().x != finalPoint.x || result.back().y != finalPoint.y)
+    {
+        result.emplace_back(finalPoint);
+    }
+    
     return result;
 }
 

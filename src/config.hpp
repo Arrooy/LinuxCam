@@ -246,6 +246,28 @@ class Config
         return instance;
     }
 
+    // Method to reload configuration from a different file (for testing)
+    bool reloadFromFile(const char* filename)
+    {
+        try
+        {
+            config_ = YAML::LoadFile(filename);
+            // Clear existing data
+            cameras_.clear();
+            external_data_ = ExternalData{};
+            enableGPU_ = true;
+            windowWidth_ = 0;
+            windowHeight_ = 0;
+            windowTitle_.clear();
+            return true;
+        }
+        catch (const YAML::Exception& e)
+        {
+            common::log_error("Failed to reload config file: %s", e.what());
+            return false;
+        }
+    }
+
     bool loadConfiguration()
     {
         if (config_["enable_gpu"])

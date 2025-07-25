@@ -45,6 +45,7 @@ struct Layer
     std::string textContent;
     ImU32 textColor = IM_COL32_WHITE;
     float fontSize = 16.0f;
+    int layerNumber = 0;  // Layer number for text layers
     float x = 0.0f;
     float y = 0.0f;
 
@@ -59,8 +60,9 @@ struct Layer
         {
             return static_cast<int>(gif->frames()[0]->info.layer);
         }
-        // For text, use text layer number
-        return 1;
+        // For text layers, return layerNumber if set, otherwise default to 1
+        // For gifs with no frames, also default to 1
+        return layerNumber == 0 ? 1 : layerNumber;
     }
 
     // Helper: set layer number (delegates to image/gif if present)
@@ -70,11 +72,14 @@ struct Layer
         {
             img->info.layer = n;
         }
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        else if (type == LayerType::Gif && gif && !gif->frames().empty())
         {
             gif->frames()[0]->info.layer = n;
         }
-        // For text, you can add a member if needed
+        else if (type == LayerType::Text)
+        {
+            layerNumber = n;
+        }
     }
 
     // Helper: get layer name
