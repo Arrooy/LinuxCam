@@ -239,7 +239,7 @@ class Image
 {
   public:
     // Default constructor
-    Image() = default;
+    Image() { info.format = ImageFormat::UNKNOWN; }
 
     // Constructor with size allocation
     explicit Image(size_t size);

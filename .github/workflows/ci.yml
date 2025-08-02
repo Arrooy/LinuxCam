@@ -1,0 +1,83 @@
+name: CI Workflow
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+    
+    steps:
+    - name: Checkout source with submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          g++-12 \
+          gcc-12 \
+          nasm \
+          libgl1-mesa-dev \
+          libglu1-mesa-dev \
+          libxinerama-dev \
+          libxcursor-dev \
+          libxi-dev \
+          libxrandr-dev \
+          libopenblas-dev \
+          liblapack-dev \
+          libavdevice-dev \
+          libavfilter-dev \
+          libavformat-dev \
+          libavcodec-dev \
+          libswresample-dev \
+          libswscale-dev \
+          libavutil-dev \
+          libjxl-dev \
+          libopencv-dev
+
+    - name: Set GCC version
+      run: |
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+        export CC=/usr/bin/gcc-12
+        export CXX=/usr/bin/g++-12
+        echo "CC=/usr/bin/gcc-12" >> $GITHUB_ENV
+        echo "CXX=/usr/bin/g++-12" >> $GITHUB_ENV
+
+    - name: Configure CMake (${{ matrix.build_type }})
+      run: |
+        cmake -S . -B build-${{ matrix.build_type }} \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+              -DBUILD_TESTING=ON \
+              -DUSE_AVX_INSTRUCTIONS=OFF \
+              -DDLIB_NO_GUI_SUPPORT=ON \
+              -DDLIB_USE_CUDA=OFF \
+              -G Ninja
+
+    - name: Build Project (${{ matrix.build_type }})
+      run: cmake --build build-${{ matrix.build_type }} --parallel
+
+    - name: Run Tests (${{ matrix.build_type }})
+      working-directory: build-${{ matrix.build_type }}
+      run: ctest --output-on-failure --parallel
+
+    - name: Upload Test Results (${{ matrix.build_type }})
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.build_type }}
+        path: |
+          build-${{ matrix.build_type }}/Testing/
+          build-${{ matrix.build_type }}/*.log

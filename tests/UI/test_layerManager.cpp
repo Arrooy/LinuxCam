@@ -395,14 +395,14 @@ TEST_F(LayerManagerTest, LayerGetLayerNumber)
     gifLayer.type = LayerType::Gif;
     gifLayer.gif = testGif;
 
-    // Since testGif failed to open (dummy path), it has no frames, so returns default 1
-    EXPECT_EQ(gifLayer.getLayerNumber(), 1); // Default when no frames
+    // Since testGif failed to open (dummy path), it has no frames, so returns default 0
+    EXPECT_EQ(gifLayer.getLayerNumber(), 0); // Default when no frames
 
     Layer textLayer;
     textLayer.type = LayerType::Text;
     textLayer.textContent = "test";
 
-    EXPECT_EQ(textLayer.getLayerNumber(), 1); // Default for text
+    EXPECT_EQ(textLayer.getLayerNumber(), 0); // Default for text
 }
 
 TEST_F(LayerManagerTest, LayerSetLayerNumber)

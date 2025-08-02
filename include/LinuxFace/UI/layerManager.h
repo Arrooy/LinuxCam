@@ -60,9 +60,9 @@ struct Layer
         {
             return static_cast<int>(gif->frames()[0]->info.layer);
         }
-        // For text layers, return layerNumber if set, otherwise default to 1
-        // For gifs with no frames, also default to 1
-        return layerNumber == 0 ? 1 : layerNumber;
+        // For text layers, return layerNumber if set, otherwise default to 0 (0-based index)
+        // For gifs with no frames, also default to 0
+        return layerNumber;
     }
 
     // Helper: set layer number (delegates to image/gif if present)

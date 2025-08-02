@@ -14,6 +14,12 @@ set(DLIB_USE_CUDA ON CACHE BOOL "Use CUDA for Dlib")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Enabling code coverage flags")
+    add_compile_options(--coverage -O0)
+    add_link_options(--coverage)
+endif()
+
 # Check for nasm
 find_program(NASM_EXECUTABLE nasm)
 if(NOT NASM_EXECUTABLE)

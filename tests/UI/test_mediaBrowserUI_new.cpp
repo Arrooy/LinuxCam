@@ -102,7 +102,7 @@ TEST_F(LayerIntegrationTest, LayerSelection)
     layerManager->addLayer(layer2);
 
     // Find selected layer (simulating MediaBrowserUI::getSelectedLayer)
-    Layer* selectedLayer = nullptr;
+    const Layer* selectedLayer = nullptr;
     auto& layers = layerManager->getLayers();
     for (auto& layer : layers)
     {
@@ -157,6 +157,7 @@ TEST_F(LayerIntegrationTest, LayerProperties)
     imageLayer.x = 50.0f;
     imageLayer.y = 75.0f;
     imageLayer.id = 1;
+    imageLayer.img->info.layer = 0; // Explicitly set layer number for test
 
     layerManager->addLayer(imageLayer);
 
@@ -253,7 +254,7 @@ TEST_F(LayerIntegrationTest, MultipleLayerTypes)
     EXPECT_EQ(layerManager->getLayers().size(), 3);
 
     // Find selected layer
-    Layer* selectedLayer = nullptr;
+    const Layer* selectedLayer = nullptr;
     auto& layers = layerManager->getLayers();
     for (auto& layer : layers)
     {
@@ -280,6 +281,7 @@ TEST_F(LayerIntegrationTest, LayerOrdering)
         layer.textContent = "Content " + std::to_string(i);
         layer.selected = (i == 2); // Select middle layer
         layer.id = i + 1;
+        layer.layerNumber = i; // Explicitly set layer number for test
 
         layerManager->addLayer(layer);
     }
@@ -295,7 +297,7 @@ TEST_F(LayerIntegrationTest, LayerOrdering)
     }
 
     // Find selected layer
-    Layer* selectedLayer = nullptr;
+    const Layer* selectedLayer = nullptr;
     for (auto& layer : layers)
     {
         if (layer.selected)

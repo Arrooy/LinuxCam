@@ -167,7 +167,7 @@ TEST_F(WindowTest, MultipleResizeCallbacks)
     EXPECT_EQ(lastHeight, 100);
 
     // Wait and process debounced events
-    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    std::this_thread::sleep_for(std::chrono::milliseconds(700));
     window.updateResizeEvents();
 
     // Should now have the final dimensions

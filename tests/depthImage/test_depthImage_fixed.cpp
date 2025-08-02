@@ -59,7 +59,7 @@ TEST_F(DepthImageTest, DefaultConstruction)
 
     EXPECT_EQ(depthImage.info.width, 0);
     EXPECT_EQ(depthImage.info.height, 0);
-    EXPECT_EQ(depthImage.info.format, ImageFormat::UNKNOWN);
+    EXPECT_EQ(depthImage.info.format, ImageFormat::DEPTH_FLOAT);
 }
 
 // Test construction with dimensions

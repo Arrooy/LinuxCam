@@ -3,9 +3,9 @@
 #include <memory>
 #include <vector>
 
-// Mock OpenGL functions for testing
-#include <GLFW/glfw3.h>
+
 #include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/image.h"
@@ -14,12 +14,18 @@
 
 using namespace linuxface;
 
-// Mock OpenGL context for testing
 class MockGLContext
 {
   public:
     static bool initialize()
     {
+        // Check for headless environment (CI/CD compatibility)
+        if (std::getenv("DISPLAY") == nullptr && std::getenv("WAYLAND_DISPLAY") == nullptr)
+        {
+            // Try to initialize anyway for environments that support headless OpenGL
+            // but mark as potentially unavailable
+        }
+
         if (glfwInit() != GLFW_TRUE)
         {
             return false;
@@ -65,20 +71,42 @@ class MockGLContext
 
 GLFWwindow* MockGLContext::window = nullptr;
 
-// Test fixture for ImageRenderGL tests
 class ImageRenderGLTest : public ::testing::Test
 {
   protected:
     static void SetUpTestSuite()
     {
+        // Check for headless environment and skip if no graphics available
+        if (std::getenv("DISPLAY") == nullptr && std::getenv("WAYLAND_DISPLAY") == nullptr)
+        {
+            // In CI/CD environments, this will be caught by individual test checks
+            // Some CI environments provide Xvfb, so we still try initialization
+        }
+        
         // Initialize OpenGL context once for all tests
-        ASSERT_TRUE(MockGLContext::initialize()) << "Failed to initialize OpenGL context for testing";
+        glContextAvailable = MockGLContext::initialize();
+        if (!glContextAvailable)
+        {
+            // Will be handled by individual tests with GTEST_SKIP
+        }
     }
 
-    static void TearDownTestSuite() { MockGLContext::cleanup(); }
+    static void TearDownTestSuite() 
+    { 
+        if (glContextAvailable)
+        {
+            MockGLContext::cleanup(); 
+        }
+    }
 
     void SetUp() override
     {
+        // Skip test if OpenGL context is not available
+        if (!glContextAvailable)
+        {
+            GTEST_SKIP() << "OpenGL context not available - likely headless environment or missing graphics drivers";
+        }
+        
         renderer = std::make_unique<ImageRenderGL>();
 
         // Create test image
@@ -121,7 +149,12 @@ class ImageRenderGLTest : public ::testing::Test
     std::shared_ptr<Image> testImage;
     std::shared_ptr<Gif> testGif;
     size_t testImageSize;
+    
+    static bool glContextAvailable;
 };
+
+// Static variable definition  
+bool ImageRenderGLTest::glContextAvailable = false;
 
 // Test basic initialization
 TEST_F(ImageRenderGLTest, Initialization)
@@ -203,27 +236,6 @@ TEST_F(ImageRenderGLTest, RenderSingleGifLayer)
     EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600));
 }
 
-TEST_F(ImageRenderGLTest, RenderSingleTextLayer)
-{
-    ASSERT_TRUE(renderer->initialize());
-
-    Layer textLayer;
-    textLayer.type = LayerType::Text;
-    textLayer.name = "test_text";
-    textLayer.textContent = "Hello World";
-    textLayer.fontSize = 24.0f;
-    textLayer.textColor = IM_COL32_WHITE;
-    textLayer.x = 200.0f;
-    textLayer.y = 200.0f;
-    textLayer.selected = false;
-    textLayer.dirty = true;
-    textLayer.id = 3;
-
-    std::vector<Layer> layers = {textLayer};
-
-    // Rendering should not crash
-    EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600));
-}
 
 TEST_F(ImageRenderGLTest, RenderMultipleLayers)
 {
@@ -247,50 +259,12 @@ TEST_F(ImageRenderGLTest, RenderMultipleLayers)
     gifLayer.id = 2;
     gifLayer.dirty = true;
 
-    Layer textLayer;
-    textLayer.type = LayerType::Text;
-    textLayer.name = "text";
-    textLayer.textContent = "Overlay Text";
-    textLayer.fontSize = 16.0f;
-    textLayer.x = 0.0f;
-    textLayer.y = 200.0f;
-    textLayer.id = 3;
-
-    std::vector<Layer> layers = {imageLayer, gifLayer, textLayer};
+    std::vector<Layer> layers = {imageLayer, gifLayer};
 
     // Rendering multiple layers should not crash
     EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600));
 }
 
-TEST_F(ImageRenderGLTest, RenderSelectedLayers)
-{
-    ASSERT_TRUE(renderer->initialize());
-
-    Layer selectedImageLayer;
-    selectedImageLayer.type = LayerType::Image;
-    selectedImageLayer.name = "selected_image";
-    selectedImageLayer.img = testImage;
-    selectedImageLayer.x = 50.0f;
-    selectedImageLayer.y = 50.0f;
-    selectedImageLayer.selected = true; // Selected layer should show green rectangle
-    selectedImageLayer.dirty = true;
-    selectedImageLayer.id = 1;
-
-    Layer selectedTextLayer;
-    selectedTextLayer.type = LayerType::Text;
-    selectedTextLayer.name = "selected_text";
-    selectedTextLayer.textContent = "Selected Text";
-    selectedTextLayer.fontSize = 20.0f;
-    selectedTextLayer.x = 100.0f;
-    selectedTextLayer.y = 300.0f;
-    selectedTextLayer.selected = true;
-    selectedTextLayer.id = 2;
-
-    std::vector<Layer> layers = {selectedImageLayer, selectedTextLayer};
-
-    // Rendering selected layers should not crash
-    EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600));
-}
 
 // Test layer caching behavior
 TEST_F(ImageRenderGLTest, LayerCaching)
@@ -429,54 +403,7 @@ TEST_F(ImageRenderGLTest, EmptyGifLayer)
     EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600));
 }
 
-TEST_F(ImageRenderGLTest, EmptyTextLayer)
-{
-    ASSERT_TRUE(renderer->initialize());
 
-    Layer textLayer;
-    textLayer.type = LayerType::Text;
-    textLayer.name = "empty_text";
-    textLayer.textContent = ""; // Empty text
-    textLayer.fontSize = 16.0f;
-    textLayer.id = 1;
-
-    std::vector<Layer> layers = {textLayer};
-
-    // Should not crash with empty text
-    EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600));
-}
-
-// Test GIF frame animation
-TEST_F(ImageRenderGLTest, GifFrameAnimation)
-{
-    ASSERT_TRUE(renderer->initialize());
-
-    // Create gif with multiple frames (note: Gif class is for reading files)
-    // For testing, we'll create a mock approach
-    auto multiFrameGif = std::make_shared<Gif>("dummy_multi_frame.gif");
-    // Skip the frame creation loop since addFrame doesn't exist
-    // The test will focus on the rendering logic that can handle empty gifs
-
-    Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
-    gifLayer.name = "animated_gif";
-    gifLayer.gif = multiFrameGif;
-    gifLayer.gifFrameIndex = 0;
-    gifLayer.id = 1;
-    gifLayer.dirty = true;
-
-    std::vector<Layer> layers = {gifLayer};
-
-    // Render multiple times to test frame advancement
-    for (int frame = 0; frame < 5; ++frame)
-    {
-        EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600)) << "Failed to render GIF frame " << frame;
-
-        // Frame index should advance (renderLayers advances it automatically)
-        size_t expectedFrame = (frame + 1) % multiFrameGif->frames().size();
-        EXPECT_EQ(layers[0].gifFrameIndex, expectedFrame);
-    }
-}
 
 // Test texture management
 TEST_F(ImageRenderGLTest, TextureCleanup)

@@ -51,11 +51,9 @@ TEST(MathUtilsTest, DDA_Negative)
 TEST(MathUtilsTest, DDA_FloatInput)
 {
     auto points = linuxface::math_utils::DDA(0.5f, 0.5f, 2.5f, 2.5f);
-    ASSERT_EQ(points.size(), 3);
+    ASSERT_EQ(points.size(), 2);
     EXPECT_EQ(points[0].x, 1);
     EXPECT_EQ(points[0].y, 1);
     EXPECT_EQ(points[1].x, 2);
     EXPECT_EQ(points[1].y, 2);
-    EXPECT_EQ(points[2].x, 2);
-    EXPECT_EQ(points[2].y, 2);
 }

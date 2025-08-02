@@ -53,9 +53,12 @@ Image::Image(size_t size) : size_(size)
     if (size > 0)
     {
         data_ = std::shared_ptr<unsigned char>(new unsigned char[size], std::default_delete<unsigned char[]>());
-        // Set default format to RGB
-        info.format = ImageFormat::RGB;
-        info.pixelSizeBytes = 3;
+        // Only set format to RGB if still UNKNOWN (so derived classes can override)
+        if (info.format == ImageFormat::UNKNOWN)
+        {
+            info.format = ImageFormat::RGB;
+            info.pixelSizeBytes = 3;
+        }
     }
 }
 

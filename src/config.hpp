@@ -40,17 +40,17 @@ class Config
         catch (const YAML::Exception& e)
         {
             common::log_error("Failed to load config file: %s", e.what());
+            config_ = YAML::Node(); // Set to null node on failure
         }
     }
 
     bool validateAndLoadInputCameras()
     {
-        if (!config_["input_cameras"])
+        if (!config_["input_cameras"] || !config_["input_cameras"].IsSequence() || config_["input_cameras"].size() == 0)
         {
-            common::log_error("Missing input_camera section in config");
+            common::log_error("Missing or empty input_camera section in config");
             return false;
         }
-
         auto inputs = config_["input_cameras"];
         for (const auto& input : inputs)
         {
@@ -58,7 +58,6 @@ class Config
             {
                 return false;
             }
-
             loadInputCameraData(input);
         }
         return true;
@@ -251,7 +250,6 @@ class Config
     {
         try
         {
-            config_ = YAML::LoadFile(filename);
             // Clear existing data
             cameras_.clear();
             external_data_ = ExternalData{};
@@ -259,6 +257,7 @@ class Config
             windowWidth_ = 0;
             windowHeight_ = 0;
             windowTitle_.clear();
+            config_ = YAML::LoadFile(filename);
             return true;
         }
         catch (const YAML::Exception& e)
@@ -270,8 +269,14 @@ class Config
 
     bool loadConfiguration()
     {
-        if (config_["enable_gpu"])
+
+        // Fail if config is empty (file missing or invalid)
+        if (!config_ || config_.IsNull())
         {
+            common::log_error("Config: YAML file missing or invalid");
+            return false;
+        }
+        if (config_["enable_gpu"]) {
             enableGPU_ = config_["enable_gpu"].as<bool>();
         }
         return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()

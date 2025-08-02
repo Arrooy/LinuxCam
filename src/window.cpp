@@ -108,15 +108,15 @@ void Window::onFramebufferResize(int width, int height)
     // Record the latest resize event
     lastResizeWidth_ = width;
     lastResizeHeight_ = height;
-    lastResizeEventTime_ = now;
     resizePending_ = true;
 
-    // Throttle: only call callback if enough time has passed since last callback
-    // OR if this is the very first callback (lastResizeCallbackTime_ == 0)
-    if (resizeCallback_ && (lastResizeCallbackTime_ == 0.0 || now - lastResizeCallbackTime_ > RESIZE_THROTTLE_INTERVAL))
+    // Throttle: only call callback if this is the very first callback (lastResizeCallbackTime_ == 0)
+    if (resizeCallback_ && lastResizeCallbackTime_ == 0.0)
     {
         resizeCallback_(width, height);
         lastResizeCallbackTime_ = now;
+        lastResizeEventTime_ = now;
+        // Do NOT set resizePending_ = false here; let debounce handle the final event
     }
 }
 
@@ -147,19 +147,18 @@ void Window::updateResizeEvents()
     if (resizePending_ && resizeCallback_)
     {
         double now = glfwGetTime();
-        
         // Fallback for test environments where GLFW is not initialized
         if (now == 0.0) {
             static double testTime = 0.0;
             testTime += 0.5; // Simulate time passing faster for debounce
             now = testTime;
         }
-        
-        // If enough time has passed since last event, fire the callback (debounce)
-        if (now - lastResizeEventTime_ > RESIZE_DEBOUNCE_DELAY)
+        // If enough time has passed since the last callback, fire the callback (debounce)
+        if (now - lastResizeCallbackTime_ > RESIZE_DEBOUNCE_DELAY)
         {
             resizeCallback_(lastResizeWidth_, lastResizeHeight_);
             lastResizeCallbackTime_ = now;
+            lastResizeEventTime_ = now;
             resizePending_ = false;
         }
     }

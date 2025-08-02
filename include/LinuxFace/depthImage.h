@@ -13,7 +13,7 @@ class DepthImage : public Image
 {
   public:
     // Default constructor
-    DepthImage() : Image() {}
+    DepthImage() : Image() { info.format = ImageFormat::DEPTH_FLOAT; }
 
     // Constructor with dimensions - creates depth image with float pixel format
     DepthImage(unsigned long width, unsigned long height) : Image(width * height * sizeof(float))
