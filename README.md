@@ -1,3 +1,6 @@
+
+[![codecov](https://codecov.io/github/Arrooy/LinuxCam/branch/develop/graph/badge.svg?token=NWVE3AC940)](https://codecov.io/github/Arrooy/LinuxCam)
+
 ## Cloning the repository:
 ```console
 git clone --recurse-submodules -j8 https://github.com/Arrooy/LinuxCam.git
