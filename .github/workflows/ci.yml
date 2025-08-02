@@ -100,10 +100,10 @@ jobs:
 
     - name: Upload to Codecov
       if: matrix.build_type == 'Debug'
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
         files: build-Debug/coverage.xml
-        token: ${{ secrets.CODECOV_TOKEN }}  # optional for public repos
+        token: ${{ secrets.CODECOV_TOKEN }}
         flags: unittests
         name: codecov-coverage
         fail_ci_if_error: false  # Don't fail CI if codecov upload fails
