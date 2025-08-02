@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <cstring>
 
 #include "LinuxFace/inputWebcam.h"
 
@@ -15,8 +16,17 @@ class MockInputWebcam : public InputWebcam
         : InputWebcam(name, devicePath, width, height, bufferCount), setupCalled_(false), startCalled_(false), stopCalled_(false),
           imageRetrieved_(false), isConnected_(true)
     {
-        // Create mock image
-        mockImage_ = std::make_unique<Image>(width, height, ImageFormat::RGB);
+        // Create mock image with calculated size for RGB format (3 bytes per pixel)
+        size_t imageSize = width * height * 3;  // RGB = 3 bytes per pixel
+        mockImage_ = std::make_unique<Image>(imageSize);
+        
+        // Set image metadata
+        mockImage_->info.width = width;
+        mockImage_->info.height = height;
+        mockImage_->info.format = ImageFormat::RGB;
+        mockImage_->info.pixelSizeBytes = 3;
+        mockImage_->info.is_valid = true;
+        
         // Fill with gray data
         std::fill(mockImage_->data(), mockImage_->data() + mockImage_->size(), 128);
     }
@@ -39,13 +49,15 @@ class MockInputWebcam : public InputWebcam
         return true;
     }
 
-    bool getImage(std::unique_ptr<Image>& outImage) override
+    bool getImage(std::unique_ptr<Image>& outImage)
     {
         if (!isConnected_) return false;
         imageRetrieved_ = true;
         
-        // Create a copy of the mock image
-        outImage = std::make_unique<Image>(*mockImage_);
+        // Create a new image and copy the mock image data
+        outImage = std::make_unique<Image>(mockImage_->size());
+        outImage->info = mockImage_->info; // Copy metadata
+        std::memcpy(outImage->data(), mockImage_->data(), mockImage_->size());
         return true;
     }
 
@@ -130,9 +142,9 @@ TEST_F(InputWebcamTest, ImageRetrieval)
     EXPECT_NE(image, nullptr);
     
     // Verify image properties
-    EXPECT_EQ(image->width(), 640);
-    EXPECT_EQ(image->height(), 480);
-    EXPECT_EQ(image->format(), ImageFormat::RGB);
+    EXPECT_EQ(image->info.width, 640);
+    EXPECT_EQ(image->info.height, 480);
+    EXPECT_EQ(image->info.format, ImageFormat::RGB);
     EXPECT_GT(image->size(), 0);
     
     // Verify image data is accessible
@@ -151,9 +163,9 @@ TEST_F(InputWebcamTest, HDImageRetrieval)
     EXPECT_NE(image, nullptr);
     
     // Verify HD image properties
-    EXPECT_EQ(image->width(), 1920);
-    EXPECT_EQ(image->height(), 1080);
-    EXPECT_EQ(image->format(), ImageFormat::RGB);
+    EXPECT_EQ(image->info.width, 1920);
+    EXPECT_EQ(image->info.height, 1080);
+    EXPECT_EQ(image->info.format, ImageFormat::RGB);
 }
 
 TEST_F(InputWebcamTest, DeviceDisconnection)
@@ -189,9 +201,9 @@ TEST_F(InputWebcamTest, ImageConsistency)
         std::unique_ptr<Image> image;
         EXPECT_TRUE(inputWebcam_->getImage(image));
         EXPECT_NE(image, nullptr);
-        EXPECT_EQ(image->width(), 640);
-        EXPECT_EQ(image->height(), 480);
-        EXPECT_EQ(image->format(), ImageFormat::RGB);
+        EXPECT_EQ(image->info.width, 640);
+        EXPECT_EQ(image->info.height, 480);
+        EXPECT_EQ(image->info.format, ImageFormat::RGB);
         
         // Verify image data integrity
         EXPECT_EQ(image->data()[0], 128);
@@ -240,8 +252,8 @@ TEST_F(InputWebcamEdgeCaseTest, ZeroDimensions)
     
     // Image should exist but have zero dimensions
     EXPECT_NE(image, nullptr);
-    EXPECT_EQ(image->width(), 0);
-    EXPECT_EQ(image->height(), 0);
+    EXPECT_EQ(image->info.width, 0);
+    EXPECT_EQ(image->info.height, 0);
 }
 
 TEST_F(InputWebcamEdgeCaseTest, LargeDimensions)
@@ -257,8 +269,8 @@ TEST_F(InputWebcamEdgeCaseTest, LargeDimensions)
     
     // Verify large image properties
     EXPECT_NE(image, nullptr);
-    EXPECT_EQ(image->width(), 3840);
-    EXPECT_EQ(image->height(), 2160);
+    EXPECT_EQ(image->info.width, 3840);
+    EXPECT_EQ(image->info.height, 2160);
 }
 
 TEST_F(InputWebcamEdgeCaseTest, InvalidDevicePath)
@@ -333,8 +345,8 @@ TEST_F(InputWebcamEdgeCaseTest, ImageRetrievalPerformance)
         std::unique_ptr<Image> image;
         EXPECT_TRUE(webcam.getImage(image));
         EXPECT_NE(image, nullptr);
-        EXPECT_EQ(image->width(), 640);
-        EXPECT_EQ(image->height(), 480);
+        EXPECT_EQ(image->info.width, 640);
+        EXPECT_EQ(image->info.height, 480);
     }
     
     EXPECT_TRUE(webcam.stop());
