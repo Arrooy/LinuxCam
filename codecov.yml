@@ -1,0 +1,40 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 70%          # Overall project coverage target
+        threshold: 5%        # Allow 5% drop in coverage
+        if_ci_failed: error  # Fail if CI failed
+    patch:
+      default:
+        target: 70%          # New code coverage target
+        threshold: 5%        # Allow 5% drop for new code
+
+  precision: 2               # Show coverage to 2 decimal places
+
+# Files and directories to ignore for coverage
+ignore:
+  - "external/**/*"          # External dependencies
+  - "tests/**/*"             # Test files themselves
+  - "build*/**/*"            # Build directories
+  - "**/CMakeFiles/**/*"     # CMake generated files
+  - "**/*.h"                 # Header files (optional)
+
+# Comment configuration for pull requests
+comment:
+  layout: "header, diff, flags, files, footer"
+  behavior: default
+  require_changes: false     # Always comment, even if no changes
+
+# GitHub checks configuration
+github_checks:
+  annotations: true
+
+# Coverage collection and processing
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no

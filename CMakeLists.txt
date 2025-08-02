@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.14.0)
 project(LinuxFace)
 
 option(BUILD_TESTING "Build the tests for the project" ON)
+option(ENABLE_COVERAGE "Enable code coverage" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -14,10 +15,32 @@ set(DLIB_USE_CUDA ON CACHE BOOL "Use CUDA for Dlib")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message(STATUS "Enabling code coverage flags")
-    add_compile_options(--coverage -O0)
+# Coverage function
+function(enable_coverage target)
+    if(ENABLE_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(STATUS "Enabling coverage for target: ${target}")
+        target_compile_options(${target} PRIVATE 
+            --coverage 
+            -fprofile-arcs 
+            -ftest-coverage
+            -O0
+            -g
+        )
+        target_link_options(${target} PRIVATE --coverage)
+    endif()
+endfunction()
+
+# Global coverage setup for Debug builds when explicitly enabled
+if(ENABLE_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Code coverage enabled for Debug build")
+    add_compile_options(--coverage -fprofile-arcs -ftest-coverage -O0 -g)
     add_link_options(--coverage)
+    
+    # Find gcov
+    find_program(GCOV_PATH gcov)
+    if(NOT GCOV_PATH)
+        message(WARNING "gcov not found! Coverage reports may not work properly.")
+    endif()
 endif()
 
 # Check for nasm
@@ -114,7 +137,6 @@ set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
 add_subdirectory(external/glfw)
-
 
 # ImGui source files
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui)
@@ -227,7 +249,6 @@ if(NOT gifdec_POPULATED)
     target_include_directories(gifdec PUBLIC ${gifdec_SOURCE_DIR})
 endif()
 
-
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 list(REMOVE_ITEM SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
@@ -239,7 +260,6 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 add_library(linuxface STATIC ${SRC_FILES})
 
 # Set include directories for the library
-# (same as for main executable)
 target_include_directories(linuxface PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -263,6 +283,9 @@ target_link_libraries(linuxface
     ${ONNXRUNTIME_LIB}
     ${OpenCV_LIBS}
 )
+
+# Enable coverage for the main library
+enable_coverage(linuxface)
 
 # Define the main executable
 add_executable(LinuxFace src/main.cpp)
@@ -303,5 +326,25 @@ if(BUILD_TESTING)
     # Only link the static library and gtest_main
     target_link_libraries(linuxface_tests PRIVATE linuxface gtest_main)
 
+    # Enable coverage for tests
+    enable_coverage(linuxface_tests)
+
     gtest_discover_tests(linuxface_tests)
+endif()
+
+# Coverage target for convenience
+if(ENABLE_COVERAGE)
+    add_custom_target(coverage
+        COMMAND gcovr -r ${CMAKE_SOURCE_DIR} 
+                --exclude-directories '${CMAKE_BINARY_DIR}'
+                --exclude-directories '${CMAKE_SOURCE_DIR}/external'
+                --exclude '${CMAKE_SOURCE_DIR}/tests/.*'
+                --filter '${CMAKE_SOURCE_DIR}/src/.*'
+                --html-details coverage.html
+                --xml coverage.xml
+                --print-summary
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Generating coverage report"
+        DEPENDS linuxface_tests
+    )
 endif()
