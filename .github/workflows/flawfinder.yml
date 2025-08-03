@@ -3,21 +3,33 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: flawfinder
+name: Security Analysis - Flawfinder
 
 on:
-  push:
-    branches: [ "develop" ]
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "develop" ]
+  # Run after CI or Code Formatting workflows complete successfully
+  workflow_run:
+    workflows: ["CI Workflow", "Code Formatting"]
+    types: [completed]
+    branches: [develop]
+  
+  # Allow manual triggering for security analysis
+  workflow_dispatch:
+  
+  # Scheduled weekly security scan
+  # Runs every Sunday at 19:36 UTC (7:36 PM)
+  # This ensures regular security analysis even without code changes
   schedule:
     - cron: '36 19 * * 0'
 
 jobs:
   flawfinder:
-    name: Flawfinder
+    name: Flawfinder Security Scan
     runs-on: ubuntu-latest
+    # Only run if triggered manually, by schedule, or if the previous workflow succeeded
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     permissions:
       actions: read
       contents: read
@@ -26,13 +38,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: flawfinder_scan
+      - name: Display trigger information
+        run: |
+          echo "## 🔍 Security Analysis Trigger Information"
+          echo "- Event: ${{ github.event_name }}"
+          echo "- Branch: ${{ github.ref }}"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "- Triggered by: ${{ github.event.workflow_run.name }}"
+            echo "- Previous workflow status: ${{ github.event.workflow_run.conclusion }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "- Scheduled weekly security scan"
+          else
+            echo "- Manual security analysis trigger"
+          fi
+
+      - name: Run Flawfinder Security Scan
         uses: david-a-wheeler/flawfinder@8e4a779ad59dbfaee5da586aa9210853b701959c
         with:
-          arguments: '--sarif ./'
+          arguments: '--sarif ./ --exclude external --exclude build --exclude _deps --exclude experimental'
           output: 'flawfinder_results.sarif'
 
       - name: Upload analysis results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{github.workspace}}/flawfinder_results.sarif
+
+      - name: Upload Flawfinder results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flawfinder-results
+          path: flawfinder_results.sarif
+          retention-days: 30
