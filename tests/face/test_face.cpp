@@ -274,3 +274,26 @@ TEST(FaceTest, DestructorNoCrash)
     delete face;
     SUCCEED();
 }
+
+TEST(FaceTest, PaintPoseAxisNoCrash)
+{
+    // Test that paintPoseAxis works without crashing
+    FaceBoundingBox bbox(10, 10, 100, 100);
+    Face face(bbox);
+    
+    // Set a pose
+    FacePose pose{30.0f, 45.0f, 15.0f};
+    face.setFacePose(pose);
+    
+    // Create a test image using the constructor that takes color, width, height
+    Pixel backgroundColor(0, 0, 0, 255); // Black background
+    auto image = std::make_unique<Image>(backgroundColor, 200, 200);
+    
+    // This should not crash and should work with the simplified interface
+    EXPECT_NO_THROW(face.paintPoseAxis(image, 50.0f, 2.0f));
+    
+    // Verify image is still valid
+    EXPECT_TRUE(image->data() != nullptr);
+    EXPECT_EQ(image->info.width, 200);
+    EXPECT_EQ(image->info.height, 200);
+}

@@ -150,13 +150,6 @@ procrustes_similarity_face_transform(const Image& input_img, const std::vector<m
         { return input_img.affineWarpBilinear(M, out_width, out_height); }, align_to_template);
 }
 
-// Rotate, translate and scale the image to fit the landmarks
-inline std::unique_ptr<Image>
-simple_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks, int target_size)
-{
-    // TODO:
-}
-
 /**
  * Eliptical mask
  *  // Fill the face region in the mask

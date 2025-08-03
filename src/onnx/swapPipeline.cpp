@@ -76,6 +76,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
     }
     bool worked = false;
     int i = 0;
+    Image swapped_face; // Reuse buffer for all faces
     for (const auto& face : scrfd_faces)
     {
         // print bounding box coords
@@ -96,8 +97,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         }
         Profiler::getInstance().stop("SwapPipeline", "detect image faces");
         Profiler::getInstance().start("SwapPipeline", "swap face");
-        // Todo: the face always have similar size, maybe we can rehuse the memory allocated for other images
-        Image swapped_face;
+        // Reuse swapped_face buffer for all faces
         bool swap_ok = inswapper_->swap(target_img_embedding_, webcam_landmarks, *image, swapped_face);
         if (!swap_ok)
         {
@@ -122,7 +122,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             swapped_face.affineWarpBilinear(affineM, image->info.width, image->info.height);
         if (!warped_swapped_face)
         {
-            common::log_error("SwapPipeline: Failed to warp swapped face.");
+            common::log_error("SwapPipeline: Affine warp failed.");
             return false;
         }
 

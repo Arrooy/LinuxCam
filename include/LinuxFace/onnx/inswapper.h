@@ -2,6 +2,7 @@
 #define INSWAPPER_H
 
 #include "LinuxFace/onnx/onnxDetector.h"
+#include "LinuxFace/Image/tensor_padding.h"
 
 namespace linuxface
 {

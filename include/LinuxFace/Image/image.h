@@ -7,8 +7,10 @@
 #include <onnxruntime_cxx_api.h>
 #include <turbojpeg.h>
 
+
 #include "LinuxFace/common.h"
 #include "LinuxFace/math_utils.h"
+#include "LinuxFace/Image/tensor_padding.h"
 
 namespace linuxface
 {
@@ -119,109 +121,18 @@ enum class ScalingAlgorithm
     BICUBIC,        // 8	6	7	7	7.0
 };
 
-// TODO: move this to another place.
-enum class PaddingType
-{
-    NO_PADDING,   // No padding
-    ZERO,         // Fill with zeros
-    CONSTANT,     // Fill with single constant value
-    RGB_CONSTANT, // Fill with RGB values (for color images)
-};
 
-// TODO: Lets refactor this to a more elegant
-struct TensorPadding
-{
-    PaddingType type;
-    union
-    {
-        float constant_value;
-        float rgb_values[3];
-    };
-
-    // Transform metadata for reversing tensor operations
-    mutable int tensor_width = 0;
-    mutable int tensor_height = 0;
-    mutable int resized_width = 0;
-    mutable int resized_height = 0;
-    mutable int offset_x = 0;
-    mutable int offset_y = 0;
-    mutable float scale_ratio = 1.0f;
-    mutable bool has_transform = false;
-
-    // Constructors for different padding types
-    static TensorPadding no_padding()
-    {
-        TensorPadding p;
-        p.type = PaddingType::NO_PADDING;
-        return p;
-    }
-
-    static TensorPadding zero()
-    {
-        TensorPadding p;
-        p.type = PaddingType::ZERO;
-        p.constant_value = 0.0f;
-        return p;
-    }
-
-    static TensorPadding constant(float value)
-    {
-        TensorPadding p;
-        p.type = PaddingType::CONSTANT;
-        p.constant_value = value;
-        return p;
-    }
-
-    static TensorPadding rgb(float r, float g, float b)
-    {
-        TensorPadding p;
-        p.type = PaddingType::RGB_CONSTANT;
-        p.rgb_values[0] = r;
-        p.rgb_values[1] = g;
-        p.rgb_values[2] = b;
-        return p;
-    }
-
-    static TensorPadding metric3d()
-    {
-        // Metric3D specific padding values [123.675, 116.28, 103.53] normalized
-        // return rgb(123.675f / 255.0f, 116.28f / 255.0f, 103.53f / 255.0f);
-        return rgb(123.675f, 116.28f, 103.53f);
-    }
-
-    static TensorPadding fsanet() { return constant(0.3f); }
-
-    static TensorPadding scrfd() { return zero(); }
-
-    void reset_transform() const
-    {
-        tensor_width = 0;
-        tensor_height = 0;
-        resized_width = 0;
-        resized_height = 0;
-        offset_x = 0;
-        offset_y = 0;
-        scale_ratio = 1.0f;
-        has_transform = false;
-    }
-};
 
 // Separate pixel operations for better performance
-class PixelOperations
-{
-  public:
+namespace PixelOperations {
     // Fast pixel access without bounds checking for performance-critical loops
-    inline static void
-    setPixelRGB(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b) noexcept
-    {
+    inline void setPixelRGB(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b) noexcept {
         data[idx] = r;
         data[idx + 1] = g;
         data[idx + 2] = b;
     }
 
-    inline static void setPixelRGBA(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b,
-                                    unsigned char a) noexcept
-    {
+    inline void setPixelRGBA(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b, unsigned char a) noexcept {
         data[idx] = r;
         data[idx + 1] = g;
         data[idx + 2] = b;
@@ -229,9 +140,9 @@ class PixelOperations
     }
 
     // Alpha blending optimized for different pixel formats
-    static void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize,
-                            unsigned char srcAlpha, unsigned char dstPixelSize, unsigned char dstAlpha = 255) noexcept;
-};
+    void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize,
+                    unsigned char srcAlpha, unsigned char dstPixelSize, unsigned char dstAlpha = 255) noexcept;
+}
 
 // Image class with proper resource management
 class Image
@@ -358,10 +269,12 @@ class Image
     ImageMetadata info{};
 
     // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
-    std::unique_ptr<Image> affineWarpBilinear(const double* M, int out_width, int out_height) const;
+    // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
+    // If invM is provided, it is used directly; otherwise, the inverse is computed from M
+    std::unique_ptr<Image> affineWarpBilinear(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
 
     // Affine warp for single-channel mask
-    std::unique_ptr<Image> affineWarpNearestNeighbour(const double* M, int out_width, int out_height) const;
+    std::unique_ptr<Image> affineWarpNearestNeighbour(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
 
     // Alpha blend src onto this image using mask (mask: 0=background, 255=full src)
     void alphaBlend(const Image& src, const Image& mask);

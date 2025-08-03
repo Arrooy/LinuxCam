@@ -12,6 +12,7 @@ namespace linuxface
 
 class ArcfaceRecognizer : public OnnxDetector
 {
+    friend class SwapPipeline; // Allow SwapPipeline access to preprocess for debug visualization
   public:
     explicit ArcfaceRecognizer(const std::string& onnx_model_path);
     ~ArcfaceRecognizer() = default;
@@ -19,10 +20,9 @@ class ArcfaceRecognizer : public OnnxDetector
     // Extracts a normalized embedding from an image and 5-point landmarks
     bool recognize(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5,
                    std::vector<float>& embedding);
-    // TODO: MADE PUBLIC FOR TESTING.
+  private:
     // Preprocess input image using 5-point landmarks
     std::unique_ptr<Image> preprocess(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5);
-  private:
     Ort::Value transform(const std::unique_ptr<Image>& img_rs) override;
 };
 

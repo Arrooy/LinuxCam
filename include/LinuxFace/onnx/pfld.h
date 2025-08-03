@@ -2,6 +2,7 @@
 #define PFLD_H
 
 #include "LinuxFace/detectors.h"
+#include "LinuxFace/Image/tensor_padding.h"
 #include "LinuxFace/onnx/onnxDetector.h"
 
 namespace linuxface

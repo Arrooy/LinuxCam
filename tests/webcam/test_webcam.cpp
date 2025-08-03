@@ -63,8 +63,6 @@ class MockWebcam : public Webcam
 
     bool isRunning() override { return running_; }
 
-    TJSAMP getChrominanceSubsampling() const override { return TJSAMP_420; }
-    int getQuality() const override { return 90; }
 
     // Test helpers
     bool wasSetupCalled() const { return setupCalled_; }
@@ -175,9 +173,9 @@ TEST_F(WebcamTest, WebcamSelection)
 
 TEST_F(WebcamTest, WebcamEncodingSettings)
 {
-    // Test encoding settings for output webcam
-    EXPECT_EQ(outputWebcam_->getChrominanceSubsampling(), TJSAMP_420);
-    EXPECT_EQ(outputWebcam_->getQuality(), 90);
+    // Test basic properties since encoding-specific methods are now in V4L2LoopbackWriter
+    EXPECT_EQ(outputWebcam_->getType(), WebcamType::VirtualOutput);
+    EXPECT_FALSE(outputWebcam_->isCurrentlySelected()); // Default state
 }
 
 TEST_F(WebcamTest, SelectedFormat)

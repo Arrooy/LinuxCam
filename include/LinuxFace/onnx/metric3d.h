@@ -2,6 +2,7 @@
 #define METRIC3D_H
 
 #include "LinuxFace/onnx/onnxDetector.h"
+#include "LinuxFace/Image/tensor_padding.h"
 
 // Source https://github.com/YvanYin/Metric3D/tree/main
 //  tested python inference, small model doesnt work well.

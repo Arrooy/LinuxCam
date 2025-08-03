@@ -61,10 +61,13 @@ void PaintWebcam::paintDevice()
         ImGui::Text("Encoding Algorithm %s", fromImageFormatToString(usedFormat.format).c_str());
         if (webcam_->getType() == WebcamType::VirtualOutput)
         {
-            ImGui::Text("Chrominance Subsampling: %s",
-                        subsampling_options[static_cast<int>(webcam_->getChrominanceSubsampling())]);
-
-            ImGui::Text("JPEG Quality: %d", webcam_->getQuality());
+            // Cast to V4L2LoopbackWriter to access V4L2-specific methods
+            auto v4l2Writer = std::dynamic_pointer_cast<V4L2LoopbackWriter>(webcam_);
+            if (v4l2Writer) {
+                ImGui::Text("Chrominance Subsampling: %s",
+                            subsampling_options[static_cast<int>(v4l2Writer->getChrominanceSubsampling())]);
+                ImGui::Text("JPEG Quality: %d", v4l2Writer->getQuality());
+            }
         }
     }
 
@@ -112,48 +115,40 @@ void PaintWebcam::paintPhysicalInput()
     // Show available Formats
     if (ImGui::CollapsingHeader("Available Formats", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        // Initialize if not exists. Search for the current format
-        if (selected_format_indices_.find(camera_key) == selected_format_indices_.end())
-        {
-            auto current_format = webcam_->getSelectedFormat();
-            selected_format_indices_[camera_key] = 0;
-            for (auto& format : webcam_->getCapabilities().formats)
-            {
-                if (current_format.pixelformat == format.pixelformat)
-                {
-                    break;
-                }
-                selected_format_indices_[camera_key]++;
-            }
-            selected_size_indices_[camera_key] = current_format.selectedFrameSize;
-            selected_fps_indices_[camera_key] = current_format.sizes[current_format.selectedFrameSize].selectedFPS;
-        }
-        // FIXME: We can remove the indices_ arrays.
-        int& selected_format = selected_format_indices_[camera_key];
-        int& selected_size = selected_size_indices_[camera_key];
-        int& selected_fps = selected_fps_indices_[camera_key];
-
+        auto current_format = webcam_->getSelectedFormat();
         CameraCapabilities capabilities = webcam_->getCapabilities();
+        
+        // Calculate current indices from webcam state
+        int current_format_idx = -1;
+        for (std::size_t i = 0; i < capabilities.formats.size(); i++)
+        {
+            if (current_format.pixelformat == capabilities.formats[i].pixelformat)
+            {
+                current_format_idx = static_cast<int>(i);
+                break;
+            }
+        }
+        
+        int current_size_idx = current_format.selectedFrameSize;
+        int current_fps_idx = current_format.sizes[current_format.selectedFrameSize].selectedFPS;
+
         for (std::size_t fmt_idx = 0; fmt_idx < capabilities.formats.size(); fmt_idx++)
         {
             ImGuiTreeNodeFlags flags = 0;
-            // Lets open all treenodes of the selected format, size and fps
-            if (selected_format == static_cast<int>(fmt_idx))
+            // Open treenode of the currently selected format
+            if (current_format_idx == static_cast<int>(fmt_idx))
             {
-                // flags |= ImGuiTreeNodeFlags_Selected;
                 flags |= ImGuiTreeNodeFlags_DefaultOpen;
             }
             const auto& format = capabilities.formats[fmt_idx];
             if (ImGui::TreeNodeEx(("Format: " + format.description).c_str(), flags))
             {
-                // TODO: FIXME: Make sure FPS selection works.
-
                 for (std::size_t size_idx = 0; size_idx < format.sizes.size(); size_idx++)
                 {
                     flags = 0;
-                    if (selected_format == static_cast<int>(fmt_idx) && selected_size == static_cast<int>(size_idx))
+                    // Auto-expand currently active size for better visibility
+                    if (current_format_idx == static_cast<int>(fmt_idx) && current_size_idx == static_cast<int>(size_idx))
                     {
-                        flags |= ImGuiTreeNodeFlags_Selected;
                         flags |= ImGuiTreeNodeFlags_DefaultOpen;
                     }
                     const auto& size = format.sizes[size_idx];
@@ -164,29 +159,28 @@ void PaintWebcam::paintPhysicalInput()
                         {
                             const auto& fps = size.getFps(fps_idx);
                             // common::log_error("User selected  fps amount %d in indx %d", fps, fps_idx);
-                            bool is_current = (selected_format == static_cast<int>(fmt_idx)
-                                               && selected_size == static_cast<int>(size_idx)
-                                               && selected_fps == static_cast<int>(fps_idx));
+                            bool is_current = (current_format_idx == static_cast<int>(fmt_idx)
+                                               && current_size_idx == static_cast<int>(size_idx)
+                                               && current_fps_idx == static_cast<int>(fps_idx));
 
                             ImGui::PushID(fmt_idx * 5000 + size_idx * 500 + fps_idx);
                             std::string fps_text = std::to_string(fps) + "fps";
                             if (ImGui::Selectable(fps_text.c_str(), is_current))
                             {
-                                if (is_current)
+                                if (!is_current) // Only apply if it's a different selection
                                 {
-                                    // Unselect the current format and size
-                                    selected_format = -1;
-                                    selected_size = -1;
-                                    selected_fps = -1;
-                                }
-                                else
-                                {
-                                    common::log_warn(
-                                        "User selected format index %d, size %dx%d (index %d) of index fps %d", fmt_idx,
-                                        size.width, size.height, size_idx, fps_idx);
-                                    selected_format = fmt_idx;
-                                    selected_size = size_idx;
-                                    selected_fps = fps_idx;
+                                    common::log_info("Applying format change: format %d, size %dx%d (index %d), fps %d", 
+                                                     fmt_idx, size.width, size.height, size_idx, fps_idx);
+                                    
+                                    // Apply changes immediately for input camera
+                                    auto inputCam = std::dynamic_pointer_cast<InputWebcam>(webcam_);
+                                    if (inputCam)
+                                    {
+                                        if (!inputCam->reconfigureFormat(fmt_idx, size_idx, fps_idx))
+                                        {
+                                            common::log_error("Failed to apply camera format changes");
+                                        }
+                                    }
                                 }
                             }
                             ImGui::PopID();
@@ -198,48 +192,15 @@ void PaintWebcam::paintPhysicalInput()
             }
         }
 
-        if (selected_format >= 0 && selected_size >= 0 && selected_fps >= 0)
+        // Show current selection info
+        if (current_format_idx >= 0 && current_size_idx >= 0 && current_fps_idx >= 0)
         {
             ImGui::Separator();
-            const auto& sel_format = capabilities.formats[selected_format];
-            const auto& sel_size = sel_format.sizes[selected_size];
-            const auto& sel_fps = sel_size.getFps(selected_fps);
-            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.4f, 1.0f), "Selection: %s - %ux%u (%d FPS)",
+            const auto& sel_format = capabilities.formats[current_format_idx];
+            const auto& sel_size = sel_format.sizes[current_size_idx];
+            const auto& sel_fps = sel_size.getFps(current_fps_idx);
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.4f, 1.0f), "Current: %s - %ux%u (%d FPS)",
                                sel_format.description.c_str(), sel_size.width, sel_size.height, sel_fps);
-        }
-
-        bool applyChangesDisabled = selected_format_indices_.find(camera_key) == selected_format_indices_.end()
-                                    || selected_format_indices_[camera_key] < 0
-                                    || selected_size_indices_[camera_key] < 0 || selected_fps_indices_[camera_key] < 0;
-
-        if (applyChangesDisabled)
-        {
-            ImGui::BeginDisabled();
-        }
-
-        if (ImGui::Button("Apply Changes"))
-        {
-            common::log_info("PaintWebcam::paintGeneralizedDeviceConfig - Applying device configuration changes for %s",
-                             camera_key.c_str());
-
-            // Apply format/size changes for input camera
-            auto inputCam = std::dynamic_pointer_cast<InputWebcam>(webcam_);
-            if (inputCam)
-            {
-                if (!inputCam->reconfigureFormat(selected_format_indices_[camera_key],
-                                                 selected_size_indices_[camera_key], selected_fps_indices_[camera_key]))
-                {
-                    // Reset selections after failure apply
-                    selected_format_indices_[camera_key] = -1;
-                    selected_size_indices_[camera_key] = -1;
-                    selected_fps_indices_[camera_key] = -1;
-                }
-            }
-        }
-
-        if (applyChangesDisabled)
-        {
-            ImGui::EndDisabled();
         }
     }
 }
@@ -252,7 +213,13 @@ void PaintWebcam::paintVirtualOutput()
     // Initialize if not exists
     if (selected_subsampling_.find(camera_key) == selected_subsampling_.end())
     {
-        selected_subsampling_[camera_key] = static_cast<int>(webcam_->getChrominanceSubsampling());
+        // Cast to V4L2LoopbackWriter to access V4L2-specific methods
+        auto v4l2Writer = std::dynamic_pointer_cast<V4L2LoopbackWriter>(webcam_);
+        if (v4l2Writer) {
+            selected_subsampling_[camera_key] = static_cast<int>(v4l2Writer->getChrominanceSubsampling());
+        } else {
+            selected_subsampling_[camera_key] = 0; // Default value
+        }
     }
 
 

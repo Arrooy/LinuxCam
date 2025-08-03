@@ -18,7 +18,6 @@ Ort::Value MODNetDetector::transform(const std::unique_ptr<Image>& image)
     }
     Ort::Value input_tensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
-    // TODO: Rename TensorPadding to TensorImageTransformation or whatever.
     padding_ = TensorPadding::no_padding();
 
     // Get pointer to tensor data.

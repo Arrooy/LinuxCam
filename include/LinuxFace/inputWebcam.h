@@ -22,9 +22,6 @@ class InputWebcam : public Webcam
     bool stop() override;
     bool isRunning() override;
 
-    TJSAMP getChrominanceSubsampling() const override { return TJSAMP::TJSAMP_444; };
-    int getQuality() const override { return 100; };
-
     bool getImage(std::unique_ptr<Image>& outImage);
 
     bool reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex);

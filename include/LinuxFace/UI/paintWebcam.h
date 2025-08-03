@@ -43,9 +43,6 @@ class PaintWebcam
     std::shared_ptr<Webcam> webcam_new_device_;
 
     // State tracking for UI selections per camera
-    std::map<std::string, int> selected_format_indices_;
-    std::map<std::string, int> selected_size_indices_;
-    std::map<std::string, int> selected_fps_indices_;
     std::map<std::string, int> selected_subsampling_;
     int selected_quality_value_{100};
 };

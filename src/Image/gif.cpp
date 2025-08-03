@@ -30,11 +30,10 @@ bool Gif::decodeAllFrames()
     }
     // Gif library only works with RGB
     const size_t frameSize = gif_->width * gif_->height * 3;
-    auto buffer = std::make_unique<uint8_t[]>(frameSize);
     int i = 0;
     do
     {
-        // TODO: FIXME: There are 2 buffer copy here, we could simplify
+        // Optimized: Direct allocation eliminates unnecessary buffer copy
         auto img = std::make_unique<Image>(frameSize);
         gd_render_frame(gif_, img->data());
 

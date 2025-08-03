@@ -59,7 +59,7 @@ bool V4L2LoopbackWriter::setupDevice()
     struct v4l2_requestbuffers reqbuf = {0};
     reqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
     reqbuf.memory = V4L2_MEMORY_MMAP;
-    reqbuf.count = 2; // FIXME: not really using both tho.
+    reqbuf.count = 1; // Single buffer for V4L2 loopback - sufficient for virtual devices
 
     if (ioctl(fd_, VIDIOC_REQBUFS, &reqbuf) < 0)
     {

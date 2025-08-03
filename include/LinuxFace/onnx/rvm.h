@@ -1,6 +1,7 @@
 #ifndef RVM_H
 #define RVM_H
 #include "LinuxFace/onnx/onnxDetector.h"
+#include "LinuxFace/Image/tensor_padding.h"
 
 /**
  * Model source https://github.com/PeterL1n/RobustVideoMatting

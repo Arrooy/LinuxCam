@@ -1,6 +1,7 @@
 #ifndef MODNET_H
 #define MODNET_H
 #include "LinuxFace/onnx/onnxDetector.h"
+#include "LinuxFace/Image/tensor_padding.h"
 namespace linuxface
 {
 // Source https://github.com/ZHKKKe/MODNet

@@ -1,9 +1,5 @@
 #include "LinuxFace/application.h"
 
-#include <csignal>
-#include <iostream>
-#include <memory>
-
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
@@ -13,6 +9,10 @@
 #include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/wflw_test.h"
 #include "config.hpp"
+
+#include <csignal>
+#include <iostream>
+#include <memory>
 
 using namespace linuxface;
 
@@ -287,83 +287,82 @@ bool Application::update()
     window_.pollEvents();
 
     std::unique_ptr<Image> image;
-    if (!cameraManager_->updateInput(image))
+    auto image_ready = cameraManager_->updateInput(image);
+    if (image_ready)
     {
-        return false;
-    }
-    image->info.filename = std::string("WebcamStream-") + std::to_string(image->info.width) + "x"
-                           + std::to_string(image->info.height) + ".jpg";
+        image->info.filename = std::string("WebcamStream-") + std::to_string(image->info.width) + "x"
+                               + std::to_string(image->info.height) + ".jpg";
 
-    process(image);
+        process(image);
 
-    // Update or create the base layer after processing
-    Layer* baseLayer = layerManager_->getBaseLayer();
-    if (baseLayer && baseLayer->type == LayerType::Image)
-    {
-        // Update the image in the base layer
-        baseLayer->img = std::move(image);
-    }
-    else
-    {
-        // Create the base layer if it doesn't exist
-        Layer newBaseLayer;
-        newBaseLayer.id = Layer::next_id++;
-        newBaseLayer.type = LayerType::Image;
-        newBaseLayer.name = "base";
-        newBaseLayer.isBaseLayer = true;
-        newBaseLayer.selected = true;
-        newBaseLayer.img = std::move(image);
-        newBaseLayer.dirty = true;
-        if (newBaseLayer.img)
+        // Update or create the base layer after processing
+        Layer* baseLayer = layerManager_->getBaseLayer();
+        if (baseLayer && baseLayer->type == LayerType::Image)
         {
-            newBaseLayer.img->info.layer = 0;
+            // Update the image in the base layer
+            baseLayer->img = std::move(image);
         }
-        layerManager_->addLayer(newBaseLayer);
-    }
-    // Output the current base image if available
-    if (baseLayer && baseLayer->img)
-    {
-        // Make a deep copy for output as unique_ptr
-        std::unique_ptr<Image> tempImage = baseLayer->img->deepCopy();
-
-        auto& layers = layerManager_->getLayers();
-        for (size_t i = 0; i < layers.size(); ++i)
+        else
         {
-            Layer& layer = layers[i];
-            if (layer.isBaseLayer)
+            // Create the base layer if it doesn't exist
+            Layer newBaseLayer;
+            newBaseLayer.id = Layer::next_id++;
+            newBaseLayer.type = LayerType::Image;
+            newBaseLayer.name = "base";
+            newBaseLayer.isBaseLayer = true;
+            newBaseLayer.selected = true;
+            newBaseLayer.img = std::move(image);
+            newBaseLayer.dirty = true;
+            if (newBaseLayer.img)
             {
-                // Skip the base layer itself
-                continue;
+                newBaseLayer.img->info.layer = 0;
             }
-            if (layer.type == LayerType::Image && layer.img)
-            {
-                // Paste each layer image onto the base image at the layer's position
-                tempImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
-            }
-            else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
-            {
-                // Paste the current GIF frame onto the base image at the layer's position
-                auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-                tempImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
-            }
+            layerManager_->addLayer(newBaseLayer);
         }
-        if (!cameraManager_->updateOutput(tempImage))
+        // Output the current base image if available
+        if (baseLayer && baseLayer->img)
         {
-            common::log_error("Failed to update output cameras");
+            // Make a deep copy for output as unique_ptr
+            std::unique_ptr<Image> tempImage = baseLayer->img->deepCopy();
+
+            auto& layers = layerManager_->getLayers();
+            for (size_t i = 0; i < layers.size(); ++i)
+            {
+                Layer& layer = layers[i];
+                if (layer.isBaseLayer)
+                {
+                    // Skip the base layer itself
+                    continue;
+                }
+                if (layer.type == LayerType::Image && layer.img)
+                {
+                    // Paste each layer image onto the base image at the layer's position
+                    tempImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
+                }
+                else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
+                {
+                    // Paste the current GIF frame onto the base image at the layer's position
+                    auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
+                    tempImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
+                }
+            }
+            if (!cameraManager_->updateOutput(tempImage))
+            {
+                common::log_error("Failed to update output cameras");
+            }
+        }
+        static bool saving = false;
+        // Check for space key press to capture and save webcam image
+        if (window_.isKeyPressed(GLFW_KEY_SPACE) && !saving)
+        {
+            saving = true;
+            captureAndSaveWebcamImageWithTimestamp();
+        }
+        else
+        {
+            saving = false;
         }
     }
-    static bool saving = false;
-    // Check for space key press to capture and save webcam image
-    if (window_.isKeyPressed(GLFW_KEY_SPACE) && !saving)
-    {
-        saving = true;
-        captureAndSaveWebcamImageWithTimestamp();
-    }
-    else
-    {
-        saving = false;
-    }
-
     ui_->handleKeyboard();
 
     // Start new UI frame

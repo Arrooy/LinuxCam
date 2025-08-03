@@ -30,6 +30,6 @@ TEST(ImageTransform, FlipHorizontal) {
 TEST(ImageTransform, AffineWarpBilinear) {
     Image img(Pixel(1,2,3), 2, 2);
     double M[6] = {1,0,0,0,1,0};
-    auto warped = img.affineWarpBilinear(M, 2, 2);
+    auto warped = img.affineWarpBilinear(M, 2, 2, nullptr);
     EXPECT_EQ(warped->info.width, 2);
 }

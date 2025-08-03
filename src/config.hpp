@@ -177,8 +177,7 @@ class Config
             common::log_error("Missing media_folder_path field in external_data section");
             return false;
         }
-        // TODO: Make sure it finishes with only one "/"
-        external_data_.mediaFolderPath = images["media_folder_path"].as<std::string>() + "/";
+        external_data_.mediaFolderPath = normalizePath(images["media_folder_path"].as<std::string>());
 
         if (!images["models_folder_path"])
         {
@@ -186,8 +185,7 @@ class Config
             return false;
         }
 
-        // TODO: Make sure it finishes with only one "/"
-        external_data_.modelFolderPath = images["models_folder_path"].as<std::string>() + "/";
+        external_data_.modelFolderPath = normalizePath(images["models_folder_path"].as<std::string>());
 
         if (!images["WFLW_folder_path"])
         {
@@ -320,6 +318,23 @@ class Config
     unsigned int windowWidth_;
     unsigned int windowHeight_;
     std::string windowTitle_;
+
+    // Helper function to ensure path ends with exactly one "/"
+    std::string normalizePath(const std::string& path) const
+    {
+        if (path.empty()) {
+            return "/";
+        }
+        
+        std::string normalized = path;
+        // Remove trailing slashes
+        while (!normalized.empty() && normalized.back() == '/') {
+            normalized.pop_back();
+        }
+        // Add exactly one slash
+        normalized += "/";
+        return normalized;
+    }
 };
 
 } // namespace linuxface
