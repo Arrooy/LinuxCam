@@ -46,7 +46,7 @@ bool Gif::decodeAllFrames()
         img->info.TJSampleFormat = TJSAMP_444;
         img->info.TJColorSpace = TJCS_RGB;
         img->info.TJPixelFormat = TJPF_RGB;
-        img->info.filename = filename_+"_"+std::to_string(i++);
+        img->info.filename = filename_ + "_" + std::to_string(i++);
         size_ += frameSize;
         frameImages_.push_back(std::move(img));
     } while (gd_get_frame(gif_));

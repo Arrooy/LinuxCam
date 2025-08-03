@@ -2,10 +2,9 @@
 
 #include <fcntl.h>
 #include <linux/videodev2.h>
+#include <set>
 #include <sys/ioctl.h>
 #include <unistd.h>
-
-#include <set>
 
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
@@ -89,7 +88,7 @@ bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage, std:
         // If outputImage already exists, paste the new frame next to the previous one
         // outputImage->paste(*newFrame, true);
         // TODO: Temporaly, use always new frame
-        outputImage = std::move(newFrame); 
+        outputImage = std::move(newFrame);
     }
 
     return outputImage != nullptr;

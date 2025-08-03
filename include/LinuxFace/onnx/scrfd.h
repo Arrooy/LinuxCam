@@ -6,7 +6,7 @@
 #include "LinuxFace/onnx/onnxDetector.h"
 
 /**
- * Using CPU -> 40ms 
+ * Using CPU -> 40ms
  * Using Cuda + CPUMemory -> 10ms
  */
 
@@ -15,7 +15,6 @@ namespace linuxface
 class SCRFDetector : public OnnxDetector
 {
   public:
-
     enum LandmarkIndex
     {
         LEYE = 36,
@@ -34,10 +33,9 @@ class SCRFDetector : public OnnxDetector
     void generate_points();
     std::unordered_map<int, std::vector<math_utils::StridePoint>> center_points_;
 
-    void
-    generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Value& bbox_pred, Ort::Value& kps_pred,
-                                      unsigned int stride, float score_threshold, float img_width, float img_height,
-                                      std::vector<Face>& faces);
+    void generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Value& bbox_pred, Ort::Value& kps_pred,
+                                           unsigned int stride, float score_threshold, float img_width,
+                                           float img_height, std::vector<Face>& faces);
 
     static constexpr const unsigned int num_anchors_ = 2;
     const std::vector<int> feat_stride_fpn_;

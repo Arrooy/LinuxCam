@@ -1,5 +1,6 @@
 
 #include "LinuxFace/window.h"
+
 #include <iostream>
 
 #include "LinuxFace/common.h"
@@ -96,9 +97,10 @@ bool Window::initialize()
 void Window::onFramebufferResize(int width, int height)
 {
     double now = glfwGetTime();
-    
+
     // Fallback for test environments where GLFW is not initialized
-    if (now == 0.0) {
+    if (now == 0.0)
+    {
         // Use a simple counter-based approach
         static double testTime = 0.0;
         testTime += 0.05; // Small increment, less than throttle interval
@@ -148,7 +150,8 @@ void Window::updateResizeEvents()
     {
         double now = glfwGetTime();
         // Fallback for test environments where GLFW is not initialized
-        if (now == 0.0) {
+        if (now == 0.0)
+        {
             static double testTime = 0.0;
             testTime += 0.5; // Simulate time passing faster for debounce
             now = testTime;
@@ -205,6 +208,8 @@ void Window::setResizeCallback(std::function<void(int, int)> cb)
 bool Window::isKeyPressed(int key) const
 {
     if (!window_)
+    {
         return false;
+    }
     return glfwGetKey(window_, key) == GLFW_PRESS;
 }

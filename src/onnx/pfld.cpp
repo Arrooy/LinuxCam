@@ -35,9 +35,10 @@ Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
     // image->toTensor(tensor_data, pfld_padding_, target_width, target_height, NormalizationType::MINMAX);
 
     // Convert image to tensor
-    image_utils::ImageView<unsigned char> srcView{image->data(), image->info.width, image->info.height, image->info.pixelSizeBytes};
+    image_utils::ImageView<unsigned char> srcView{image->data(), image->info.width, image->info.height,
+                                                  image->info.pixelSizeBytes};
     image_utils::ImageView<float> dstView{tensor_data, target_width, target_height, 3};
-    image_utils::bicubicScaling<unsigned char, float, NormalizationType::MINMAX,ImageLayout::CHW>(srcView, dstView);
+    image_utils::bicubicScaling<unsigned char, float, NormalizationType::MINMAX, ImageLayout::CHW>(srcView, dstView);
 
     auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, target_width, target_height);
     if (test)

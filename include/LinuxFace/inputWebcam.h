@@ -1,9 +1,8 @@
 #ifndef INPUTWEBCAM_H
 #define INPUTWEBCAM_H
 
-#include <linux/videodev2.h>
-
 #include <atomic>
+#include <linux/videodev2.h>
 #include <thread>
 
 #include "LinuxFace/codec.h"

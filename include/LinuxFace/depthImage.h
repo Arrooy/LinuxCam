@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "LinuxFace/Image/image.h"
-//TODO: Still under evaluation.
+// TODO: Still under evaluation.
 namespace linuxface
 {
 
@@ -92,7 +92,8 @@ class DepthImage : public Image
 
         if (normalDataSize != expected_bytes)
         {
-            common::log_warn("DepthImage::setNormals - Expected: %zu bytes, Got: %zu bytes", static_cast<size_t>(expected_bytes), static_cast<size_t>(normalDataSize));
+            common::log_warn("DepthImage::setNormals - Expected: %zu bytes, Got: %zu bytes",
+                             static_cast<size_t>(expected_bytes), static_cast<size_t>(normalDataSize));
         }
 
         size_t element_count = normalDataSize / sizeof(float);

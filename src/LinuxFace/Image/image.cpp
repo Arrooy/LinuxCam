@@ -1,11 +1,10 @@
 #include "LinuxFace/Image/image.h"
 
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
 #include <vector>
 
 #include "LinuxFace/Image/image_utils.h"

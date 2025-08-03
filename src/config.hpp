@@ -269,14 +269,14 @@ class Config
 
     bool loadConfiguration()
     {
-
         // Fail if config is empty (file missing or invalid)
         if (!config_ || config_.IsNull())
         {
             common::log_error("Config: YAML file missing or invalid");
             return false;
         }
-        if (config_["enable_gpu"]) {
+        if (config_["enable_gpu"])
+        {
             enableGPU_ = config_["enable_gpu"].as<bool>();
         }
         return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()
@@ -285,12 +285,12 @@ class Config
 
     // Get configuration sections
     std::vector<WebcamDevice> getWebcams() const { return cameras_; }
-    std::string inline getMediaFolderPath() const { return external_data_.mediaFolderPath; }
-    std::string inline getModelFolderPath() const { return external_data_.modelFolderPath; }
-    std::string inline getWFLWFolderPath() const { return external_data_.WFLWFolderPath; }
+    inline std::string getMediaFolderPath() const { return external_data_.mediaFolderPath; }
+    inline std::string getModelFolderPath() const { return external_data_.modelFolderPath; }
+    inline std::string getWFLWFolderPath() const { return external_data_.WFLWFolderPath; }
 
-    bool inline preloadExternalContent() const { return external_data_.preLoading; }
-    bool inline isGPUEnabled() const { return enableGPU_; }
+    inline bool preloadExternalContent() const { return external_data_.preLoading; }
+    inline bool isGPUEnabled() const { return enableGPU_; }
     void getWindowSize(int& width, int& height) const
     {
         width = windowWidth_;

@@ -1,9 +1,8 @@
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <string>
+#include <unistd.h>
 
 #include "LinuxFace/application.h"
 #include "config.hpp"

@@ -1,24 +1,26 @@
 #pragma once
 #include <memory>
 #include <vector>
+
 #include "LinuxFace/Image/image.h"
-#include "LinuxFace/onnx/inswapper.h"
-#include "LinuxFace/onnx/arcfaceRecognizer.h"
-#include "LinuxFace/onnx/scrfd.h"
 #include "LinuxFace/math_utils.h"
+#include "LinuxFace/onnx/arcfaceRecognizer.h"
+#include "LinuxFace/onnx/inswapper.h"
+#include "LinuxFace/onnx/scrfd.h"
 
-namespace linuxface {
+namespace linuxface
+{
 
-class SwapPipeline {
-public:
-    SwapPipeline(std::shared_ptr<InSwapper> inswapper,
-                 std::shared_ptr<ArcfaceRecognizer> arcface,
+class SwapPipeline
+{
+  public:
+    SwapPipeline(std::shared_ptr<InSwapper> inswapper, std::shared_ptr<ArcfaceRecognizer> arcface,
                  std::shared_ptr<SCRFDetector> scrfd);
 
     // Call once per frame. Returns true if swap was performed.
     bool run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& target_img);
 
-private:
+  private:
     std::shared_ptr<InSwapper> inswapper_;
     std::shared_ptr<ArcfaceRecognizer> arcface_;
     std::shared_ptr<SCRFDetector> scrfd_;
@@ -29,7 +31,6 @@ private:
     bool debug_{false};
     std::unique_ptr<Image> debug_target_image_;
     std::unique_ptr<Image> debug_target_image_aligned_;
-
 };
 
 } // namespace linuxface

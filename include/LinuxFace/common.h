@@ -1,21 +1,20 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <errno.h>
-#include <fcntl.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <string>
-#include <unordered_map>
-#include <algorithm>
-#include <vector>
+#include <errno.h>
+#include <fcntl.h>
 #include <memory>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <unordered_map>
+#include <vector>
 // Macro to clear a buffer
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
@@ -275,12 +274,10 @@ inline void errno_log(const char* s)
 }
 
 
-
 inline bool long_write(int fd, const void* buf, size_t size)
 {
-
     // Write the buff data
-    size_t written {0u};
+    size_t written{0u};
     const char* ptr = static_cast<const char*>(buf);
     while (written < size)
     {
@@ -290,12 +287,12 @@ inline bool long_write(int fd, const void* buf, size_t size)
             log_error("common::long_write - Write buf data failed. Written %zd bytes", written);
             return false;
         }
-         written += static_cast<size_t>(result);
+        written += static_cast<size_t>(result);
     }
     return true;
 }
 
-template<typename T>
+template <typename T>
 std::vector<std::string> getKeysFromMap(const std::unordered_map<std::string, std::shared_ptr<T>>& map)
 {
     std::vector<std::string> keys;
@@ -310,8 +307,9 @@ std::vector<std::string> getKeysFromMap(const std::unordered_map<std::string, st
 }
 
 // Interpolate between two T
-template<typename T>
-T lerp(T a, T b, T t) {
+template <typename T>
+T lerp(T a, T b, T t)
+{
     return a + t * (b - a);
 }
 

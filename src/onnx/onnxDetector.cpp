@@ -6,11 +6,11 @@
 using namespace linuxface;
 
 OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
-    : env_(ORT_LOGGING_LEVEL_FATAL, "OnnxDetector"),
-      session_options_{},
-      detector_session_{nullptr},
-      memory_info_{nullptr},
-      io_binding_(nullptr)
+    : env_(ORT_LOGGING_LEVEL_FATAL, "OnnxDetector")
+    , session_options_{}
+    , detector_session_{nullptr}
+    , memory_info_{nullptr}
+    , io_binding_(nullptr)
 {
     // session_options_.SetInterOpNumThreads(2);  // e.g., parallel execution of independent ops
     // session_options_.SetIntraOpNumThreads(4);  // e.g., threads used inside each op
@@ -79,7 +79,8 @@ OnnxDetector::OnnxDetector(const std::string& onnx_model_path)
         common::log_error("OnnxDetector: Failed to create ONNX session: %s", e.what());
         ready_ = false;
         return;
-    }catch (const std::exception& e)
+    }
+    catch (const std::exception& e)
     {
         common::log_error("OnnxDetector: Failed to create ONNX session: %s", e.what());
         ready_ = false;

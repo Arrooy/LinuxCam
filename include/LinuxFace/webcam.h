@@ -2,11 +2,10 @@
 #define WEBCAM_H
 
 #include <linux/videodev2.h>
-#include <turbojpeg.h>
-
 #include <memory>
 #include <string>
 #include <tuple>
+#include <turbojpeg.h>
 #include <vector>
 
 #include "LinuxFace/codecFactory.h"

@@ -891,7 +891,7 @@ class LanczosKernel
   public:
     static constexpr int RADIUS = 3; // Lanczos-3 for good quality/speed balance
 
-    static inline double lanczos(double x)
+    inline static double lanczos(double x)
     {
         if (x == 0.0)
         {

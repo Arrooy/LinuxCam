@@ -1,16 +1,16 @@
 #include "LinuxFace/imageRenderGL.h"
 
-#include <unistd.h>
+#include "imgui.h"
 
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <unordered_map>
 
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-#include "imgui.h"
 
 // Vertex shader for full-screen quad
 const char* vertexShaderSource = R"(
@@ -159,7 +159,7 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
                 continue;
             }
             GLuint texId = getOrCreateTexture(*renderImg, layer.id, layer.dirty);
-           if (layer.dirty)
+            if (layer.dirty)
             {
                 layer.dirty = false;
             }
@@ -167,11 +167,11 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
             {
                 std::string key = std::to_string(layer.id);
                 auto& entry = textureCache_[key];
-                if(entry.texId != texId)
+                if (entry.texId != texId)
                 {
-                    common::log_error("Texture ID mismatch for layer %s: expected %u, got %u",
-                                      key.c_str(), entry.texId, texId);
-                                      continue; // Mismatch, skip rendering this layer
+                    common::log_error("Texture ID mismatch for layer %s: expected %u, got %u", key.c_str(), entry.texId,
+                                      texId);
+                    continue; // Mismatch, skip rendering this layer
                 }
                 bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
                                      || static_cast<size_t>(entry.width) != renderImg->info.width

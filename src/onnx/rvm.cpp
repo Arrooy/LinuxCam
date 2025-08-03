@@ -66,7 +66,7 @@ void RobustVideoMatting::initialize()
 
 bool RobustVideoMatting::isImageCompatible(const std::unique_ptr<Image>& image)
 {
-    if(lastHeight_ == 0 && lastWidth_ == 0)
+    if (lastHeight_ == 0 && lastWidth_ == 0)
     {
         return true;
     }

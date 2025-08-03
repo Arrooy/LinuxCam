@@ -1,22 +1,24 @@
 #ifndef WFLW_TEST_H
 #define WFLW_TEST_H
 
-#include <string>
-#include <vector>
 #include <array>
 #include <fstream>
-#include <sstream>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "LinuxFace/imageLoader.h" // Include ImageLoader header
-#include "LinuxFace/math_utils.h" // Assuming this contains Point and Rect
+#include "LinuxFace/math_utils.h"  // Assuming this contains Point and Rect
 
-namespace linuxface {
+namespace linuxface
+{
 
-struct WFLWExample {
+struct WFLWExample
+{
     std::vector<math_utils::Point<double>> landmarks; // 98 landmarks
-    math_utils::Rect<double> bounding_box; // Detection rectangle
-    std::array<int, 6> attributes; // pose, expression, illumination, make-up, occlusion, blur
+    math_utils::Rect<double> bounding_box;            // Detection rectangle
+    std::array<int, 6> attributes;                    // pose, expression, illumination, make-up, occlusion, blur
 
     bool isNormalPose() const { return attributes[0] == 0; }
     bool isNormalExpression() const { return attributes[1] == 0; }
@@ -28,14 +30,15 @@ struct WFLWExample {
     std::shared_ptr<Image> image; // Store the loaded image
 };
 
-class WFLWLoader {
-public:
-    WFLWLoader(const std::string& data_file_path, const int max_samples=-1);
+class WFLWLoader
+{
+  public:
+    WFLWLoader(const std::string& data_file_path, const int max_samples = -1);
 
     bool load_example(int index, WFLWExample& example) const;
     int get_num_examples() const { return examples_.size(); }
 
-private:
+  private:
     std::vector<WFLWExample> examples_;
 
     // Helper function to parse a single line from the data file

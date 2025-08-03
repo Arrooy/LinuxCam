@@ -15,8 +15,7 @@ void LayerManager::addLayer(const Layer& layer)
 
 void LayerManager::removeLayer(size_t layerId)
 {
-    layers_.erase(std::remove_if(layers_.begin(), layers_.end(),
-                                 [layerId](const Layer& l) { return l.id == layerId; }),
+    layers_.erase(std::remove_if(layers_.begin(), layers_.end(), [layerId](const Layer& l) { return l.id == layerId; }),
                   layers_.end());
 }
 
@@ -61,7 +60,7 @@ Layer* LayerManager::getBaseLayer()
 {
     for (auto& l : layers_)
     {
-        if (l.isBaseLayer )
+        if (l.isBaseLayer)
         {
             return &l;
         }

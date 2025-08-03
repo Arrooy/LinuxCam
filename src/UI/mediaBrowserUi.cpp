@@ -1,7 +1,6 @@
 #include "LinuxFace/UI/mediaBrowserUi.h"
 
 #include <GL/gl.h>
-
 #include <algorithm>
 
 namespace linuxface

@@ -303,7 +303,7 @@ bool ImageLoader::extractMetadata()
     // Create source image from raw data for header parsing
     Image temp_image(const_cast<unsigned char*>(raw_data_.data()), raw_data_.size(), false);
     temp_image.info = metadata_;
-    
+
     // Try to get metadata without full decode
     unsigned long raw_needed_size = 0;
     if (temp_decoder->decodeHeader(temp_image, raw_needed_size))

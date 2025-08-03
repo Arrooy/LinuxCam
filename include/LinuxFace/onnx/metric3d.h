@@ -3,9 +3,9 @@
 
 #include "LinuxFace/onnx/onnxDetector.h"
 
-//Source https://github.com/YvanYin/Metric3D/tree/main
-// tested python inference, small model doesnt work well.
-// large model works nice but inference time is too big.
+// Source https://github.com/YvanYin/Metric3D/tree/main
+//  tested python inference, small model doesnt work well.
+//  large model works nice but inference time is too big.
 
 namespace linuxface
 {

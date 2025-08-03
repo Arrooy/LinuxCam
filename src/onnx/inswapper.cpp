@@ -41,7 +41,8 @@ bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<
     }
 
     const int target_size = input_width_;
-    auto [aligned, affine] = image_utils::affine_face_transform(dst_face, dst_landmarks, image_utils::template_128, target_size);
+    auto [aligned, affine] =
+        image_utils::affine_face_transform(dst_face, dst_landmarks, image_utils::template_128, target_size);
     if (!aligned)
     {
         return false;

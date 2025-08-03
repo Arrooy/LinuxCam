@@ -1,6 +1,8 @@
 #ifndef MEDIABROWSERUI_H
 #define MEDIABROWSERUI_H
 
+#include "imgui.h"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -8,7 +10,6 @@
 
 #include "LinuxFace/Image/mediaManager.h"
 #include "LinuxFace/UI/layerManager.h"
-#include "imgui.h"
 
 namespace linuxface
 {
@@ -42,7 +43,7 @@ class MediaBrowserUI
 
     std::shared_ptr<MediaManager> mediaManager;
     std::shared_ptr<LayerManager> layerManager_;
- 
+
     // UI State
     bool showImages = true;
     bool showGifs = true;

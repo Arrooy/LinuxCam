@@ -1,11 +1,10 @@
 #ifndef MATH_UTILS_H
 #define MATH_UTILS_H
-#include <stdlib.h>
-
 #include <cmath>
 #include <cstring>
-#include <vector>
+#include <stdlib.h>
 #include <type_traits>
+#include <vector>
 
 namespace linuxface
 {
@@ -50,18 +49,18 @@ struct Rect
     Rect(T left, T top, T right, T bottom) : l(left), t(top), r(right), b(bottom) {}
 
     Rect(Point<T> leftTopCorner, T w, T h)
-        : l(static_cast<T>(leftTopCorner.x)),
-          t(static_cast<T>(leftTopCorner.y)),
-          r(static_cast<T>(leftTopCorner.x + w)),
-          b(static_cast<T>(leftTopCorner.y + h))
+        : l(static_cast<T>(leftTopCorner.x))
+        , t(static_cast<T>(leftTopCorner.y))
+        , r(static_cast<T>(leftTopCorner.x + w))
+        , b(static_cast<T>(leftTopCorner.y + h))
     {
     }
 
     Rect(Point<T> leftTopCorner, Point<T> rightBottomCorner)
-        : l(static_cast<T>(leftTopCorner.x)),
-          t(static_cast<T>(leftTopCorner.y)),
-          r(static_cast<T>(rightBottomCorner.x)),
-          b(static_cast<T>(rightBottomCorner.y))
+        : l(static_cast<T>(leftTopCorner.x))
+        , t(static_cast<T>(leftTopCorner.y))
+        , r(static_cast<T>(rightBottomCorner.x))
+        , b(static_cast<T>(rightBottomCorner.y))
     {
     }
 
@@ -69,18 +68,26 @@ struct Rect
     inline T y() const { return t; }
 
     // Assuming r >= l and b >= t
-    inline T width() const { 
-        if constexpr (std::is_floating_point_v<T>) {
-            return r - l; 
-        } else {
-            return r - l + 1; 
+    inline T width() const
+    {
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            return r - l;
+        }
+        else
+        {
+            return r - l + 1;
         }
     }
-    inline T height() const { 
-        if constexpr (std::is_floating_point_v<T>) {
-            return b - t; 
-        } else {
-            return b - t + 1; 
+    inline T height() const
+    {
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            return b - t;
+        }
+        else
+        {
+            return b - t + 1;
         }
     }
 
@@ -120,25 +127,26 @@ std::vector<Point<long>> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
     T dx = x2 - x1;
     T dy = y2 - y1;
     T steps = std::round(std::max(std::abs(dx), std::abs(dy)));
-    
-    if (steps == 0) {
+
+    if (steps == 0)
+    {
         // Same start and end point
         result.emplace_back(Point<long>(std::lround(x1), std::lround(y1)));
         return result;
     }
-    
+
     double xInc = static_cast<double>(dx) / static_cast<double>(steps);
     double yInc = static_cast<double>(dy) / static_cast<double>(steps);
     double x = static_cast<double>(x1);
     double y = static_cast<double>(y1);
-    
+
     for (int i = 0; i < steps; i++)
     {
         result.emplace_back(Point<long>(std::lround(x), std::lround(y)));
         x += xInc;
         y += yInc;
     }
-    
+
     // Add final point, but check for duplicates
     Point<long> finalPoint;
     if constexpr (std::is_floating_point_v<T>)
@@ -149,13 +157,13 @@ std::vector<Point<long>> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
     {
         finalPoint = Point<long>(x2, y2);
     }
-    
+
     // Only add final point if it's different from the last point
     if (result.empty() || result.back().x != finalPoint.x || result.back().y != finalPoint.y)
     {
         result.emplace_back(finalPoint);
     }
-    
+
     return result;
 }
 

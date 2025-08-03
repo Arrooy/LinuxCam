@@ -6,6 +6,8 @@
 #include <GLFW/glfw3.h>
 // clang-format on
 
+#include "imgui.h"
+
 #include <map>
 #include <memory>
 #include <queue>
@@ -13,11 +15,10 @@
 
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/mediaManager.h"
+#include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/UI/mediaBrowserUi.h"
 #include "LinuxFace/UI/paintWebcam.h"
 #include "LinuxFace/cameraManager.h"
-#include "LinuxFace/UI/layerManager.h"
-#include "imgui.h"
 
 namespace linuxface
 {

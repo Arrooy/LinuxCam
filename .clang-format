@@ -42,17 +42,27 @@ BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeTernaryOperators: true
 BreakStringLiterals: true
 IncludeBlocks: Regroup
-IncludeCategories: # new
-  - Regex: '^<.*\.h>'
+IncludeCategories:
+  - Regex: '^"[^/]*\.h"' # 1. Own header (same directory)
     Priority: 1
     SortPriority: 0
     CaseSensitive: false
-  - Regex: '^"(.*)"'
+
+  - Regex: "^<.*>" # 2. Standard library headers
     Priority: 2
     SortPriority: 1
     CaseSensitive: false
-  - Regex: '.*'
+
+  - Regex: '^"(third_party|external|libs)/.*"' # 3. Third-party libs
     Priority: 3
+    SortPriority: 2
+    CaseSensitive: false
+
+  - Regex: '^".*"' # 4. Other project headers
+    Priority: 4
+    SortPriority: 3
+    CaseSensitive: false
+
 IndentWrappedFunctionNames: false
 ReflowComments: true
 SpaceAfterCStyleCast: true
@@ -69,9 +79,9 @@ CompactNamespaces: true
 NamespaceIndentation: None
 FixNamespaceComments: true
 InsertBraces: true
+QualifierAlignment: Custom
 QualifierOrder: [inline, static, const, type, volatile]
 ConstructorInitializerAllOnOneLineOrOnePerLine: true # new
 BreakConstructorInitializersBeforeComma: true # new
 IndentPPDirectives: AfterHash # new
 SpaceAfterTemplateKeyword: true # new
-DeriveFunctionDeclarationIndentation: false # new

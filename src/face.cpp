@@ -126,7 +126,7 @@ void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints,
         return; // No landmarks to paint
     }
 
-    for (auto const& face_part : landmarks_)
+    for (const auto& face_part : landmarks_)
     {
         if (face_part.first == FaceIndex::SILHOUETTE)
         {
@@ -240,7 +240,8 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
             if (lastPoint.x != -1 && lastPoint.y != -1)
             {
                 // We know a last point. Proceed with DDA and paint it
-                std::vector<math_utils::Point<>> points = math_utils::DDA(static_cast<double>(lastPoint.x), static_cast<double>(lastPoint.y), l.p.x, l.p.y);
+                std::vector<math_utils::Point<>> points =
+                    math_utils::DDA(static_cast<double>(lastPoint.x), static_cast<double>(lastPoint.y), l.p.x, l.p.y);
                 image->paintPoints(points, color);
             }
             lastPoint = l.p;
@@ -315,11 +316,17 @@ std::vector<math_utils::Point3D> Face::getFivePointLandmarksArcFaceOrder() const
 {
     std::vector<math_utils::Point3D> result(5);
     if (landmarks_.count(LEYE) && !landmarks_.at(LEYE).empty())
+    {
         result[0] = landmarks_.at(LEYE)[0].p;
+    }
     if (landmarks_.count(REYE) && !landmarks_.at(REYE).empty())
+    {
         result[1] = landmarks_.at(REYE)[0].p;
+    }
     if (landmarks_.count(NOSE) && !landmarks_.at(NOSE).empty())
+    {
         result[2] = landmarks_.at(NOSE)[0].p;
+    }
     if (landmarks_.count(OUTERMOUTH) && landmarks_.at(OUTERMOUTH).size() >= 2)
     {
         result[3] = landmarks_.at(OUTERMOUTH)[0].p;
@@ -335,7 +342,9 @@ std::vector<math_utils::Point<>> Face::getFivePointLandmarksArcFaceOrder2D() con
     auto pts3d = getFivePointLandmarksArcFaceOrder();
     result.reserve(pts3d.size());
     for (const auto& pt : pts3d)
+    {
         result.emplace_back(static_cast<long>(pt.x), static_cast<long>(pt.y));
+    }
     return result;
 }
 
@@ -346,7 +355,9 @@ math_utils::Point3D Face::getLandmarkByIndex(unsigned int id) const
         for (const auto& landmark : face_part.second)
         {
             if (landmark.i == id)
+            {
                 return landmark.p;
+            }
         }
     }
     return math_utils::Point3D(-1, -1, -1);

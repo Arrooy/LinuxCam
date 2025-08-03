@@ -2,9 +2,9 @@
 
 #include <cmath>
 
+#include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-#include "LinuxFace/Image/image_utils.h"
 
 using namespace linuxface;
 
@@ -16,7 +16,8 @@ std::unique_ptr<Image>
 ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5)
 {
     const int target_size = 112;
-    auto [aligned, affine] = image_utils::affine_face_transform(input_img, face_landmark_5, image_utils::template_112, target_size);
+    auto [aligned, affine] =
+        image_utils::affine_face_transform(input_img, face_landmark_5, image_utils::template_112, target_size);
     if (aligned)
     {
         return std::move(aligned);
@@ -75,7 +76,9 @@ bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math
         {
             np_array += std::to_string(embedding[i]);
             if (i != embedding.size() - 1)
+            {
                 np_array += ", ";
+            }
         }
         np_array += "])";
         common::log_info("%s", np_array.c_str());

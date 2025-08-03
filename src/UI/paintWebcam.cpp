@@ -1,10 +1,11 @@
 #include "LinuxFace/UI/paintWebcam.h"
 
+#include "imgui.h"
+
 #include "LinuxFace/common.h"
 #include "LinuxFace/inputWebcam.h"
 #include "LinuxFace/v4l2loopbackWritter.h"
 #include "LinuxFace/webcam.h"
-#include "imgui.h"
 
 using namespace linuxface;
 const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};

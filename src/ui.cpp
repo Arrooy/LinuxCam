@@ -1,10 +1,11 @@
 #include "LinuxFace/ui.h"
 
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 #include "LinuxFace/UI/paintWebcam.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
 
 using namespace linuxface;
 
@@ -443,7 +444,7 @@ void UI::handleKeyboard()
                 return;
             }
         }
-        if(ImGui::IsKeyPressed(ImGuiKey_Backspace) || ImGui::IsKeyPressed(ImGuiKey_Delete))
+        if (ImGui::IsKeyPressed(ImGuiKey_Backspace) || ImGui::IsKeyPressed(ImGuiKey_Delete))
         {
             auto selected_layer = mediaBrowserUI_->getSelectedLayer();
             if (selected_layer)

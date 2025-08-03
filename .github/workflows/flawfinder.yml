@@ -8,7 +8,7 @@ name: Security Analysis - Flawfinder
 on:
   # Run after CI or Code Formatting workflows complete successfully
   workflow_run:
-    workflows: ["CI Workflow", "Code Formatting"]
+    workflows: ["CI Workflow"]
     types: [completed]
     branches: [develop]
   

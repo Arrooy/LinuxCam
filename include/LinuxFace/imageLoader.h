@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "LinuxFace/codec.h"
 #include "LinuxFace/Image/image.h"
+#include "LinuxFace/codec.h"
 
 namespace linuxface
 {

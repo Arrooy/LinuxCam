@@ -32,13 +32,13 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         std::vector<Face> target_faces = scrfd_->detect(target_img);
         if (!target_faces.empty())
         {
-            common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)",
-                         99, target_faces[0].getBoundingBox().rect.x(), target_faces[0].getBoundingBox().rect.y(),
-                         target_faces[0].getBoundingBox().rect.width(), target_faces[0].getBoundingBox().rect.height());
+            common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", 99,
+                             target_faces[0].getBoundingBox().rect.x(), target_faces[0].getBoundingBox().rect.y(),
+                             target_faces[0].getBoundingBox().rect.width(),
+                             target_faces[0].getBoundingBox().rect.height());
             target_img_landmarks_ = target_faces[0].getFivePointLandmarksArcFaceOrder2D();
             if (target_img_landmarks_.size() == 5)
             {
-                
                 // print keypoints
                 common::log_info("Target image landmarks: ");
                 for (const auto& landmark : target_img_landmarks_)
@@ -53,7 +53,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             {
                 debug_target_image_ = std::move(target_img->deepCopy());
                 target_faces[0].paintBoundingBox(debug_target_image_, Pixel(255, 0, 0));
-                target_faces[0].paintAllFaceLandmarks(debug_target_image_, false, Pixel(255,0,0), 5.0f);
+                target_faces[0].paintAllFaceLandmarks(debug_target_image_, false, Pixel(255, 0, 0), 5.0f);
                 debug_target_image_aligned_ = arcface_->preprocess(*target_img, target_img_landmarks_);
                 debug_target_image_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
                 // debug_target_image_aligned_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
@@ -79,8 +79,8 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
     for (const auto& face : scrfd_faces)
     {
         // print bounding box coords
-        common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)",
-                         i, face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
+        common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", i,
+                         face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
                          face.getBoundingBox().rect.width(), face.getBoundingBox().rect.height());
         std::vector<math_utils::Point<>> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (webcam_landmarks.size() != 5)
@@ -89,7 +89,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
                               static_cast<int>(webcam_landmarks.size()));
             return false;
         }
-        common::log_info("Source image landmarks %d",i++);
+        common::log_info("Source image landmarks %d", i++);
         for (const auto& landmark : webcam_landmarks)
         {
             common::log_info("  - (%ld, %ld)", landmark.x, landmark.y);
@@ -169,7 +169,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
                 face.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 2.0f);
             }
             auto scale = 1;
-            if(scale != 1)
+            if (scale != 1)
             {
                 image->scaleInPlace(scale);
                 output->scaleInPlace(scale);

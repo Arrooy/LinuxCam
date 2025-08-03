@@ -1,10 +1,11 @@
 #if 0
-#ifndef JPEGMANAGER_H
-#define JPEGMANAGER_H
+#    ifndef JPEGMANAGER_H
+#        define JPEGMANAGER_H
 
-#include <turbojpeg.h>
-#include "LinuxFace/Image/image.h"
-#include <memory>
+#        include <memory>
+#        include <turbojpeg.h>
+
+#        include "LinuxFace/Image/image.h"
 
 namespace linuxface
 {
@@ -56,5 +57,5 @@ class JPEGManager
 
 } // namespace linuxface
 
-#endif // JPEGMANAGER_H
+#    endif // JPEGMANAGER_H
 #endif

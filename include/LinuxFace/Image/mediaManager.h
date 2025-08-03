@@ -1,12 +1,12 @@
 #ifndef MEDIAMANAGER_H
 #define MEDIAMANAGER_H
 
-#include <memory>
-#include <string>
-#include <unordered_map>
 #include <atomic>
-#include <thread>
+#include <memory>
 #include <mutex>
+#include <string>
+#include <thread>
+#include <unordered_map>
 
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/image.h"

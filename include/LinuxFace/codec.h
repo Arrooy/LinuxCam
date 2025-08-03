@@ -877,7 +877,8 @@ class PPMDecoder : public Decoder
             common::log_error("PPMDecoder::decodeHeader - Invalid header. Not enough data for pixel array");
             return false;
         }
-        common::log_info("PPMDecoder::decodeHeader - Parsed header: width=%lu height=%lu maxval=%u header_end=%zu", width, height, maxval, header_end);
+        common::log_info("PPMDecoder::decodeHeader - Parsed header: width=%lu height=%lu maxval=%u header_end=%zu",
+                         width, height, maxval, header_end);
         srcImage.info.width = width;
         srcImage.info.height = height;
         srcImage.info.pixelSizeBytes = 3;
@@ -890,7 +891,7 @@ class PPMDecoder : public Decoder
   private:
     // Minimal P6 PPM header parser
     bool parseHeader(const unsigned char* data, size_t size, size_t& header_end, unsigned long& width,
-                 unsigned long& height, unsigned int& maxval)
+                     unsigned long& height, unsigned int& maxval)
     {
         if (size < 3 || data[0] != 'P' || data[1] != '6')
         {
@@ -899,24 +900,32 @@ class PPMDecoder : public Decoder
         }
         size_t pos = 2;
         // Helper to skip whitespace and comments
-        auto skipWhitespaceAndComments = [&](size_t& p) {
-            while (p < size) {
+        auto skipWhitespaceAndComments = [&](size_t& p)
+        {
+            while (p < size)
+            {
                 // Skip whitespace
-                while (p < size && (data[p] == ' ' || data[p] == '\n' || data[p] == '\r' || data[p] == '\t')) {
+                while (p < size && (data[p] == ' ' || data[p] == '\n' || data[p] == '\r' || data[p] == '\t'))
+                {
                     p++;
                 }
                 // Skip comment lines
-                if (p < size && data[p] == '#') {
-                    while (p < size && data[p] != '\n') {
+                if (p < size && data[p] == '#')
+                {
+                    while (p < size && data[p] != '\n')
+                    {
                         p++;
                     }
-                } else {
+                }
+                else
+                {
                     break;
                 }
             }
         };
         // Read width, height, maxval
-        auto readInt = [&](size_t& p, unsigned long& out) {
+        auto readInt = [&](size_t& p, unsigned long& out)
+        {
             out = 0;
             skipWhitespaceAndComments(p);
             if (p >= size)
@@ -931,7 +940,8 @@ class PPMDecoder : public Decoder
                 p++;
                 found_digit = true;
             }
-            if (!found_digit) {
+            if (!found_digit)
+            {
                 common::log_error("PPMDecoder::parseHeader - No digits found for int");
                 return false;
             }
@@ -956,12 +966,14 @@ class PPMDecoder : public Decoder
         maxval = static_cast<unsigned int>(maxv);
         // Skip single whitespace after maxval and comments
         skipWhitespaceAndComments(pos);
-        if (pos >= size) {
+        if (pos >= size)
+        {
             common::log_error("PPMDecoder::parseHeader - Header ends past file size");
             return false;
         }
         header_end = pos;
-        common::log_info("PPMDecoder::parseHeader - width=%lu height=%lu maxval=%u header_end=%zu", width, height, maxval, header_end);
+        common::log_info("PPMDecoder::parseHeader - width=%lu height=%lu maxval=%u header_end=%zu", width, height,
+                         maxval, header_end);
         return true;
     }
 };

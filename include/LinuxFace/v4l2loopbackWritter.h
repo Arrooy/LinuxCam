@@ -2,14 +2,13 @@
 #define V4L2LOOPBACKWRITTER_H
 
 
+#include <cstring>
 #include <fcntl.h>
+#include <iostream>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
-#include <cstring>
-#include <iostream>
 #include <vector>
 
 #include "LinuxFace/common.h"

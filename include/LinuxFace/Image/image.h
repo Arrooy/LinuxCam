@@ -2,11 +2,10 @@
 #define IMAGE_H
 
 #include <math.h>
-#include <onnxruntime_cxx_api.h>
-#include <turbojpeg.h>
-
 #include <memory>
 #include <mutex>
+#include <onnxruntime_cxx_api.h>
+#include <turbojpeg.h>
 
 #include "LinuxFace/common.h"
 #include "LinuxFace/math_utils.h"
@@ -212,7 +211,7 @@ class PixelOperations
 {
   public:
     // Fast pixel access without bounds checking for performance-critical loops
-    static inline void
+    inline static void
     setPixelRGB(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b) noexcept
     {
         data[idx] = r;
@@ -220,7 +219,7 @@ class PixelOperations
         data[idx + 2] = b;
     }
 
-    static inline void setPixelRGBA(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b,
+    inline static void setPixelRGBA(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b,
                                     unsigned char a) noexcept
     {
         data[idx] = r;

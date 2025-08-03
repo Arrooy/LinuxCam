@@ -1,7 +1,7 @@
 #include "LinuxFace/profiler.h"
 
-#include <chrono>
 #include <algorithm>
+#include <chrono>
 
 using namespace linuxface;
 

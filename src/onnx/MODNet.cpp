@@ -45,11 +45,11 @@ void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr
         {
             std::vector<int64_t> matte_shape = output_tensor.GetTensorTypeAndShapeInfo().GetShape();
             matte->fromTensor(mate, matte_shape, input_width_, input_height_, padding_, NormalizationType::MINMAX);
-        }else
+        }
+        else
         {
             common::log_error("MODNetDetector: Failed to get output tensor");
         }
-
     }
     catch (const Ort::Exception& e)
     {

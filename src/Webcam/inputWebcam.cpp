@@ -296,7 +296,8 @@ void InputWebcam::imageAcquisitionLoop()
             totalTimeouts++;
             if (totalTimeouts > 5)
             {
-                common::log_error("InputWebcam::imageAcquisitionLoop - Select timeout reached. Please unplug and plug again the camera.");
+                common::log_error("InputWebcam::imageAcquisitionLoop - Select timeout reached. Please unplug and plug "
+                                  "again the camera.");
                 break;
             }
             continue;
@@ -476,7 +477,7 @@ InputWebcam::~InputWebcam()
 
 void InputWebcam::cleanup()
 {
-    if(ready_)
+    if (ready_)
     {
         stopRecording();
     }
@@ -518,8 +519,10 @@ void InputWebcam::cleanupBuffers()
 bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex)
 {
     const auto& new_format = capabilities_.formats[formatIndex].sizes[sizeIndex];
-    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format Index %d, size index %d and fps index %d that is %dx%d with %d fps", name_.c_str(),
-                     formatIndex, sizeIndex, fpsIndex, new_format.width, new_format.height, new_format.getFps(new_format.selectedFPS));
+    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format Index %d, size index %d and "
+                     "fps index %d that is %dx%d with %d fps",
+                     name_.c_str(), formatIndex, sizeIndex, fpsIndex, new_format.width, new_format.height,
+                     new_format.getFps(new_format.selectedFPS));
 
     // Stop current operation
     bool wasRunning = isRunning();

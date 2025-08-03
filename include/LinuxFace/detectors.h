@@ -16,7 +16,7 @@ class FaceDetector
 
 class ShapeDetector
 {
-public:
+  public:
     virtual std::vector<Face>
     detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) = 0;
 };

@@ -1,6 +1,8 @@
 #ifndef LAYERMANAGER_H
 #define LAYERMANAGER_H
 
+#include "imgui.h"
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -9,7 +11,6 @@
 
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/image.h"
-#include "imgui.h"
 
 namespace linuxface
 {
@@ -45,7 +46,7 @@ struct Layer
     std::string textContent;
     ImU32 textColor = IM_COL32_WHITE;
     float fontSize = 16.0f;
-    int layerNumber = 0;  // Layer number for text layers
+    int layerNumber = 0; // Layer number for text layers
     float x = 0.0f;
     float y = 0.0f;
 
@@ -183,8 +184,8 @@ class LayerManager
     void sortLayers(); // Sort by layer number ascending
 
     // Overlay cache
-    void markDirty();          // Marks all layers as dirty
-    bool isDirty() const;      // Returns true if any layer is dirty
+    void markDirty();     // Marks all layers as dirty
+    bool isDirty() const; // Returns true if any layer is dirty
     void setLayerDirty(int layerNumber, bool dirty);
 
     // Invalidate all textures

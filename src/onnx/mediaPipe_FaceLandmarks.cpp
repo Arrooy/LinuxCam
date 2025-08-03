@@ -2,9 +2,9 @@
 
 #include <vector>
 
+#include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-#include "LinuxFace/Image/image_utils.h"
 using namespace linuxface;
 
 MediaPipeFaceLandmarks::MediaPipeFaceLandmarks(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path)
@@ -31,9 +31,9 @@ Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image
     //         common::log_info("MediaPipeFaceLandmarks: Not Saved test image to disk.");
     //     }
     // }
-    // common::log_info("MediaPipeFaceLandmarks: Input image dimensions: %ldx%ld", image->info.width, image->info.height);
-    // common::log_info("MediaPipeFaceLandmarks: Input tensor prepared with dimensions: %ldx%ld", input_node_dims[3], input_node_dims[2]);
-    // image->saveToDisk("media_pipe_input_image.ppm");
+    // common::log_info("MediaPipeFaceLandmarks: Input image dimensions: %ldx%ld", image->info.width,
+    // image->info.height); common::log_info("MediaPipeFaceLandmarks: Input tensor prepared with dimensions: %ldx%ld",
+    // input_node_dims[3], input_node_dims[2]); image->saveToDisk("media_pipe_input_image.ppm");
     return input_tensor;
 }
 
@@ -52,12 +52,11 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
         detector_session_->Run(Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1, output_names.data(), 2);
     // scores: float[1]
     auto score_tensor = std::move(output_tensors[0]);
-    if(score_tensor.IsTensor() == false ||
-       score_tensor.GetTensorTypeAndShapeInfo().GetShape()[0] != 1)
+    if (score_tensor.IsTensor() == false || score_tensor.GetTensorTypeAndShapeInfo().GetShape()[0] != 1)
     {
         common::log_error("MediaPipeFaceLandmarks: Score tensor is not valid.");
         auto shape = score_tensor.GetTensorTypeAndShapeInfo().GetShape();
-        for(const auto& dim : shape)
+        for (const auto& dim : shape)
         {
             common::log_error("MediaPipeFaceLandmarks: Score tensor dimension: %ld", dim);
         }
@@ -74,7 +73,7 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     }
     // landmarks: float[1,468,3]
     float* lmk_ptr = output_tensors[1].GetTensorMutableData<float>();
-    if(lmk_ptr == nullptr)
+    if (lmk_ptr == nullptr)
     {
         common::log_error("MediaPipeFaceLandmarks: Landmarks tensor is null.");
         return result; // Return empty result if landmarks are not available

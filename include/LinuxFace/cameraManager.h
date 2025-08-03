@@ -1,11 +1,10 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include <linux/videodev2.h>
-
 #include <atomic>
 #include <cstddef>
 #include <functional>
+#include <linux/videodev2.h>
 #include <memory>
 #include <thread>
 #include <unordered_map>

@@ -28,8 +28,8 @@ class RobustVideoMatting : public OnnxDetector
     static constexpr const int input_width_ = 512;
     static constexpr const int input_height_ = 512;
 
-    unsigned long lastWidth_ {0u};
-    unsigned long lastHeight_ {0u};
+    unsigned long lastWidth_{0u};
+    unsigned long lastHeight_{0u};
 
     std::vector<Ort::Value> rec_;
     std::vector<std::vector<float>> rec_cpu_data_;

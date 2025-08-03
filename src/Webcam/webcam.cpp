@@ -1,11 +1,10 @@
 #include "LinuxFace/webcam.h"
 
+#include <algorithm>
+#include <cmath>
 #include <fcntl.h>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
-
-#include <algorithm>
-#include <cmath>
 
 #include "LinuxFace/common.h"
 
@@ -247,8 +246,8 @@ void Webcam::selectBestFormat()
         selectedSize.selectedFPS = bestFpsIndex;
 
         common::log_info("Webcam: Selected format is %s with frame size of %dx%d (%d FPS). And with pixel format %u",
-                         bestFormat->description.c_str(), selectedSize.width, selectedSize.height, selectedSize.getFps(selectedSize.selectedFPS),
-                         bestFormat->pixelformat);
+                         bestFormat->description.c_str(), selectedSize.width, selectedSize.height,
+                         selectedSize.getFps(selectedSize.selectedFPS), bestFormat->pixelformat);
         selectedFormat_ = std::make_unique<Format>(*bestFormat);
     }
     else
