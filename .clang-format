@@ -1,0 +1,77 @@
+BasedOnStyle: Google
+UseTab: Never
+IndentWidth: 4
+BreakBeforeBraces: Allman
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: true
+ColumnLimit: 120
+SortIncludes: true
+Language: Cpp
+PointerAlignment: Left
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+DerivePointerAlignment: false
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlines: Left
+AlignOperands: true
+AlwaysBreakAfterReturnType: None
+PenaltyReturnTypeOnItsOwnLine: 0
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: false
+AlignArrayOfStructures: Left
+Cpp11BracedListStyle: true
+AlignTrailingComments: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AlwaysBreakAfterDefinitionReturnType: None # new
+AlwaysBreakTemplateDeclarations: Yes # new
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+BreakStringLiterals: true
+IncludeBlocks: Regroup
+IncludeCategories: # new
+  - Regex: '^<.*\.h>'
+    Priority: 1
+    SortPriority: 0
+    CaseSensitive: false
+  - Regex: '^"(.*)"'
+    Priority: 2
+    SortPriority: 1
+    CaseSensitive: false
+  - Regex: '.*'
+    Priority: 3
+IndentWrappedFunctionNames: false
+ReflowComments: true
+SpaceAfterCStyleCast: true
+SpacesInCStyleCastParentheses: false
+IndentAccessModifiers: false
+AccessModifierOffset: -2
+SeparateDefinitionBlocks: Leave
+KeepEmptyLinesAtEOF: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+InsertNewlineAtEOF: true
+MaxEmptyLinesToKeep: 2
+EmptyLineBeforeAccessModifier: Leave
+CompactNamespaces: true
+NamespaceIndentation: None
+FixNamespaceComments: true
+InsertBraces: true
+QualifierOrder: [inline, static, const, type, volatile]
+ConstructorInitializerAllOnOneLineOrOnePerLine: true # new
+BreakConstructorInitializersBeforeComma: true # new
+IndentPPDirectives: AfterHash # new
+SpaceAfterTemplateKeyword: true # new
+DeriveFunctionDeclarationIndentation: false # new
