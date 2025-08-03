@@ -1,0 +1,452 @@
+name: Static Analysis - Clang-Tidy
+
+on:
+  # Run after Code Formatting workflow completes successfully
+  workflow_run:
+    workflows: ["Code Formatting"]
+    types: [completed]
+    branches: [develop]
+  
+  # Check static analysis on PRs (independent of formatting)
+  pull_request:
+    branches: [develop, main]
+    
+  # Allow manual triggering for static analysis
+  workflow_dispatch:
+  
+  # Scheduled weekly static analysis scan
+  # Runs every Sunday at 18:00 UTC (6:00 PM)
+  schedule:
+    - cron: '0 18 * * 0'
+
+env:
+  # Clang-tidy specific settings
+  CLANG_TIDY_VERSION: "15"
+  # Use ccache to speed up builds for clang-tidy
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPRESSLEVEL: "6"
+  CCACHE_MAXSIZE: "200M"
+
+jobs:
+  clang-tidy-analysis:
+    name: Clang-Tidy Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Run on PRs, manual trigger, schedule, or after successful formatting workflow
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+      
+    steps:
+      - name: Checkout source with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # For PRs, get the full history to enable proper diff analysis
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+
+      - name: Display trigger information
+        run: |
+          echo "## 🔍 Clang-Tidy Static Analysis Trigger Information"
+          echo "- Event: ${{ github.event_name }}"
+          echo "- Branch: ${{ github.ref }}"
+          echo "- Repository: ${{ github.repository }}"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "- Triggered by: ${{ github.event.workflow_run.name }}"
+            echo "- Previous workflow status: ${{ github.event.workflow_run.conclusion }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "- PR Number: #${{ github.event.number }}"
+            echo "- PR Title: ${{ github.event.pull_request.title }}"
+            echo "- Base Branch: ${{ github.event.pull_request.base.ref }}"
+            echo "- Head Branch: ${{ github.event.pull_request.head.ref }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "- Scheduled weekly static analysis scan"
+          else
+            echo "- Manual static analysis trigger"
+          fi
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            g++-12 \
+            gcc-12 \
+            ccache \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxrandr-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            libavdevice-dev \
+            libavfilter-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            libswresample-dev \
+            libswscale-dev \
+            libavutil-dev \
+            libjxl-dev \
+            libopencv-dev \
+            unzip
+
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          
+          # Try to install clang-tidy from default repos first
+          if sudo apt-get install -y clang-tidy; then
+            echo "✅ Installed clang-tidy from default repositories"
+          else
+            echo "📦 Installing clang-tidy from LLVM repository..."
+            # Add LLVM repository for latest clang-tidy
+            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+            echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble main" | sudo tee /etc/apt/sources.list.d/llvm.list
+            sudo apt-get update
+            sudo apt-get install -y clang-tidy
+          fi
+          
+          # Verify installation
+          clang-tidy --version
+          echo "Clang-tidy checks available:"
+          clang-tidy --list-checks | head -10
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: clang-tidy-${{ runner.os }}
+          max-size: 200M
+
+      - name: Set GCC version
+        run: |
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+          
+          # Verify versions
+          echo "Compiler versions:"
+          gcc --version | head -1
+          g++ --version | head -1
+
+      - name: Cache CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/cmake
+            build-analysis/_deps
+          key: ${{ runner.os }}-cmake-analysis-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-analysis-
+            ${{ runner.os }}-cmake-
+
+      - name: Configure CMake for Analysis
+        run: |
+          cmake -S . -B build-analysis \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DENABLE_COVERAGE=OFF \
+            -DUSE_AVX_INSTRUCTIONS=OFF \
+            -DDLIB_NO_GUI_SUPPORT=ON \
+            -DDLIB_USE_CUDA=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -G Ninja
+
+      - name: Build External Dependencies
+        run: |
+          echo "Building external dependencies for clang-tidy analysis..."
+          # Build external dependencies first (required for proper includes)
+          if ! cmake --build build-analysis --target libjpeg-turbo; then
+            echo "ERROR: Failed to build libjpeg-turbo"
+            exit 1
+          fi
+          
+          if ! cmake --build build-analysis --target libjpeg_include_dir; then
+            echo "ERROR: Failed to build libjpeg_include_dir"
+            exit 1
+          fi
+
+      - name: Determine files to analyze
+        id: determine-files
+        run: |
+          echo "Determining which files to analyze..."
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Analyzing only changed files in PR #${{ github.event.number }}"
+            # Get changed files in the PR
+            git fetch origin ${{ github.event.pull_request.base.ref }}
+            git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD \
+              | grep -E '\.(cpp|cc|cxx|c)$' \
+              | grep -v -E '^(external|build|_deps|experimental)/' \
+              > files_to_analyze.txt || touch files_to_analyze.txt
+          else
+            echo "Analyzing all project source files"
+            # Analyze all source files for scheduled runs or manual triggers
+            find . -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" -o -name "*.c" \
+              | grep -v -E '^\./(external|build|_deps|experimental)/' \
+              > files_to_analyze.txt
+          fi
+          
+          TOTAL_FILES=$(wc -l < files_to_analyze.txt)
+          echo "Found $TOTAL_FILES C/C++ source files to analyze"
+          echo "file_count=$TOTAL_FILES" >> $GITHUB_OUTPUT
+          
+          if [ "$TOTAL_FILES" -gt 0 ]; then
+            echo "Files to analyze:"
+            cat files_to_analyze.txt
+            # Set scope for output
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "analysis_scope=changed" >> $GITHUB_OUTPUT
+            else
+              echo "analysis_scope=full" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "No relevant C/C++ files found for analysis"
+            echo "analysis_scope=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run clang-tidy analysis
+        id: clang-tidy
+        if: steps.determine-files.outputs.file_count != '0'
+        run: |
+          echo "Running clang-tidy static analysis..."
+          
+          # Ensure compile_commands.json exists
+          if [ ! -f "build-analysis/compile_commands.json" ]; then
+            echo "ERROR: compile_commands.json not found. Attempting to generate..."
+            cmake --build build-analysis --target all -- -v
+            if [ ! -f "build-analysis/compile_commands.json" ]; then
+              echo "ERROR: Failed to generate compile_commands.json"
+              exit 1
+            fi
+          fi
+          
+          echo "Using compile database: build-analysis/compile_commands.json"
+          
+          # Initialize counters and files
+          TOTAL_ISSUES=0
+          ANALYZED_FILES=0
+          > clang_tidy_results.txt
+          > clang_tidy_summary.txt
+          
+          # Process each file
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              echo "Analyzing: $file"
+              ANALYZED_FILES=$((ANALYZED_FILES + 1))
+              
+              # Run clang-tidy on the file and capture output
+              if clang-tidy \
+                -p build-analysis \
+                --config-file=.clang-tidy \
+                --format-style=file \
+                "$file" \
+                2>&1 | tee -a clang_tidy_results.txt; then
+                
+                # Count warnings/errors in this file
+                FILE_ISSUES=$(grep -c "warning:\|error:" clang_tidy_results.txt | tail -1 || echo "0")
+                TOTAL_ISSUES=$((TOTAL_ISSUES + FILE_ISSUES))
+                
+                echo "File: $file - Issues: $FILE_ISSUES" >> clang_tidy_summary.txt
+              else
+                echo "ERROR: clang-tidy failed for $file" | tee -a clang_tidy_results.txt
+              fi
+            else
+              echo "WARNING: File not found: $file"
+            fi
+          done < files_to_analyze.txt
+          
+          echo "total_issues=$TOTAL_ISSUES" >> $GITHUB_OUTPUT
+          echo "analyzed_files=$ANALYZED_FILES" >> $GITHUB_OUTPUT
+          
+          # Generate summary statistics
+          echo "## 📊 Clang-Tidy Analysis Summary" > analysis_summary.md
+          echo "- **Total files analyzed**: $ANALYZED_FILES" >> analysis_summary.md
+          echo "- **Total issues found**: $TOTAL_ISSUES" >> analysis_summary.md
+          echo "- **Analysis scope**: ${{ steps.determine-files.outputs.analysis_scope }}" >> analysis_summary.md
+          echo "" >> analysis_summary.md
+          
+          if [ $TOTAL_ISSUES -gt 0 ]; then
+            echo "### 🔍 Issues by File" >> analysis_summary.md
+            echo "\`\`\`" >> analysis_summary.md
+            cat clang_tidy_summary.txt >> analysis_summary.md
+            echo "\`\`\`" >> analysis_summary.md
+            echo "" >> analysis_summary.md
+            
+            echo "### 📋 Detailed Results" >> analysis_summary.md
+            echo "<details><summary>Click to expand detailed clang-tidy output</summary>" >> analysis_summary.md
+            echo "" >> analysis_summary.md
+            echo "\`\`\`" >> analysis_summary.md
+            head -500 clang_tidy_results.txt >> analysis_summary.md
+            if [ $(wc -l < clang_tidy_results.txt) -gt 500 ]; then
+              echo "... (output truncated, see artifacts for full results)" >> analysis_summary.md
+            fi
+            echo "\`\`\`" >> analysis_summary.md
+            echo "</details>" >> analysis_summary.md
+          else
+            echo "✅ **No issues found!** The code passes all clang-tidy checks." >> analysis_summary.md
+          fi
+          
+          echo "Clang-tidy analysis completed:"
+          echo "- Files analyzed: $ANALYZED_FILES"
+          echo "- Total issues: $TOTAL_ISSUES"
+
+      - name: Post PR comment with results
+        if: github.event_name == 'pull_request' && steps.determine-files.outputs.file_count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read the analysis summary
+            let summary = '';
+            try {
+              summary = fs.readFileSync('analysis_summary.md', 'utf8');
+            } catch (error) {
+              summary = '❌ Failed to read analysis summary';
+            }
+            
+            const totalIssues = '${{ steps.clang-tidy.outputs.total_issues }}';
+            const analyzedFiles = '${{ steps.clang-tidy.outputs.analyzed_files }}';
+            
+            // Create comment body
+            const commentBody = `## 🔍 Clang-Tidy Static Analysis Results
+            
+            ${summary}
+            
+            ---
+            <sub>🤖 This comment was automatically generated by the clang-tidy workflow</sub>`;
+            
+            // Find existing comment to update
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(
+              comment => comment.body.includes('🔍 Clang-Tidy Static Analysis Results')
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: commentBody
+              });
+              console.log('Updated existing PR comment with clang-tidy results');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+              console.log('Created new PR comment with clang-tidy results');
+            }
+
+      - name: Check analysis results
+        if: steps.determine-files.outputs.file_count != '0'
+        run: |
+          TOTAL_ISSUES=${{ steps.clang-tidy.outputs.total_issues }}
+          
+          echo "## 🔍 Final Analysis Results"
+          echo "- Total issues found: $TOTAL_ISSUES"
+          echo "- Analysis scope: ${{ steps.determine-files.outputs.analysis_scope }}"
+          
+          # For now, we'll report issues but not fail the workflow
+          # This allows teams to gradually improve code quality
+          if [ "$TOTAL_ISSUES" -gt 0 ]; then
+            echo "⚠️  Clang-tidy found $TOTAL_ISSUES issues"
+            echo "Consider reviewing and fixing these issues to improve code quality"
+            # Uncomment the next line if you want to fail the workflow on issues:
+            # exit 1
+          else
+            echo "✅ No clang-tidy issues found!"
+          fi
+
+      - name: Upload clang-tidy results
+        uses: actions/upload-artifact@v4
+        if: always() && steps.determine-files.outputs.file_count != '0'
+        with:
+          name: clang-tidy-results-${{ github.run_number }}
+          path: |
+            clang_tidy_results.txt
+            clang_tidy_summary.txt
+            analysis_summary.md
+            files_to_analyze.txt
+            build-analysis/compile_commands.json
+          retention-days: 30
+
+      - name: Generate SARIF report for GitHub Security tab
+        if: steps.determine-files.outputs.file_count != '0' && steps.clang-tidy.outputs.total_issues != '0'
+        run: |
+          echo "Converting clang-tidy results to SARIF format..."
+          
+          # Simple SARIF conversion (basic implementation)
+          # For more advanced SARIF conversion, consider using dedicated tools
+          cat > clang_tidy_results.sarif << 'EOF'
+          {
+            "version": "2.1.0",
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "runs": [
+              {
+                "tool": {
+                  "driver": {
+                    "name": "clang-tidy",
+                    "version": "${{ env.CLANG_TIDY_VERSION }}",
+                    "informationUri": "https://clang.llvm.org/extra/clang-tidy/"
+                  }
+                },
+                "results": []
+              }
+            ]
+          }
+          EOF
+          
+          echo "Basic SARIF report generated (results parsing would require additional tooling)"
+
+      - name: Upload SARIF results
+        if: steps.determine-files.outputs.file_count != '0' && steps.clang-tidy.outputs.total_issues != '0'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: clang_tidy_results.sarif
+        continue-on-error: true
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🔍 Clang-Tidy Static Analysis Summary"
+          echo "- Event: ${{ github.event_name }}"
+          echo "- Branch: ${{ github.ref }}"
+          echo "- Files to analyze: ${{ steps.determine-files.outputs.file_count || '0' }}"
+          echo "- Analysis scope: ${{ steps.determine-files.outputs.analysis_scope || 'none' }}"
+          if [ "${{ steps.determine-files.outputs.file_count }}" != "0" ]; then
+            echo "- Files analyzed: ${{ steps.clang-tidy.outputs.analyzed_files || '0' }}"
+            echo "- Issues found: ${{ steps.clang-tidy.outputs.total_issues || '0' }}"
+          fi
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ "${{ steps.determine-files.outputs.file_count }}" = "0" ]; then
+              echo "- ℹ️  No relevant C/C++ files were changed in this PR"
+            else
+              echo "- 📝 Results posted as PR comment"
+            fi
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "- 🔧 Manually triggered static analysis"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "- ⏰ Scheduled weekly static analysis"
+          fi

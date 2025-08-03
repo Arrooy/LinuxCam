@@ -6,9 +6,9 @@
 name: Security Analysis - Flawfinder
 
 on:
-  # Run after CI or Code Formatting workflows complete successfully
+  # Run after Clang-Tidy workflows complete successfully
   workflow_run:
-    workflows: ["CI Workflow"]
+    workflows: ["Static Analysis - Clang-Tidy"]
     types: [completed]
     branches: [develop]
   

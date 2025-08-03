@@ -4,6 +4,7 @@
 
 [![CI Workflow](https://github.com/Arrooy/LinuxCam/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Arrooy/LinuxCam/actions/workflows/ci.yml)
 [![Code Formatting](https://github.com/Arrooy/LinuxCam/actions/workflows/code-formatting.yml/badge.svg?branch=develop)](https://github.com/Arrooy/LinuxCam/actions/workflows/code-formatting.yml)
+[![Clang-Tidy Analysis](https://github.com/Arrooy/LinuxCam/actions/workflows/clang-tidy.yml/badge.svg?branch=develop)](https://github.com/Arrooy/LinuxCam/actions/workflows/clang-tidy.yml)
 [![codecov](https://codecov.io/github/Arrooy/LinuxCam/branch/develop/graph/badge.svg?token=NWVE3AC940)](https://codecov.io/github/Arrooy/LinuxCam)
 [![Security Analysis - Flawfinder](https://github.com/Arrooy/LinuxCam/actions/workflows/flawfinder.yml/badge.svg?branch=develop)](https://github.com/Arrooy/LinuxCam/actions/workflows/flawfinder.yml)
 
