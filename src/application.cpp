@@ -1,5 +1,9 @@
 #include "LinuxFace/application.h"
 
+#include <csignal>
+#include <iostream>
+#include <memory>
+
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
@@ -9,10 +13,6 @@
 #include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/wflw_test.h"
 #include "config.hpp"
-
-#include <csignal>
-#include <iostream>
-#include <memory>
 
 using linuxface::Application;
 using linuxface::Config;
@@ -42,8 +42,8 @@ std::atomic<bool> g_should_exit{false};
 
 
 linuxface::math_utils::Point<double>
-AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x, double min_y,
-                        double angle_rad, const linuxface::math_utils::Point<double>& eye_center);
+AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x,
+                        double min_y, double angle_rad, const linuxface::math_utils::Point<double>& eye_center);
 
 void SignalHandler(int signal)
 {
@@ -55,7 +55,18 @@ void SignalHandler(int signal)
 }
 
 
-Application::Application() : ui_(nullptr), profiler_(Profiler::getInstance()), faceDetector_(nullptr), dlibShapeDetector_(nullptr), fsanetDetectorVar_(nullptr), fsanetDetectorConv_(nullptr), modnetDetector_(nullptr), rvmDetector_(nullptr), swapPipeline_(nullptr), adria_img_(nullptr), target_img_(nullptr)
+Application::Application()
+    : ui_(nullptr)
+    , profiler_(Profiler::getInstance())
+    , faceDetector_(nullptr)
+    , dlibShapeDetector_(nullptr)
+    , fsanetDetectorVar_(nullptr)
+    , fsanetDetectorConv_(nullptr)
+    , modnetDetector_(nullptr)
+    , rvmDetector_(nullptr)
+    , swapPipeline_(nullptr)
+    , adria_img_(nullptr)
+    , target_img_(nullptr)
 {
 }
 
@@ -245,11 +256,11 @@ bool Application::initialize()
     if (loader.load_example(0, example_))
     { // Load the first example
         linuxface::common::log_info("Loaded example from image: %s", example_.image_name.c_str());
-        linuxface::common::log_info("Bounding box: (%f, %f) - (%f, %f)", example_.bounding_box.l, example_.bounding_box.t,
-                         example_.bounding_box.r, example_.bounding_box.b);
+        linuxface::common::log_info("Bounding box: (%f, %f) - (%f, %f)", example_.bounding_box.l,
+                                    example_.bounding_box.t, example_.bounding_box.r, example_.bounding_box.b);
         linuxface::common::log_info("Attributes: %d %d %d %d %d %d", example_.attributes[0], example_.attributes[1],
-                         example_.attributes[2], example_.attributes[3], example_.attributes[4],
-                         example_.attributes[5]);
+                                    example_.attributes[2], example_.attributes[3], example_.attributes[4],
+                                    example_.attributes[5]);
         linuxface::common::log_info("Number of landmarks: %zu", example_.landmarks.size());
         // You can further process the landmarks here...
     }
@@ -821,8 +832,8 @@ void Application::captureAndSaveWebcamImageWithTimestamp()
 }
 
 linuxface::math_utils::Point<double>
-AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x, double min_y,
-                        double angle_rad, const linuxface::math_utils::Point<double>& eye_center)
+AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x,
+                        double min_y, double angle_rad, const linuxface::math_utils::Point<double>& eye_center)
 {
     // Step 1: undo crop
     double x_rotated = x_aligned + crop_left;

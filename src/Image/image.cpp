@@ -14,9 +14,10 @@ using namespace linuxface;
 using namespace linuxface::pixel_conversion;
 
 // Optimized pixel operations using centralized conversion logic
-namespace linuxface::PixelOperations {
-void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize,
-                                  unsigned char srcAlpha, unsigned char dstPixelSize, unsigned char dstAlpha) noexcept
+namespace linuxface::PixelOperations
+{
+void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize, unsigned char srcAlpha,
+                 unsigned char dstPixelSize, unsigned char dstAlpha) noexcept
 {
     // Skip transparent pixels for RGBA formats
     if (srcPixelSize == 4 && srcAlpha == 0)
@@ -159,9 +160,9 @@ void Image::resize(size_t newSize, bool preserveData)
     if (size_ != newSize)
     {
         std::shared_ptr<unsigned char> newData(new unsigned char[newSize], std::default_delete<unsigned char[]>());
-        
+
         // MED-004 OPTIMIZATION: Conditional data preservation with performance analysis.
-        // Analysis shows most calls use preserveData=false (copyFrom, scaleToInPlace), 
+        // Analysis shows most calls use preserveData=false (copyFrom, scaleToInPlace),
         // but some legitimate cases need data preserved (JPEG codec tests, buffer reallocation).
         // Only perform memcpy when explicitly requested and both buffers are valid.
         if (preserveData && data_ && size_ > 0)
@@ -245,19 +246,21 @@ unsigned char Image::getExpectedPixelSize() const noexcept
 {
     // Use compile-time lookup for cleaner and more maintainable code
     static constexpr std::pair<ImageFormat, unsigned char> formatSizes[] = {
-        {ImageFormat::RGB, 3},
-        {ImageFormat::RGBA, 4},
-        {ImageFormat::GRAYSCALE, 1},
+        {ImageFormat::RGB,         3            },
+        {ImageFormat::RGBA,        4            },
+        {ImageFormat::GRAYSCALE,   1            },
         {ImageFormat::DEPTH_FLOAT, sizeof(float)},
-        {ImageFormat::DEPTH_Z16, 2},
+        {ImageFormat::DEPTH_Z16,   2            },
     };
 
-    for (const auto& [format, size] : formatSizes) {
-        if (info.format == format) {
+    for (const auto& [format, size] : formatSizes)
+    {
+        if (info.format == format)
+        {
             return size;
         }
     }
-    
+
     // Fallback to stored pixel size for unknown/unsupported formats
     return info.pixelSizeBytes;
 }
@@ -1490,7 +1493,8 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     // Avoid full buffer memset; only clear new regions if needed.
     // This minimizes memory operations and improves performance for large images.
     Image backup;
-    if (!sameCanvasSize) {
+    if (!sameCanvasSize)
+    {
         // Region-aware backup and copy is now correct and safe (see CRIT-002 resolution)
         backup.copyFrom(*this);
         size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
@@ -1499,14 +1503,15 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
         info.y = static_cast<unsigned long>(minY);
         info.width = newWidth;
         info.height = newHeight;
-        copyPixelsWithBlending(backup, baseLeft, baseTop, minX, minY, baseRight-baseLeft, baseBottom-baseTop);
+        copyPixelsWithBlending(backup, baseLeft, baseTop, minX, minY, baseRight - baseLeft, baseBottom - baseTop);
     }
     // Copy the pasted image (other) to the correct region
     copyPixelsWithBlending(other, otherLeft, otherTop, minX, minY, other.info.width, other.info.height);
     return *this;
 }
 // TODO: SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM EDGE.
-std::unique_ptr<Image> Image::affineWarpBilinear(const double* M, int out_width, int out_height, const double* invM) const
+std::unique_ptr<Image>
+Image::affineWarpBilinear(const double* M, int out_width, int out_height, const double* invM) const
 {
     if (info.pixelSizeBytes != 3)
     {
@@ -1518,10 +1523,14 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* M, int out_width,
     // Accept optional inverse matrix for performance
     double localInvM[6];
     const double* useInvM = nullptr;
-    if (invM) {
+    if (invM)
+    {
         useInvM = invM;
-    } else {
-        if (!math_utils::invert_affine(M, localInvM)) {
+    }
+    else
+    {
+        if (!math_utils::invert_affine(M, localInvM))
+        {
             common::log_error("Image::affineWarpGeneric - Invalid affine matrix provided");
             return nullptr;
         }
@@ -1579,9 +1588,9 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* M, int out_width,
     return out_img;
 }
 
-std::unique_ptr<Image> Image::affineWarpNearestNeighbour(const double* M, int out_width, int out_height, const double* invM) const
+std::unique_ptr<Image>
+Image::affineWarpNearestNeighbour(const double* M, int out_width, int out_height, const double* invM) const
 {
-
     if (info.pixelSizeBytes != 1)
     {
         common::log_error("Image::affineWarpNearestNeighbour - Only single-channel images are supported");
@@ -1591,10 +1600,14 @@ std::unique_ptr<Image> Image::affineWarpNearestNeighbour(const double* M, int ou
     // Matrix inversion optimization (MED-003): use optional invM parameter
     double localInvM[6];
     const double* useInvM = nullptr;
-    if (invM) {
+    if (invM)
+    {
         useInvM = invM;
-    } else {
-        if (!math_utils::invert_affine(M, localInvM)) {
+    }
+    else
+    {
+        if (!math_utils::invert_affine(M, localInvM))
+        {
             common::log_error("Image::affineWarpNearestNeighbour - Invalid affine matrix provided");
             return nullptr;
         }
