@@ -14,10 +14,14 @@
 #include <iostream>
 #include <memory>
 
-using namespace linuxface;
+using linuxface::Application;
+using linuxface::Config;
+using linuxface::LayerManager;
+using linuxface::Profiler;
+using linuxface::UI;
 
 
-// TODO: test models:
+// TODO(arroyoa): test models:
 // pipnet68/xx
 // Maybe nanodet_m.onnx (Fast yolo)
 // mobile_hair_seg_hairmattenetv1_224x224
@@ -37,21 +41,21 @@ using namespace linuxface;
 std::atomic<bool> g_should_exit{false};
 
 
-math_utils::Point<double>
-alignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double minX, double minY,
-                        double angleRad, const math_utils::Point<double>& eye_center);
+linuxface::math_utils::Point<double>
+AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x, double min_y,
+                        double angle_rad, const linuxface::math_utils::Point<double>& eye_center);
 
-void signalHandler(int signal)
+void SignalHandler(int signal)
 {
     if (signal == SIGINT)
     {
-        common::log_warn("Received SIGINT, exiting...");
+        linuxface::common::log_warn("Received SIGINT, exiting...");
         g_should_exit = true;
     }
 }
 
 
-Application::Application() : profiler_(Profiler::getInstance())
+Application::Application() : profiler_(Profiler::getInstance()), ui_(nullptr), faceDetector_(nullptr), dlibShapeDetector_(nullptr), fsanetDetectorVar_(nullptr), fsanetDetectorConv_(nullptr), modnetDetector_(nullptr), rvmDetector_(nullptr), swapPipeline_(nullptr), adria_img_(nullptr), target_img_(nullptr)
 {
 }
 
@@ -79,12 +83,12 @@ Application::~Application()
 
 bool Application::initialize()
 {
-    std::signal(SIGINT, signalHandler);
+    std::signal(SIGINT, SignalHandler);
 
     // Initialize window
     if (!window_.initialize())
     {
-        common::log_error("Failed to initialize window");
+        linuxface::common::log_error("Failed to initialize window");
         return false;
     }
 
@@ -97,7 +101,7 @@ bool Application::initialize()
     ui_ = std::make_unique<UI>(layerManager_);
     if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
     {
-        common::log_error("Failed to initialize UI");
+        linuxface::common::log_error("Failed to initialize UI");
         return false;
     }
 
@@ -125,19 +129,19 @@ bool Application::initialize()
         }
         if (!webcam->setupDevice())
         {
-            common::log_error("Failed to setup webcam: %s", wc.name.c_str());
+            linuxface::common::log_error("Failed to setup webcam: %s", wc.name.c_str());
             continue;
         }
 
         if (!webcam->start())
         {
-            common::log_error("Failed to start webcam: %s", wc.name.c_str());
+            linuxface::common::log_error("Failed to start webcam: %s", wc.name.c_str());
             continue;
         }
         webcam->setCurrentlySelected(true);
         if (!cameraManager_->addCamera(std::move(webcam)))
         {
-            common::log_error("Failed to add webcam: %s", wc.name.c_str());
+            linuxface::common::log_error("Failed to add webcam: %s", wc.name.c_str());
             continue;
         }
     }
@@ -148,12 +152,12 @@ bool Application::initialize()
         std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", device_path, 0, 0, 2);
         if (!webcam->setupDevice())
         {
-            common::log_error("Failed to setup webcam: %s", device_path.c_str());
+            linuxface::common::log_error("Failed to setup webcam: %s", device_path.c_str());
             continue;
         }
         if (!cameraManager_->addCamera(std::move(webcam)))
         {
-            common::log_error("Failed to add webcam: %s", device_path.c_str());
+            linuxface::common::log_error("Failed to add webcam: %s", device_path.c_str());
             return false;
         }
     }
@@ -203,13 +207,13 @@ bool Application::initialize()
     // Pass pointer instead of reference
     ui_->connect(cameraManager_);
 
-    common::log_info("OpenGL version: %s", glGetString(GL_VERSION));
+    linuxface::common::log_info("OpenGL version: %s", glGetString(GL_VERSION));
 
     // Initialize image renderer
     imageRender_ = std::make_shared<ImageRenderGL>();
     if (!imageRender_ || !imageRender_->initialize())
     {
-        common::log_error("Failed to initialize image renderer");
+        linuxface::common::log_error("Failed to initialize image renderer");
         return false;
     }
 
@@ -221,7 +225,7 @@ bool Application::initialize()
     target_img_ = ImageLoader::loadImageFromFile(target_path);
     if (!target_img_)
     {
-        common::log_error("Failed to load image at initialization");
+        linuxface::common::log_error("Failed to load image at initialization");
     }
 
     // PFLD Landmarks initialization
@@ -234,19 +238,19 @@ bool Application::initialize()
 
     if (loader.get_num_examples() == 0)
     {
-        common::log_error("Error: No examples loaded.");
+        linuxface::common::log_error("Error: No examples loaded.");
         return false;
     }
 
     if (loader.load_example(0, example_))
     { // Load the first example
-        common::log_info("Loaded example from image: %s", example_.image_name.c_str());
-        common::log_info("Bounding box: (%f, %f) - (%f, %f)", example_.bounding_box.l, example_.bounding_box.t,
+        linuxface::common::log_info("Loaded example from image: %s", example_.image_name.c_str());
+        linuxface::common::log_info("Bounding box: (%f, %f) - (%f, %f)", example_.bounding_box.l, example_.bounding_box.t,
                          example_.bounding_box.r, example_.bounding_box.b);
-        common::log_info("Attributes: %d %d %d %d %d %d", example_.attributes[0], example_.attributes[1],
+        linuxface::common::log_info("Attributes: %d %d %d %d %d %d", example_.attributes[0], example_.attributes[1],
                          example_.attributes[2], example_.attributes[3], example_.attributes[4],
                          example_.attributes[5]);
-        common::log_info("Number of landmarks: %zu", example_.landmarks.size());
+        linuxface::common::log_info("Number of landmarks: %zu", example_.landmarks.size());
         // You can further process the landmarks here...
     }
 
@@ -257,13 +261,13 @@ bool Application::initialize()
     // test->saveToDisk("output.ppm");
     // return false;
 
-    common::log_info("Application initialized successfully");
+    linuxface::common::log_info("Application initialized successfully");
     return true;
 }
 
 void Application::run()
 {
-    common::log_info("Starting main loop...");
+    linuxface::common::log_info("Starting main loop...");
 
     // Main loop
     while (!window_.shouldClose() && !g_should_exit)
@@ -278,7 +282,7 @@ void Application::run()
     cameraManager_->shutdown();
     mediaManager_->shutdown();
 
-    common::log_info("Main loop ended");
+    linuxface::common::log_info("Main loop ended");
 }
 
 bool Application::update()
@@ -297,7 +301,7 @@ bool Application::update()
 
         // Update or create the base layer after processing
         Layer* baseLayer = layerManager_->getBaseLayer();
-        if (baseLayer && baseLayer->type == LayerType::Image)
+        if (baseLayer != nullptr && baseLayer->type == LayerType::Image)
         {
             // Update the image in the base layer
             baseLayer->img = std::move(image);
@@ -320,15 +324,14 @@ bool Application::update()
             layerManager_->addLayer(newBaseLayer);
         }
         // Output the current base image if available
-        if (baseLayer && baseLayer->img)
+        if (baseLayer != nullptr && baseLayer->img)
         {
             // Make a deep copy for output as unique_ptr
             std::unique_ptr<Image> tempImage = baseLayer->img->deepCopy();
 
             auto& layers = layerManager_->getLayers();
-            for (size_t i = 0; i < layers.size(); ++i)
+            for (auto& layer : layers)
             {
-                Layer& layer = layers[i];
                 if (layer.isBaseLayer)
                 {
                     // Skip the base layer itself
@@ -348,7 +351,7 @@ bool Application::update()
             }
             if (!cameraManager_->updateOutput(tempImage))
             {
-                common::log_error("Failed to update output cameras");
+                linuxface::common::log_error("Failed to update output cameras");
             }
         }
         static bool saving = false;
@@ -384,7 +387,8 @@ void Application::render()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Render all layers
-    int width, height;
+    int width = 0;
+    int height = 0;
     window_.getFramebufferSize(width, height);
     imageRender_->renderLayers(layerManager_->getLayers(), width, height);
 
@@ -395,7 +399,7 @@ void Application::render()
     window_.swapBuffers();
 }
 
-void Application::process(std::unique_ptr<Image>& image)
+void Application::process(std::unique_ptr<Image>& image /*image*/)
 {
     auto raw = image->deepCopy();
 
@@ -447,7 +451,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //     // for (size_t i = 0; i < five_pts.size(); ++i)
     //     // {
     //     //     image->ppx(five_pts[i].x, five_pts[i].y, Pixel(0, 255, 255));
-    //     //     common::log_info("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
+    //     //     linuxface::common::log_info("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
     //     //                      (float) five_pts[i].y);
     //     // }
 
@@ -459,7 +463,7 @@ void Application::process(std::unique_ptr<Image>& image)
 
     //     if (!aligned_image)
     //     {
-    //         common::log_error("Failed to wrap face image for MediaPipe landmarks detection");
+    //         linuxface::common::log_error("Failed to wrap face image for MediaPipe landmarks detection");
     //         return;
     //     }
     //     auto test = aligned_image->deepCopy();
@@ -474,7 +478,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //         double invM[6];
     //         if (!math_utils::invert_affine(affine.data(), invM))
     //         {
-    //             common::log_error("Failed to invert affine for MediaPipe unalignment");
+    //             linuxface::common::log_error("Failed to invert affine for MediaPipe unalignment");
     //             return;
     //         }
 
@@ -495,7 +499,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //             float z = aligned_z[i];
     //             if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
     //             {
-    //                 common::log_warn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
+    //                 linuxface::common::log_warn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
     //                 continue;
     //             }
     //             image->ppx(x, y, Pixel(0, 0, 255));
@@ -509,7 +513,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //     }
     //     else
     //     {
-    //         common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+    //         linuxface::common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
     //     }
     // }
 
@@ -607,7 +611,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //     aligned_face = aligned_face->crop(crop_rect);
     //     if (!aligned_face)
     //     {
-    //         common::log_error("Failed to crop aligned face image for MediaPipe landmarks detection");
+    //         linuxface::common::log_error("Failed to crop aligned face image for MediaPipe landmarks detection");
     //         return;
     //     }
 
@@ -622,7 +626,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //             double x_aligned = result.landmarks[i][0] * aligned_face->info.width;
     //             double y_aligned = result.landmarks[i][1] * aligned_face->info.height;
 
-    //             auto pt = alignedToOriginalCoords(x_aligned, y_aligned, crop_left, crop_top, minX, minY, angleRad,
+    //             auto pt = AlignedToOriginalCoords(x_aligned, y_aligned, crop_left, crop_top, minX, minY, angleRad,
     //                                               eye_center);
 
     //             if (pt.x >= 0 && pt.x < raw->info.width && pt.y >= 0 && pt.y < raw->info.height)
@@ -634,7 +638,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //     }
     //     else
     //     {
-    //         common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+    //         linuxface::common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
     //     }
     // }
 
@@ -680,7 +684,7 @@ void Application::process(std::unique_ptr<Image>& image)
             error_sum += std::sqrt(dx * dx + dy * dy) / iod;
         }
         double mne = error_sum / pfld_landmarks.size();
-        common::log_info("Mean Normalized Error: %.4f", mne);
+        linuxface::common::log_info("Mean Normalized Error: %.4f", mne);
 
         // Face face2 = scrfd_faces[0];
         // pfldDetector_->detectSimilar(raw, face2);
@@ -714,8 +718,8 @@ void Application::process(std::unique_ptr<Image>& image)
         swap_success = swapPipeline_->run(image, target_img_);
         if (swap_success && layerManager_)
         {
-            auto layer = layerManager_->getBaseLayer();
-            if (layer)
+            auto* layer = layerManager_->getBaseLayer();
+            if (layer != nullptr)
             {
                 layer->dirty = true;
             }
@@ -744,7 +748,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //     if (fake_background_ && !image->isCompatible(*fake_background_))
     //     {
     //         fake_background_ = fake_background_->scale(image->info.width, image->info.height);
-    //         common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
+    //         linuxface::common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
     //     }
     //     image->changeBackgroundImage(*matting, *fake_background_);
     //     // foreground->info.x = 0;
@@ -780,7 +784,7 @@ void Application::captureAndSaveWebcamImageWithTimestamp()
     std::unique_ptr<Image> image;
     if (!cameraManager_->updateInput(image) || !image)
     {
-        common::log_error("Failed to capture image from webcam");
+        linuxface::common::log_error("Failed to capture image from webcam");
         return;
     }
 
@@ -794,11 +798,11 @@ void Application::captureAndSaveWebcamImageWithTimestamp()
     std::string raw_filename = std::string("webcam_raw_") + timestamp + ".ppm";
     if (!image->saveToDisk(raw_filename))
     {
-        common::log_error("Failed to save raw webcam image to %s", raw_filename.c_str());
+        linuxface::common::log_error("Failed to save raw webcam image to %s", raw_filename.c_str());
     }
     else
     {
-        common::log_info("Saved raw webcam image: %s", raw_filename.c_str());
+        linuxface::common::log_info("Saved raw webcam image: %s", raw_filename.c_str());
     }
 
     // Process image (in-place)
@@ -808,29 +812,29 @@ void Application::captureAndSaveWebcamImageWithTimestamp()
     std::string processed_filename = std::string("webcam_processed_") + timestamp + ".ppm";
     if (!image->saveToDisk(processed_filename))
     {
-        common::log_error("Failed to save processed webcam image to %s", processed_filename.c_str());
+        linuxface::common::log_error("Failed to save processed webcam image to %s", processed_filename.c_str());
     }
     else
     {
-        common::log_info("Saved processed webcam image: %s", processed_filename.c_str());
+        linuxface::common::log_info("Saved processed webcam image: %s", processed_filename.c_str());
     }
 }
 
-math_utils::Point<double>
-alignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double minX, double minY,
-                        double angleRad, const math_utils::Point<double>& eye_center)
+linuxface::math_utils::Point<double>
+AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x, double min_y,
+                        double angle_rad, const linuxface::math_utils::Point<double>& eye_center)
 {
     // Step 1: undo crop
     double x_rotated = x_aligned + crop_left;
     double y_rotated = y_aligned + crop_top;
 
     // Step 2: get absolute rotated coordinates
-    double x_rel = x_rotated + minX;
-    double y_rel = y_rotated + minY;
+    double x_rel = x_rotated + min_x;
+    double y_rel = y_rotated + min_y;
 
     // Step 3: un-rotate around eye center
-    double cosA = std::cos(-angleRad);
-    double sinA = std::sin(-angleRad);
+    double cosA = std::cos(-angle_rad);
+    double sinA = std::sin(-angle_rad);
 
     double x_orig = cosA * x_rel - sinA * y_rel + eye_center.x;
     double y_orig = sinA * x_rel + cosA * y_rel + eye_center.y;

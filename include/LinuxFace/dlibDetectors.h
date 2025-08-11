@@ -37,8 +37,6 @@ struct DlibImageWrapper
     const std::unique_ptr<Image>& image_;
 };
 
-// Now, define **free functions** in the same namespace so ADL finds them:
-
 inline long num_rows(const DlibImageWrapper& img)
 {
     return img.num_rows();
@@ -78,7 +76,7 @@ class DlibFaceDetector : public FaceDetector
 {
   public:
     DlibFaceDetector();
-    ~DlibFaceDetector();
+    ~DlibFaceDetector() = default;
     virtual std::vector<Face> detect(const std::unique_ptr<Image>& image) override;
 
   private:

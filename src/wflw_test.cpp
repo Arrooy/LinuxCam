@@ -50,13 +50,13 @@ bool WFLWLoader::load_example(int index, WFLWExample& example) const
 
 bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
 {
-    std::stringstream ss(line);
-    std::string token;
+    auto ss = std::stringstream(line);
 
     // Parse 98 landmarks (x, y)
     for (int i = 0; i < 98; ++i)
     {
-        double x, y;
+        double x = 0.0;
+        double y = 0.0;
         if (!(ss >> x >> y))
         {
             return false;
@@ -65,7 +65,10 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
     }
 
     // Parse bounding box (x_min, y_min, x_max, y_max)
-    double x_min, y_min, x_max, y_max;
+    double x_min = 0.0;
+    double y_min = 0.0;
+    double x_max = 0.0;
+    double y_max = 0.0;
     if (!(ss >> x_min >> y_min >> x_max >> y_max))
     {
         return false;
@@ -73,9 +76,9 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
     example.bounding_box = math_utils::Rect<double>(x_min, y_min, x_max, y_max);
 
     // Parse 6 attributes
-    for (int i = 0; i < 6; ++i)
+    for (auto& attr : example.attributes)
     {
-        if (!(ss >> example.attributes[i]))
+        if (!(ss >> attr))
         {
             return false;
         }
@@ -88,13 +91,13 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
     }
 
     // Load the image using ImageLoader
-    const std::string base_image_dir = Config::getInstance().getWFLWFolderPath();
-    const std::string image_path = base_image_dir + "/WFLW_images/" + example.image_name;
+    const auto& base_image_dir = Config::getInstance().getWFLWFolderPath();
+    const auto image_path = base_image_dir + "/WFLW_images/" + example.image_name;
     example.image = ImageLoader::loadImageFromFile(image_path);
     if (!example.image)
     {
         common::log_error("Could not load image: %s", image_path.c_str());
-        return false; // Or handle the error as appropriate for your application
+        return false;
     }
     common::log_info("Loaded image: %s", image_path.c_str());
     return true;

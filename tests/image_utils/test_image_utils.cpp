@@ -97,7 +97,7 @@ TEST(ImageUtilsPaintTest, PaintCircle)
     paintCircle(img, center, 2.0f, color);
     // Check at least one pixel is painted
     int painted = 0;
-    for (int i = 0; i < img->size(); ++i)
+    for (size_t i = 0; i < img->size(); ++i)
     {
         painted += img->data()[i] == 255 ? 1 : 0;
     }

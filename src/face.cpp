@@ -7,7 +7,7 @@
 #include "LinuxFace/onnx/scrfd.h"
 using namespace linuxface;
 
-Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
+Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}
 {
     if (landmarks.size() == 5)
     {
@@ -29,7 +29,7 @@ Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : b
     }
 }
 
-Face::Face(FaceBoundingBox boundingBox) : boundingBox_(boundingBox)
+Face::Face(FaceBoundingBox boundingBox) : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}
 {
 }
 
@@ -48,7 +48,7 @@ void Face::freeFaceLandmarks()
     landmarks_.clear();
 }
 
-void Face::loadNewFaceLandmarks(std::vector<FaceLandmark> landmarks)
+void Face::loadNewFaceLandmarks(const std::vector<FaceLandmark>& landmarks)
 {
     freeFaceLandmarks();
 
@@ -56,7 +56,7 @@ void Face::loadNewFaceLandmarks(std::vector<FaceLandmark> landmarks)
     for (const FaceLandmark& landmark : landmarks)
     {
         unsigned int id = landmark.i;
-        Face::FaceIndex index = this->get_facepart_from_landmark_id(id);
+        Face::FaceIndex index = Face::get_facepart_from_landmark_id(id);
         auto it = landmarks_.find(index);
         if (it == landmarks_.end())
         {
@@ -71,7 +71,7 @@ void Face::loadNewFaceLandmarks(std::vector<FaceLandmark> landmarks)
     }
 }
 
-Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id) const
+Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id)
 {
     // Lookup table for landmark -> facepart translation
     if (id >= 0 && id <= 16)
@@ -79,38 +79,38 @@ Face::FaceIndex Face::get_facepart_from_landmark_id(unsigned long id) const
         // Jaw
         return JAW;
     }
-    else if (id >= 17 && id <= 21)
+    if (id >= 17 && id <= 21)
     {
         // Left eyebrow
 
         return LBROW;
     }
-    else if (id >= 22 && id <= 26)
+    if (id >= 22 && id <= 26)
     {
         // Right eyebrow
         return RBROW;
     }
-    else if (id >= 27 && id <= 35)
+    if (id >= 27 && id <= 35)
     {
         // Nose
         return NOSE;
     }
-    else if (id >= 36 && id <= 41)
+    if (id >= 36 && id <= 41)
     {
         // Left eye
         return LEYE;
     }
-    else if (id >= 42 && id <= 47)
+    if (id >= 42 && id <= 47)
     {
         // Right eye
         return REYE;
     }
-    else if (id >= 48 && id <= 59)
+    if (id >= 48 && id <= 59)
     {
         // Outer mouth
         return OUTERMOUTH;
     }
-    else if (id >= 60 && id <= 67)
+    if (id >= 60 && id <= 67)
     {
         // Inner mouth
         return INNERMOUTH;
@@ -179,15 +179,14 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
                           * static_cast<float>(image->info.pixelSizeBytes));
 
     // El 25 es per corregir el bottom massa curt. Aixi no talla la cara,
-    long endPixel = (boundingBox_.rect.r + (boundingBox_.rect.b + 25.0f) * static_cast<float>(image->info.width))
-                    * static_cast<float>(image->info.pixelSizeBytes);
+    long endPixel = static_cast<long>(boundingBox_.rect.r + boundingBox_.rect.b + 25.0f) * static_cast<long>(image->info.width) * static_cast<long>(image->info.pixelSizeBytes);
 
     for (long i = startPixel; i < endPixel; i += image->info.pixelSizeBytes)
     {
         for (const FaceLandmark& landmark : landmarks_.at(facepart))
         {
             const math_utils::Point3D& p = landmark.p;
-            long index = static_cast<long>((p.x + p.y * image->info.width) * image->info.pixelSizeBytes);
+            long index = static_cast<long>(p.x + p.y * static_cast<double>(image->info.width)) * static_cast<long>(image->info.pixelSizeBytes);
             if (index == i)
             {
                 if (inside == 0)
@@ -261,14 +260,14 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
     }
 }
 
-void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const
+void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float /*thickness*/) const
 {
     // Convert to radians
-    const float pitch = pose_.pitch * M_PI / 180.f;
-    const float yaw = -pose_.yaw * M_PI / 180.f;
-    const float roll = pose_.roll * M_PI / 180.f;
+    const float pitch = static_cast<float>(pose_.pitch * M_PI / 180.0);
+    const float yaw = static_cast<float>(-pose_.yaw * M_PI / 180.0);
+    const float roll = static_cast<float>(pose_.roll * M_PI / 180.0);
 
-    // TODO: Set tdx tdy to the center of the face.
+    // TODO(arroyoa): Set tdx tdy to the center of the face.
     const int tdx = static_cast<int>(boundingBox_.rect.x() + boundingBox_.rect.width() / 2.0f);
     const int tdy = static_cast<int>(boundingBox_.rect.y() + boundingBox_.rect.height() / 2.0f);
 
@@ -301,7 +300,7 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickn
 }
 
 // Retrieve 5-point landmarks in ArcFace order (3D)
-std::vector<math_utils::Point3D> Face::getFivePointLandmarksArcFaceOrder() const
+std::vector<linuxface::math_utils::Point3D> Face::getFivePointLandmarksArcFaceOrder() const
 {
     std::vector<math_utils::Point3D> result(5);
     if (landmarks_.count(LEYE) && !landmarks_.at(LEYE).empty())
@@ -325,7 +324,7 @@ std::vector<math_utils::Point3D> Face::getFivePointLandmarksArcFaceOrder() const
 }
 
 // Retrieve 5-point landmarks in ArcFace order (2D)
-std::vector<math_utils::Point<>> Face::getFivePointLandmarksArcFaceOrder2D() const
+std::vector<linuxface::math_utils::Point<>> Face::getFivePointLandmarksArcFaceOrder2D() const
 {
     std::vector<math_utils::Point<>> result;
     auto pts3d = getFivePointLandmarksArcFaceOrder();
@@ -337,7 +336,7 @@ std::vector<math_utils::Point<>> Face::getFivePointLandmarksArcFaceOrder2D() con
     return result;
 }
 
-math_utils::Point3D Face::getLandmarkByIndex(unsigned int id) const
+linuxface::math_utils::Point3D Face::getLandmarkByIndex(unsigned int id) const
 {
     for (const auto& face_part : landmarks_)
     {

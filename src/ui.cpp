@@ -9,7 +9,7 @@
 
 using namespace linuxface;
 
-ImVec4 getProfileColorFromDuration(int64_t value);
+ImVec4 getProfileColorFromDuration(int64_t duration);
 
 UI::UI(std::shared_ptr<LayerManager> layerManager) : layerManager_(std::move(layerManager))
 {
@@ -32,8 +32,8 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
     // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 
     // disable ini and log files for ImGui
-    io.IniFilename = NULL;
-    io.LogFilename = NULL;
+    io.IniFilename = nullptr;
+    io.LogFilename = nullptr;
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();

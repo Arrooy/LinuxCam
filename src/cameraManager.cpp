@@ -8,11 +8,11 @@
 
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-using namespace linuxface;
+using linuxface::CameraManager;
+using linuxface::Webcam;
+using linuxface::Image;
 
-CameraManager::CameraManager()
-{
-}
+CameraManager::CameraManager() : inWebcam_(), outWebcam_() {}
 
 CameraManager::~CameraManager()
 {
@@ -75,7 +75,7 @@ bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
     return outputImage != nullptr;
 }
 
-bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage, std::unique_ptr<Image>& newFrame)
+bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage /*outputImage*/, std::unique_ptr<Image>& newFrame /*newFrame*/)
 {
     // Valid image, copy it to output image
     if (!outputImage)
@@ -94,7 +94,7 @@ bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage, std:
     return outputImage != nullptr;
 }
 
-bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
+bool CameraManager::updateOutput(std::unique_ptr<Image>& image /*image*/)
 {
     Profiler::getInstance().start("CameraManager", "Encode and write all output images");
 
@@ -122,7 +122,7 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
     return success;
 }
 
-bool CameraManager::addCamera(std::shared_ptr<Webcam> camera)
+bool CameraManager::addCamera(std::shared_ptr<Webcam> camera /*camera*/)
 {
     if (auto input = std::dynamic_pointer_cast<InputWebcam>(camera))
     {
@@ -138,7 +138,7 @@ bool CameraManager::addCamera(std::shared_ptr<Webcam> camera)
 }
 
 
-bool CameraManager::removeCamera(std::shared_ptr<Webcam> camera)
+bool CameraManager::removeCamera(std::shared_ptr<Webcam> camera /*camera*/)
 {
     const std::string& devicePath = camera->getDevicePath();
 
@@ -155,7 +155,7 @@ bool CameraManager::removeCamera(std::shared_ptr<Webcam> camera)
     return false;
 }
 
-bool CameraManager::updateCamera(std::shared_ptr<Webcam> camera)
+bool CameraManager::updateCamera(std::shared_ptr<Webcam> camera /*camera*/)
 {
     if (auto input = std::dynamic_pointer_cast<InputWebcam>(camera))
     {
@@ -216,7 +216,7 @@ std::vector<std::string> CameraManager::discoverAvailableVideoDevices()
     return availableDevices;
 }
 
-bool CameraManager::isDeviceUsable(const std::string& devicePath)
+bool CameraManager::isDeviceUsable(const std::string& devicePath /*devicePath*/)
 {
     int fd = open(devicePath.c_str(), O_RDWR | O_NONBLOCK);
     if (fd < 0)
@@ -224,13 +224,13 @@ bool CameraManager::isDeviceUsable(const std::string& devicePath)
         return false;
     }
 
-    struct v4l2_capability cap;
+        struct v4l2_capability cap{}; // initialize struct
     bool isUsable = false;
 
     if (ioctl(fd, VIDIOC_QUERYCAP, &cap) == 0)
     {
         // Check if it's an input device (has capture capability)
-        if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) && (cap.capabilities & V4L2_CAP_STREAMING))
+            if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) != 0u && (cap.capabilities & V4L2_CAP_STREAMING) != 0u)
         {
             // Make sure it's not a v4l2loopback output device
             std::string driver = reinterpret_cast<char*>(cap.driver);

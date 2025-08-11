@@ -30,8 +30,8 @@ Window::~Window()
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     // Retrieve the pointer to the Window instance
-    Window* win = static_cast<Window*>(glfwGetWindowUserPointer(window));
-    if (win)
+    auto* win = static_cast<Window*>(glfwGetWindowUserPointer(window));
+    if (win != nullptr)
     {
         win->onFramebufferResize(width, height);
     }
@@ -42,9 +42,9 @@ bool Window::initialize()
     // Setup GLFW
     glfwSetErrorCallback(errorCallback);
 
-    if (!glfwInit())
+    if (glfwInit() == 0)
     {
-        common::log_error("Failed to initialize GLFW");
+        linuxface::common::log_error("Failed to initialize GLFW");
         return false;
     }
 
@@ -56,7 +56,8 @@ bool Window::initialize()
     // Remove title bar
     // glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    int width, height;
+    int width = 0;
+    int height = 0;
     Config::getInstance().getWindowSize(width, height);
     std::string title = Config::getInstance().getWindowTitle();
 
@@ -64,7 +65,7 @@ bool Window::initialize()
     window_ = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     if (window_ == nullptr)
     {
-        common::log_error("Failed to create GLFW window");
+        linuxface::common::log_error("Failed to create GLFW window");
         glfwTerminate();
         return false;
     }
@@ -78,9 +79,9 @@ bool Window::initialize()
     glfwSetFramebufferSizeCallback(window_, framebuffer_size_callback);
 
     // Initialize GLAD
-    if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
+    if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) == 0)
     {
-        common::log_error("Failed to initialize GLAD");
+        linuxface::common::log_error("Failed to initialize GLAD");
         return false;
     }
 
@@ -89,7 +90,7 @@ bool Window::initialize()
     // images[0] = load_icon(media_path + "icon.png");
     // glfwSetWindowIcon(window_, 1, images);
 
-    common::log_info("GLFW Window initialized successfully. Size %d x %d", width, height);
+    linuxface::common::log_info("GLFW Window initialized successfully. Size %d x %d", width, height);
     return true;
 }
 
@@ -124,7 +125,7 @@ void Window::onFramebufferResize(int width, int height)
 
 void Window::shutdown()
 {
-    if (window_)
+    if (window_ != nullptr)
     {
         glfwDestroyWindow(window_);
         window_ = nullptr;
@@ -134,7 +135,7 @@ void Window::shutdown()
 
 bool Window::shouldClose() const
 {
-    return window_ ? glfwWindowShouldClose(window_) : true;
+    return window_ != nullptr ? glfwWindowShouldClose(window_) != 0 : true;
 }
 
 void Window::pollEvents()
@@ -169,7 +170,7 @@ void Window::updateResizeEvents()
 
 void Window::swapBuffers()
 {
-    if (window_)
+    if (window_ != nullptr)
     {
         glfwSwapBuffers(window_);
     }
@@ -177,7 +178,7 @@ void Window::swapBuffers()
 
 void Window::getFramebufferSize(int& width, int& height) const
 {
-    if (window_)
+    if (window_ != nullptr)
     {
         glfwGetFramebufferSize(window_, &width, &height);
     }
@@ -187,16 +188,17 @@ void Window::getFramebufferSize(int& width, int& height) const
     }
 }
 
-void Window::setViewport()
+void Window::setViewport() const
 {
-    int width, height;
+    int width = 0;
+    int height = 0;
     getFramebufferSize(width, height);
     glViewport(0, 0, width, height);
 }
 
 void Window::errorCallback(int error, const char* description)
 {
-    common::log_error("GLFW Error %d: %s", error, description);
+    linuxface::common::log_error("GLFW Error %d: %s", error, description);
 }
 
 // Allow setting a callback for resize events
@@ -207,7 +209,7 @@ void Window::setResizeCallback(std::function<void(int, int)> cb)
 
 bool Window::isKeyPressed(int key) const
 {
-    if (!window_)
+    if (window_ == nullptr)
     {
         return false;
     }

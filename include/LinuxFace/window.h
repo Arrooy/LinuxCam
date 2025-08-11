@@ -39,7 +39,7 @@ class Window
     const char* getGLSLVersion() const { return glslVersion_; }
 
     // Set viewport to match framebuffer size
-    void setViewport();
+    void setViewport() const;
     bool isKeyPressed(int key) const;
 
     // Called by GLFW on framebuffer resize

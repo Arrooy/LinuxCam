@@ -7,36 +7,50 @@
 #include "LinuxFace/application.h"
 #include "config.hpp"
 
-using namespace linuxface;
+using linuxface::Application;
+using linuxface::Config;
 
 int main(int argc, char* argv[])
 {
-    common::init_logger("a0.0.0");
-    std::string configFileLocation{"../config.yaml"};
-    if (argc > 1)
+    try
     {
-        common::log_info("Config file: %s", argv[1]);
-        configFileLocation = std::string(argv[1]);
+        linuxface::common::init_logger("a0.0.0");
+        std::string config_file_location{"../config.yaml"};
+        if (argc > 1)
+        {
+            linuxface::common::log_info("Config file: %s", argv[1]);
+            config_file_location = std::string(argv[1]);
+        }
+        if (!Config::getInstance(config_file_location.c_str()).loadConfiguration())
+        {
+            linuxface::common::log_error("Failed to load configuration");
+            return -1;
+        }
+
+        Application app;
+
+        // Initialize the application
+        if (!app.initialize())
+        {
+            linuxface::common::log_error("Failed to initialize application");
+            return -1;
+        }
+
+        // Run the main loop
+        app.run();
+
+        // Cleanup happens automatically via destructors
+        linuxface::common::log_info("Application finished successfully");
+        return 0;
     }
-    if (!Config::getInstance(configFileLocation.c_str()).loadConfiguration())
+    catch (const std::exception& e)
     {
-        common::log_error("Failed to load configuration");
+        linuxface::common::log_error("Unhandled exception: %s", e.what());
         return -1;
     }
-
-    Application app;
-
-    // Initialize the application
-    if (!app.initialize())
+    catch (...)
     {
-        common::log_error("Failed to initialize application");
+        linuxface::common::log_error("Unknown exception occurred");
         return -1;
     }
-
-    // Run the main loop
-    app.run();
-
-    // Cleanup happens automatically via destructors
-    common::log_info("Application finished successfully");
-    return 0;
 }

@@ -60,15 +60,15 @@ ImageFormat ImageFormatDetector::detectFormatFromPath(const std::string& path)
     {
         return ImageFormat::JPEG;
     }
-    else if (extension == ".png")
+    if (extension == ".png")
     {
         return ImageFormat::PNG;
     }
-    else if (extension == ".bmp")
+    if (extension == ".bmp")
     {
         return ImageFormat::BMP;
     }
-    else if (extension == ".ppm")
+    if (extension == ".ppm")
     {
         return ImageFormat::PPM;
     }

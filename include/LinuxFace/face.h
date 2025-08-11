@@ -64,9 +64,9 @@ class Face
     Face() = default;
     ~Face();
 
-    void loadNewFaceLandmarks(std::vector<FaceLandmark> landmarks);
+    void loadNewFaceLandmarks(const std::vector<FaceLandmark>& landmarks);
 
-    FaceIndex get_facepart_from_landmark_id(unsigned long id) const;
+    static FaceIndex get_facepart_from_landmark_id(unsigned long id);
 
     void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, Pixel c, float radius = 1) const;
     void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color,

@@ -3,12 +3,15 @@
 #include <dlib/image_processing/shape_predictor.h>
 
 #include "LinuxFace/profiler.h"
-using namespace linuxface;
+using linuxface::DlibFaceDetector;
+using linuxface::DlibShapeDetector;
+using linuxface::Face;
+using linuxface::Image;
 
-namespace dlib
-{
+
+namespace dlib {
 template <>
-struct image_traits<DlibImageWrapper>
+struct image_traits<linuxface::DlibImageWrapper>
 {
     typedef rgb_pixel pixel_type;
     static const bool has_simd = false;
@@ -21,9 +24,6 @@ DlibFaceDetector::DlibFaceDetector()
     detector_ = dlib::get_frontal_face_detector();
 }
 
-DlibFaceDetector::~DlibFaceDetector()
-{
-}
 
 std::vector<Face> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
 {
@@ -36,7 +36,7 @@ std::vector<Face> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
     std::vector<Face> faces;
     for (const auto& rect : rects_detected)
     {
-        faces.push_back(Face(FaceBoundingBox(rect.left(), rect.top(), rect.right(), rect.bottom())));
+    faces.emplace_back(Face(FaceBoundingBox(static_cast<float>(rect.left()), static_cast<float>(rect.top()), static_cast<float>(rect.right()), static_cast<float>(rect.bottom()))));
     }
 
     Profiler::getInstance().stop("DLIB", "Face Detector");
@@ -72,7 +72,7 @@ DlibShapeDetector::detect(const std::unique_ptr<Image>& image, const std::vector
     for (const auto& rect : faces_rect)
     {
         // Convert to dlib rectangle
-        dlib::rectangle dlib_rect((long) rect.l, (long) rect.t, (long) rect.r, (long) rect.b);
+        dlib::rectangle dlib_rect(static_cast<long>(rect.l), static_cast<long>(rect.t), static_cast<long>(rect.r), static_cast<long>(rect.b));
         // Predict landmarks
         dlib::full_object_detection shape = (*predictor_)(dlib_image, dlib_rect);
         std::vector<FaceLandmark> landmarks;

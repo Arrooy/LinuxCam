@@ -81,6 +81,7 @@ jobs:
             g++-12 \
             gcc-12 \
             ccache \
+            nasm \
             libgl1-mesa-dev \
             libglu1-mesa-dev \
             libxinerama-dev \

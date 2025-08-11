@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <chrono>
 
-using namespace linuxface;
+using linuxface::Profiler;
 
-std::string Profiler::makeKey(const std::string& sourceName, const std::string& name) const
+std::string Profiler::makeKey(const std::string& sourceName, const std::string& name)
 {
     return sourceName + "::" + name;
 }
@@ -75,7 +75,7 @@ std::vector<std::pair<std::string, std::chrono::microseconds>> Profiler::getDura
     result.reserve(durations_.size());
     for (const auto& pair : durations_)
     {
-        result.push_back(pair);
+        result.emplace_back(pair);
     }
     std::sort(result.begin(), result.end(),
               [](const std::pair<std::string, std::chrono::microseconds>& a,

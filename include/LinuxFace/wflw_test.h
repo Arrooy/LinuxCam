@@ -42,7 +42,7 @@ class WFLWLoader
     std::vector<WFLWExample> examples_;
 
     // Helper function to parse a single line from the data file
-    bool parse_line(const std::string& line, WFLWExample& example);
+    static bool parse_line(const std::string& line, WFLWExample& example);
 };
 
 } // namespace linuxface

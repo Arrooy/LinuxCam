@@ -1,7 +1,7 @@
 DeletedItems/*
 DeletedItems
 .vscode
-build
+build*
 help
 help/*
 dlib/*
