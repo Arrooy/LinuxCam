@@ -55,7 +55,7 @@ void SignalHandler(int signal)
 }
 
 
-Application::Application() : profiler_(Profiler::getInstance()), ui_(nullptr), faceDetector_(nullptr), dlibShapeDetector_(nullptr), fsanetDetectorVar_(nullptr), fsanetDetectorConv_(nullptr), modnetDetector_(nullptr), rvmDetector_(nullptr), swapPipeline_(nullptr), adria_img_(nullptr), target_img_(nullptr)
+Application::Application() : ui_(nullptr), profiler_(Profiler::getInstance()), faceDetector_(nullptr), dlibShapeDetector_(nullptr), fsanetDetectorVar_(nullptr), fsanetDetectorConv_(nullptr), modnetDetector_(nullptr), rvmDetector_(nullptr), swapPipeline_(nullptr), adria_img_(nullptr), target_img_(nullptr)
 {
 }
 

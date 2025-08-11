@@ -13,6 +13,9 @@ set(USE_AVX_INSTRUCTIONS ON CACHE BOOL "Use AVX instructions for Dlib")
 set(DLIB_NO_GUI_SUPPORT OFF CACHE BOOL "Disable GUI support for Dlib")
 set(DLIB_USE_CUDA ON CACHE BOOL "Use CUDA for Dlib")
 
+# Suppress NVCC deprecated GPU target warnings
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wno-deprecated-gpu-targets")
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Coverage function
@@ -50,6 +53,9 @@ if(NOT NASM_EXECUTABLE)
 endif()
 
 add_compile_options(-Wall)
+
+# Suppress warnings from external dependencies
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-compare")
 
 include(FetchContent)
 

@@ -55,7 +55,7 @@ jobs:
       - name: Run Flawfinder Security Scan
         uses: david-a-wheeler/flawfinder@8e4a779ad59dbfaee5da586aa9210853b701959c
         with:
-          arguments: '--sarif ./ --exclude external --exclude build --exclude _deps --exclude experimental'
+          arguments: '--sarif src/ include/'
           output: 'flawfinder_results.sarif'
 
       - name: Upload analysis results to GitHub Security tab

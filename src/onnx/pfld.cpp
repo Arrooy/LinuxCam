@@ -37,7 +37,7 @@ Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
     // Convert image to tensor
     image_utils::ImageView<unsigned char> srcView{image->data(), image->info.width, image->info.height,
                                                   image->info.pixelSizeBytes};
-    image_utils::ImageView<float> dstView{tensor_data, target_width, target_height, 3};
+    image_utils::ImageView<float> dstView{tensor_data, static_cast<size_t>(target_width), static_cast<size_t>(target_height), 3};
     image_utils::bicubicScaling<unsigned char, float, NormalizationType::MINMAX, ImageLayout::CHW>(srcView, dstView);
 
     auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, target_width, target_height);
@@ -82,7 +82,7 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     auto aligned_face = image->deepCopy();
 
     // Rotate the whole image
-    auto translation_offset = aligned_face->rotate(angleRad, eye_center);
+    aligned_face->rotate(angleRad, eye_center);
 
     // Calculate where the eye center should be in the rotated image
     // We need to simulate the same transformation that the rotation function does
