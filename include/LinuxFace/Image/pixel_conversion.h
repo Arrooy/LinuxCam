@@ -4,8 +4,6 @@
 
 #include "LinuxFace/Image/image_utils.h"
 
-// TODO: add Gtest.
-
 namespace linuxface
 {
 namespace pixel_conversion

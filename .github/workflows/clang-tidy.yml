@@ -183,18 +183,15 @@ jobs:
           echo "Determining which files to analyze..."
           
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "Analyzing only changed files in PR #${{ github.event.number }}"
-            # Get changed files in the PR
+            echo "Analyzing only changed files in PR #${{ github.event.number }} (src/ and include/ only)"
             git fetch origin ${{ github.event.pull_request.base.ref }}
             git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD \
+              | grep -E '^src/|^include/' \
               | grep -E '\.(cpp|cc|cxx|c)$' \
-              | grep -v -E '^(external|build|_deps|experimental)/' \
               > files_to_analyze.txt || touch files_to_analyze.txt
           else
-            echo "Analyzing all project source files"
-            # Analyze all source files for scheduled runs or manual triggers
-            find . -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" -o -name "*.c" \
-              | grep -v -E '^\./(external|build|_deps|experimental)/' \
+            echo "Analyzing all project source files in src/ and include/ only"
+            find src include -type f \( -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" -o -name "*.c" \) \
               > files_to_analyze.txt
           fi
           

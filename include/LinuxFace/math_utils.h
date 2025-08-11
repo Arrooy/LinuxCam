@@ -424,8 +424,10 @@ inline bool estimate_similarity_2d(const double* src, const double* dst, int n, 
     }
 
     // Compute centroids
-    double src_mean_x = 0, src_mean_y = 0;
-    double dst_mean_x = 0, dst_mean_y = 0;
+    double src_mean_x = 0;
+    double src_mean_y = 0;
+    double dst_mean_x = 0;
+    double dst_mean_y = 0;
 
     for (int i = 0; i < n; ++i)
     {
@@ -440,18 +442,21 @@ inline bool estimate_similarity_2d(const double* src, const double* dst, int n, 
     dst_mean_y /= n;
 
     // Center points
-    double mu_src[2] = {src_mean_x, src_mean_y};
-    double mu_dst[2] = {dst_mean_x, dst_mean_y};
+    const double mu_src[2] = {src_mean_x, src_mean_y};
+    const double mu_dst[2] = {dst_mean_x, dst_mean_y};
 
-    double cov_xx = 0, cov_xy = 0, cov_yx = 0, cov_yy = 0;
+    double cov_xx = 0;
+    double cov_xy = 0;
+    double cov_yx = 0;
+    double cov_yy = 0;
     double src_var = 0;
 
     for (int i = 0; i < n; ++i)
     {
-        double xs = src[2 * i] - mu_src[0];
-        double ys = src[2 * i + 1] - mu_src[1];
-        double xd = dst[2 * i] - mu_dst[0];
-        double yd = dst[2 * i + 1] - mu_dst[1];
+        const double xs = src[2 * i] - mu_src[0];
+        const double ys = src[2 * i + 1] - mu_src[1];
+        const double xd = dst[2 * i] - mu_dst[0];
+        const double yd = dst[2 * i + 1] - mu_dst[1];
 
         cov_xx += xd * xs;
         cov_xy += xd * ys;
@@ -551,12 +556,13 @@ inline bool estimate_procrustes_similarity(const double* src, const double* dst,
     }
 
     // 4. Compute rotation & scale
-    double trace = cov_xx + cov_yy;
+    const double trace = cov_xx + cov_yy;
     // double det = cov_xx*cov_yy - cov_xy*cov_yx;
-    double scale = trace / var_s;
-    double theta = atan2(cov_xy - cov_yx, cov_xx + cov_yy); // rotation angle
+    const double scale = trace / var_s;
+    const double theta = atan2(cov_xy - cov_yx, cov_xx + cov_yy); // rotation angle
 
-    double cs = cos(theta), sn = sin(theta);
+    const double cs = cos(theta);
+    const double sn = sin(theta);
 
     // 5. Build 2×3 matrix
     M[0] = scale * cs;

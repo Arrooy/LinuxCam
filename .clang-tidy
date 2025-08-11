@@ -29,6 +29,8 @@ Checks: >
   -cppcoreguidelines-pro-type-vararg,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-avoid-c-arrays,
+  -modernize-avoid-c-arrays,
   modernize-use-override,
   cppcoreguidelines-pro-type-const-cast,
   misc-unused-parameters
