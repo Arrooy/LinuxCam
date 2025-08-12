@@ -70,37 +70,32 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
 
 constexpr unsigned char DEFAULT_ALPHA = 255;
 
-struct Pixel
-{
+struct Pixel {
     unsigned char r;
     unsigned char g;
     unsigned char b;
     unsigned char a;
 
-    Pixel(unsigned char r, unsigned char g, unsigned char b, unsigned char a = DEFAULT_ALPHA)
-    {
-        this->r = r;
-        this->g = g;
-        this->b = b;
-        this->a = a;
-    }
+    Pixel(unsigned char r_, unsigned char g_, unsigned char b_, unsigned char a_ = DEFAULT_ALPHA)
+        : r(r_), g(g_), b(b_), a(a_) {}
+    Pixel() = default;
 };
 
-struct ImageMetadata
-{
+struct ImageMetadata {
     unsigned long x{0u};
     unsigned long y{0u};
     unsigned long width{0u};
     unsigned long height{0u};
     unsigned char pixelSizeBytes{0u};
-    TJSAMP TJSampleFormat;                // TJSAMP_444
-    TJCS TJColorSpace;                    // TJCS_RGB
-    TJPF TJPixelFormat;                   // TJPF_RGB
+    TJSAMP TJSampleFormat{};                // TJSAMP_444
+    TJCS TJColorSpace{};                    // TJCS_RGB
+    TJPF TJPixelFormat{};                   // TJPF_RGB
     ImageFormat format{ImageFormat::RGB}; // Default to RGB
     bool is_valid{false};
-    std::string filename;
+    std::string filename{};
     unsigned int textureId{0};
     int layer{0}; // Layer for rendering, default is 0
+    ImageMetadata() = default;
 };
 
 
@@ -149,7 +144,7 @@ class Image
 {
   public:
     // Default constructor
-    Image() { info.format = ImageFormat::UNKNOWN; }
+    Image() : info{} { info.format = ImageFormat::UNKNOWN; }
 
     // Constructor with size allocation
     explicit Image(size_t size);
@@ -199,10 +194,10 @@ class Image
 
     // Legacy pixel access methods (for backward compatibility)
     [[nodiscard]] Pixel operator()(size_t x, size_t y) const;
-    void ppx(size_t x, size_t y, const Pixel& pixel);
-    void pxy(size_t x, size_t y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = DEFAULT_ALPHA);
-    void pidx(size_t idx, unsigned char r, unsigned char g, unsigned char b, unsigned char a = DEFAULT_ALPHA);
-    [[nodiscard]] size_t index(size_t x, size_t y) const noexcept;
+    void ppx(size_t col, size_t row, const Pixel& c);
+    void pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b, const unsigned char a = DEFAULT_ALPHA);
+    void pidx(size_t idx, const unsigned char r, const unsigned char g, const unsigned char b, const unsigned char a = DEFAULT_ALPHA);
+    [[nodiscard]] size_t index(size_t col, size_t row) const noexcept;
 
     // Helper method to determine if image is RGB/RGBA based on format
     [[nodiscard]] bool isColorImage() const noexcept;

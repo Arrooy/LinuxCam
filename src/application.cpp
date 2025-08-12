@@ -1,5 +1,9 @@
 #include "LinuxFace/application.h"
 
+#include <csignal>
+#include <iostream>
+#include <memory>
+
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
@@ -8,10 +12,6 @@
 #include "LinuxFace/inputWebcam.h"
 #include "LinuxFace/onnx/swapPipeline.h"
 #include "config.hpp"
-
-#include <csignal>
-#include <iostream>
-#include <memory>
 
 using linuxface::Application;
 using linuxface::Config;
@@ -41,8 +41,8 @@ std::atomic<bool> g_should_exit{false};
 
 
 linuxface::math_utils::Point<double>
-AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x, double min_y,
-                        double angle_rad, const linuxface::math_utils::Point<double>& eye_center);
+AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x,
+                        double min_y, double angle_rad, const linuxface::math_utils::Point<double>& eye_center);
 
 void SignalHandler(int signal)
 {
@@ -54,7 +54,18 @@ void SignalHandler(int signal)
 }
 
 
-Application::Application() : profiler_(Profiler::getInstance()), ui_(nullptr), faceDetector_(nullptr), dlibShapeDetector_(nullptr), fsanetDetectorVar_(nullptr), fsanetDetectorConv_(nullptr), modnetDetector_(nullptr), rvmDetector_(nullptr), swapPipeline_(nullptr), adria_img_(nullptr), target_img_(nullptr)
+Application::Application()
+    : ui_(nullptr)
+    , profiler_(Profiler::getInstance())
+    , faceDetector_(nullptr)
+    , dlibShapeDetector_(nullptr)
+    , fsanetDetectorVar_(nullptr)
+    , fsanetDetectorConv_(nullptr)
+    , modnetDetector_(nullptr)
+    , rvmDetector_(nullptr)
+    , swapPipeline_(nullptr)
+    , adria_img_(nullptr)
+    , target_img_(nullptr)
 {
 }
 
@@ -736,8 +747,8 @@ void Application::captureAndSaveWebcamImageWithTimestamp()
 }
 
 linuxface::math_utils::Point<double>
-AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x, double min_y,
-                        double angle_rad, const linuxface::math_utils::Point<double>& eye_center)
+AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x,
+                        double min_y, double angle_rad, const linuxface::math_utils::Point<double>& eye_center)
 {
     // Step 1: undo crop
     double x_rotated = x_aligned + crop_left;
