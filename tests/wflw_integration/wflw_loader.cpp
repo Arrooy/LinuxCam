@@ -1,9 +1,9 @@
-#include "LinuxFace/wflw_test.h"
+#include "wflw_loader.h"
 
 #include "LinuxFace/common.h"
 #include "config.hpp"
 
-namespace linuxface
+namespace linuxface::test
 {
 
 WFLWLoader::WFLWLoader(const std::string& data_file_path, const int max_samples)
@@ -22,7 +22,7 @@ WFLWLoader::WFLWLoader(const std::string& data_file_path, const int max_samples)
         WFLWExample example;
         if (parse_line(line, example))
         {
-            examples_.push_back(example);
+            examples_.emplace_back(std::move(example));
             ++num_examples;
             if (max_samples > 0 && num_examples >= max_samples)
             {
@@ -44,7 +44,23 @@ bool WFLWLoader::load_example(int index, WFLWExample& example) const
         common::log_error("Invalid example index: %lu", index);
         return false;
     }
-    example = examples_[index];
+
+    // Copy the basic data
+    example.landmarks = examples_[index].landmarks;
+    example.bounding_box = examples_[index].bounding_box;
+    example.attributes = examples_[index].attributes;
+    example.image_name = examples_[index].image_name;
+
+    // Create a deep copy of the image
+    if (examples_[index].image)
+    {
+        example.image = examples_[index].image->deepCopy();
+    }
+    else
+    {
+        example.image = nullptr;
+    }
+
     return true;
 }
 
@@ -103,33 +119,24 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
     return true;
 }
 
-} // namespace linuxface
+std::vector<int> WFLWLoader::getExamplesByAttribute(bool normal_pose, bool normal_expression, bool normal_illumination,
+                                                    bool no_makeup, bool no_occlusion, bool is_clear) const
+{
+    std::vector<int> matching_indices;
 
-// Example usage (in your main function or another test file)
-/*
-#include "LinuxFace/wflw_test.h"
+    for (size_t i = 0; i < examples_.size(); ++i)
+    {
+        const auto& example = examples_[i];
 
-int main() {
-    linuxface::WFLWLoader
-loader("../WFLW/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt"); // Replace with
-actual path
-
-    if (loader.get_num_examples() == 0) {
-        std::cerr << "Error: No examples loaded." << std::endl;
-        return 1;
+        if ((normal_pose == example.isNormalPose()) && (normal_expression == example.isNormalExpression())
+            && (normal_illumination == example.isNormalIllumination()) && (no_makeup == example.hasNoMakeup())
+            && (no_occlusion == example.hasNoOcclusion()) && (is_clear == example.isClear()))
+        {
+            matching_indices.push_back(static_cast<int>(i));
+        }
     }
 
-    linuxface::WFLWExample example;
-    if (loader.load_example(0, example)) { // Load the first example
-        common::log_info("Loaded example from image: %s", example.image_name.c_str());
-        common::log_info("Bounding box: (%f, %f) - (%f, %f)", example.bounding_box.l, example.bounding_box.t,
-                         example.bounding_box.r, example.bounding_box.b);
-        common::log_info("Attributes: %d %d %d %d %d %d", example.attributes[0], example.attributes[1],
-                         example.attributes[2], example.attributes[3], example.attributes[4], example.attributes[5]);
-        common::log_info("Number of landmarks: %zu", example.landmarks.size());
-        // You can further process the landmarks here...
-    }
-
-    return 0;
+    return matching_indices;
 }
-*/
+
+} // namespace linuxface::test

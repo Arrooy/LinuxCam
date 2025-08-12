@@ -21,7 +21,6 @@
 #include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/profiler.h"
 #include "LinuxFace/ui.h"
-#include "LinuxFace/wflw_test.h"
 #include "LinuxFace/window.h"
 
 namespace linuxface
@@ -72,8 +71,6 @@ class Application
 
     std::unique_ptr<Image> adria_img_;
     std::unique_ptr<Image> target_img_;
-
-    WFLWExample example_;
 
     // Main loop methods
     bool update();

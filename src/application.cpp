@@ -7,7 +7,6 @@
 #include "LinuxFace/dlibDetectors.h"
 #include "LinuxFace/inputWebcam.h"
 #include "LinuxFace/onnx/swapPipeline.h"
-#include "LinuxFace/wflw_test.h"
 #include "config.hpp"
 
 #include <csignal>
@@ -231,35 +230,6 @@ bool Application::initialize()
     // PFLD Landmarks initialization
     std::string pfld_model = models_folder + "pfld-106-v3.onnx";
     pfldDetector_ = std::make_shared<PFLDDetector>(pfld_model);
-
-
-    const std::string wflw_base = Config::getInstance().getWFLWFolderPath();
-    WFLWLoader loader(wflw_base + "/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt", 10);
-
-    if (loader.get_num_examples() == 0)
-    {
-        linuxface::common::log_error("Error: No examples loaded.");
-        return false;
-    }
-
-    if (loader.load_example(0, example_))
-    { // Load the first example
-        linuxface::common::log_info("Loaded example from image: %s", example_.image_name.c_str());
-        linuxface::common::log_info("Bounding box: (%f, %f) - (%f, %f)", example_.bounding_box.l, example_.bounding_box.t,
-                         example_.bounding_box.r, example_.bounding_box.b);
-        linuxface::common::log_info("Attributes: %d %d %d %d %d %d", example_.attributes[0], example_.attributes[1],
-                         example_.attributes[2], example_.attributes[3], example_.attributes[4],
-                         example_.attributes[5]);
-        linuxface::common::log_info("Number of landmarks: %zu", example_.landmarks.size());
-        // You can further process the landmarks here...
-    }
-
-    // std::unique_ptr<Image> testa = ImageLoader::loadImageFromFile(Config::getInstance().getMediaFolderPath() +
-    // "image_.jpeg"); testa->saveToDisk("image.ppm"); return false; std::unique_ptr<Image> test =
-    // std::make_unique<Image>(); test->copyFrom(*example_.image); process(test);
-    // example_.image->saveToDisk("input.ppm");
-    // test->saveToDisk("output.ppm");
-    // return false;
 
     linuxface::common::log_info("Application initialized successfully");
     return true;
@@ -641,61 +611,6 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //         linuxface::common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
     //     }
     // }
-
-    // PFLD Landmarks detection (using SCRFD face)
-    if (pfldDetector_ && pfldDetector_->isReady() && !scrfd_faces.empty())
-    {
-        // Use the first detected face for demo
-        Face face = scrfd_faces[0];
-
-        pfldDetector_->detect(raw, face);
-
-        // Draw landmarks on the image
-        face.paintAllFaceLandmarks(image, false, Pixel(255, 25, 0), 1.5f);
-
-        // Small test with WFLW
-        auto left_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::LEYE);
-        auto right_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::REYE);
-
-        auto pfld_landmarks = face.getLandmarks();
-        // Load ground truth points for WFLW dataset
-        auto gt_landmarks = example_.landmarks;
-
-        for (const auto& lm : pfld_landmarks)
-        {
-            // draw each landmark index onto the face:
-            Layer newText;
-            newText.id = Layer::next_id++;
-            newText.type = LayerType::Text;
-            newText.textContent = std::to_string(lm.i);
-            newText.name = "pfld" + std::to_string(lm.i);
-            newText.x = lm.p.x + 1;
-            newText.y = lm.p.y + 1;
-            newText.fontSize = 16.0f;
-            newText.textColor = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-            layerManager_->addLayer(newText);
-        }
-        double iod = std::sqrt(std::pow(right_eye.x - left_eye.x, 2) + std::pow(right_eye.y - left_eye.y, 2));
-        double error_sum = 0.0;
-        for (unsigned int i = 0; i < pfld_landmarks.size(); ++i)
-        {
-            double dx = pfld_landmarks[i].p.x - gt_landmarks[i].x;
-            double dy = pfld_landmarks[i].p.y - gt_landmarks[i].y;
-            error_sum += std::sqrt(dx * dx + dy * dy) / iod;
-        }
-        double mne = error_sum / pfld_landmarks.size();
-        linuxface::common::log_info("Mean Normalized Error: %.4f", mne);
-
-        // Face face2 = scrfd_faces[0];
-        // pfldDetector_->detectSimilar(raw, face2);
-        // // Draw landmarks on the image
-        // face2.paintAllFaceLandmarks(image, false, Pixel(25, 255, 0), 1.5f);
-
-        // Face face3 = scrfd_faces[0];
-        // pfldDetector_->detectOpenCv(raw, face3);
-        // // Draw landmarks on the image
-        // face3.paintAllFaceLandmarks(image, false, Pixel(25, 255, 255), 1.5f);
-    }
 
 
     // bool swap_success = false;

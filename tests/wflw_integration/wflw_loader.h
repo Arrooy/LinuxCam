@@ -1,5 +1,5 @@
-#ifndef WFLW_TEST_H
-#define WFLW_TEST_H
+#ifndef WFLW_LOADER_H
+#define WFLW_LOADER_H
 
 #include <array>
 #include <fstream>
@@ -8,10 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "LinuxFace/imageLoader.h" // Include ImageLoader header
-#include "LinuxFace/math_utils.h"  // Assuming this contains Point and Rect
+#include "LinuxFace/imageLoader.h"
+#include "LinuxFace/math_utils.h"
 
-namespace linuxface
+namespace linuxface::test
 {
 
 struct WFLWExample
@@ -27,7 +27,16 @@ struct WFLWExample
     bool hasNoOcclusion() const { return attributes[4] == 0; }
     bool isClear() const { return attributes[5] == 0; }
     std::string image_name;
-    std::shared_ptr<Image> image; // Store the loaded image
+    std::unique_ptr<Image> image;
+
+    // Move constructor and assignment
+    WFLWExample() = default;
+    WFLWExample(WFLWExample&&) = default;
+    WFLWExample& operator=(WFLWExample&&) = default;
+
+    // Delete copy constructor and assignment to prevent accidental copies
+    WFLWExample(const WFLWExample&) = delete;
+    WFLWExample& operator=(const WFLWExample&) = delete;
 };
 
 class WFLWLoader
@@ -38,13 +47,16 @@ class WFLWLoader
     bool load_example(int index, WFLWExample& example) const;
     int get_num_examples() const { return examples_.size(); }
 
+    // Get examples by specific attributes for targeted testing
+    std::vector<int>
+    getExamplesByAttribute(bool normal_pose = true, bool normal_expression = true, bool normal_illumination = true,
+                           bool no_makeup = true, bool no_occlusion = true, bool is_clear = true) const;
+
   private:
     std::vector<WFLWExample> examples_;
-
-    // Helper function to parse a single line from the data file
     static bool parse_line(const std::string& line, WFLWExample& example);
 };
 
-} // namespace linuxface
+} // namespace linuxface::test
 
-#endif // WFLW_TEST_H
+#endif // WFLW_LOADER_H

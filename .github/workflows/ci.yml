@@ -143,6 +143,22 @@ jobs:
                   echo "Build artifacts:"
                   find build-${{ matrix.build_type }} -name "*.a" -o -name "linuxface*" -type f | head -20
 
+            - name: Download WFLW Dataset for Integration Tests
+              run: |
+                  echo "Setting up WFLW dataset for integration tests..."
+                  # Install gdown for Google Drive downloads
+                  pip install gdown
+                  
+                  # Run the dataset download script
+                  if ! ./scripts/download_wflw_dataset.sh; then
+                    echo "⚠️  Warning: WFLW dataset download failed"
+                    echo "Integration tests will be skipped"
+                    echo "WFLW_AVAILABLE=false" >> $GITHUB_ENV
+                  else
+                    echo "✅ WFLW dataset ready for testing"
+                    echo "WFLW_AVAILABLE=true" >> $GITHUB_ENV
+                  fi
+
             - name: Run Tests (${{ matrix.build_type }})
               working-directory: build-${{ matrix.build_type }}
               run: |
@@ -154,10 +170,22 @@ jobs:
                   fi
 
                   echo "Running tests..."
-                  # Run tests with verbose output on failure
-                  if ! ctest --output-on-failure --parallel $(nproc) --verbose; then
-                    echo "ERROR: Tests failed"
-                    exit 1
+                  # Run different test suites based on dataset availability
+                  if [ "${WFLW_AVAILABLE:-false}" = "true" ]; then
+                    echo "🧪 Running full test suite including WFLW integration tests..."
+                    # Run all tests
+                    if ! ctest --output-on-failure --parallel $(nproc) --verbose; then
+                      echo "ERROR: Tests failed"
+                      exit 1
+                    fi
+                  else
+                    echo "🧪 Running standard test suite (excluding WFLW integration tests)..."
+                    # Run tests excluding WFLW integration tests
+                    if ! ctest --output-on-failure --parallel $(nproc) --verbose --exclude-regex ".*WFLW.*"; then
+                      echo "ERROR: Tests failed"
+                      exit 1
+                    fi
+                    echo "⚠️  Note: WFLW integration tests were skipped due to dataset unavailability"
                   fi
 
                   # For Debug builds, verify coverage data was generated
