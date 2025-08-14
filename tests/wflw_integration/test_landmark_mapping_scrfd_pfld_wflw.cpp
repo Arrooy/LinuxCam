@@ -1,3 +1,11 @@
+/**
+ * LANDMARK MAPPING TEST: SCRFD + PFLD + WFLW
+ * 
+ * This test validates landmark mappings and conversions between:
+ * - SCRFD 5-point landmarks (face detection)
+ * - PFLD 106-point landmarks (detailed facial landmarks) 
+ * - WFLW 98-point ground truth landmarks (benchmark dataset)
+ */
 #include "wflw_loader.h"
 
 #include <fstream>
@@ -42,7 +50,7 @@ class LandmarkMappingTest : public ::testing::Test
     void SetUp() override
     {
         // Ensure we can load the test configuration file
-        // Try test-specific config first, then fallback to main config
+        // Only use test-specific config, not main config
         std::string config_paths[] = {"tests/wflw_integration/test_config.yaml",
                                       "../tests/wflw_integration/test_config.yaml"};
         bool config_loaded = false;

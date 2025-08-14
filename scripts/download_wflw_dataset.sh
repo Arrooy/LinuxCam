@@ -10,8 +10,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WFLW_DIR="$PROJECT_ROOT/WFLW"
 
 # WFLW dataset URLs (official academic dataset)
-WFLW_IMAGES_URL="https://drive.google.com/uc?export=download&id=1hzBd48JIdWTJSsATBEB_eFVvPL1bx6UC"
-WFLW_ANNOTATIONS_URL="https://drive.google.com/uc?export=download&id=1tJNmYB8zxL9LzBk7qb-r3sCtHPxAhKo_"
+WFLW_IMAGES_URL="https://drive.usercontent.google.com/download?id=1hzBd48JIdWTJSsATBEB_eFVvPL1bx6UC&export=download"
+WFLW_ANNOTATIONS_URL="https://wywu.github.io/projects/LAB/support/WFLW_annotations.tar.gz"
 
 # Create WFLW directory
 mkdir -p "$WFLW_DIR"
@@ -24,12 +24,20 @@ echo "Target directory: $WFLW_DIR"
 download_with_gdown() {
     local url="$1"
     local filename="$2"
-    
-    if command -v gdown &> /dev/null; then
-        echo "Using gdown to download $filename..."
-        gdown "$url" -O "$filename"
+    # Use gdown only for Google Drive URLs, otherwise wget
+    if [[ "$url" == *"drive.google.com"* || "$url" == *"drive.usercontent.google.com"* ]]; then
+        if command -v gdown &> /dev/null; then
+            echo "Using gdown to download $filename..."
+            gdown "$url" -O "$filename"
+        elif command -v pipx &> /dev/null && pipx list | grep -q gdown; then
+            echo "Using pipx gdown to download $filename..."
+            pipx run gdown "$url" -O "$filename"
+        else
+            echo "gdown not available, using wget..."
+            wget -O "$filename" "$url"
+        fi
     else
-        echo "gdown not available, using wget..."
+        echo "Using wget to download $filename..."
         wget -O "$filename" "$url"
     fi
 }
@@ -59,8 +67,12 @@ download_if_missing() {
 
 # Install gdown if not available (for Google Drive downloads)
 if ! command -v gdown &> /dev/null; then
-    echo "Installing gdown for Google Drive downloads..."
-    pip install gdown
+    echo "gdown not found. Installing with pipx..."
+    if ! command -v pipx &> /dev/null; then
+        echo "pipx not found. Installing pipx..."
+        sudo apt-get update && sudo apt-get install -y pipx python3-pip
+    fi
+    pipx install gdown
 fi
 
 # Download dataset files

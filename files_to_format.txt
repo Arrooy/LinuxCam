@@ -1,3 +1,0 @@
-src/Image/image.cpp
-src/application.cpp
-src/onnx/pfld.cpp

@@ -101,6 +101,11 @@ jobs:
           else
             echo "✅ All source files are properly formatted"
           fi
+        - name: Cleanup files_to_format.txt
+          if: always()
+          run: rm -f files_to_format.txt
+        - name: Cleanup files_to_format.txt
+          run: rm -f files_to_format.txt
 
   auto-format:
     name: Auto-Format Code
@@ -249,6 +254,9 @@ jobs:
             fi
           done
 
+        - name: Cleanup files_to_format.txt
+          if: always()
+          run: rm -f files_to_format.txt
       - name: Summary
         if: always()
         run: |

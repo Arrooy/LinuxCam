@@ -110,17 +110,17 @@ TEST_F(ProfilerTest, GetDurationsSorted)
     auto sorted = profiler.getDurationsSorted();
     EXPECT_GE(sorted.size(), 2);
 
-    // Should be sorted alphabetically by key
-    bool is_sorted = true;
+    // Should be sorted by duration (descending)
+    bool is_sorted_by_duration = true;
     for (size_t i = 1; i < sorted.size(); ++i)
     {
-        if (sorted[i - 1].first > sorted[i].first)
+        if (sorted[i - 1].second < sorted[i].second)
         {
-            is_sorted = false;
+            is_sorted_by_duration = false;
             break;
         }
     }
-    EXPECT_TRUE(is_sorted);
+    EXPECT_TRUE(is_sorted_by_duration);
 }
 
 TEST_F(ProfilerTest, FormatDurationMicroseconds)

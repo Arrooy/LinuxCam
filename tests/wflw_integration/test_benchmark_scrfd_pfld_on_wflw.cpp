@@ -3,6 +3,15 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+/**
+ * BENCHMARK TEST: SCRFD + PFLD PERFORMANCE ON WFLW DATASET
+ * 
+ * This benchmark evaluates:
+ * - SCRFD face detection speed and accuracy
+ * - PFLD landmark detection speed and accuracy
+ * - End-to-end pipeline performance
+ * - Mean Normalized Error (MNE) against WFLW ground truth
+ */
 #include <gtest/gtest.h>
 #include <iomanip>
 #include <memory>
@@ -49,7 +58,7 @@ class FaceKeypointBenchmark : public ::testing::Test
         // Ensure we can load the test configuration file
         // Try test-specific config first, then fallback to main config
         std::string config_paths[] = {"tests/wflw_integration/test_config.yaml",
-                                      "../tests/wflw_integration/test_config.yaml", "config.yaml", "../config.yaml"};
+                                      "../tests/wflw_integration/test_config.yaml"};
         bool config_loaded = false;
 
         for (const auto& config_path : config_paths)
@@ -71,7 +80,7 @@ class FaceKeypointBenchmark : public ::testing::Test
             }
         }
 
-        ASSERT_TRUE(config_loaded) << "Could not find test_config.yaml or config.yaml in expected paths";
+        ASSERT_TRUE(config_loaded) << "Could not find test_config.yaml in expected test paths";
 
         // Check CUDA availability for conditional testing
         has_cuda_available_ = checkCudaAvailability();

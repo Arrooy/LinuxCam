@@ -41,14 +41,6 @@ Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
                                           static_cast<size_t>(target_height), 3};
     image_utils::bicubicScaling<unsigned char, float, NormalizationType::MINMAX, ImageLayout::CHW>(srcView, dstView);
 
-    auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, target_width, target_height);
-    if (test)
-    {
-        if (!test->saveToDisk("pfld_input_tensor.ppm"))
-        {
-            common::log_info("PFLDDetector: Not Saved test image to disk.");
-        }
-    }
     return input_tensor;
 }
 
@@ -133,7 +125,6 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
         common::log_error("Failed to crop aligned face image for MediaPipe landmarks detection");
         return;
     }
-    aligned_face->saveToDisk("aligned_face_manual.ppm");
     // 4. Run PFLD on aligned face
     Ort::Value input_tensor = this->transform(aligned_face);
 

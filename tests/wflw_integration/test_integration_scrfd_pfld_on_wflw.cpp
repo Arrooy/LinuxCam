@@ -1,3 +1,12 @@
+/**
+ * INTEGRATION TEST: SCRFD + PFLD PIPELINE ON WFLW DATASET
+ * 
+ * This integration test covers:
+ * - SCRFD face detection initialization and basic functionality
+ * - PFLD landmark detection initialization and basic functionality
+ * - Combined SCRFD->PFLD pipeline validation
+ * - Error handling and edge cases using WFLW test data
+ */
 #include "wflw_loader.h"
 
 #include <algorithm>
@@ -42,7 +51,7 @@ class WFLWIntegrationTest : public ::testing::Test
         // Ensure we can load the test configuration file
         // Try test-specific config first, then fallback to main config
         std::string config_paths[] = {"tests/wflw_integration/test_config.yaml",
-                                      "../tests/wflw_integration/test_config.yaml", "config.yaml", "../config.yaml"};
+                                      "../tests/wflw_integration/test_config.yaml"};
         bool config_loaded = false;
 
         for (const auto& config_path : config_paths)
@@ -64,7 +73,7 @@ class WFLWIntegrationTest : public ::testing::Test
             }
         }
 
-        ASSERT_TRUE(config_loaded) << "Could not find test_config.yaml or config.yaml in expected paths";
+        ASSERT_TRUE(config_loaded) << "Could not find test_config.yaml in expected test paths";
 
         // Check CUDA availability for conditional testing
         has_cuda_available_ = checkCudaAvailability();

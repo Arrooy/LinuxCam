@@ -14,10 +14,10 @@ output_cameras:
       subsampling: "444"  # Options: 444, 422, 420, gray, 440, 411
 
 external_data:
-    media_folder_path: "./media/"
-    models_folder_path: "./models/"
+    media_folder_path: "../media/"
+    models_folder_path: "../models/"
     preload_content: true
-    WFLW_folder_path: "./WFLW/"
+    WFLW_folder_path: "../WFLW/"
 
 window:
     title: "LinuxFace Test Suite"
