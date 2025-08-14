@@ -69,7 +69,22 @@ std::vector<FaceLandmark> LandmarkConverter::pfldToWflw(const std::vector<FaceLa
         }
     }
 
-    return wflw_landmarks;
+    // Apply curve-aware smoothing for better accuracy
+    std::vector<std::pair<int, int>> wflw_curve_segments = {
+        {0, 16},   // Jawline left half
+        {16, 32},  // Jawline right half
+        {33, 41},  // Right eyebrow
+        {42, 50},  // Left eyebrow
+        {51, 59},  // Nose
+        {60, 67},  // Right eye
+        {68, 75},  // Left eye
+        {76, 87},  // Outer lip
+        {88, 95}   // Inner lip
+    };
+    
+    auto smoothed_result = applyCurveSmoothing(wflw_landmarks, wflw_curve_segments);
+    
+    return smoothed_result;
 }
 
 std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLandmark>& wflw_landmarks)
@@ -126,7 +141,21 @@ std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLa
         }
     }
 
-    return pfld_landmarks;
+    // Apply curve-aware smoothing for PFLD format as well
+    std::vector<std::pair<int, int>> pfld_curve_segments = {
+        {0, 16},   // Jawline
+        {17, 21},  // Right eyebrow  
+        {22, 26},  // Left eyebrow
+        {27, 35},  // Nose
+        {36, 41},  // Right eye
+        {42, 47},  // Left eye
+        {48, 59},  // Outer mouth
+        {60, 67}   // Inner mouth (partial - PFLD has more inner lip points)
+    };
+    
+    auto smoothed_pfld = applyCurveSmoothing(pfld_landmarks, pfld_curve_segments);
+
+    return smoothed_pfld;
 }
 
 std::vector<FaceLandmark> LandmarkConverter::extractKeyLandmarks(const std::vector<FaceLandmark>& landmarks, 
@@ -377,6 +406,144 @@ std::vector<FaceLandmark> LandmarkConverter::interpolateLandmarks(const std::vec
     }
 
     return interpolated;
+}
+
+// Enhanced geometric interpolation considering facial structure
+math_utils::Point3D LandmarkConverter::computeGeometricInterpolation(
+    const std::vector<FaceLandmark>& landmarks, 
+    int target_index, 
+    const std::vector<int>& available_indices)
+{
+    // Find nearest neighbors with curve-aware distance weighting
+    std::vector<std::pair<double, int>> weighted_neighbors;
+    
+    for (int idx : available_indices)
+    {
+        if (idx >= 0 && idx < static_cast<int>(landmarks.size()))
+        {
+            // Consider both spatial distance and index proximity for facial geometry
+            double spatial_weight = 1.0;
+            double index_weight = 1.0 / (1.0 + std::abs(target_index - idx));
+            
+            // Apply facial region weighting - landmarks in same facial region are more relevant
+            double region_weight = getFacialRegionWeight(target_index, idx);
+            
+            double combined_weight = spatial_weight * index_weight * region_weight;
+            weighted_neighbors.emplace_back(combined_weight, idx);
+        }
+    }
+    
+    if (weighted_neighbors.empty())
+    {
+        return math_utils::Point3D(0, 0, 0);
+    }
+    
+    // Sort by weight (highest first)
+    std::sort(weighted_neighbors.begin(), weighted_neighbors.end(),
+        [](const std::pair<double, int>& a, const std::pair<double, int>& b) {
+            return a.first > b.first;
+        });
+    
+    // Use top weighted neighbors for interpolation
+    double total_weight = 0.0;
+    math_utils::Point3D weighted_sum(0, 0, 0);
+    
+    size_t max_neighbors = std::min(size_t(4), weighted_neighbors.size()); // Use up to 4 neighbors
+    for (size_t i = 0; i < max_neighbors; ++i)
+    {
+        double weight = weighted_neighbors[i].first;
+        int neighbor_idx = weighted_neighbors[i].second;
+        
+        const auto& neighbor_point = landmarks[neighbor_idx].p;
+        
+        weighted_sum.x += neighbor_point.x * weight;
+        weighted_sum.y += neighbor_point.y * weight;
+        weighted_sum.z += neighbor_point.z * weight;
+        total_weight += weight;
+    }
+    
+    if (total_weight > 0.0)
+    {
+        return math_utils::Point3D(
+            weighted_sum.x / total_weight,
+            weighted_sum.y / total_weight,
+            weighted_sum.z / total_weight
+        );
+    }
+    
+    return math_utils::Point3D(0, 0, 0);
+}
+
+// Compute facial region weight for enhanced interpolation
+double LandmarkConverter::getFacialRegionWeight(int target_idx, int source_idx)
+{
+    // Define facial regions based on landmark indices
+    auto get_region = [](int idx) -> int {
+        if (idx >= 0 && idx <= 16) return 0;    // Jawline
+        if (idx >= 17 && idx <= 21) return 1;   // Right eyebrow
+        if (idx >= 22 && idx <= 26) return 2;   // Left eyebrow  
+        if (idx >= 27 && idx <= 35) return 3;   // Nose
+        if (idx >= 36 && idx <= 41) return 4;   // Right eye
+        if (idx >= 42 && idx <= 47) return 5;   // Left eye
+        if (idx >= 48 && idx <= 59) return 6;   // Outer mouth
+        if (idx >= 60 && idx <= 67) return 7;   // Inner mouth
+        return 8; // Other/Unknown
+    };
+    
+    int target_region = get_region(target_idx);
+    int source_region = get_region(source_idx);
+    
+    // Same region gets highest weight
+    if (target_region == source_region) return 2.0;
+    
+    // Adjacent regions get medium weight
+    if (std::abs(target_region - source_region) <= 1) return 1.5;
+    
+    // Distant regions get lower weight
+    return 1.0;
+}
+
+// Apply curve-aware smoothing to improve landmark conversion accuracy
+std::vector<FaceLandmark> LandmarkConverter::applyCurveSmoothing(
+    const std::vector<FaceLandmark>& landmarks, 
+    const std::vector<std::pair<int, int>>& curve_segments)
+{
+    std::vector<FaceLandmark> smoothed = landmarks;
+    
+    for (const auto& segment : curve_segments)
+    {
+        int start_idx = segment.first;
+        int end_idx = segment.second;
+        
+        if (start_idx >= static_cast<int>(smoothed.size()) || 
+            end_idx >= static_cast<int>(smoothed.size()) || 
+            start_idx >= end_idx)
+        {
+            continue;
+        }
+        
+        // Apply simple smoothing within the curve segment
+        for (int i = start_idx + 1; i < end_idx; ++i)
+        {
+            const auto& prev = smoothed[i - 1].p;
+            const auto& curr = smoothed[i].p;
+            const auto& next = smoothed[i + 1].p;
+            
+            // Weighted average smoothing
+            double weight = 0.7; // Current point weight
+            double neighbor_weight = (1.0 - weight) / 2.0;
+            
+            math_utils::Point3D smoothed_point(
+                curr.x * weight + (prev.x + next.x) * neighbor_weight,
+                curr.y * weight + (prev.y + next.y) * neighbor_weight, 
+                curr.z * weight + (prev.z + next.z) * neighbor_weight
+            );
+            
+            smoothed[i].p = smoothed_point;
+        }
+    }
+    
+    return smoothed;
 }
 
 } // namespace linuxface

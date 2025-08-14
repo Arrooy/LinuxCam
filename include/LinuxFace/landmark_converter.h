@@ -135,6 +135,39 @@ private:
      */
     static std::vector<FaceLandmark> interpolateLandmarks(const std::vector<FaceLandmark>& landmarks,
                                                           const std::vector<int>& missing_indices);
+
+    /**
+     * @brief Enhanced geometric interpolation considering facial structure
+     * 
+     * @param landmarks Existing landmarks
+     * @param target_index Index of landmark to interpolate
+     * @param available_indices Indices of available landmarks to use
+     * @return Interpolated 3D point
+     */
+    static math_utils::Point3D computeGeometricInterpolation(
+        const std::vector<FaceLandmark>& landmarks, 
+        int target_index, 
+        const std::vector<int>& available_indices);
+        
+    /**
+     * @brief Compute facial region weight for enhanced interpolation
+     * 
+     * @param target_idx Target landmark index
+     * @param source_idx Source landmark index  
+     * @return Weight factor for interpolation
+     */
+    static double getFacialRegionWeight(int target_idx, int source_idx);
+    
+    /**
+     * @brief Apply curve-aware smoothing to improve landmark accuracy
+     * 
+     * @param landmarks Input landmarks
+     * @param curve_segments Vector of start/end index pairs defining curve segments
+     * @return Smoothed landmarks
+     */
+    static std::vector<FaceLandmark> applyCurveSmoothing(
+        const std::vector<FaceLandmark>& landmarks, 
+        const std::vector<std::pair<int, int>>& curve_segments);
 };
 
 } // namespace linuxface
