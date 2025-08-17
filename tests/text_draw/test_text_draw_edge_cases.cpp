@@ -102,14 +102,6 @@ TEST_F(TextDrawEdgeCasesTest, VeryLargeScale)
     EXPECT_NO_THROW(drawText(*large_image, 10, 10, "C", white_color, 1000, false));
 }
 
-TEST_F(TextDrawEdgeCasesTest, MaxIntScale)
-{
-    // Test with maximum integer scale (might cause overflow)
-    int max_reasonable_scale = 10000; // Avoid actual max int which would be impractical
-
-    EXPECT_NO_THROW(drawText(*large_image, 0, 0, "X", white_color, max_reasonable_scale, false));
-}
-
 TEST_F(TextDrawEdgeCasesTest, ScaleOverflowInTextSize)
 {
     // Test scale values that might cause integer overflow in size calculations

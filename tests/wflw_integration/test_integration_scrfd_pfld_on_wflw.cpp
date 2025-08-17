@@ -112,7 +112,7 @@ class WFLWIntegrationTest : public ::testing::Test
         // Load configurable number of samples for analysis
         // Get max samples from environment variable, default to 500 for CI/CD
         const char* max_samples_env = std::getenv("WFLW_MAX_SAMPLES");
-        int max_samples = max_samples_env ? std::atoi(max_samples_env) : 500;
+        int max_samples = max_samples_env ? std::atoi(max_samples_env) : 50;
 
         // For local development, allow more samples
         if (max_samples == -1)
@@ -1468,6 +1468,18 @@ TEST_F(WFLWIntegrationTest, AttributeBasedAnalysis)
          wflw_loader_->getExamplesByAttribute(true,  true,  true,  true,  true,  false)}  // Blurred
     };
 
+    // Allow dynamic sample size control via environment variable
+    int max_normal = 100;
+    int max_challenging = 100;
+    const char* env_max_normal = std::getenv("MAX_ATTRIBUTE_EXAMPLES_NORMAL");
+    const char* env_max_challenging = std::getenv("MAX_ATTRIBUTE_EXAMPLES_CHALLENGING");
+    if (env_max_normal) {
+        max_normal = std::atoi(env_max_normal);
+    }
+    if (env_max_challenging) {
+        max_challenging = std::atoi(env_max_challenging);
+    }
+
     // CSV output for detailed analysis
     std::ofstream attr_csv("attribute_analysis.csv");
     attr_csv << "Attribute,Condition,Sample_Size,Success_Rate,Mean_MNE,Median_MNE,SCRFD_Failures,PFLD_Failures,"
@@ -1477,11 +1489,10 @@ TEST_F(WFLWIntegrationTest, AttributeBasedAnalysis)
     {
         if (!comp.normal_indices.empty())
         {
-            // Limit sample size for testing performance
             std::vector<int> normal_sample = comp.normal_indices;
-            if (normal_sample.size() > 100)
+            if (normal_sample.size() > max_normal)
             {
-                normal_sample.resize(100);
+                normal_sample.resize(max_normal);
             }
 
             auto normal_results = runBenchmarkOnSubset(normal_sample);
@@ -1496,11 +1507,10 @@ TEST_F(WFLWIntegrationTest, AttributeBasedAnalysis)
 
         if (!comp.challenging_indices.empty())
         {
-            // Limit sample size for testing performance
             std::vector<int> challenging_sample = comp.challenging_indices;
-            if (challenging_sample.size() > 100)
+            if (challenging_sample.size() > max_challenging)
             {
-                challenging_sample.resize(100);
+                challenging_sample.resize(max_challenging);
             }
 
             auto challenging_results = runBenchmarkOnSubset(challenging_sample);

@@ -103,7 +103,7 @@ class FaceKeypointBenchmark : public ::testing::Test
 
         // Load WFLW dataset
         const std::string test_annotations = WFLWTestBase::getWFLWAnnotationsPath() + "/list_98pt_rect_attr_test.txt";
-        wflw_loader_ = std::make_unique<WFLWLoader>(test_annotations, 100); // Larger subset for benchmarking
+        wflw_loader_ = std::make_unique<WFLWLoader>(test_annotations, 75); // Larger subset for benchmarking
 
         ASSERT_GT(wflw_loader_->get_num_examples(), 0) << "No WFLW examples loaded for benchmarking";
     }

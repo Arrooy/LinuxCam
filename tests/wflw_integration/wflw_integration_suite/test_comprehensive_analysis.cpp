@@ -309,6 +309,18 @@ TEST_F(ComprehensiveAnalysisTest, AttributeBasedAnalysis)
          wflw_loader_->getExamplesByAttribute(true,  true,  true,  true,  true,  false)}
     };
 
+    // Allow dynamic sample size control via environment variable
+    int max_normal = 50;
+    int max_challenging = 30;
+    const char* env_max_normal = std::getenv("MAX_ATTRIBUTE_EXAMPLES_NORMAL");
+    const char* env_max_challenging = std::getenv("MAX_ATTRIBUTE_EXAMPLES_CHALLENGING");
+    if (env_max_normal) {
+        max_normal = std::atoi(env_max_normal);
+    }
+    if (env_max_challenging) {
+        max_challenging = std::atoi(env_max_challenging);
+    }
+
     // CSV output for detailed analysis
     std::ofstream attr_csv("attribute_analysis.csv");
     attr_csv << "Attribute,Condition,Sample_Size,Success_Rate,Mean_MNE,Median_MNE,SCRFD_Failures,PFLD_Failures,"
@@ -318,11 +330,10 @@ TEST_F(ComprehensiveAnalysisTest, AttributeBasedAnalysis)
     {
         if (!comp.normal_indices.empty())
         {
-            // Limit sample size for reasonable test duration
             std::vector<int> normal_subset = comp.normal_indices;
-            if (normal_subset.size() > 50)
+            if (normal_subset.size() > max_normal)
             {
-                normal_subset.resize(50);
+                normal_subset.resize(max_normal);
             }
 
             auto normal_results = runComprehensiveAnalysis(normal_subset, false);
@@ -346,11 +357,10 @@ TEST_F(ComprehensiveAnalysisTest, AttributeBasedAnalysis)
 
         if (!comp.challenging_indices.empty())
         {
-            // Limit sample size for reasonable test duration
             std::vector<int> challenging_subset = comp.challenging_indices;
-            if (challenging_subset.size() > 30)
+            if (challenging_subset.size() > max_challenging)
             {
-                challenging_subset.resize(30);
+                challenging_subset.resize(max_challenging);
             }
 
             auto challenging_results = runComprehensiveAnalysis(challenging_subset, false);
