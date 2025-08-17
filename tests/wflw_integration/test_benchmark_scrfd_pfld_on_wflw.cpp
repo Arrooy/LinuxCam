@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+
+#include "wflw_integration_suite/wflw_test_base.h"
 /**
  * BENCHMARK TEST: SCRFD + PFLD PERFORMANCE ON WFLW DATASET
- * 
+ *
  * This benchmark evaluates:
  * - SCRFD face detection speed and accuracy
  * - PFLD landmark detection speed and accuracy
@@ -100,9 +102,7 @@ class FaceKeypointBenchmark : public ::testing::Test
             << "PFLD detector failed to initialize. Expected path: " << models_folder << "pfld-106-v3.onnx";
 
         // Load WFLW dataset
-        const std::string wflw_base = Config::getInstance().getWFLWFolderPath();
-        const std::string test_annotations =
-            wflw_base + "/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt";
+        const std::string test_annotations = WFLWTestBase::getWFLWAnnotationsPath() + "/list_98pt_rect_attr_test.txt";
         wflw_loader_ = std::make_unique<WFLWLoader>(test_annotations, 100); // Larger subset for benchmarking
 
         ASSERT_GT(wflw_loader_->get_num_examples(), 0) << "No WFLW examples loaded for benchmarking";

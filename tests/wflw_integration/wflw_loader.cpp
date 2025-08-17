@@ -108,7 +108,25 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
 
     // Load the image using ImageLoader
     const auto& base_image_dir = Config::getInstance().getWFLWFolderPath();
-    const auto image_path = base_image_dir + "/WFLW_images/" + example.image_name;
+
+    // Normalize the path by ensuring clean directory separators
+    std::string normalized_base = base_image_dir;
+
+    // Remove any trailing slashes first
+    while (!normalized_base.empty() && normalized_base.back() == '/')
+    {
+        normalized_base.pop_back();
+    }
+
+    // Then normalize any double slashes
+    size_t pos = 0;
+    while ((pos = normalized_base.find("//", pos)) != std::string::npos)
+    {
+        normalized_base.replace(pos, 2, "/");
+        pos += 1;
+    }
+
+    const auto image_path = normalized_base + "/WFLW_images/" + example.image_name;
     example.image = ImageLoader::loadImageFromFile(image_path);
     if (!example.image)
     {

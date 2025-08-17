@@ -1,6 +1,7 @@
 # Landmark Converter Tests
 set(LANDMARK_CONVERTER_TEST_SOURCES
     test_landmark_converter.cpp
+    test_landmark_mapping_validation.cpp
 )
 
 # Create the test executable

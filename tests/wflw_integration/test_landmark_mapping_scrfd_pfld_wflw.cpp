@@ -1,11 +1,11 @@
 /**
  * LANDMARK MAPPING TEST: SCRFD + PFLD + WFLW
- * 
+ *
  * This test validates landmark mappings and conversions between:
  * - SCRFD 5-point landmarks (face detection)
- * - PFLD 106-point landmarks (detailed facial landmarks) 
+ * - PFLD 106-point landmarks (detailed facial landmarks)
  * - WFLW 98-point ground truth landmarks (benchmark dataset)
- * 
+ *
  * Uses LandmarkConverter for proper format translation between coordinate systems
  */
 #include "wflw_loader.h"
@@ -20,11 +20,12 @@
 #include <vector>
 
 #include "LinuxFace/Image/image.h"
-#include "LinuxFace/landmark_converter.h"
 #include "LinuxFace/face.h"
+#include "LinuxFace/landmark_converter.h"
 #include "LinuxFace/onnx/pfld.h"
 #include "LinuxFace/onnx/scrfd.h"
 #include "config.hpp"
+#include "wflw_integration_suite/wflw_test_base.h"
 
 using namespace linuxface;
 using namespace linuxface::test;
@@ -93,9 +94,7 @@ class LandmarkMappingTest : public ::testing::Test
         ASSERT_TRUE(pfld_detector_->isReady())
             << "PFLD detector failed to initialize. Expected path: " << models_folder << "pfld-106-v3.onnx";
 
-        const std::string wflw_base = Config::getInstance().getWFLWFolderPath();
-        const std::string test_annotations =
-            wflw_base + "/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt";
+        const std::string test_annotations = WFLWTestBase::getWFLWAnnotationsPath() + "/list_98pt_rect_attr_test.txt";
         wflw_loader_ = std::make_unique<WFLWLoader>(test_annotations, 10);
 
         ASSERT_GT(wflw_loader_->get_num_examples(), 0);
@@ -482,7 +481,7 @@ TEST_F(LandmarkMappingTest, WFLWGroundTruthComparison)
 
         // Convert PFLD 106-point landmarks to WFLW 98-point format using our enhanced converter
         std::vector<FaceLandmark> converted_wflw_landmarks;
-        try 
+        try
         {
             converted_wflw_landmarks = LandmarkConverter::pfldToWflw(pfld_landmarks);
         }
@@ -501,7 +500,8 @@ TEST_F(LandmarkMappingTest, WFLWGroundTruthComparison)
             for (int idx : region.wflw_indices)
             {
                 // Now using proper landmark conversion - PFLD→WFLW mapping with geometric interpolation
-                if (idx < static_cast<int>(example.landmarks.size()) && idx < static_cast<int>(converted_wflw_landmarks.size()))
+                if (idx < static_cast<int>(example.landmarks.size())
+                    && idx < static_cast<int>(converted_wflw_landmarks.size()))
                 {
                     // Compare converted WFLW landmark with ground truth
                     double dx = converted_wflw_landmarks[idx].p.x - example.landmarks[idx].x;
@@ -538,18 +538,22 @@ TEST_F(LandmarkMappingTest, WFLWGroundTruthComparison)
 
             // Adjusted thresholds based on enhanced converter performance
             // These values reflect realistic accuracy expectations with proper landmark mapping
-            double threshold = (region.name == "Jawline") ? 0.09 :       // Jawline is most difficult
-                              (region.name.find("Eyebrow") != std::string::npos) ? 0.085 :  // Eyebrows
-                              (region.name.find("Eye") != std::string::npos) ? 0.075 :      // Eyes
-                              (region.name == "Nose") ? 0.065 :                            // Nose
-                              0.075;                                                        // Mouth regions
+            double threshold = (region.name == "Jawline") ? 0.09 : // Jawline is most difficult
+                                   (region.name.find("Eyebrow") != std::string::npos) ? 0.085
+                                                                                      : // Eyebrows
+                                   (region.name.find("Eye") != std::string::npos) ? 0.075
+                                                                                  : // Eyes
+                                   (region.name == "Nose") ? 0.065
+                                                           : // Nose
+                                   0.075;                    // Mouth regions
             if (region.avg_error > threshold)
             {
                 all_regions_acceptable = false;
-                std::cout << "  WARNING: " << region.name << " error above threshold (" << std::fixed << std::setprecision(3) << threshold << ")\n";
+                std::cout << "  WARNING: " << region.name << " error above threshold (" << std::fixed
+                          << std::setprecision(3) << threshold << ")\n";
                 std::cout << "           Enhanced LandmarkConverter provided improvement but more accuracy needed\n";
             }
-            else 
+            else
             {
                 std::cout << "  ✓ PASS: " << region.name << " within acceptable range\n";
             }

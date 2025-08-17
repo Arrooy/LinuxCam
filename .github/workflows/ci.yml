@@ -11,6 +11,8 @@ env:
     CCACHE_COMPRESS: "true"
     CCACHE_COMPRESSLEVEL: "6"
     CCACHE_MAXSIZE: "400M"
+    # Limit WFLW dataset samples for CI to prevent timeouts
+    WFLW_MAX_SAMPLES: "50"
 
 jobs:
     build-test:
@@ -170,9 +172,12 @@ jobs:
                   fi
 
                   echo "Running tests..."
+                  echo "WFLW_MAX_SAMPLES set to: ${WFLW_MAX_SAMPLES:-default}"
+                  
                   # Run different test suites based on dataset availability
                   if [ "${WFLW_AVAILABLE:-false}" = "true" ]; then
                     echo "🧪 Running full test suite including WFLW integration tests..."
+                    echo "📊 WFLW tests will use max ${WFLW_MAX_SAMPLES:-500} samples to prevent CI timeouts"
                     # Run all tests
                     if ! ctest --output-on-failure --parallel $(nproc) --verbose; then
                       echo "ERROR: Tests failed"

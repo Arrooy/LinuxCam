@@ -7,10 +7,9 @@
 #include <onnxruntime_cxx_api.h>
 #include <turbojpeg.h>
 
-
+#include "LinuxFace/Image/tensor_padding.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/math_utils.h"
-#include "LinuxFace/Image/tensor_padding.h"
 
 namespace linuxface
 {
@@ -70,26 +69,39 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
 
 constexpr unsigned char DEFAULT_ALPHA = 255;
 
-struct Pixel {
+struct Pixel
+{
     unsigned char r;
     unsigned char g;
     unsigned char b;
     unsigned char a;
 
     Pixel(unsigned char r_, unsigned char g_, unsigned char b_, unsigned char a_ = DEFAULT_ALPHA)
-        : r(r_), g(g_), b(b_), a(a_) {}
+        : r(r_), g(g_), b(b_), a(a_)
+    {
+    }
     Pixel() = default;
+
+    // Equality operator for testing and comparisons
+    bool operator==(const Pixel& other) const noexcept
+    {
+        return r == other.r && g == other.g && b == other.b && a == other.a;
+    }
+
+    // Inequality operator
+    bool operator!=(const Pixel& other) const noexcept { return !(*this == other); }
 };
 
-struct ImageMetadata {
+struct ImageMetadata
+{
     unsigned long x{0u};
     unsigned long y{0u};
     unsigned long width{0u};
     unsigned long height{0u};
     unsigned char pixelSizeBytes{0u};
-    TJSAMP TJSampleFormat{};                // TJSAMP_444
-    TJCS TJColorSpace{};                    // TJCS_RGB
-    TJPF TJPixelFormat{};                   // TJPF_RGB
+    TJSAMP TJSampleFormat{};              // TJSAMP_444
+    TJCS TJColorSpace{};                  // TJCS_RGB
+    TJPF TJPixelFormat{};                 // TJPF_RGB
     ImageFormat format{ImageFormat::RGB}; // Default to RGB
     bool is_valid{false};
     std::string filename{};
@@ -117,27 +129,30 @@ enum class ScalingAlgorithm
 };
 
 
-
 // Separate pixel operations for better performance
-namespace PixelOperations {
-    // Fast pixel access without bounds checking for performance-critical loops
-    inline void setPixelRGB(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b) noexcept {
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-    }
-
-    inline void setPixelRGBA(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b, unsigned char a) noexcept {
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-        data[idx + 3] = a;
-    }
-
-    // Alpha blending optimized for different pixel formats
-    void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize,
-                    unsigned char srcAlpha, unsigned char dstPixelSize, unsigned char dstAlpha = 255) noexcept;
+namespace PixelOperations
+{
+// Fast pixel access without bounds checking for performance-critical loops
+inline void setPixelRGB(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b) noexcept
+{
+    data[idx] = r;
+    data[idx + 1] = g;
+    data[idx + 2] = b;
 }
+
+inline void setPixelRGBA(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b,
+                         unsigned char a) noexcept
+{
+    data[idx] = r;
+    data[idx + 1] = g;
+    data[idx + 2] = b;
+    data[idx + 3] = a;
+}
+
+// Alpha blending optimized for different pixel formats
+void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize, unsigned char srcAlpha,
+                 unsigned char dstPixelSize, unsigned char dstAlpha = 255) noexcept;
+} // namespace PixelOperations
 
 // Image class with proper resource management
 class Image
@@ -195,8 +210,10 @@ class Image
     // Legacy pixel access methods (for backward compatibility)
     [[nodiscard]] Pixel operator()(size_t x, size_t y) const;
     void ppx(size_t col, size_t row, const Pixel& c);
-    void pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b, const unsigned char a = DEFAULT_ALPHA);
-    void pidx(size_t idx, const unsigned char r, const unsigned char g, const unsigned char b, const unsigned char a = DEFAULT_ALPHA);
+    void pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b,
+             const unsigned char a = DEFAULT_ALPHA);
+    void pidx(size_t idx, const unsigned char r, const unsigned char g, const unsigned char b,
+              const unsigned char a = DEFAULT_ALPHA);
     [[nodiscard]] size_t index(size_t col, size_t row) const noexcept;
 
     // Helper method to determine if image is RGB/RGBA based on format
@@ -266,10 +283,12 @@ class Image
     // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
     // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
     // If invM is provided, it is used directly; otherwise, the inverse is computed from M
-    std::unique_ptr<Image> affineWarpBilinear(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
+    std::unique_ptr<Image>
+    affineWarpBilinear(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
 
     // Affine warp for single-channel mask
-    std::unique_ptr<Image> affineWarpNearestNeighbour(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
+    std::unique_ptr<Image>
+    affineWarpNearestNeighbour(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
 
     // Alpha blend src onto this image using mask (mask: 0=background, 255=full src)
     void alphaBlend(const Image& src, const Image& mask);
