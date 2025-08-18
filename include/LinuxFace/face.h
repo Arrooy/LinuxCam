@@ -94,6 +94,27 @@ class Face
     // Retrieve 5-point landmarks in ArcFace order (2D)
     std::vector<math_utils::Point<>> getFivePointLandmarksArcFaceOrder2D() const;
     math_utils::Point3D getLandmarkByIndex(unsigned int id) const;
+
+    // Face matching utilities
+    struct FaceMatchResult
+    {
+        Face* best_face = nullptr;
+        int face_index = -1;
+        double iou_score = 0.0;
+        bool found_match = false;
+    };
+
+    /**
+     * Find the best matching face from a list of detected faces based on IoU with ground truth bounding box
+     * @param detected_faces List of detected faces to search through
+     * @param ground_truth_bbox Ground truth bounding box to match against
+     * @param min_iou_threshold Minimum IoU threshold for a valid match (default: 0.1)
+     * @return FaceMatchResult containing the best match and its details
+     */
+    static FaceMatchResult
+    findBestMatchingFace(std::vector<Face>& detected_faces, const math_utils::Rect<double>& ground_truth_bbox,
+                         double min_iou_threshold = 0.1);
+
   private:
     void freeFaceLandmarks();
 

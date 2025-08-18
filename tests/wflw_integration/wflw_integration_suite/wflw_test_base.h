@@ -49,23 +49,27 @@ class WFLWTestBase : public ::testing::Test
     // Core functionality
     static bool checkCudaAvailability();
 
+    // Test output directory management
+    std::string createTestOutputDirectory(const std::string& test_name) const;
+
     // Metrics calculation
     double calculateMNE(const std::vector<FaceLandmark>& predicted_landmarks,
                         const std::vector<math_utils::Point<double>>& ground_truth, double interocular_distance) const;
 
     double calculateInterocularDistance(const Face& face) const;
 
-    // Face matching for multi-face images
-    struct FaceMatchResult
-    {
-        Face* best_face = nullptr;
-        int face_index = -1;
-        double iou_score = 0.0;
-        bool found_match = false;
-    };
+    // Face matching for multi-face images - using production Face::FaceMatchResult
 
-    FaceMatchResult findBestMatchingFace(const std::vector<Face>& detected_faces,
-                                         const math_utils::Rect<double>& gt_bbox, double min_iou_threshold = 0.1) const;
+    // Helper method to find best matching face using IoU calculation
+    Face::FaceMatchResult findBestMatchingFace(const std::vector<Face>& detected_faces,
+                                               const math_utils::Rect<double>& ground_truth_bbox,
+                                               double min_iou_threshold = 0.1) const
+    {
+        // Cast away const since Face::findBestMatchingFace needs non-const vector
+        // This is safe because the method doesn't modify the faces, just returns pointers
+        auto& faces_non_const = const_cast<std::vector<Face>&>(detected_faces);
+        return Face::findBestMatchingFace(faces_non_const, ground_truth_bbox, min_iou_threshold);
+    }
 
     // Visualization helpers
     void saveDetectionVisualization(const WFLWExample& example, const std::vector<FaceLandmark>& detected_landmarks,

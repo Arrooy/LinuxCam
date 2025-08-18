@@ -402,26 +402,26 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     }
 
     // Dlib landmark detection using dlib face
-    if (dlibShapeDetector_ && !dlib_faces.empty())
-    {
-        std::vector<math_utils::Rect<float>> rects;
-        rects.push_back(dlib_faces[0].getBoundingBox().rect);
-        auto dlib_landmark_faces = dlibShapeDetector_->detect(image, rects);
-        for (const auto& face : dlib_landmark_faces)
-        {
-            face.paintBoundingBox(image, Pixel(255, 0, 0));
-            face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
-        }
-    }
+    // if (dlibShapeDetector_ && !dlib_faces.empty())
+    // {
+    //     std::vector<math_utils::Rect<float>> rects;
+    //     rects.push_back(dlib_faces[0].getBoundingBox().rect);
+    //     auto dlib_landmark_faces = dlibShapeDetector_->detect(image, rects);
+    //     for (const auto& face : dlib_landmark_faces)
+    //     {
+    //         face.paintBoundingBox(image, Pixel(255, 0, 0));
+    //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
+    //     }
+    // }
 
-    if (modnetDetector_ && modnetDetector_->isReady())
-    {
-        std::unique_ptr<Image> matting = image->deepCopy();
-        modnetDetector_->detect(image, matting);
-        matting->info.x = image->info.width;
-        matting->info.y = 0;
-        image->paste(*matting, true);
-    }
+    // if (modnetDetector_ && modnetDetector_->isReady())
+    // {
+    //     std::unique_ptr<Image> matting = image->deepCopy();
+    //     modnetDetector_->detect(image, matting);
+    //     matting->info.x = image->info.width;
+    //     matting->info.y = 0;
+    //     image->paste(*matting, true);
+    // }
 
     // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
     // {
@@ -638,19 +638,19 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //     }
     // }
 
-    bool swap_success = false;
-    if (swapPipeline_ && target_img_)
-    {
-        swap_success = swapPipeline_->run(image, target_img_);
-        if (swap_success && layerManager_)
-        {
-            auto* layer = layerManager_->getBaseLayer();
-            if (layer != nullptr)
-            {
-                layer->dirty = true;
-            }
-        }
-    }
+    // bool swap_success = false;
+    // if (swapPipeline_ && target_img_)
+    // {
+    //     swap_success = swapPipeline_->run(image, target_img_);
+    //     if (swap_success && layerManager_)
+    //     {
+    //         auto* layer = layerManager_->getBaseLayer();
+    //         if (layer != nullptr)
+    //         {
+    //             layer->dirty = true;
+    //         }
+    //     }
+    // }
 
     // if (rvmDetector_ && rvmDetector_->isReady())
     // {

@@ -6,6 +6,7 @@
 
 #include "wflw_test_base.h"
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -88,9 +89,23 @@ void WFLWTestBase::SetUp()
         GTEST_SKIP() << "WFLW annotations not found at: " << wflw_annotations_path;
     }
 
+    // Get max samples from environment variable, default to 100 for tests
+    const char* max_samples_env = std::getenv("WFLW_MAX_SAMPLES");
+    int max_samples = max_samples_env ? std::atoi(max_samples_env) : 100;
+    
+    // For local development, allow unlimited samples
+    if (max_samples == -1)
+    {
+        std::cout << "Loading ALL available WFLW samples (this may take a while)" << std::endl;
+    }
+    else
+    {
+        std::cout << "Loading up to " << max_samples << " WFLW samples for testing" << std::endl;
+    }
+
     try
     {
-        wflw_loader_ = std::make_unique<WFLWLoader>(wflw_annotations_path, 100); // Limit to 100 samples for tests
+        wflw_loader_ = std::make_unique<WFLWLoader>(wflw_annotations_path, max_samples);
     }
     catch (const std::exception& e)
     {
@@ -116,6 +131,25 @@ bool WFLWTestBase::checkCudaAvailability()
     // Simple check - in a real implementation you might want to check CUDA runtime
     // For now, assume CPU-only execution
     return false;
+}
+
+std::string WFLWTestBase::createTestOutputDirectory(const std::string& test_name) const
+{
+    std::filesystem::path output_dir = "testing";
+    output_dir /= "wflw_integration_suite";
+    output_dir /= test_name;
+    
+    try
+    {
+        std::filesystem::create_directories(output_dir);
+    }
+    catch (const std::filesystem::filesystem_error& e)
+    {
+        std::cerr << "Failed to create output directory " << output_dir << ": " << e.what() << std::endl;
+        return "";
+    }
+    
+    return output_dir.string();
 }
 
 std::string WFLWTestBase::normalizePath(const std::string& path)
@@ -221,49 +255,6 @@ double WFLWTestBase::calculateInterocularDistance(const Face& face) const
     return std::sqrt(dx * dx + dy * dy);
 }
 
-WFLWTestBase::FaceMatchResult
-WFLWTestBase::findBestMatchingFace(const std::vector<Face>& detected_faces, const math_utils::Rect<double>& gt_bbox,
-                                   double min_iou_threshold) const
-{
-    FaceMatchResult result;
-
-    if (detected_faces.empty())
-    {
-        return result;
-    }
-
-    double best_iou = 0.0;
-    int best_index = -1;
-
-    for (size_t i = 0; i < detected_faces.size(); ++i)
-    {
-        auto face_bbox = detected_faces[i].getBoundingBox().rect;
-
-        // Convert float rect to double rect for IoU calculation
-        math_utils::Rect<double> face_rect_double(static_cast<double>(face_bbox.l), static_cast<double>(face_bbox.t),
-                                                  static_cast<double>(face_bbox.r), static_cast<double>(face_bbox.b));
-
-        double iou = math_utils::calculateIoU(gt_bbox, face_rect_double);
-
-        if (iou > best_iou)
-        {
-            best_iou = iou;
-            best_index = static_cast<int>(i);
-        }
-    }
-
-    result.iou_score = best_iou;
-    result.face_index = best_index;
-
-    if (best_iou >= min_iou_threshold && best_index >= 0)
-    {
-        result.found_match = true;
-        result.best_face = const_cast<Face*>(&detected_faces[best_index]);
-    }
-
-    return result;
-}
-
 void WFLWTestBase::saveDetectionVisualization(const WFLWExample& example,
                                               const std::vector<FaceLandmark>& detected_landmarks, int image_index,
                                               double mne) const
@@ -298,7 +289,15 @@ void WFLWTestBase::saveDetectionVisualization(const WFLWExample& example,
     drawText(*viz_image, 10, 10, mne_text, Pixel(255, 255, 255));
 
     // Save visualization
+    std::string output_dir = createTestOutputDirectory("detection_visualization");
     std::string filename = "detection_viz_img" + std::to_string(image_index) + "_mne" + std::to_string(mne) + ".ppm";
+    
+    // Combine with output directory
+    if (!output_dir.empty())
+    {
+        filename = output_dir + "/" + filename;
+    }
+    
     viz_image->saveToDisk(filename);
 }
 
@@ -346,7 +345,15 @@ void WFLWTestBase::saveDetectionVisualizationWithFaceInfo(const WFLWExample& exa
     }
 
     // Save visualization
+    std::string output_dir = createTestOutputDirectory("detection_visualization");
     std::string filename = "detection_viz_detailed_img" + std::to_string(image_index) + "_face"
                            + std::to_string(face_index) + "_mne" + std::to_string(mne) + ".ppm";
+    
+    // Combine with output directory
+    if (!output_dir.empty())
+    {
+        filename = output_dir + "/" + filename;
+    }
+    
     viz_image->saveToDisk(filename);
 }

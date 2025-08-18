@@ -50,7 +50,8 @@ class WFLWLoader
     // Get examples by specific attributes for targeted testing
     std::vector<int>
     getExamplesByAttribute(bool normal_pose = true, bool normal_expression = true, bool normal_illumination = true,
-                           bool no_makeup = true, bool no_occlusion = true, bool is_clear = true) const;
+                           bool no_makeup = true, bool no_occlusion = true, bool is_clear = true, 
+                           int max_results = -1) const;
 
   private:
     std::vector<WFLWExample> examples_;

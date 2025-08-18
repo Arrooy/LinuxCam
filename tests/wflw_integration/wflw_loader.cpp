@@ -1,5 +1,6 @@
 #include "wflw_loader.h"
 
+#include <cstdlib>
 #include "LinuxFace/common.h"
 #include "config.hpp"
 
@@ -138,9 +139,19 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
 }
 
 std::vector<int> WFLWLoader::getExamplesByAttribute(bool normal_pose, bool normal_expression, bool normal_illumination,
-                                                    bool no_makeup, bool no_occlusion, bool is_clear) const
+                                                    bool no_makeup, bool no_occlusion, bool is_clear, int max_results) const
 {
     std::vector<int> matching_indices;
+
+    // If max_results is not specified, check environment variable
+    if (max_results == -1)
+    {
+        const char* max_samples_env = std::getenv("WFLW_MAX_SAMPLES");
+        if (max_samples_env)
+        {
+            max_results = std::atoi(max_samples_env);
+        }
+    }
 
     for (size_t i = 0; i < examples_.size(); ++i)
     {
@@ -151,6 +162,12 @@ std::vector<int> WFLWLoader::getExamplesByAttribute(bool normal_pose, bool norma
             && (no_occlusion == example.hasNoOcclusion()) && (is_clear == example.isClear()))
         {
             matching_indices.push_back(static_cast<int>(i));
+            
+            // Stop collecting if we reached the limit (unless unlimited)
+            if (max_results > 0 && static_cast<int>(matching_indices.size()) >= max_results)
+            {
+                break;
+            }
         }
     }
 

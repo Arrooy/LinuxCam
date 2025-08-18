@@ -7,7 +7,8 @@
 #include "LinuxFace/onnx/scrfd.h"
 using namespace linuxface;
 
-Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox) : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}
+Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox)
+    : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}
 {
     if (landmarks.size() == 5)
     {
@@ -179,14 +180,16 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
                           * static_cast<float>(image->info.pixelSizeBytes));
 
     // El 25 es per corregir el bottom massa curt. Aixi no talla la cara,
-    long endPixel = static_cast<long>(boundingBox_.rect.r + boundingBox_.rect.b + 25.0f) * static_cast<long>(image->info.width) * static_cast<long>(image->info.pixelSizeBytes);
+    long endPixel = static_cast<long>(boundingBox_.rect.r + boundingBox_.rect.b + 25.0f)
+                    * static_cast<long>(image->info.width) * static_cast<long>(image->info.pixelSizeBytes);
 
     for (long i = startPixel; i < endPixel; i += image->info.pixelSizeBytes)
     {
         for (const FaceLandmark& landmark : landmarks_.at(facepart))
         {
             const math_utils::Point3D& p = landmark.p;
-            long index = static_cast<long>(p.x + p.y * static_cast<double>(image->info.width)) * static_cast<long>(image->info.pixelSizeBytes);
+            long index = static_cast<long>(p.x + p.y * static_cast<double>(image->info.width))
+                         * static_cast<long>(image->info.pixelSizeBytes);
             if (index == i)
             {
                 if (inside == 0)
@@ -290,7 +293,7 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float /*thic
     auto x_color = Pixel(0, 0, 255);
     auto y_color = Pixel(0, 255, 0);
     auto z_color = Pixel(255, 0, 0);
-    
+
     auto X = math_utils::DDA(tdx, tdy, x1, y1);
     image->paintPoints(X, x_color);
     auto Y = math_utils::DDA(tdx, tdy, x2, y2);
@@ -349,4 +352,53 @@ linuxface::math_utils::Point3D Face::getLandmarkByIndex(unsigned int id) const
         }
     }
     return math_utils::Point3D(-1, -1, -1);
+}
+
+Face::FaceMatchResult
+Face::findBestMatchingFace(std::vector<Face>& detected_faces, const math_utils::Rect<double>& ground_truth_bbox,
+                           double min_iou_threshold)
+{
+    FaceMatchResult result;
+
+    if (detected_faces.empty())
+    {
+        return result; // No faces to match
+    }
+
+    double best_iou = 0.0;
+    int best_index = -1;
+    Face* best_face = nullptr;
+
+    for (size_t i = 0; i < detected_faces.size(); ++i)
+    {
+        // Get the detected face's bounding box
+        auto detected_bbox_rect = detected_faces[i].getBoundingBox().rect;
+
+        // Convert to double precision for IoU calculation
+        math_utils::Rect<double> detected_bbox_double(
+            static_cast<double>(detected_bbox_rect.x()), static_cast<double>(detected_bbox_rect.y()),
+            static_cast<double>(detected_bbox_rect.width()), static_cast<double>(detected_bbox_rect.height()));
+
+        // Calculate IoU between ground truth and detected face
+        double iou = math_utils::calculateIoU(ground_truth_bbox, detected_bbox_double);
+
+        // Track the best match
+        if (iou > best_iou)
+        {
+            best_iou = iou;
+            best_index = static_cast<int>(i);
+            best_face = &detected_faces[i];
+        }
+    }
+
+    // Set result based on whether we found a match above threshold
+    result.iou_score = best_iou;
+    if (best_iou >= min_iou_threshold && best_face != nullptr)
+    {
+        result.found_match = true;
+        result.best_face = best_face;
+        result.face_index = best_index;
+    }
+
+    return result;
 }

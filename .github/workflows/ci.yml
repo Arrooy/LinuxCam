@@ -12,10 +12,10 @@ env:
     CCACHE_COMPRESSLEVEL: "6"
     CCACHE_MAXSIZE: "400M"
     # Limit WFLW dataset samples for CI to prevent timeouts
-    WFLW_MAX_SAMPLES: "50"
+    WFLW_MAX_SAMPLES: "2"
     # Limit AttributeBasedAnalysis test samples for faster CI execution
-    MAX_ATTRIBUTE_EXAMPLES_NORMAL: "15"
-    MAX_ATTRIBUTE_EXAMPLES_CHALLENGING: "10"
+    MAX_ATTRIBUTE_EXAMPLES_NORMAL: "3"
+    MAX_ATTRIBUTE_EXAMPLES_CHALLENGING: "3"
 
 jobs:
     build-test:

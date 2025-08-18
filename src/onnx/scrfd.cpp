@@ -23,6 +23,14 @@ SCRFDetector::SCRFDetector(const std::string& onnx_model_path)
 
 Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
 {
+    // Validate input image
+    if (!image)
+    {
+        common::log_error("SCRFDetector::transform: Null image pointer provided");
+        // Return an empty/invalid tensor - this should be handled by calling code
+        return Ort::Value{nullptr};
+    }
+
     const int target_height = static_cast<int>(input_node_dims.at(2));
     const int target_width = static_cast<int>(input_node_dims.at(3));
     Ort::Value input_tensor =
@@ -38,11 +46,26 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
 // TODO: average the face location so we dont have that much jitter in face bounding box.
 std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
 {
+    // Validate input image
+    if (!image)
+    {
+        common::log_error("SCRFDetector::detect: Null image pointer provided");
+        return {};
+    }
+
     Profiler::getInstance().start("SCRFD", "Face detection");
     std::vector<Face> faces;
     faces.reserve(3000); // Reserve once for all strides (rough estimate)
     // Convert from image to tensor.
     Ort::Value input_tensor = this->transform(image);
+    
+    // Check if transform succeeded
+    if (!input_tensor.IsTensor())
+    {
+        common::log_error("SCRFDetector::detect: Failed to create input tensor");
+        Profiler::getInstance().stop("SCRFD", "Face detection");
+        return {};
+    }
     try
     {
         auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,

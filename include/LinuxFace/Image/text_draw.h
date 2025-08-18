@@ -183,7 +183,7 @@ inline void drawCharDDA(Image& img, int x, int y, char c, const Pixel& color, in
         uint8_t bits = glyph[row];
         for (int col = 0; col < 8; col++)
         {
-            if (bits & (1 << (7 - col)))
+            if (bits & (1 << col))
             {
                 fillBlockWithDDA(img, x + col * scale, y + row * scale, scale, color);
             }
