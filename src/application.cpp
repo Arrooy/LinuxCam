@@ -279,41 +279,45 @@ bool Application::update()
     auto& layers = layerManager_->getLayers();
     if (!layers.empty())
     {
-        // Find a base layer to start compositing (use first layer as base)
-        std::unique_ptr<Image> compositeImage = nullptr;
-
-        for (auto& layer : layers)
+        // Get window/viewport size for composite
+        int windowWidth = 0;
+        int windowHeight = 0;
+        window_.getFramebufferSize(windowWidth, windowHeight);
+        
+        if (windowWidth > 0 && windowHeight > 0)
         {
-            if (layer.type == LayerType::Image && layer.img)
+            // Create window-sized composite image with transparent background
+            Pixel transparentPixel{0, 0, 0, 0};
+            auto compositeImage = std::make_unique<Image>(transparentPixel, 
+                                                        static_cast<unsigned int>(windowWidth), 
+                                                        static_cast<unsigned int>(windowHeight));
+            
+            // Set image info
+            compositeImage->info.width = static_cast<unsigned int>(windowWidth);
+            compositeImage->info.height = static_cast<unsigned int>(windowHeight);
+            compositeImage->info.format = ImageFormat::RGBA;
+
+            // Composite all layers onto the window-sized canvas
+            for (auto& layer : layers)
             {
-                if (!compositeImage)
+                // Skip output camera overlays from the composite sent to output
+                if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
                 {
-                    // Use first layer as base
-                    compositeImage = layer.img->deepCopy();
+                    continue;
                 }
-                else
+                
+                if (layer.type == LayerType::Image && layer.img)
                 {
-                    // Paste other layers onto the composite
                     compositeImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
                 }
-            }
-            else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
-            {
-                auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-                if (!compositeImage)
+                else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
                 {
-                    compositeImage = frame->deepCopy();
-                }
-                else
-                {
+                    auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
                     compositeImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
                 }
             }
-        }
 
-        // Send composite to output cameras
-        if (compositeImage)
-        {
+            // Send composite to output cameras with cropping
             if (!cameraManager_->updateOutput(compositeImage))
             {
                 linuxface::common::log_error("Failed to update output cameras");

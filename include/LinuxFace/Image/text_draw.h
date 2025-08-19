@@ -170,30 +170,30 @@ inline TextSize getMultilineTextSize(const std::string& text, int scale = 1, int
     std::vector<std::string> lines;
     std::stringstream ss(text);
     std::string line;
-    
+
     // Split by newlines
     while (std::getline(ss, line, '\n'))
     {
         lines.push_back(line);
     }
-    
+
     if (lines.empty())
     {
         return {0, 0};
     }
-    
+
     // Find the longest line for width
     size_t maxLineLength = 0;
     for (const auto& textLine : lines)
     {
         maxLineLength = std::max(maxLineLength, textLine.length());
     }
-    
+
     // Calculate dimensions
     int lineHeight = 8 * scale + lineSpacing;
     int width = static_cast<int>(maxLineLength) * 8 * scale;
     int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing; // Remove last spacing
-    
+
     return {width, height};
 }
 

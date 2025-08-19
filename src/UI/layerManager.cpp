@@ -100,6 +100,7 @@ void LayerManager::invalidateTextures()
     for (auto& l : layers_)
     {
         l.dirty = true;
+        l.invalidateTextOverlay();  // Also invalidate text overlays on window resize
     }
 }
 

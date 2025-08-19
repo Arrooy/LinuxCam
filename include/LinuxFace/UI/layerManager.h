@@ -59,6 +59,19 @@ struct Layer
     float x = 0.0f;
     float y = 0.0f;
 
+    // Text overlay system - attached to every layer
+    struct TextOverlay {
+        bool enabled = true;                    // Show/hide layer name overlay
+        float offsetX = 5.0f;                   // Relative offset from layer position
+        float offsetY = 5.0f;
+        std::shared_ptr<Image> cachedImage;     // Cached text overlay image
+        bool needsRefresh = true;               // Flag to regenerate overlay
+        
+        // Get absolute position based on layer position
+        inline float getAbsoluteX(float layerX) const { return layerX + offsetX; }
+        inline float getAbsoluteY(float layerY) const { return layerY + offsetY; }
+    } textOverlay;
+
     // Helper: get layer number (delegates to image/gif if present)
     inline int getLayerNumber() const
     {
@@ -99,12 +112,65 @@ struct Layer
         {
             return img->info.filename;
         }
-        if (type == LayerType::Gif && gif)
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
         {
-            return gif->getFilename();
+            return gif->frames()[0]->info.filename;
         }
-        // For text, use text layer number
-        return textContent.empty() ? "Text Layer" : textContent;
+        if (type == LayerType::Text)
+        {
+            return textContent.empty() ? ("Text Layer " + std::to_string(id)) : textContent;
+        }
+        return "Unknown Layer " + std::to_string(id);
+    }
+
+    // Update layer animation (for GIF layers)
+    inline void updateAnimation()
+    {
+        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        {
+            gifFrameIndex = (gifFrameIndex + 1) % gif->frames().size();
+            dirty = true;
+        }
+    }
+
+    // Text overlay management
+    inline void setPosition(float newX, float newY)
+    {
+        x = newX;
+        y = newY;
+        dirty = true;
+        textOverlay.needsRefresh = true;  // Invalidate overlay when position changes
+    }
+
+    inline void moveBy(float deltaX, float deltaY)
+    {
+        x += deltaX;
+        y += deltaY;
+        dirty = true;
+        textOverlay.needsRefresh = true;  // Invalidate overlay when position changes
+    }
+
+    inline void invalidateTextOverlay()
+    {
+        textOverlay.needsRefresh = true;
+    }
+
+    inline void setTextOverlayEnabled(bool enabled)
+    {
+        if (textOverlay.enabled != enabled)
+        {
+            textOverlay.enabled = enabled;
+            textOverlay.needsRefresh = true;
+        }
+    }
+
+    inline void setSelected(bool isSelected)
+    {
+        if (selected != isSelected)
+        {
+            selected = isSelected;
+            textOverlay.needsRefresh = true;  // Refresh text overlay for opacity change
+        }
     }
 
     // Helper: get textureId (delegates to image/gif if present)

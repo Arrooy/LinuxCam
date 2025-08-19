@@ -93,6 +93,23 @@ void MediaBrowserUI::renderImageDataContent()
         ImGui::TextDisabled("(Layer cannot be dragged)");
     }
 
+    // Output camera overlay indicator
+    if (!selected->cameraDevicePath.empty() && selected->cameraDevicePath.compare(0, 7, "output:") == 0)
+    {
+        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255)); // Red text
+        ImGui::Text("📹 Output Camera Overlay");
+        ImGui::PopStyleColor();
+        ImGui::TextWrapped("This shows the recording region for the output camera. Move this layer to adjust what area gets recorded.");
+        
+        if (ImGui::Button("Center Recording Region"))
+        {
+            selected->x = 0.0f;
+            selected->y = 0.0f;
+            selected->dirty = true;
+        }
+    }
+
     if (selected->type == LayerType::Gif && selected->gif)
     {
         ImGui::Text("GIF Frames: %zu", selected->gif->frames().size());

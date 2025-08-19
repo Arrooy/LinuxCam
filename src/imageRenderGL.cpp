@@ -11,6 +11,7 @@
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
+#include "LinuxFace/Image/text_renderer.h"
 
 // Vertex shader for full-screen quad
 const char* vertexShaderSource = R"(
@@ -62,10 +63,18 @@ bool ImageRenderGL::initialize()
     return true;
 }
 
-// Helper to setup VAO/VBO/EBO for a quad
-void ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, float px, float py, float imgW, float imgH,
+bool ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, 
                                      int windowWidth, int windowHeight)
 {
+    // Check if buffers need recreation (size OR position change)
+    if (entry.vao != 0 && entry.vbo != 0 && entry.ebo != 0 &&
+        static_cast<float>(entry.width) == bounds.width &&
+        static_cast<float>(entry.height) == bounds.height &&
+        entry.lastX == bounds.x && entry.lastY == bounds.y)
+    {
+        return true; // Buffers are already set up correctly
+    }
+
     // Clean up previous buffers if they exist
     if (entry.vao)
     {
@@ -79,15 +88,19 @@ void ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, float px, float p
     {
         glDeleteBuffers(1, &entry.ebo);
     }
+    
     glGenVertexArrays(1, &entry.vao);
     glGenBuffers(1, &entry.vbo);
     glGenBuffers(1, &entry.ebo);
-    float x0 = -1.0f + 2.0f * (px / windowWidth);
-    float y0 = 1.0f - 2.0f * (py / windowHeight);
-    float x1 = -1.0f + 2.0f * ((px + imgW) / windowWidth);
-    float y1 = 1.0f - 2.0f * ((py + imgH) / windowHeight);
+    
+    float x0 = -1.0f + 2.0f * (bounds.x / windowWidth);
+    float y0 = 1.0f - 2.0f * (bounds.y / windowHeight);
+    float x1 = -1.0f + 2.0f * ((bounds.x + bounds.width) / windowWidth);
+    float y1 = 1.0f - 2.0f * ((bounds.y + bounds.height) / windowHeight);
+    
     float vertices[] = {x0, y1, 0.0f, 1.0f, x1, y1, 1.0f, 1.0f, x1, y0, 1.0f, 0.0f, x0, y0, 0.0f, 0.0f};
     unsigned int indices[] = {0, 1, 2, 2, 3, 0};
+    
     glBindVertexArray(entry.vao);
     glBindBuffer(GL_ARRAY_BUFFER, entry.vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
@@ -98,157 +111,253 @@ void ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, float px, float p
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
-    entry.width = static_cast<int>(imgW);
-    entry.height = static_cast<int>(imgH);
+    
+    entry.width = static_cast<int>(bounds.width);
+    entry.height = static_cast<int>(bounds.height);
+    entry.lastX = bounds.x;  // Track position changes
+    entry.lastY = bounds.y;
+    
+    return true;
 }
 
 // Accept a list of layers to render (images and text)
 void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWidth, int windowHeight)
 {
+    if (!initializeRenderingContext(windowWidth, windowHeight))
+    {
+        return;
+    }
+
+    for (auto& layer : const_cast<std::vector<Layer>&>(layers))
+    {
+        // Update animation for GIF layers (moved to layer responsibility)
+        layer.updateAnimation();
+        
+        LayerRenderInfo renderInfo;
+        if (prepareLayerForRendering(layer, renderInfo))
+        {
+            renderLayer(layer, renderInfo, windowWidth, windowHeight);
+            renderLayerNameOverlay(layer, renderInfo, windowWidth, windowHeight);
+            renderSelectionIndicator(layer, renderInfo);
+        }
+    }
+
+    finalizeRenderingContext();
+}
+
+bool ImageRenderGL::initializeRenderingContext(int windowWidth, int windowHeight)
+{
     if (shaderProgram_ == 0)
     {
         common::log_error("No shader program available for rendering");
-        return; // No shader available
+        return false;
     }
+
     glViewport(0, 0, windowWidth, windowHeight);
     glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_DEPTH_TEST);
     glUseProgram(shaderProgram_);
+
     GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
     if (textureLocation >= 0)
     {
         glUniform1i(textureLocation, 0);
     }
+
     GLenum err = glGetError();
     if (err != GL_NO_ERROR)
     {
         common::log_error("OpenGL error after setting texture uniform: %d", err);
+        return false;
     }
-    for (auto& layer : const_cast<std::vector<Layer>&>(layers))
-    {
-        // Animate GIFs: advance frame index every frame
-        // TODO: define a speed for the advancement of the images of the giff.
-        if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
-        {
-            layer.gifFrameIndex = (layer.gifFrameIndex + 1) % layer.gif->frames().size();
-            layer.dirty = true; // Mark as dirty to force texture update if needed
-        }
-        ImVec2 p_min, p_max;
-        bool has_rect = false;
-        float rect_thickness = 3.0f;
 
-        if ((layer.type == LayerType::Image && layer.img)
-            || (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty()))
-        {
-            Image* renderImg = nullptr;
-            if (layer.type == LayerType::Image && layer.img)
-            {
-                renderImg = layer.img.get();
-            }
-            else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
+    return true;
+}
+
+bool ImageRenderGL::prepareLayerForRendering(const Layer& layer, LayerRenderInfo& renderInfo)
+{
+    renderInfo.image = getRenderableImage(layer);
+    if (!renderInfo.image)
+    {
+        return false;
+    }
+
+    renderInfo.textureId = getOrCreateTexture(*renderInfo.image, layer.id, layer.dirty);
+    if (!renderInfo.textureId)
+    {
+        return false;
+    }
+
+    // Mark layer as clean after successful texture creation
+    const_cast<Layer&>(layer).dirty = false;
+
+    // Set render bounds
+    renderInfo.bounds = RenderBounds(layer.x, layer.y, 
+                                   static_cast<float>(renderInfo.image->info.width),
+                                   static_cast<float>(renderInfo.image->info.height));
+
+    return true;
+}
+
+Image* ImageRenderGL::getRenderableImage(const Layer& layer)
+{
+    switch (layer.type)
+    {
+        case LayerType::Image:
+            return layer.img ? layer.img.get() : nullptr;
+            
+        case LayerType::Gif:
+            if (layer.gif && !layer.gif->frames().empty())
             {
                 auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-                if (!frame)
-                {
-                    continue;
-                }
-                renderImg = frame.get();
+                return frame ? frame.get() : nullptr;
             }
-            if (!renderImg)
-            {
-                continue;
-            }
-            GLuint texId = getOrCreateTexture(*renderImg, layer.id, layer.dirty);
-            if (layer.dirty)
-            {
-                layer.dirty = false;
-            }
-            if (texId)
-            {
-                std::string key = std::to_string(layer.id);
-                auto& entry = textureCache_[key];
-                if (entry.texId != texId)
-                {
-                    common::log_error("Texture ID mismatch for layer %s: expected %u, got %u", key.c_str(), entry.texId,
-                                      texId);
-                    continue; // Mismatch, skip rendering this layer
-                }
-                bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
-                                     || static_cast<size_t>(entry.width) != renderImg->info.width
-                                     || static_cast<size_t>(entry.height) != renderImg->info.height);
-                if (needRecreate)
-                {
-                    setupQuadBuffers(entry, static_cast<float>(layer.x), static_cast<float>(layer.y),
-                                     static_cast<float>(renderImg->info.width),
-                                     static_cast<float>(renderImg->info.height), windowWidth, windowHeight);
-                }
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, texId);
-                glBindVertexArray(entry.vao);
-                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-                glBindVertexArray(0);
-                glBindTexture(GL_TEXTURE_2D, 0);
-                p_min = ImVec2(layer.x, layer.y);
-                p_max = ImVec2(layer.x + renderImg->info.width, layer.y + renderImg->info.height);
-                has_rect = true;
-            }
-        }
-        else if (layer.type == LayerType::Text)
-        {
-            // Text layers now store their rendered image in the img field
-            if (layer.img)
-            {
-                auto renderImg = layer.img.get();
-                GLuint texId = getOrCreateTexture(*renderImg, layer.id, layer.dirty);
-                if (layer.dirty)
-                {
-                    layer.dirty = false;
-                }
-                if (texId)
-                {
-                    std::string key = std::to_string(layer.id);
-                    auto& entry = textureCache_[key];
-                    if (entry.texId != texId)
-                    {
-                        common::log_error("Texture ID mismatch for text layer %s: expected %u, got %u", key.c_str(), 
-                                         entry.texId, texId);
-                        continue;
-                    }
-                    bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
-                                         || static_cast<size_t>(entry.width) != renderImg->info.width
-                                         || static_cast<size_t>(entry.height) != renderImg->info.height);
-                    if (needRecreate)
-                    {
-                        setupQuadBuffers(entry, static_cast<float>(layer.x), static_cast<float>(layer.y),
-                                         static_cast<float>(renderImg->info.width),
-                                         static_cast<float>(renderImg->info.height), windowWidth, windowHeight);
-                    }
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, texId);
-                    glBindVertexArray(entry.vao);
-                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-                    glBindVertexArray(0);
-                    glBindTexture(GL_TEXTURE_2D, 0);
-                    p_min = ImVec2(layer.x, layer.y);
-                    p_max = ImVec2(layer.x + renderImg->info.width, layer.y + renderImg->info.height);
-                    has_rect = true;
-                }
-            }
-        }
-        
-        // Draw green rectangle if selected (for both image and text)
-        if (layer.selected && has_rect)
-        {
-            ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-            draw_list->AddRect(p_min, p_max, IM_COL32(0, 255, 0, 255), 0.0f, 0, rect_thickness);
-        }
+            return nullptr;
+            
+        case LayerType::Text:
+            return layer.img ? layer.img.get() : nullptr;
+            
+        default:
+            return nullptr;
     }
-    glUseProgram(0);
-    glEnable(GL_DEPTH_TEST);
-    err = glGetError();
+}
+
+bool ImageRenderGL::renderLayer(const Layer& layer, const LayerRenderInfo& renderInfo, 
+                               int windowWidth, int windowHeight)
+{
+    if (!renderInfo.isValid())
+    {
+        return false;
+    }
+
+    std::string key = std::to_string(layer.id);
+    auto& entry = textureCache_[key];
+    
+    if (entry.texId != renderInfo.textureId)
+    {
+        common::log_error("Texture ID mismatch for layer %s", key.c_str());
+        return false;
+    }
+
+    if (!setupQuadBuffers(entry, renderInfo.bounds, windowWidth, windowHeight))
+    {
+        return false;
+    }
+
+    return executeOpenGLRender(entry, renderInfo.textureId);
+}
+
+bool ImageRenderGL::executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId)
+{
+    // Ensure shader program is active
+    glUseProgram(shaderProgram_);
+    
+    GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
+    if (textureLocation >= 0)
+    {
+        glUniform1i(textureLocation, 0);
+    }
+    
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texId);
+    glBindVertexArray(entry.vao);
+    
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    
+    GLenum err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("OpenGL error: %d", err);
+        common::log_error("OpenGL render error: %d", err);
+        return false;
+    }
+    
+    return true;
+}
+
+void ImageRenderGL::renderLayerNameOverlay(const Layer& layer, const LayerRenderInfo& renderInfo,
+                                         int windowWidth, int windowHeight)
+{
+    if (layer.name.empty() || !layer.textOverlay.enabled)
+    {
+        return;
+    }
+
+    // Check if we need to regenerate the text overlay
+    auto& overlay = const_cast<Layer&>(layer).textOverlay;
+    bool shouldRefreshTexture = overlay.needsRefresh;
+    
+    if (overlay.needsRefresh || !overlay.cachedImage)
+    {
+        // Calculate opacity based on selection state
+        unsigned char textAlpha = layer.selected ? 255 : 128;
+        unsigned char bgAlpha = layer.selected ? 180 : 90;
+        
+        TextRenderConfig nameConfig(layer.name, {255, 255, 255, textAlpha}, 1);
+        nameConfig.useBackground = true;
+        nameConfig.backgroundColor = {0, 0, 0, bgAlpha};
+        nameConfig.padding = 3;
+        nameConfig.wrapMode = TextWrapMode::NONE;
+        nameConfig.horizontalAlign = TextAlignment::LEFT;
+        nameConfig.verticalAlign = TextAlignment::TOP;
+        
+        overlay.cachedImage = TextRenderer::renderText(nameConfig);
+        overlay.needsRefresh = false;
+    }
+    
+    if (!overlay.cachedImage)
+    {
+        return;
+    }
+
+    // Position overlay using the layer's text overlay system
+    RenderBounds overlayBounds(overlay.getAbsoluteX(layer.x), overlay.getAbsoluteY(layer.y),
+                              static_cast<float>(overlay.cachedImage->info.width),
+                              static_cast<float>(overlay.cachedImage->info.height));
+    
+    std::string nameKey = "name_" + std::to_string(layer.id);
+    GLuint nameTexId = getOrCreateTexture(*overlay.cachedImage, 
+                                        static_cast<size_t>(std::hash<std::string>{}(nameKey)), 
+                                        shouldRefreshTexture); // Use saved refresh flag
+    
+    if (!nameTexId)
+    {
+        return;
+    }
+
+    auto& nameEntry = textureCache_[nameKey];
+    if (setupQuadBuffers(nameEntry, overlayBounds, windowWidth, windowHeight))
+    {
+        executeOpenGLRender(nameEntry, nameTexId);
+    }
+}
+
+void ImageRenderGL::renderSelectionIndicator(const Layer& layer, const LayerRenderInfo& renderInfo)
+{
+    if (!layer.selected)
+    {
+        return;
+    }
+
+    ImVec2 p_min(renderInfo.bounds.x, renderInfo.bounds.y);
+    ImVec2 p_max(renderInfo.bounds.x + renderInfo.bounds.width, 
+                 renderInfo.bounds.y + renderInfo.bounds.height);
+    
+    ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+    draw_list->AddRect(p_min, p_max, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
+}
+
+void ImageRenderGL::finalizeRenderingContext()
+{
+    glUseProgram(0);
+    glEnable(GL_DEPTH_TEST);
+    
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        common::log_error("OpenGL error during finalization: %d", err);
     }
 }
 
@@ -472,7 +581,7 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool forc
     glBindTexture(GL_TEXTURE_2D, 0);
 
     textureCache_[key] = TextureCacheEntry{
-        texId, static_cast<int>(image.info.width), static_cast<int>(image.info.height), image.info.layer, 0, 0, 0};
+        texId, static_cast<int>(image.info.width), static_cast<int>(image.info.height), image.info.layer, 0, 0, 0, -999999.0f, -999999.0f};
     image.setTextureId(texId);
     return texId;
 }

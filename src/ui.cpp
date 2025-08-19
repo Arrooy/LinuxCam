@@ -246,8 +246,7 @@ void UI::paintMainWindow()
                         newText.img = textImage;  // Store the generated text image
                         newText.textContent = add_text_layer_buffer_;  // Keep text for reference
                         newText.name = add_text_layer_buffer_;
-                        newText.x = 100;
-                        newText.y = 100;
+                        newText.setPosition(100, 100);
                         
                         layerManager_->addLayer(newText);
                     }
@@ -362,6 +361,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                             newLayer.name = item;
                             newLayer.img = std::move(newImage);
                             newLayer.img->setTextureId(0);
+                            newLayer.setPosition(100, 100);
                             newLayer.dirty = true;
 
                             layerManager_->addLayer(newLayer);
@@ -384,8 +384,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                         newLayer.type = LayerType::Gif;
                         newLayer.name = item;
                         newLayer.gif = origGif;
-                        newLayer.x = 100;
-                        newLayer.y = 100;
+                        newLayer.setPosition(100, 100);
                         newLayer.gifFrameIndex = 0;
                         newLayer.dirty = true;
                         layerManager_->addLayer(newLayer);
@@ -643,16 +642,16 @@ void UI::handleLayerDragging()
             // Select this layer, deselect others
             for (auto& l : layers)
             {
-                l.selected = false;
+                l.setSelected(false);
             }
-            clickedLayer->selected = true;
+            clickedLayer->setSelected(true);
         }
         else
         {
             // If no layer was found, deselect all layers
             for (auto& l : layers)
             {
-                l.selected = false;
+                l.setSelected(false);
             }
         }
     }
@@ -686,10 +685,7 @@ void UI::handleLayerDragging()
     // Only allow dragging if mouse is dragging, layer is selected, and layer is not locked
     if (ImGui::IsMouseDragging(0) && !selectedLayer.locked)
     {
-        selectedLayer.x += delta.x;
-        selectedLayer.y += delta.y;
-        // Mark the layer as dirty to trigger a redraw
-        selectedLayer.dirty = true;
+        selectedLayer.moveBy(delta.x, delta.y);
     }
 }
 

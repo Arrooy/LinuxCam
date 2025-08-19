@@ -46,6 +46,8 @@ class CameraManager
   private:
     bool isDeviceUsable(const std::string& devicePath);
     void updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::unique_ptr<Image> newFrame);
+    void createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera);
+    void updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera, const Image& compositeImage);
     std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
     std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
     std::shared_ptr<LayerManager> layerManager_;

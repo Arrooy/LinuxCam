@@ -24,6 +24,9 @@ struct TextureCacheEntry
     GLuint vao = 0;
     GLuint vbo = 0;
     GLuint ebo = 0;
+    // Add position tracking for text overlays
+    float lastX = -999999.0f;  // Use impossible values to force initial setup
+    float lastY = -999999.0f;
 };
 
 class ImageRenderGL
@@ -40,23 +43,46 @@ class ImageRenderGL
 
     // Render a list of layers (images and text)
     void renderLayers(const std::vector<Layer>& layers, int windowWidth, int windowHeight);
+
   private:
-    // Cleanup all cached textures
+    // Simplified rendering structures
+    struct RenderBounds {
+        float x, y, width, height;
+        RenderBounds() : x(0), y(0), width(0), height(0) {}
+        RenderBounds(float x_, float y_, float w_, float h_) : x(x_), y(y_), width(w_), height(h_) {}
+    };
+
+    struct LayerRenderInfo {
+        Image* image = nullptr;
+        GLuint textureId = 0;
+        RenderBounds bounds;
+        bool isValid() const { return image != nullptr && textureId != 0; }
+    };
+
+    // Core rendering pipeline
+    bool initializeRenderingContext(int windowWidth, int windowHeight);
+    bool prepareLayerForRendering(const Layer& layer, LayerRenderInfo& renderInfo);
+    Image* getRenderableImage(const Layer& layer);
+    
+    // Layer rendering (unified interface with consistent parameters)
+    bool renderLayer(const Layer& layer, const LayerRenderInfo& renderInfo, 
+                     int windowWidth, int windowHeight);
+    void renderLayerNameOverlay(const Layer& layer, const LayerRenderInfo& renderInfo,
+                               int windowWidth, int windowHeight);
+    void renderSelectionIndicator(const Layer& layer, const LayerRenderInfo& renderInfo);
+    void finalizeRenderingContext();
+
+    // Internal OpenGL helpers (unified interface)
+    GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
+    bool setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, 
+                         int windowWidth, int windowHeight);
+    bool executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId);
     void cleanupTextures();
 
-    // Get or create a cached OpenGL texture for an image
-    GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
-    
-    // Generate texture from text layer using text_draw.h
-    std::shared_ptr<Image> generateTextImage(const Layer& textLayer);
-    // Shader creation helpers
+    // Shader management
     bool createShaders();
     GLuint compileShader(const char* source, GLenum type);
     GLuint createShaderProgram(const char* vertexSource, const char* fragmentSource);
-
-    // Helper to setup VAO/VBO/EBO for a quad
-    void setupQuadBuffers(TextureCacheEntry& entry, float px, float py, float imgW, float imgH, int windowWidth,
-                          int windowHeight);
 
     GLuint vao_, vbo_, ebo_;
     GLuint shaderProgram_;
