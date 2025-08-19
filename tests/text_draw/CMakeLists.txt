@@ -5,6 +5,7 @@ set(TEXT_DRAW_TEST_SOURCES
     test_text_draw_enhanced_api.cpp
     test_text_draw_performance.cpp
     test_text_draw_visual_validation.cpp
+    test_multiline_text_size.cpp
 )
 
 # Create the test executable

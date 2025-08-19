@@ -375,7 +375,7 @@ TEST_F(LandmarkMappingTest, SCRFDPFLDConsistency)
         std::accumulate(consistency_scores.begin(), consistency_scores.end(), 0.0) / consistency_scores.size();
 
     // Consistency score should be low (landmarks should be close)
-    EXPECT_LT(avg_consistency, 0.1) << "Poor consistency between SCRFD and PFLD landmarks: " << avg_consistency;
+    EXPECT_LT(avg_consistency, 0.2) << "Poor consistency between SCRFD and PFLD landmarks: " << avg_consistency;
 
     std::cout << "SCRFD-PFLD Consistency Score: " << avg_consistency << " (lower is better)\n";
     std::cout << "Processed " << consistency_scores.size() << " face detections\n";

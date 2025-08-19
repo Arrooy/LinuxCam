@@ -76,7 +76,6 @@ class Application
     bool update();
     void process(std::unique_ptr<Image>& image);
     void render();
-    void captureAndSaveWebcamImageWithTimestamp();
 };
 
 } // namespace linuxface

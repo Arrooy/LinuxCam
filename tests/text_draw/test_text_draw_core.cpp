@@ -90,7 +90,7 @@ TEST_F(TextDrawCoreTest, GetTextSizeNegativeScale)
 TEST_F(TextDrawCoreTest, FillBlockBasic)
 {
     // Fill a 2x2 block at position (10, 10)
-    fillBlockWithDDA(*test_image, 10, 10, 2, white_color);
+    test_image->fillRect(10, 10, 2, 2, white_color);
 
     // Check the filled pixels
     EXPECT_EQ((*test_image)(10, 10), white_color);
@@ -105,7 +105,7 @@ TEST_F(TextDrawCoreTest, FillBlockBasic)
 
 TEST_F(TextDrawCoreTest, FillBlockSinglePixel)
 {
-    fillBlockWithDDA(*test_image, 50, 50, 1, red_color);
+    test_image->fillRect(50, 50, 1, 1, red_color);
 
     EXPECT_EQ((*test_image)(50, 50), red_color);
     // Check neighbors are unchanged
@@ -115,7 +115,7 @@ TEST_F(TextDrawCoreTest, FillBlockSinglePixel)
 
 TEST_F(TextDrawCoreTest, FillBlockLargeSize)
 {
-    fillBlockWithDDA(*test_image, 5, 5, 10, blue_color);
+    test_image->fillRect(5, 5, 10, 10, blue_color);
 
     // Check corners and center
     EXPECT_EQ((*test_image)(5, 5), blue_color);
@@ -128,7 +128,7 @@ TEST_F(TextDrawCoreTest, FillBlockLargeSize)
 TEST_F(TextDrawCoreTest, FillBlockZeroSize)
 {
     // Zero size should not crash and not affect the image
-    fillBlockWithDDA(*test_image, 10, 10, 0, white_color);
+    test_image->fillRect(10, 10, 0, 0, white_color);
 
     // No pixels should be changed
     EXPECT_EQ((*test_image)(10, 10), Pixel(0, 0, 0));

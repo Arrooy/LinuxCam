@@ -8,15 +8,21 @@
 
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
+#include "LinuxFace/UI/layerManager.h"
 using linuxface::CameraManager;
 using linuxface::Webcam;
 using linuxface::Image;
 
-CameraManager::CameraManager() : inWebcam_(), outWebcam_() {}
+CameraManager::CameraManager() : inWebcam_(), outWebcam_(), layerManager_(nullptr) {}
 
 CameraManager::~CameraManager()
 {
     shutdown();
+}
+
+void CameraManager::setLayerManager(std::shared_ptr<LayerManager> layerManager)
+{
+    layerManager_ = layerManager;
 }
 
 void CameraManager::shutdown()
@@ -34,8 +40,14 @@ void CameraManager::shutdown()
     outWebcam_.clear();
 }
 
-bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
+bool CameraManager::updateInput()
 {
+    if (!layerManager_)
+    {
+        common::log_error("CameraManager::updateInput - LayerManager not set");
+        return false;
+    }
+
     for (auto& input : inWebcam_)
     {
         if (input->isRunning())
@@ -55,43 +67,73 @@ bool CameraManager::updateInput(std::unique_ptr<Image>& outputImage)
             else if (newFrame == nullptr)
             {
                 common::log_error("CameraManager::updateInput - Input image is null");
-                return false;
+                continue;
             }
             else if (newFrame->info.width == 0 || newFrame->info.height == 0)
             {
-                common::log_error("CameraManager::updateInput - Input image invalid size size: %d x %d",
+                common::log_error("CameraManager::updateInput - Input image invalid size: %d x %d",
                                   newFrame->info.width, newFrame->info.height);
                 continue;
             }
 
-            if (!processCameraInput(outputImage, newFrame))
-            {
-                common::log_error("CameraManager::updateInput - Failed to process camera input");
-                return false;
-            }
+            updateCameraLayer(input, std::move(newFrame));
         }
     }
 
-    return outputImage != nullptr;
+    return true;
 }
 
-bool CameraManager::processCameraInput(std::unique_ptr<Image>& outputImage /*outputImage*/, std::unique_ptr<Image>& newFrame /*newFrame*/)
+void CameraManager::updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::unique_ptr<Image> newFrame)
 {
-    // Valid image, copy it to output image
-    if (!outputImage)
+    // Find or create layer for this camera
+    Layer* existingLayer = layerManager_->getLayerByCameraDevicePath(camera->getDevicePath());
+    
+    if (existingLayer != nullptr)
     {
-        outputImage = std::move(newFrame);
-        outputImage->move(0, 0);
+        // Update existing layer
+        if (existingLayer->resizeScale != 1.0f)
+        {
+            // Apply resize if scale is set
+            int targetWidth = static_cast<int>(newFrame->info.width * existingLayer->resizeScale);
+            int targetHeight = static_cast<int>(newFrame->info.height * existingLayer->resizeScale);
+            
+            if (targetWidth > 0 && targetHeight > 0)
+            {
+                newFrame->scaleToInPlace(static_cast<size_t>(targetWidth), static_cast<size_t>(targetHeight));
+            }
+        }
+        
+        existingLayer->img = std::shared_ptr<Image>(newFrame.release());
+        existingLayer->dirty = true;
     }
     else
     {
-        // If outputImage already exists, paste the new frame next to the previous one
-        // outputImage->paste(*newFrame, true);
-        // TODO: Temporaly, use always new frame
-        outputImage = std::move(newFrame);
+        // Create new layer for this camera
+        Layer newLayer;
+        newLayer.id = Layer::next_id++;
+        newLayer.type = LayerType::Image;
+        newLayer.name = camera->getName();
+        newLayer.cameraDevicePath = camera->getDevicePath();
+        newLayer.selected = false;
+        newLayer.resizeScale = 1.0f;
+        newLayer.img = std::shared_ptr<Image>(newFrame.release());
+        newLayer.dirty = true;
+        newLayer.x = 0.0f;
+        newLayer.y = 0.0f;
+        
+        if (newLayer.img)
+        {
+            // Assign next available layer number
+            int nextLayerNumber = 0;
+            for (const auto& layer : layerManager_->getLayers())
+            {
+                nextLayerNumber = std::max(nextLayerNumber, layer.getLayerNumber() + 1);
+            }
+            newLayer.img->info.layer = nextLayerNumber;
+        }
+        
+        layerManager_->addLayer(newLayer);
     }
-
-    return outputImage != nullptr;
 }
 
 bool CameraManager::updateOutput(std::unique_ptr<Image>& image /*image*/)
@@ -130,7 +172,12 @@ bool CameraManager::addCamera(std::shared_ptr<Webcam> camera /*camera*/)
     }
     else if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
     {
-        return addCameraImpl(outWebcam_, std::move(output));
+        bool result = addCameraImpl(outWebcam_, output);
+        if (result && layerManager_)
+        {
+            createOutputCameraOverlay(output);
+        }
+        return result;
     }
 
     common::log_error("CameraManager::addCamera - Unknown webcam type");

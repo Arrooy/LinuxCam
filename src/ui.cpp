@@ -6,6 +6,7 @@
 #include "LinuxFace/UI/paintWebcam.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
+#include "LinuxFace/Image/text_renderer.h"
 
 using namespace linuxface;
 
@@ -140,26 +141,116 @@ void UI::paintMainWindow()
         // Add new menu for text layer
         if (ImGui::BeginMenu("Load text..."))
         {
-            static float text_font_size = 16.0f;
+            static int text_scale = 1;
             static ImVec4 text_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            static ImVec4 bg_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+            static bool use_background = false;
+            static bool center_text = true;
+            static bool force_single_line = false;
+            static bool use_text_wrapping = false;
+            static int text_width_limit = 200;
+            static int text_alignment = 1; // 0=LEFT, 1=CENTER, 2=RIGHT
+            static int text_v_alignment = 1; // 0=TOP, 1=MIDDLE, 2=BOTTOM
+            static int padding = 2;
+            
             ImGui::InputText("Text", add_text_layer_buffer_, IM_ARRAYSIZE(add_text_layer_buffer_));
-            ImGui::InputFloat("Font Size", &text_font_size, 1.0f, 5.0f, "%.1f");
-            ImGui::ColorEdit4("Color", (float*) &text_color, ImGuiColorEditFlags_NoInputs);
-            ImGui::SameLine();
+            
+            ImGui::Separator();
+            ImGui::Text("Text Styling");
+            
+            ImGui::SliderInt("Font Scale", &text_scale, 0.05, 25, "%dx");
+            ImGui::ColorEdit4("Text Color", (float*) &text_color, ImGuiColorEditFlags_NoInputs);
+            
+            ImGui::Checkbox("Use Background", &use_background);
+            if (use_background)
+            {
+                ImGui::SameLine();
+                ImGui::ColorEdit4("BG Color", (float*) &bg_color, ImGuiColorEditFlags_NoInputs);
+                ImGui::SliderInt("Padding", &padding, 0, 10);
+            }
+            
+            ImGui::Separator();
+            ImGui::Text("Text Layout");
+            
+            ImGui::Checkbox("Force Single Line", &force_single_line);
+            if (!force_single_line)
+            {
+                ImGui::Checkbox("Enable Text Wrapping", &use_text_wrapping);
+                if (use_text_wrapping)
+                {
+                    ImGui::SliderInt("Wrap Width", &text_width_limit, 50, 800, "%d px");
+                }
+            }
+            
+            ImGui::Checkbox("Center Text", &center_text);
+            if (!center_text)
+            {
+                const char* h_align_items[] = { "Left", "Center", "Right" };
+                ImGui::Combo("H-Align", &text_alignment, h_align_items, IM_ARRAYSIZE(h_align_items));
+                
+                const char* v_align_items[] = { "Top", "Middle", "Bottom" };
+                ImGui::Combo("V-Align", &text_v_alignment, v_align_items, IM_ARRAYSIZE(v_align_items));
+            }
+            
             if (ImGui::Button("Add Text Layer"))
             {
                 if (layerManager_)
                 {
-                    Layer newText;
-                    newText.id = Layer::next_id++;
-                    newText.type = LayerType::Text;
-                    newText.textContent = add_text_layer_buffer_;
-                    newText.name = add_text_layer_buffer_;
-                    newText.x = 100;
-                    newText.y = 100;
-                    newText.fontSize = text_font_size;
-                    newText.textColor = ImGui::ColorConvertFloat4ToU32(text_color);
-                    layerManager_->addLayer(newText);
+                    // Create TextRenderConfig for the new approach
+                    auto toPixel = [](const ImVec4& color) -> Pixel {
+                        return {
+                            static_cast<unsigned char>(color.x * 255),
+                            static_cast<unsigned char>(color.y * 255),
+                            static_cast<unsigned char>(color.z * 255),
+                            static_cast<unsigned char>(color.w * 255)
+                        };
+                    };
+                    
+                    TextRenderConfig config(add_text_layer_buffer_, toPixel(text_color), text_scale);
+                    
+                    // Set background
+                    config.useBackground = use_background;
+                    config.backgroundColor = toPixel(bg_color);
+                    config.padding = padding;
+                    
+                    // Set wrap mode based on UI choices
+                    if (force_single_line) {
+                        config.wrapMode = TextWrapMode::NONE;
+                        if (use_text_wrapping) {
+                            config.maxWidth = text_width_limit;  // Truncate at this width
+                        }
+                    } else if (use_text_wrapping) {
+                        config.wrapMode = TextWrapMode::AUTO_WIDTH;
+                        config.maxWidth = text_width_limit;
+                    } else {
+                        config.wrapMode = TextWrapMode::AUTO_CANVAS;  // Natural line breaks or single line
+                    }
+                    
+                    // Set alignment
+                    if (center_text) {
+                        config.horizontalAlign = TextAlignment::CENTER;
+                        config.verticalAlign = TextAlignment::MIDDLE;
+                    } else {
+                        config.horizontalAlign = static_cast<TextAlignment>(text_alignment);
+                        config.verticalAlign = static_cast<TextAlignment>(text_v_alignment + 3);
+                    }
+                    
+                    // Render the text using the new system
+                    auto textImage = TextRenderer::renderText(config);
+                    
+                    if (textImage)
+                    {
+                        Layer newText;
+                        newText.id = Layer::next_id++;
+                        newText.type = LayerType::Text;
+                        newText.img = textImage;  // Store the generated text image
+                        newText.textContent = add_text_layer_buffer_;  // Keep text for reference
+                        newText.name = add_text_layer_buffer_;
+                        newText.x = 100;
+                        newText.y = 100;
+                        
+                        layerManager_->addLayer(newText);
+                    }
                 }
                 // Optionally clear buffer or reset
                 strncpy(add_text_layer_buffer_, "Write here", 11);
@@ -486,6 +577,49 @@ ImVec4 getProfileColorFromDuration(int64_t duration)
     return ImVec4(r, g, b, a);
 }
 
+// Helper function to find the topmost layer under mouse position
+Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& mousePos)
+{
+    // Iterate from topmost to bottom (reverse order)
+    for (int i = static_cast<int>(layers.size()) - 1; i >= 0; --i)
+    {
+        const Layer& layer = layers[i];
+        float lx = layer.x;
+        float ly = layer.y;
+        float lw = 0, lh = 0;
+        
+        if (layer.type == LayerType::Image && layer.img)
+        {
+            lw = static_cast<float>(layer.img->info.width);
+            lh = static_cast<float>(layer.img->info.height);
+        }
+        else if (layer.type == LayerType::Gif && layer.gif)
+        {
+            // Use the first frame's dimensions for GIFs
+            if (layer.gif->frames().empty())
+            {
+                continue; // Skip empty GIFs
+            }
+            lw = static_cast<float>(layer.gif->frames()[0]->info.width);
+            lh = static_cast<float>(layer.gif->frames()[0]->info.height);
+        }
+        else if (layer.type == LayerType::Text)
+        {
+            if (layer.img)
+            {
+                lw = static_cast<float>(layer.img->info.width);
+                lh = static_cast<float>(layer.img->info.height);
+            }
+        }
+
+        if (mousePos.x >= lx && mousePos.x <= lx + lw && mousePos.y >= ly && mousePos.y <= ly + lh)
+        {
+            return const_cast<Layer*>(&layer);
+        }
+    }
+    return nullptr;
+}
+
 void UI::handleLayerDragging()
 {
     if (!layerManager_)
@@ -499,53 +633,21 @@ void UI::handleLayerDragging()
     }
     auto& layers = layerManager_->getLayers();
     ImVec2 mousePos = ImGui::GetIO().MousePos;
+    
     // On mouse click, select the topmost layer under the mouse
     if (ImGui::IsMouseClicked(0))
     {
-        bool foundLayer = false;
-        // Iterate from topmost to bottom (reverse order)
-        for (int i = static_cast<int>(layers.size()) - 1; i >= 0; --i)
+        Layer* clickedLayer = findLayerUnderMouse(layers, mousePos);
+        if (clickedLayer)
         {
-            Layer& layer = layers[i];
-            float lx = layer.x;
-            float ly = layer.y;
-            float lw = 0, lh = 0;
-            if (layer.type == LayerType::Image && layer.img)
+            // Select this layer, deselect others
+            for (auto& l : layers)
             {
-                lw = static_cast<float>(layer.img->info.width);
-                lh = static_cast<float>(layer.img->info.height);
+                l.selected = false;
             }
-            else if (layer.type == LayerType::Gif && layer.gif)
-            {
-                // Use the first frame's dimensions for GIFs
-                if (layer.gif->frames().empty())
-                {
-                    continue; // Skip empty GIFs
-                }
-                lw = static_cast<float>(layer.gif->frames()[0]->info.width);
-                lh = static_cast<float>(layer.gif->frames()[0]->info.height);
-            }
-            else if (layer.type == LayerType::Text)
-            {
-                // Estimate text bounding box (simple, not perfect)
-                ImVec2 textSize = ImGui::CalcTextSize(layer.textContent.c_str(), nullptr, false, -1);
-                lw = textSize.x * (layer.fontSize / 16.0f);
-                lh = textSize.y * (layer.fontSize / 16.0f);
-            }
-
-            if (mousePos.x >= lx && mousePos.x <= lx + lw && mousePos.y >= ly && mousePos.y <= ly + lh)
-            {
-                // Select this layer, deselect others
-                for (auto& l : layers)
-                {
-                    l.selected = false;
-                }
-                layer.selected = true;
-                foundLayer = true;
-                break;
-            }
+            clickedLayer->selected = true;
         }
-        if (!foundLayer)
+        else
         {
             // If no layer was found, deselect all layers
             for (auto& l : layers)
@@ -554,6 +656,21 @@ void UI::handleLayerDragging()
             }
         }
     }
+
+    // On double-click, open the media browser if it's closed
+    if (ImGui::IsMouseDoubleClicked(0))
+    {
+        Layer* doubleClickedLayer = findLayerUnderMouse(layers, mousePos);
+        if (doubleClickedLayer)
+        {
+            // Double-click detected on a layer - open media browser if closed
+            if (!mediaBrowserVisible_)
+            {
+                mediaBrowserVisible_ = true;
+            }
+        }
+    }
+    
     if (!ImGui::IsMouseDown(0))
     {
         return;
@@ -566,8 +683,8 @@ void UI::handleLayerDragging()
     }
     Layer& selectedLayer = *it;
     ImVec2 delta = ImGui::GetIO().MouseDelta;
-    // Only allow dragging if mouse is dragging and a layer is selected
-    if (ImGui::IsMouseDragging(0) && !selectedLayer.isBaseLayer)
+    // Only allow dragging if mouse is dragging, layer is selected, and layer is not locked
+    if (ImGui::IsMouseDragging(0) && !selectedLayer.locked)
     {
         selectedLayer.x += delta.x;
         selectedLayer.y += delta.y;

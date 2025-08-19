@@ -80,6 +80,19 @@ void MediaBrowserUI::renderImageDataContent()
     ImGui::Text("Dimensions: %lu x %lu", selected->getWidth(), selected->getHeight());
     ImGui::Text("Format: %s", fromImageFormatToString(selected->getFormat()).c_str());
 
+    // Layer lock checkbox
+    ImGui::Separator();
+    bool lockChanged = ImGui::Checkbox("Lock Position", &selected->locked);
+    if (lockChanged)
+    {
+        selected->dirty = true;
+    }
+    if (selected->locked)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(Layer cannot be dragged)");
+    }
+
     if (selected->type == LayerType::Gif && selected->gif)
     {
         ImGui::Text("GIF Frames: %zu", selected->gif->frames().size());
@@ -88,7 +101,10 @@ void MediaBrowserUI::renderImageDataContent()
     else if (selected->type == LayerType::Text)
     {
         ImGui::Text("Content: %s", selected->textContent.c_str());
-        ImGui::Text("Font size: %.1f", selected->fontSize);
+        if (selected->img)
+        {
+            ImGui::Text("Rendered as %lu x %lu image", selected->img->info.width, selected->img->info.height);
+        }
     }
 }
 
@@ -166,41 +182,73 @@ void MediaBrowserUI::renderImageOperationsContent()
 
         // Slider-based resize
         ImGui::Separator();
-        ImGui::Text("Resize with Slider:");
-
-        static bool sliderActive = false;
-        static float resizeScale = 1.0f;
-
-        bool sliderChanged = ImGui::SliderFloat("Scale", &resizeScale, 0.1f, 3.0f, "%.2f");
-
-        if (sliderChanged && !sliderActive)
+        
+        // Check if this is a camera layer
+        if (!selected->cameraDevicePath.empty())
         {
-            sliderActive = true;
-        }
-
-        if (sliderActive && !ImGui::IsItemActive())
-        {
-            // User released the slider, apply the resize
-            sliderActive = false;
-            int targetWidth = static_cast<int>(image->info.width * resizeScale);
-            int targetHeight = static_cast<int>(image->info.height * resizeScale);
-
-            if (targetWidth > 0 && targetHeight > 0)
+            ImGui::Text("Camera Layer Resize (Applied Each Frame):");
+            
+            bool scaleChanged = ImGui::SliderFloat("Scale", &selected->resizeScale, 0.1f, 3.0f, "%.2f");
+            
+            if (scaleChanged)
             {
-                image->scaleToInPlace(static_cast<size_t>(targetWidth), static_cast<size_t>(targetHeight));
                 selected->dirty = true;
-                // Update input fields to match new size
-                newWidth = image->info.width;
-                newHeight = image->info.height;
+            }
+            
+            if (ImGui::Button("Reset Scale"))
+            {
+                selected->resizeScale = 1.0f;
+                selected->dirty = true;
+            }
+            
+            ImGui::Text("Current Scale: %.2f", selected->resizeScale);
+            ImGui::Text("Original Size: %ldx%ld", selected->getWidth(), selected->getHeight());
+            if (selected->resizeScale != 1.0f)
+            {
+                int scaledWidth = static_cast<int>(selected->getWidth() * selected->resizeScale);
+                int scaledHeight = static_cast<int>(selected->getHeight() * selected->resizeScale);
+                ImGui::Text("Scaled Size: %dx%d", scaledWidth, scaledHeight);
             }
         }
-
-        // Show preview dimensions while dragging
-        if (sliderActive || ImGui::IsItemActive())
+        else
         {
-            int previewWidth = static_cast<int>(image->info.width * resizeScale);
-            int previewHeight = static_cast<int>(image->info.height * resizeScale);
-            ImGui::Text("Preview: %dx%d", previewWidth, previewHeight);
+            // Original resize logic for non-camera layers
+            ImGui::Text("Resize with Slider:");
+
+            static bool sliderActive = false;
+            static float resizeScale = 1.0f;
+
+            bool sliderChanged = ImGui::SliderFloat("Scale", &resizeScale, 0.1f, 3.0f, "%.2f");
+
+            if (sliderChanged && !sliderActive)
+            {
+                sliderActive = true;
+            }
+
+            if (sliderActive && !ImGui::IsItemActive())
+            {
+                // User released the slider, apply the resize
+                sliderActive = false;
+                int targetWidth = static_cast<int>(image->info.width * resizeScale);
+                int targetHeight = static_cast<int>(image->info.height * resizeScale);
+
+                if (targetWidth > 0 && targetHeight > 0)
+                {
+                    image->scaleToInPlace(static_cast<size_t>(targetWidth), static_cast<size_t>(targetHeight));
+                    selected->dirty = true;
+                    // Update input fields to match new size
+                    newWidth = image->info.width;
+                    newHeight = image->info.height;
+                }
+            }
+
+            // Show preview dimensions while dragging
+            if (sliderActive || ImGui::IsItemActive())
+            {
+                int previewWidth = static_cast<int>(image->info.width * resizeScale);
+                int previewHeight = static_cast<int>(image->info.height * resizeScale);
+                ImGui::Text("Preview: %dx%d", previewWidth, previewHeight);
+            }
         }
 
         ImGui::Spacing();
@@ -307,18 +355,9 @@ void MediaBrowserUI::renderSceneCompositor()
             ImGui::EndDisabled();
         }
         ImGui::SameLine();
-        if (layer.isBaseLayer)
+        if (ImGui::SmallButton("x"))
         {
-            ImGui::BeginDisabled();
-            ImGui::SmallButton("x");
-            ImGui::EndDisabled();
-        }
-        else
-        {
-            if (ImGui::SmallButton("x"))
-            {
-                removeIndex = i;
-            }
+            removeIndex = i;
         }
         ImGui::EndGroup();
         ImGui::PopID();

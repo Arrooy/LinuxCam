@@ -9,6 +9,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include "LinuxFace/Image/image.h"
+#include "LinuxFace/Image/text_renderer.h"
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/image.h"
 
@@ -29,11 +36,15 @@ struct Layer
     std::string name;
     bool selected{false};
     bool dirty{true};
-    bool isBaseLayer{false};
+    bool locked{false};           // Prevents layer from being dragged when true
 
     // Unique identifier for this layer instance
     size_t id = 0;
     static size_t next_id;
+    
+    // Camera-specific fields
+    std::string cameraDevicePath;  // Empty for non-camera layers
+    float resizeScale{1.0f};       // For camera layers resize functionality
 
     // For image layers
     std::shared_ptr<Image> img{nullptr};
@@ -42,11 +53,9 @@ struct Layer
     std::shared_ptr<Gif> gif{nullptr}; // Added for GIFs
     size_t gifFrameIndex{0};           // Track current frame for GIFs
 
-    // For text layers
-    std::string textContent;
-    ImU32 textColor = IM_COL32_WHITE;
-    float fontSize = 16.0f;
-    int layerNumber = 0; // Layer number for text layers
+    // For text layers - store minimal info for regeneration if needed
+    std::string textContent;             // Store text content for potential regeneration
+    int layerNumber = 0;                  // Layer number for text layers
     float x = 0.0f;
     float y = 0.0f;
 
@@ -101,7 +110,7 @@ struct Layer
     // Helper: get textureId (delegates to image/gif if present)
     inline unsigned int getTextureId() const
     {
-        if (type == LayerType::Image && img)
+        if ((type == LayerType::Image || type == LayerType::Text) && img)
         {
             return img->info.textureId;
         }
@@ -114,7 +123,7 @@ struct Layer
 
     inline size_t getSize() const
     {
-        if (type == LayerType::Image && img)
+        if ((type == LayerType::Image || type == LayerType::Text) && img)
         {
             return img->size();
         }
@@ -135,6 +144,11 @@ struct Layer
         {
             return gif->frames()[0]->info.width;
         }
+        if (type == LayerType::Text && img)
+        {
+            // Text layers store their rendered image in img
+            return img->info.width;
+        }
         return 0;
     }
 
@@ -148,6 +162,11 @@ struct Layer
         {
             return gif->frames()[0]->info.height;
         }
+        if (type == LayerType::Text && img)
+        {
+            // Text layers store their rendered image in img
+            return img->info.height;
+        }
         return 0;
     }
     inline ImageFormat getFormat() const
@@ -160,8 +179,29 @@ struct Layer
         {
             return gif->frames()[0]->info.format;
         }
+        if (type == LayerType::Text && img)
+        {
+            // Text layers store their rendered image in img
+            return img->info.format;
+        }
         return ImageFormat::UNKNOWN;
     }
+    
+    // Factory method: Create a text image using text_draw.h
+    static std::shared_ptr<Image> createTextImage(
+        const std::string& text,
+        ImU32 textColor = IM_COL32_WHITE,
+        int textScale = 1,
+        bool useBackground = false,
+        ImU32 backgroundColor = IM_COL32_BLACK,
+        bool centerText = false,
+        bool multilineText = false,
+        int textHAlignment = 1,     // 0=LEFT, 1=CENTER, 2=RIGHT
+        int textVAlignment = 1,     // 0=TOP, 1=MIDDLE, 2=BOTTOM
+        int textPadding = 2,
+        int boundingWidth = 0,      // 0 = auto-size
+        int boundingHeight = 0      // 0 = auto-size
+    );
 };
 // Initialize static member
 inline size_t Layer::next_id = 0;
@@ -180,7 +220,7 @@ class LayerManager
     const std::vector<Layer>& getLayers() const;
     Layer* getLayerByNumber(int layerNumber);
     Layer* getLayerByName(const std::string& layerName);
-    Layer* getBaseLayer();
+    Layer* getLayerByCameraDevicePath(const std::string& devicePath);
     void sortLayers(); // Sort by layer number ascending
 
     // Overlay cache

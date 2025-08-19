@@ -263,6 +263,12 @@ void WFLWTestBase::saveDetectionVisualization(const WFLWExample& example,
         return;
     }
 
+    // Only save images if SAVE_IMAGES environment variable is set
+    if (!TestUtils::getEnvVarBool("SAVE_IMAGES"))
+    {
+        return;
+    }
+
     auto viz_image = example.image->deepCopy();
 
     // Draw detected landmarks in red
@@ -306,6 +312,12 @@ void WFLWTestBase::saveDetectionVisualizationWithFaceInfo(const WFLWExample& exa
                                                           int total_faces) const
 {
     if (!example.image)
+    {
+        return;
+    }
+
+    // Only save images if SAVE_IMAGES environment variable is set
+    if (!TestUtils::getEnvVarBool("SAVE_IMAGES"))
     {
         return;
     }

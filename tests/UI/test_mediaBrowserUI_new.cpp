@@ -181,8 +181,8 @@ TEST_F(LayerIntegrationTest, TextLayerHandling)
     textLayer.type = LayerType::Text;
     textLayer.name = "text_test";
     textLayer.textContent = "Hello, World!";
-    textLayer.fontSize = 24.0f;
-    textLayer.textColor = IM_COL32(255, 0, 0, 255); // Red
+    // Create text image using the new implementation
+    textLayer.img = Layer::createTextImage("Hello, World!", IM_COL32(255, 0, 0, 255), 2);
     textLayer.x = 10.0f;
     textLayer.y = 20.0f;
     textLayer.selected = true;
@@ -195,8 +195,9 @@ TEST_F(LayerIntegrationTest, TextLayerHandling)
 
     EXPECT_EQ(layer.type, LayerType::Text);
     EXPECT_EQ(layer.textContent, "Hello, World!");
-    EXPECT_EQ(layer.fontSize, 24.0f);
-    EXPECT_EQ(layer.textColor, IM_COL32(255, 0, 0, 255));
+    EXPECT_NE(layer.img, nullptr); // Text image should be created
+    EXPECT_GT(layer.getWidth(), 0); // Should have dimensions
+    EXPECT_GT(layer.getHeight(), 0);
     EXPECT_EQ(layer.x, 10.0f);
     EXPECT_EQ(layer.y, 20.0f);
 }
@@ -236,7 +237,8 @@ TEST_F(LayerIntegrationTest, MultipleLayerTypes)
     textLayer.type = LayerType::Text;
     textLayer.name = "text_layer";
     textLayer.textContent = "Test Text";
-    textLayer.fontSize = 16.0f;
+    // Create text image using the new implementation
+    textLayer.img = Layer::createTextImage("Test Text");
     textLayer.selected = false;
     textLayer.id = 2;
 
@@ -317,7 +319,8 @@ TEST_F(LayerIntegrationTest, EmptyTextLayer)
     textLayer.type = LayerType::Text;
     textLayer.name = "empty_text";
     textLayer.textContent = ""; // Empty text
-    textLayer.fontSize = 16.0f;
+    // Empty text should result in null image
+    textLayer.img = Layer::createTextImage("");
     textLayer.selected = true;
     textLayer.id = 1;
 

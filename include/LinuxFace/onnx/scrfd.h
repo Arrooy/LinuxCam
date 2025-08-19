@@ -45,7 +45,7 @@ class SCRFDetector : public OnnxDetector
 
     // Configuration constants
     static constexpr const float nms_threshold_ = 0.45f;
-    static constexpr const float score_threshold = 0.1f;  // Lowered from 0.3f to 0.1f for better detection
+    static constexpr const float score_threshold = 0.2f;
     static constexpr const unsigned int max_faces_per_stride = 1000;
     static constexpr const unsigned int max_number_of_faces_ = 3000;
 

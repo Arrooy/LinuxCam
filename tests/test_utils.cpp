@@ -7,6 +7,7 @@
 #include "test_utils.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -45,6 +46,21 @@ int getEnvVarInt(const char* var_name, int default_value)
                   << ")" << std::endl;
         return default_value;
     }
+}
+
+bool getEnvVarBool(const char* var_name)
+{
+    const char* env_value = std::getenv(var_name);
+    if (env_value == nullptr)
+    {
+        return false;
+    }
+
+    std::string value(env_value);
+    // Convert to lowercase for case-insensitive comparison
+    std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+    
+    return value == "1" || value == "true" || value == "yes" || value == "on" || value == "enabled";
 }
 
 } // namespace TestUtils

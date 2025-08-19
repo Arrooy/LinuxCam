@@ -86,7 +86,8 @@ TEST_F(LayerManagerTest, AddMultipleLayers)
     textLayer.type = LayerType::Text;
     textLayer.name = "text_layer";
     textLayer.textContent = "Hello World";
-    textLayer.fontSize = 24.0f;
+    // Text layers now use createTextImage to generate their image representation
+    textLayer.img = Layer::createTextImage("Hello World");
 
     layerManager->addLayer(imageLayer);
     layerManager->addLayer(gifLayer);
@@ -207,45 +208,45 @@ TEST_F(LayerManagerTest, GetLayerByName)
     EXPECT_EQ(notFound, nullptr);
 }
 
-TEST_F(LayerManagerTest, GetBaseLayer)
+TEST_F(LayerManagerTest, GetLayerByCameraDevicePath)
 {
     Layer normalLayer;
     normalLayer.name = "normal";
-    normalLayer.isBaseLayer = false;
+    normalLayer.cameraDevicePath = "";
 
-    Layer baseLayer;
-    baseLayer.name = "base";
-    baseLayer.isBaseLayer = true;
+    Layer cameraLayer;
+    cameraLayer.name = "camera";
+    cameraLayer.cameraDevicePath = "/dev/video0";
 
-    Layer anotherLayer;
-    anotherLayer.name = "another";
-    anotherLayer.isBaseLayer = false;
+    Layer anotherCameraLayer;
+    anotherCameraLayer.name = "another_camera";
+    anotherCameraLayer.cameraDevicePath = "/dev/video1";
 
     layerManager->addLayer(normalLayer);
-    layerManager->addLayer(baseLayer);
-    layerManager->addLayer(anotherLayer);
+    layerManager->addLayer(cameraLayer);
+    layerManager->addLayer(anotherCameraLayer);
 
-    Layer* base = layerManager->getBaseLayer();
-    ASSERT_NE(base, nullptr);
-    EXPECT_EQ(base->name, "base");
-    EXPECT_TRUE(base->isBaseLayer);
+    Layer* camera = layerManager->getLayerByCameraDevicePath("/dev/video0");
+    ASSERT_NE(camera, nullptr);
+    EXPECT_EQ(camera->name, "camera");
+    EXPECT_EQ(camera->cameraDevicePath, "/dev/video0");
 }
 
-TEST_F(LayerManagerTest, GetBaseLayerWhenNoneExists)
+TEST_F(LayerManagerTest, GetLayerByCameraDevicePathWhenNoneExists)
 {
     Layer layer1;
     layer1.name = "layer1";
-    layer1.isBaseLayer = false;
+    layer1.cameraDevicePath = "/dev/video0";
 
     Layer layer2;
     layer2.name = "layer2";
-    layer2.isBaseLayer = false;
+    layer2.cameraDevicePath = "/dev/video1";
 
     layerManager->addLayer(layer1);
     layerManager->addLayer(layer2);
 
-    Layer* base = layerManager->getBaseLayer();
-    EXPECT_EQ(base, nullptr);
+    Layer* camera = layerManager->getLayerByCameraDevicePath("/dev/video2");
+    EXPECT_EQ(camera, nullptr);
 }
 
 TEST_F(LayerManagerTest, SortLayers)
@@ -464,8 +465,15 @@ TEST_F(LayerManagerTest, LayerGetTextureId)
 
     Layer textLayer;
     textLayer.type = LayerType::Text;
-
-    EXPECT_EQ(textLayer.getTextureId(), 0);
+    textLayer.textContent = "Test";
+    textLayer.img = Layer::createTextImage("Test");
+    
+    // Text layer can have texture ID from its generated image
+    EXPECT_EQ(textLayer.getTextureId(), 0); // Default before texture is created
+    
+    // Set texture ID and verify
+    textLayer.img->info.textureId = 789;
+    EXPECT_EQ(textLayer.getTextureId(), 789);
 }
 
 TEST_F(LayerManagerTest, LayerGetSize)
@@ -485,8 +493,11 @@ TEST_F(LayerManagerTest, LayerGetSize)
 
     Layer textLayer;
     textLayer.type = LayerType::Text;
+    textLayer.textContent = "Test";
+    textLayer.img = Layer::createTextImage("Test");
 
-    EXPECT_EQ(textLayer.getSize(), 0);
+    // Text layer now has size from its generated image
+    EXPECT_GT(textLayer.getSize(), 0);
 }
 
 TEST_F(LayerManagerTest, LayerGetDimensions)
@@ -508,9 +519,12 @@ TEST_F(LayerManagerTest, LayerGetDimensions)
 
     Layer textLayer;
     textLayer.type = LayerType::Text;
+    textLayer.textContent = "Test";
+    textLayer.img = Layer::createTextImage("Test");
 
-    EXPECT_EQ(textLayer.getWidth(), 0);
-    EXPECT_EQ(textLayer.getHeight(), 0);
+    // Text layer now has dimensions from its generated image
+    EXPECT_GT(textLayer.getWidth(), 0);
+    EXPECT_GT(textLayer.getHeight(), 0);
 }
 
 TEST_F(LayerManagerTest, LayerGetFormat)
@@ -530,8 +544,11 @@ TEST_F(LayerManagerTest, LayerGetFormat)
 
     Layer textLayer;
     textLayer.type = LayerType::Text;
+    textLayer.textContent = "Test";
+    textLayer.img = Layer::createTextImage("Test");
 
-    EXPECT_EQ(textLayer.getFormat(), ImageFormat::UNKNOWN);
+    // Text layer now has RGBA format from its generated image
+    EXPECT_EQ(textLayer.getFormat(), ImageFormat::RGBA);
 }
 
 // Test layer unique ID assignment
@@ -575,11 +592,249 @@ TEST_F(LayerManagerTest, EmptyLayerManager)
     EXPECT_FALSE(layerManager->isDirty());
     EXPECT_EQ(layerManager->getLayerByNumber(1), nullptr);
     EXPECT_EQ(layerManager->getLayerByName("test"), nullptr);
-    EXPECT_EQ(layerManager->getBaseLayer(), nullptr);
+    EXPECT_EQ(layerManager->getLayerByCameraDevicePath("/dev/video0"), nullptr);
 
     // These operations should not crash on empty manager
     layerManager->sortLayers();
     layerManager->markDirty();
     layerManager->invalidateTextures();
     layerManager->setLayerDirty(1, true);
+}
+
+// Test text layer creation and functionality
+TEST_F(LayerManagerTest, CreateTextImage)
+{
+    // Test basic text image creation
+    auto textImage = Layer::createTextImage("Hello World");
+    ASSERT_NE(textImage, nullptr);
+    EXPECT_GT(textImage->info.width, 0);
+    EXPECT_GT(textImage->info.height, 0);
+    EXPECT_EQ(textImage->info.format, ImageFormat::RGBA);
+    EXPECT_EQ(textImage->info.filename, "text_layer_Hello World");
+}
+
+TEST_F(LayerManagerTest, CreateTextImageWithScaling)
+{
+    // Test text with different scales
+    auto textImage1 = Layer::createTextImage("Test", IM_COL32_WHITE, 1);
+    auto textImage2 = Layer::createTextImage("Test", IM_COL32_WHITE, 2);
+    auto textImage3 = Layer::createTextImage("Test", IM_COL32_WHITE, 3);
+    
+    ASSERT_NE(textImage1, nullptr);
+    ASSERT_NE(textImage2, nullptr);
+    ASSERT_NE(textImage3, nullptr);
+    
+    // Larger scale should produce larger images
+    EXPECT_LT(textImage1->info.width, textImage2->info.width);
+    EXPECT_LT(textImage2->info.width, textImage3->info.width);
+    EXPECT_LT(textImage1->info.height, textImage2->info.height);
+    EXPECT_LT(textImage2->info.height, textImage3->info.height);
+}
+
+TEST_F(LayerManagerTest, CreateTextImageWithBackground)
+{
+    // Test text with background
+    auto textWithBg = Layer::createTextImage("Test", IM_COL32_WHITE, 1, true, IM_COL32_BLACK);
+    auto textWithoutBg = Layer::createTextImage("Test", IM_COL32_WHITE, 1, false);
+    
+    ASSERT_NE(textWithBg, nullptr);
+    ASSERT_NE(textWithoutBg, nullptr);
+    
+    // Background version should be larger due to padding
+    EXPECT_GE(textWithBg->info.width, textWithoutBg->info.width);
+    EXPECT_GE(textWithBg->info.height, textWithoutBg->info.height);
+}
+
+TEST_F(LayerManagerTest, CreateTextImageWithAlignment)
+{
+    // Test text with bounding rectangle and alignment
+    int boundingWidth = 200;
+    int boundingHeight = 100;
+    
+    auto centeredText = Layer::createTextImage("Test", IM_COL32_WHITE, 1, false, IM_COL32_BLACK, 
+                                              false, false, 1, 1, 2, boundingWidth, boundingHeight);
+    
+    ASSERT_NE(centeredText, nullptr);
+    EXPECT_EQ(centeredText->info.width, boundingWidth);
+    EXPECT_EQ(centeredText->info.height, boundingHeight);
+}
+
+TEST_F(LayerManagerTest, CreateTextImageMultiline)
+{
+    // Test multiline text
+    auto multilineText = Layer::createTextImage("Line1\nLine2\nLine3", IM_COL32_WHITE, 1, 
+                                               false, IM_COL32_BLACK, false, true);
+    auto singleLineText = Layer::createTextImage("Line1Line2Line3", IM_COL32_WHITE, 1);
+    
+    ASSERT_NE(multilineText, nullptr);
+    ASSERT_NE(singleLineText, nullptr);
+    
+    // Multiline should be taller
+    EXPECT_GT(multilineText->info.height, singleLineText->info.height);
+}
+
+TEST_F(LayerManagerTest, CreateTextImageEmptyString)
+{
+    // Test empty string handling
+    auto emptyText = Layer::createTextImage("");
+    EXPECT_EQ(emptyText, nullptr);
+}
+
+TEST_F(LayerManagerTest, TextLayerLifecycle)
+{
+    // Test complete text layer lifecycle
+    Layer textLayer;
+    textLayer.type = LayerType::Text;
+    textLayer.name = "test_text";
+    textLayer.textContent = "Hello LinuxCam";
+    textLayer.x = 50.0f;
+    textLayer.y = 100.0f;
+    
+    // Create the text image
+    textLayer.img = Layer::createTextImage(textLayer.textContent, IM_COL32(255, 255, 255, 255), 2);
+    
+    ASSERT_NE(textLayer.img, nullptr);
+    
+    // Add to layer manager
+    layerManager->addLayer(textLayer);
+    
+    EXPECT_EQ(layerManager->getLayers().size(), 1);
+    EXPECT_EQ(layerManager->getLayers()[0].type, LayerType::Text);
+    EXPECT_EQ(layerManager->getLayers()[0].textContent, "Hello LinuxCam");
+    EXPECT_EQ(layerManager->getLayers()[0].x, 50.0f);
+    EXPECT_EQ(layerManager->getLayers()[0].y, 100.0f);
+    
+    // Test layer dimensions from text image
+    EXPECT_GT(layerManager->getLayers()[0].getWidth(), 0);
+    EXPECT_GT(layerManager->getLayers()[0].getHeight(), 0);
+    EXPECT_EQ(layerManager->getLayers()[0].getFormat(), ImageFormat::RGBA);
+}
+
+TEST_F(LayerManagerTest, TextLayerGetters)
+{
+    Layer textLayer;
+    textLayer.type = LayerType::Text;
+    textLayer.textContent = "Test Text";
+    textLayer.img = Layer::createTextImage("Test Text", IM_COL32_WHITE, 1);
+    
+    // Test width and height getters work with text layers
+    EXPECT_GT(textLayer.getWidth(), 0);
+    EXPECT_GT(textLayer.getHeight(), 0);
+    EXPECT_EQ(textLayer.getFormat(), ImageFormat::RGBA);
+    EXPECT_EQ(textLayer.getLayerName(), "Test Text");
+    EXPECT_GT(textLayer.getSize(), 0);
+}
+
+TEST_F(LayerManagerTest, TextLayerWithCustomColors)
+{
+    // Test text with custom colors
+    ImU32 redColor = IM_COL32(255, 0, 0, 255);
+    ImU32 blueBackground = IM_COL32(0, 0, 255, 128);
+    
+    auto coloredText = Layer::createTextImage("Colored Text", redColor, 1, true, blueBackground);
+    
+    ASSERT_NE(coloredText, nullptr);
+    EXPECT_GT(coloredText->info.width, 0);
+    EXPECT_GT(coloredText->info.height, 0);
+    EXPECT_EQ(coloredText->info.format, ImageFormat::RGBA);
+}
+
+TEST_F(LayerManagerTest, TextLayerSorting)
+{
+    // Test text layers in sorting
+    Layer textLayer1;
+    textLayer1.type = LayerType::Text;
+    textLayer1.textContent = "Layer 1";
+    textLayer1.layerNumber = 3;
+    textLayer1.img = Layer::createTextImage("Layer 1");
+    
+    Layer textLayer2;
+    textLayer2.type = LayerType::Text;
+    textLayer2.textContent = "Layer 2";
+    textLayer2.layerNumber = 1;
+    textLayer2.img = Layer::createTextImage("Layer 2");
+    
+    Layer textLayer3;
+    textLayer3.type = LayerType::Text;
+    textLayer3.textContent = "Layer 3";
+    textLayer3.layerNumber = 2;
+    textLayer3.img = Layer::createTextImage("Layer 3");
+    
+    layerManager->addLayer(textLayer1);
+    layerManager->addLayer(textLayer2);
+    layerManager->addLayer(textLayer3);
+    
+    // Before sorting: 3, 1, 2
+    EXPECT_EQ(layerManager->getLayers()[0].getLayerNumber(), 3);
+    EXPECT_EQ(layerManager->getLayers()[1].getLayerNumber(), 1);
+    EXPECT_EQ(layerManager->getLayers()[2].getLayerNumber(), 2);
+    
+    layerManager->sortLayers();
+    
+    // After sorting: 1, 2, 3
+    EXPECT_EQ(layerManager->getLayers()[0].getLayerNumber(), 1);
+    EXPECT_EQ(layerManager->getLayers()[1].getLayerNumber(), 2);
+    EXPECT_EQ(layerManager->getLayers()[2].getLayerNumber(), 3);
+    
+    EXPECT_EQ(layerManager->getLayers()[0].textContent, "Layer 2");
+    EXPECT_EQ(layerManager->getLayers()[1].textContent, "Layer 3");
+    EXPECT_EQ(layerManager->getLayers()[2].textContent, "Layer 1");
+}
+
+TEST_F(LayerManagerTest, MixedLayerTypes)
+{
+    // Test managing mixed layer types (Image, Gif, Text)
+    Layer imageLayer;
+    imageLayer.type = LayerType::Image;
+    imageLayer.name = "image";
+    imageLayer.img = testImage;
+    
+    Layer gifLayer;
+    gifLayer.type = LayerType::Gif;
+    gifLayer.name = "gif";
+    gifLayer.gif = testGif;
+    
+    Layer textLayer;
+    textLayer.type = LayerType::Text;
+    textLayer.name = "text";
+    textLayer.textContent = "Mixed Layer Test";
+    textLayer.img = Layer::createTextImage("Mixed Layer Test");
+    
+    layerManager->addLayer(imageLayer);
+    layerManager->addLayer(gifLayer);
+    layerManager->addLayer(textLayer);
+    
+    EXPECT_EQ(layerManager->getLayers().size(), 3);
+    
+    // Find layers by name
+    Layer* foundImage = layerManager->getLayerByName("test_image.jpg");
+    Layer* foundText = layerManager->getLayerByName("Mixed Layer Test");
+    
+    ASSERT_NE(foundImage, nullptr);
+    ASSERT_NE(foundText, nullptr);
+    
+    EXPECT_EQ(foundImage->type, LayerType::Image);
+    EXPECT_EQ(foundText->type, LayerType::Text);
+}
+
+TEST_F(LayerManagerTest, TextLayerDirtyState)
+{
+    Layer textLayer;
+    textLayer.type = LayerType::Text;
+    textLayer.textContent = "Dirty Test";
+    textLayer.img = Layer::createTextImage("Dirty Test");
+    textLayer.dirty = false;
+    
+    layerManager->addLayer(textLayer);
+    
+    EXPECT_FALSE(layerManager->isDirty());
+    
+    // Mark text layer as dirty
+    layerManager->getLayers()[0].dirty = true;
+    
+    EXPECT_TRUE(layerManager->isDirty());
+    
+    // Test invalidateTextures with text layers
+    layerManager->invalidateTextures();
+    EXPECT_TRUE(layerManager->getLayers()[0].dirty);
 }

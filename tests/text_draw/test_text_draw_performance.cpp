@@ -161,7 +161,7 @@ TEST_F(TextDrawPerformanceTest, FillBlockPerformance)
     for (int size : block_sizes)
     {
         double avg_time =
-            measureExecutionTime([&]() { fillBlockWithDDA(*medium_image, 100, 100, size, white_color); }, iterations);
+            measureExecutionTime([&]() { medium_image->fillRect(100, 100, size, size, white_color); }, iterations);
 
         std::cout << "Fill block size " << size << "x" << size << ": " << avg_time << " μs average" << std::endl;
 

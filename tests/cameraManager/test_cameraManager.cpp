@@ -151,14 +151,13 @@ TEST_F(CameraManagerTest, EmptyImageUpdate)
 {
     std::unique_ptr<Image> nullImage = nullptr;
 
-    // Test that null image updates are handled gracefully
-    // These methods should not crash with null images
-    bool inputResult = manager_->updateInput(nullImage);
+    // Test that updateInput works without cameras (should not crash)
+    bool inputResult = manager_->updateInput();
     bool outputResult = manager_->updateOutput(nullImage);
 
-    // The exact return value depends on implementation, but it shouldn't crash
-    // Since we don't have any cameras added, both should probably return false
-    EXPECT_FALSE(inputResult);
+    // Since we don't have any cameras added, input should succeed (no work to do)
+    // but output should fail (no image to output)
+    EXPECT_TRUE(inputResult);
     EXPECT_FALSE(outputResult);
 }
 

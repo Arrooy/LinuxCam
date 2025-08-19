@@ -82,13 +82,13 @@ TEST_F(TextDrawEdgeCasesTest, DrawTextPartiallyOutOfBounds)
 TEST_F(TextDrawEdgeCasesTest, FillBlockOutOfBounds)
 {
     // Fill block completely out of bounds
-    EXPECT_NO_THROW(fillBlockWithDDA(*small_image, 100, 100, 5, white_color));
+    EXPECT_NO_THROW(small_image->fillRect(100, 100, 5, 5, white_color));
 
     // Fill block at negative coordinates
-    EXPECT_NO_THROW(fillBlockWithDDA(*small_image, -10, -10, 5, white_color));
+    EXPECT_NO_THROW(small_image->fillRect(-10, -10, 5, 5, white_color));
 
     // Fill block partially out of bounds
-    EXPECT_NO_THROW(fillBlockWithDDA(*small_image, 8, 8, 5, white_color));
+    EXPECT_NO_THROW(small_image->fillRect(8, 8, 5, 5, white_color));
 }
 
 // ===== Large Scale Value Tests =====
@@ -153,7 +153,7 @@ TEST_F(TextDrawEdgeCasesTest, VerySmallImage)
 
     EXPECT_NO_THROW(drawText(*tiny_image, 0, 0, "A", white_color, 1, false));
     EXPECT_NO_THROW(drawCharDDA(*tiny_image, 0, 0, 'X', white_color, 1));
-    EXPECT_NO_THROW(fillBlockWithDDA(*tiny_image, 0, 0, 1, white_color));
+    EXPECT_NO_THROW(tiny_image->fillRect(0, 0, 1, 1, white_color));
 }
 
 TEST_F(TextDrawEdgeCasesTest, ZeroDimensionHandling)
@@ -162,7 +162,7 @@ TEST_F(TextDrawEdgeCasesTest, ZeroDimensionHandling)
     // Note: Image constructor might have its own validation
 
     // Test text operations that should handle zero dimensions gracefully
-    EXPECT_NO_THROW(fillBlockWithDDA(*standard_image, 10, 10, 0, white_color));
+    EXPECT_NO_THROW(standard_image->fillRect(10, 10, 0, 0, white_color));
 
     TextSize zero_size = getTextSize("", 1);
     EXPECT_EQ(zero_size.width, 0);
@@ -278,7 +278,7 @@ TEST_F(TextDrawEdgeCasesTest, CoordinateOverflow)
     int large_coord = std::numeric_limits<int>::max() / 2;
 
     EXPECT_NO_THROW(drawText(*standard_image, large_coord, large_coord, "Test", white_color, 1, false));
-    EXPECT_NO_THROW(fillBlockWithDDA(*standard_image, large_coord, large_coord, 1, white_color));
+    EXPECT_NO_THROW(standard_image->fillRect(large_coord, large_coord, 1, 1, white_color));
 }
 
 TEST_F(TextDrawEdgeCasesTest, CoordinateUnderflow)
@@ -287,7 +287,7 @@ TEST_F(TextDrawEdgeCasesTest, CoordinateUnderflow)
     int small_coord = std::numeric_limits<int>::min() / 2;
 
     EXPECT_NO_THROW(drawText(*standard_image, small_coord, small_coord, "Test", white_color, 1, false));
-    EXPECT_NO_THROW(fillBlockWithDDA(*standard_image, small_coord, small_coord, 1, white_color));
+    EXPECT_NO_THROW(standard_image->fillRect(small_coord, small_coord, 1, 1, white_color));
 }
 
 // ===== Stress Tests =====
@@ -304,7 +304,7 @@ TEST_F(TextDrawEdgeCasesTest, MixedOperationsStress)
 
         EXPECT_NO_THROW({
             drawCharDDA(*standard_image, x, y, c, white_color, scale);
-            fillBlockWithDDA(*standard_image, x + 10, y + 10, scale, red_color);
+            standard_image->fillRect(x + 10, y + 10, scale, scale, red_color);
 
             std::string text = "T" + std::to_string(i % 10);
             drawText(*standard_image, x, y + 20, text, white_color, scale, i % 2 == 0);

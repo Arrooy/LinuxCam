@@ -123,6 +123,7 @@ bool Application::initialize()
     window_.pollEvents();
 
     cameraManager_ = std::make_shared<CameraManager>();
+    cameraManager_->setLayerManager(layerManager_);
 
     auto webcams = Config::getInstance().getWebcams();
     for (const auto& wc : webcams)
@@ -271,80 +272,52 @@ bool Application::update()
     // Poll events
     window_.pollEvents();
 
-    std::unique_ptr<Image> image;
-    auto image_ready = cameraManager_->updateInput(image);
-    if (image_ready)
+    // Update camera inputs - this now creates/updates individual layers per camera
+    cameraManager_->updateInput();
+
+    // Composite all layers for output (if we have output cameras)
+    auto& layers = layerManager_->getLayers();
+    if (!layers.empty())
     {
-        image->info.filename = std::string("WebcamStream-") + std::to_string(image->info.width) + "x"
-                               + std::to_string(image->info.height) + ".jpg";
+        // Find a base layer to start compositing (use first layer as base)
+        std::unique_ptr<Image> compositeImage = nullptr;
 
-        process(image);
-
-        // Update or create the base layer after processing
-        Layer* baseLayer = layerManager_->getBaseLayer();
-        if (baseLayer != nullptr && baseLayer->type == LayerType::Image)
+        for (auto& layer : layers)
         {
-            // Update the image in the base layer
-            baseLayer->img = std::move(image);
-        }
-        else
-        {
-            // Create the base layer if it doesn't exist
-            Layer newBaseLayer;
-            newBaseLayer.id = Layer::next_id++;
-            newBaseLayer.type = LayerType::Image;
-            newBaseLayer.name = "base";
-            newBaseLayer.isBaseLayer = true;
-            newBaseLayer.selected = true;
-            newBaseLayer.img = std::move(image);
-            newBaseLayer.dirty = true;
-            if (newBaseLayer.img)
+            if (layer.type == LayerType::Image && layer.img)
             {
-                newBaseLayer.img->info.layer = 0;
-            }
-            layerManager_->addLayer(newBaseLayer);
-        }
-        // Output the current base image if available
-        if (baseLayer != nullptr && baseLayer->img)
-        {
-            // Make a deep copy for output as unique_ptr
-            std::unique_ptr<Image> tempImage = baseLayer->img->deepCopy();
-
-            auto& layers = layerManager_->getLayers();
-            for (auto& layer : layers)
-            {
-                if (layer.isBaseLayer)
+                if (!compositeImage)
                 {
-                    // Skip the base layer itself
-                    continue;
+                    // Use first layer as base
+                    compositeImage = layer.img->deepCopy();
                 }
-                if (layer.type == LayerType::Image && layer.img)
+                else
                 {
-                    // Paste each layer image onto the base image at the layer's position
-                    tempImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
-                }
-                else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
-                {
-                    // Paste the current GIF frame onto the base image at the layer's position
-                    auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-                    tempImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
+                    // Paste other layers onto the composite
+                    compositeImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
                 }
             }
-            if (!cameraManager_->updateOutput(tempImage))
+            else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
+            {
+                auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
+                if (!compositeImage)
+                {
+                    compositeImage = frame->deepCopy();
+                }
+                else
+                {
+                    compositeImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
+                }
+            }
+        }
+
+        // Send composite to output cameras
+        if (compositeImage)
+        {
+            if (!cameraManager_->updateOutput(compositeImage))
             {
                 linuxface::common::log_error("Failed to update output cameras");
             }
-        }
-        static bool saving = false;
-        // Check for space key press to capture and save webcam image
-        if (window_.isKeyPressed(GLFW_KEY_SPACE) && !saving)
-        {
-            saving = true;
-            captureAndSaveWebcamImageWithTimestamp();
-        }
-        else
-        {
-            saving = false;
         }
     }
     ui_->handleKeyboard();
@@ -702,48 +675,6 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
 void Application::shutdown()
 {
     // UI and Window destructors will handle cleanup automatically
-}
-
-// Capture an image from webcam, process it, and save both raw and processed images with timestamp
-void Application::captureAndSaveWebcamImageWithTimestamp()
-{
-    std::unique_ptr<Image> image;
-    if (!cameraManager_->updateInput(image) || !image)
-    {
-        linuxface::common::log_error("Failed to capture image from webcam");
-        return;
-    }
-
-    // Get timestamp (seconds since epoch, as integer)
-    auto now = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    // Use the raw time_t value for filename (no formatting)
-    std::string timestamp = std::to_string(static_cast<long long>(now_time_t));
-
-    // Save raw image as PPM
-    std::string raw_filename = std::string("webcam_raw_") + timestamp + ".ppm";
-    if (!image->saveToDisk(raw_filename))
-    {
-        linuxface::common::log_error("Failed to save raw webcam image to %s", raw_filename.c_str());
-    }
-    else
-    {
-        linuxface::common::log_info("Saved raw webcam image: %s", raw_filename.c_str());
-    }
-
-    // Process image (in-place)
-    process(image);
-
-    // Save processed image as PPM
-    std::string processed_filename = std::string("webcam_processed_") + timestamp + ".ppm";
-    if (!image->saveToDisk(processed_filename))
-    {
-        linuxface::common::log_error("Failed to save processed webcam image to %s", processed_filename.c_str());
-    }
-    else
-    {
-        linuxface::common::log_info("Saved processed webcam image: %s", processed_filename.c_str());
-    }
 }
 
 linuxface::math_utils::Point<double>

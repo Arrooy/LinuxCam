@@ -46,6 +46,9 @@ class ImageRenderGL
 
     // Get or create a cached OpenGL texture for an image
     GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
+    
+    // Generate texture from text layer using text_draw.h
+    std::shared_ptr<Image> generateTextImage(const Layer& textLayer);
     // Shader creation helpers
     bool createShaders();
     GLuint compileShader(const char* source, GLenum type);

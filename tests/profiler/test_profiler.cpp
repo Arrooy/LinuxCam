@@ -80,7 +80,7 @@ TEST_F(ProfilerTest, NonExistentTimer)
 TEST_F(ProfilerTest, GetDurations)
 {
     Profiler& profiler = Profiler::getInstance();
-
+    // TODO: This fails if we execute gtests in parallel.
     profiler.start("TestSource", "Timer1");
     std::this_thread::sleep_for(std::chrono::microseconds(10));
     profiler.stop("TestSource", "Timer1");

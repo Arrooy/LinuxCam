@@ -16,6 +16,7 @@
 
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_draw.h"
+#include "../test_utils.h"
 
 using namespace linuxface;
 
@@ -43,8 +44,8 @@ class TextDrawVisualValidationTest : public ::testing::Test
 
     void TearDown() override
     {
-        // Optionally save the final test image
-        if (test_image)
+        // Optionally save the final test image if SAVE_IMAGES is set
+        if (test_image && TestUtils::getEnvVarBool("SAVE_IMAGES"))
         {
             std::string output_dir = createTestOutputDirectory();
             std::string filename = "text_draw_visual_test_final.ppm";
@@ -87,6 +88,12 @@ class TextDrawVisualValidationTest : public ::testing::Test
     // Helper to save test images with unique names
     void saveTestImage(const std::string& test_name)
     {
+        // Only save images if SAVE_IMAGES environment variable is set
+        if (!TestUtils::getEnvVarBool("SAVE_IMAGES"))
+        {
+            return;
+        }
+
         std::string output_dir = createTestOutputDirectory();
         std::string filename = "text_draw_visual_" + test_name + "_" + std::to_string(test_counter++) + ".ppm";
 

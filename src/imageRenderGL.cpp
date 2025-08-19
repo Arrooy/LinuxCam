@@ -195,19 +195,47 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
         }
         else if (layer.type == LayerType::Text)
         {
-            float text_padding = 5.0f; // Padding for selection rectangle
-            float pad = text_padding + rect_thickness * 0.5f;
-            ImFont* font = ImGui::GetFont();
-            ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-            // Draw text at the intended position
-            ImVec2 text_pos = ImVec2(layer.x, layer.y);
-            draw_list->AddText(font, layer.fontSize, text_pos, layer.textColor, layer.textContent.c_str());
-            ImVec2 textSize = font->CalcTextSizeA(layer.fontSize, FLT_MAX, 0.0f, layer.textContent.c_str());
-            // Rectangle centered around the text
-            p_min = ImVec2(layer.x - pad, layer.y - pad);
-            p_max = ImVec2(layer.x + textSize.x + pad, layer.y + textSize.y + pad);
-            has_rect = true;
+            // Text layers now store their rendered image in the img field
+            if (layer.img)
+            {
+                auto renderImg = layer.img.get();
+                GLuint texId = getOrCreateTexture(*renderImg, layer.id, layer.dirty);
+                if (layer.dirty)
+                {
+                    layer.dirty = false;
+                }
+                if (texId)
+                {
+                    std::string key = std::to_string(layer.id);
+                    auto& entry = textureCache_[key];
+                    if (entry.texId != texId)
+                    {
+                        common::log_error("Texture ID mismatch for text layer %s: expected %u, got %u", key.c_str(), 
+                                         entry.texId, texId);
+                        continue;
+                    }
+                    bool needRecreate = (entry.vao == 0 || entry.vbo == 0 || entry.ebo == 0
+                                         || static_cast<size_t>(entry.width) != renderImg->info.width
+                                         || static_cast<size_t>(entry.height) != renderImg->info.height);
+                    if (needRecreate)
+                    {
+                        setupQuadBuffers(entry, static_cast<float>(layer.x), static_cast<float>(layer.y),
+                                         static_cast<float>(renderImg->info.width),
+                                         static_cast<float>(renderImg->info.height), windowWidth, windowHeight);
+                    }
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, texId);
+                    glBindVertexArray(entry.vao);
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                    glBindVertexArray(0);
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                    p_min = ImVec2(layer.x, layer.y);
+                    p_max = ImVec2(layer.x + renderImg->info.width, layer.y + renderImg->info.height);
+                    has_rect = true;
+                }
+            }
         }
+        
         // Draw green rectangle if selected (for both image and text)
         if (layer.selected && has_rect)
         {

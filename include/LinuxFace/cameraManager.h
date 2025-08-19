@@ -15,6 +15,12 @@
 #include "LinuxFace/v4l2loopbackWritter.h"
 #include "LinuxFace/webcam.h"
 
+// Forward declaration to avoid circular dependency
+namespace linuxface
+{
+class LayerManager;
+}
+
 namespace linuxface
 {
 
@@ -24,12 +30,13 @@ class CameraManager
     CameraManager();
     ~CameraManager();
 
+    void setLayerManager(std::shared_ptr<LayerManager> layerManager);
 
     bool addCamera(std::shared_ptr<Webcam> camera);
     bool removeCamera(std::shared_ptr<Webcam> camera);
     bool updateCamera(std::shared_ptr<Webcam> camera);
 
-    bool updateInput(std::unique_ptr<Image>& image);
+    bool updateInput();
     bool updateOutput(std::unique_ptr<Image>& outputImage);
     std::vector<std::shared_ptr<Webcam>> getWebcams() const;
 
@@ -38,9 +45,10 @@ class CameraManager
     std::vector<std::string> discoverAvailableVideoDevices();
   private:
     bool isDeviceUsable(const std::string& devicePath);
-    bool processCameraInput(std::unique_ptr<Image>& outputImage, std::unique_ptr<Image>& newFrame);
+    void updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::unique_ptr<Image> newFrame);
     std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
     std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
+    std::shared_ptr<LayerManager> layerManager_;
     // std::unordered_map<int, int> connections_;
 };
 

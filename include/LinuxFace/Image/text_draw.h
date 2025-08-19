@@ -159,18 +159,45 @@ inline TextSize getTextSize(const std::string& text, int scale = 1)
     return {static_cast<int>(text.size()) * 8 * scale, 8 * scale};
 }
 
-// Draw a single scaled pixel block using DDA to fill
-inline void fillBlockWithDDA(Image& img, int x1, int y1, int size, const Pixel& color)
+// Compute text dimensions for multiline text with proper line spacing
+inline TextSize getMultilineTextSize(const std::string& text, int scale = 1, int lineSpacing = 2)
 {
-    for (int dy = 0; dy < size; dy++)
+    if (text.empty() || scale <= 0)
     {
-        auto line = math_utils::DDA<long>(x1, y1 + dy, x1 + size - 1, y1 + dy);
-        img.paintPoints(line, color);
+        return {0, 0};
     }
+
+    std::vector<std::string> lines;
+    std::stringstream ss(text);
+    std::string line;
+    
+    // Split by newlines
+    while (std::getline(ss, line, '\n'))
+    {
+        lines.push_back(line);
+    }
+    
+    if (lines.empty())
+    {
+        return {0, 0};
+    }
+    
+    // Find the longest line for width
+    size_t maxLineLength = 0;
+    for (const auto& textLine : lines)
+    {
+        maxLineLength = std::max(maxLineLength, textLine.length());
+    }
+    
+    // Calculate dimensions
+    int lineHeight = 8 * scale + lineSpacing;
+    int width = static_cast<int>(maxLineLength) * 8 * scale;
+    int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing; // Remove last spacing
+    
+    return {width, height};
 }
 
-
-// Draw a single character scaled by `scale` using DDA
+// Draw a single character scaled by `scale` - optimized with fillRect
 inline void drawCharDDA(Image& img, int x, int y, char c, const Pixel& color, int scale = 1)
 {
     if (c < 0 || c > 127)
@@ -185,7 +212,7 @@ inline void drawCharDDA(Image& img, int x, int y, char c, const Pixel& color, in
         {
             if (bits & (1 << col))
             {
-                fillBlockWithDDA(img, x + col * scale, y + row * scale, scale, color);
+                img.fillRect(x + col * scale, y + row * scale, scale, scale, color);
             }
         }
     }

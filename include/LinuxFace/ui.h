@@ -82,6 +82,9 @@ class UI
 
     // Handle dragging of selected layer (image or text)
     void handleLayerDragging();
+    
+    // Helper function to find the topmost layer under mouse position
+    Layer* findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& mousePos);
 
   private:
     bool ready_{false};

@@ -9,6 +9,7 @@
  */
 
 #include "wflw_test_base.h"
+#include "../../test_utils.h"
 
 #include <fstream>
 #include <sstream>
@@ -271,18 +272,21 @@ class FailureAnalysisTest : public WFLWTestBase
             text_y += 20;
         }
 
-        // Save debug visualization
-        std::string output_dir = createTestOutputDirectory("failure_analysis");
-        std::string debug_filename =
-            "failure_debug_idx" + std::to_string(failure_case.image_index) + "_" + failure_case.failure_type + ".ppm";
-        
-        // Combine with output directory
-        if (!output_dir.empty())
+        // Save debug visualization if SAVE_IMAGES is set
+        if (TestUtils::getEnvVarBool("SAVE_IMAGES"))
         {
-            debug_filename = output_dir + "/" + debug_filename;
+            std::string output_dir = createTestOutputDirectory("failure_analysis");
+            std::string debug_filename =
+                "failure_debug_idx" + std::to_string(failure_case.image_index) + "_" + failure_case.failure_type + ".ppm";
+            
+            // Combine with output directory
+            if (!output_dir.empty())
+            {
+                debug_filename = output_dir + "/" + debug_filename;
+            }
+            
+            debug_image->saveToDisk(debug_filename);
         }
-        
-        debug_image->saveToDisk(debug_filename);
     }
 };
 

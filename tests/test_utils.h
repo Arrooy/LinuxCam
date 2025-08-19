@@ -31,4 +31,11 @@ int getMaxFacesPerImage();
  */
 int getEnvVarInt(const char* var_name, int default_value);
 
+/**
+ * Check if environment variable is set to a truthy value
+ * @param var_name Environment variable name
+ * @return true if env var is set to "1", "true", "yes", "on", "enabled" (case-insensitive)
+ */
+bool getEnvVarBool(const char* var_name);
+
 } // namespace TestUtils
