@@ -232,12 +232,8 @@ inline void drawTextWithBackground(Image& img, int x, int y, const std::string& 
     int bgWidth = ts.width + 2 * padding;
     int bgHeight = ts.height + 2 * padding;
 
-    // Fill background using DDA lines
-    for (int row = 0; row < bgHeight; row++)
-    {
-        auto line = math_utils::DDA<long>(bgX, bgY + row, bgX + bgWidth - 1, bgY + row);
-        img.paintPoints(line, bgColor);
-    }
+    // Fill background using optimized rectangle fill
+    img.fillRect(bgX, bgY, bgWidth, bgHeight, bgColor);
 
     // Draw text on top
     drawText(img, drawX, drawY, text, textColor, scale, false);

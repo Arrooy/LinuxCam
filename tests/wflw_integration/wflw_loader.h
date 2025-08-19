@@ -43,6 +43,9 @@ class WFLWLoader
 {
   public:
     WFLWLoader(const std::string& data_file_path, const int max_samples = -1);
+    
+    // Constructor that loads only challenging condition examples (any non-normal attribute)
+    WFLWLoader(const std::string& data_file_path, bool load_challenging_only, const int max_samples = -1);
 
     bool load_example(int index, WFLWExample& example) const;
     int get_num_examples() const { return examples_.size(); }
@@ -55,6 +58,10 @@ class WFLWLoader
 
   private:
     std::vector<WFLWExample> examples_;
+    
+    // Shared implementation for both constructors
+    void load_examples_from_file(const std::string& data_file_path, bool load_challenging_only, const int max_samples);
+    
     static bool parse_line(const std::string& line, WFLWExample& example);
 };
 

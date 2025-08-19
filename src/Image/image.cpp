@@ -737,6 +737,125 @@ void Image::paintPoints(const std::vector<math_utils::Point<>>& points, const Pi
     }
 }
 
+void Image::fillRect(int x, int y, int width, int height, const Pixel& color)
+{
+    // Bounds checking and clipping
+    if (x >= static_cast<int>(info.width) || y >= static_cast<int>(info.height) || width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    // Clip rectangle to image bounds
+    int x1 = std::max(0, x);
+    int y1 = std::max(0, y);
+    int x2 = std::min(static_cast<int>(info.width), x + width);
+    int y2 = std::min(static_cast<int>(info.height), y + height);
+    
+    int clippedWidth = x2 - x1;
+    int clippedHeight = y2 - y1;
+    
+    if (clippedWidth <= 0 || clippedHeight <= 0)
+    {
+        return;
+    }
+
+    const int bytesPerPixel = info.pixelSizeBytes;
+    
+    // Only optimize for RGB and RGBA formats
+    if (info.format != ImageFormat::RGB && info.format != ImageFormat::RGBA)
+    {
+        // Fallback to individual pixel setting for unsupported formats
+        for (int row = y1; row < y2; ++row)
+        {
+            for (int col = x1; col < x2; ++col)
+            {
+                ppx(col, row, color);
+            }
+        }
+        return;
+    }
+
+    // Fast fill using block-based approach
+    const int rowBytes = clippedWidth * bytesPerPixel;
+    
+    // Allocate row buffer
+    auto rowBuffer = std::make_unique<unsigned char[]>(rowBytes);
+    
+    if (bytesPerPixel == 3) // RGB
+    {
+        // Prepare a 4-pixel (12-byte) block for RGB
+        unsigned char block[12];
+        for (int i = 0; i < 4; i++)
+        {
+            block[i*3 + 0] = color.r;
+            block[i*3 + 1] = color.g;
+            block[i*3 + 2] = color.b;
+        }
+        
+        // Fill the row buffer with unrolled copies of the 12-byte block
+        int nBlocks = clippedWidth / 4;    // full 4-pixel blocks
+        int rem = clippedWidth % 4;        // leftover pixels
+        
+        unsigned char* ptr = rowBuffer.get();
+        
+        // Copy full 4-pixel blocks
+        for (int i = 0; i < nBlocks; i++)
+        {
+            std::memcpy(ptr, block, 12);
+            ptr += 12;
+        }
+        
+        // Handle leftover pixels
+        for (int i = 0; i < rem; i++)
+        {
+            *ptr++ = color.r;
+            *ptr++ = color.g;
+            *ptr++ = color.b;
+        }
+    }
+    else if (bytesPerPixel == 4) // RGBA
+    {
+        // Prepare a 4-pixel (16-byte) block for RGBA
+        unsigned char block[16];
+        for (int i = 0; i < 4; i++)
+        {
+            block[i*4 + 0] = color.r;
+            block[i*4 + 1] = color.g;
+            block[i*4 + 2] = color.b;
+            block[i*4 + 3] = color.a;
+        }
+        
+        // Fill the row buffer with unrolled copies of the 16-byte block
+        int nBlocks = clippedWidth / 4;    // full 4-pixel blocks
+        int rem = clippedWidth % 4;        // leftover pixels
+        
+        unsigned char* ptr = rowBuffer.get();
+        
+        // Copy full 4-pixel blocks
+        for (int i = 0; i < nBlocks; i++)
+        {
+            std::memcpy(ptr, block, 16);
+            ptr += 16;
+        }
+        
+        // Handle leftover pixels
+        for (int i = 0; i < rem; i++)
+        {
+            *ptr++ = color.r;
+            *ptr++ = color.g;
+            *ptr++ = color.b;
+            *ptr++ = color.a;
+        }
+    }
+    
+    // Copy row buffer to each image row efficiently
+    for (int row = y1; row < y2; ++row)
+    {
+        unsigned char* dest = data() + (row * info.width + x1) * bytesPerPixel;
+        std::memcpy(dest, rowBuffer.get(), rowBytes);
+    }
+}
+
 void Image::drawBorder(const Pixel& color, int thickness)
 {
     // Draw a border around the image

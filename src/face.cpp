@@ -376,8 +376,8 @@ Face::findBestMatchingFace(std::vector<Face>& detected_faces, const math_utils::
 
         // Convert to double precision for IoU calculation
         math_utils::Rect<double> detected_bbox_double(
-            static_cast<double>(detected_bbox_rect.x()), static_cast<double>(detected_bbox_rect.y()),
-            static_cast<double>(detected_bbox_rect.width()), static_cast<double>(detected_bbox_rect.height()));
+            static_cast<double>(detected_bbox_rect.l), static_cast<double>(detected_bbox_rect.t),
+            static_cast<double>(detected_bbox_rect.r), static_cast<double>(detected_bbox_rect.b));
 
         // Calculate IoU between ground truth and detected face
         double iou = math_utils::calculateIoU(ground_truth_bbox, detected_bbox_double);

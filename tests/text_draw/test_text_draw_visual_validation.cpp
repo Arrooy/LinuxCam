@@ -9,10 +9,10 @@
  * - Visual regression testing
  */
 
+#include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
-#include <filesystem>
 
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_draw.h"
@@ -48,13 +48,13 @@ class TextDrawVisualValidationTest : public ::testing::Test
         {
             std::string output_dir = createTestOutputDirectory();
             std::string filename = "text_draw_visual_test_final.ppm";
-            
+
             // Combine with output directory
             if (!output_dir.empty())
             {
                 filename = output_dir + "/" + filename;
             }
-            
+
             test_image->saveToDisk(filename);
         }
     }
@@ -70,7 +70,7 @@ class TextDrawVisualValidationTest : public ::testing::Test
         std::filesystem::path output_dir = "testing";
         output_dir /= "text_draw";
         output_dir /= "visual_validation";
-        
+
         try
         {
             std::filesystem::create_directories(output_dir);
@@ -80,7 +80,7 @@ class TextDrawVisualValidationTest : public ::testing::Test
             std::cerr << "Failed to create output directory " << output_dir << ": " << e.what() << std::endl;
             return "";
         }
-        
+
         return output_dir.string();
     }
 
@@ -89,13 +89,13 @@ class TextDrawVisualValidationTest : public ::testing::Test
     {
         std::string output_dir = createTestOutputDirectory();
         std::string filename = "text_draw_visual_" + test_name + "_" + std::to_string(test_counter++) + ".ppm";
-        
+
         // Combine with output directory
         if (!output_dir.empty())
         {
             filename = output_dir + "/" + filename;
         }
-        
+
         test_image->saveToDisk(filename);
         std::cout << "Saved visual test image: " << filename << std::endl;
     }

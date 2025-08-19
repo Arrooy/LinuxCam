@@ -1,6 +1,6 @@
 #include "wflw_loader.h"
+#include "../test_utils.h"
 
-#include <cstdlib>
 #include "LinuxFace/common.h"
 #include "config.hpp"
 
@@ -8,6 +8,16 @@ namespace linuxface::test
 {
 
 WFLWLoader::WFLWLoader(const std::string& data_file_path, const int max_samples)
+{
+    load_examples_from_file(data_file_path, false, max_samples);
+}
+
+WFLWLoader::WFLWLoader(const std::string& data_file_path, bool load_challenging_only, const int max_samples)
+{
+    load_examples_from_file(data_file_path, load_challenging_only, max_samples);
+}
+
+void WFLWLoader::load_examples_from_file(const std::string& data_file_path, bool load_challenging_only, const int max_samples)
 {
     std::ifstream file(data_file_path);
     if (!file.is_open())
@@ -18,16 +28,39 @@ WFLWLoader::WFLWLoader(const std::string& data_file_path, const int max_samples)
 
     std::string line;
     int num_examples = 0;
+    int total_processed = 0;
+    
     while (std::getline(file, line))
     {
         WFLWExample example;
         if (parse_line(line, example))
         {
-            examples_.emplace_back(std::move(example));
-            ++num_examples;
-            if (max_samples > 0 && num_examples >= max_samples)
+            total_processed++;
+            
+            bool should_include = true;
+            if (load_challenging_only)
             {
-                break;
+                // Check if example has ANY challenging condition (any attribute != 0)
+                bool has_challenging_condition = false;
+                for (int attr : example.attributes)
+                {
+                    if (attr != 0)
+                    {
+                        has_challenging_condition = true;
+                        break;
+                    }
+                }
+                should_include = has_challenging_condition;
+            }
+            
+            if (should_include)
+            {
+                examples_.emplace_back(std::move(example));
+                ++num_examples;
+                if (max_samples > 0 && num_examples >= max_samples)
+                {
+                    break;
+                }
             }
         }
         else
@@ -36,6 +69,12 @@ WFLWLoader::WFLWLoader(const std::string& data_file_path, const int max_samples)
         }
     }
     file.close();
+    
+    if (load_challenging_only)
+    {
+        common::log_info("Loaded %d challenging condition examples from %d total processed samples", 
+                        num_examples, total_processed);
+    }
 }
 
 bool WFLWLoader::load_example(int index, WFLWExample& example) const
@@ -146,11 +185,7 @@ std::vector<int> WFLWLoader::getExamplesByAttribute(bool normal_pose, bool norma
     // If max_results is not specified, check environment variable
     if (max_results == -1)
     {
-        const char* max_samples_env = std::getenv("WFLW_MAX_SAMPLES");
-        if (max_samples_env)
-        {
-            max_results = std::atoi(max_samples_env);
-        }
+        max_results = TestUtils::getEnvVarInt("WFLW_MAX_SAMPLES", -1);
     }
 
     for (size_t i = 0; i < examples_.size(); ++i)

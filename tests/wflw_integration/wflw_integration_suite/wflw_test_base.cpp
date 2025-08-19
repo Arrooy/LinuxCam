@@ -5,8 +5,8 @@
  */
 
 #include "wflw_test_base.h"
+#include "../../test_utils.h"
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -90,8 +90,7 @@ void WFLWTestBase::SetUp()
     }
 
     // Get max samples from environment variable, default to 100 for tests
-    const char* max_samples_env = std::getenv("WFLW_MAX_SAMPLES");
-    int max_samples = max_samples_env ? std::atoi(max_samples_env) : 100;
+    int max_samples = TestUtils::getEnvVarInt("WFLW_MAX_SAMPLES", 100);
     
     // For local development, allow unlimited samples
     if (max_samples == -1)

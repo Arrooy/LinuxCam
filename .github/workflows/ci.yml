@@ -13,9 +13,8 @@ env:
     CCACHE_MAXSIZE: "400M"
     # Limit WFLW dataset samples for CI to prevent timeouts
     WFLW_MAX_SAMPLES: "2"
-    # Limit AttributeBasedAnalysis test samples for faster CI execution
-    MAX_ATTRIBUTE_EXAMPLES_NORMAL: "3"
-    MAX_ATTRIBUTE_EXAMPLES_CHALLENGING: "3"
+    # Limit faces processed per image to control test execution time
+    WFLW_MAX_FACES_PER_IMAGE: "3"
 
 jobs:
     build-test:
@@ -176,11 +175,12 @@ jobs:
 
                   echo "Running tests..."
                   echo "WFLW_MAX_SAMPLES set to: ${WFLW_MAX_SAMPLES:-default}"
+                  echo "WFLW_MAX_FACES_PER_IMAGE set to: ${WFLW_MAX_FACES_PER_IMAGE:-default}"
                   
                   # Run different test suites based on dataset availability
                   if [ "${WFLW_AVAILABLE:-false}" = "true" ]; then
                     echo "🧪 Running full test suite including WFLW integration tests..."
-                    echo "📊 WFLW tests will use max ${WFLW_MAX_SAMPLES:-500} samples to prevent CI timeouts"
+                    echo "📊 WFLW tests will use max ${WFLW_MAX_SAMPLES:-500} samples and ${WFLW_MAX_FACES_PER_IMAGE:-5} faces per image to prevent CI timeouts"
                     # Run all tests
                     if ! ctest --output-on-failure --parallel $(nproc) --verbose; then
                       echo "ERROR: Tests failed"

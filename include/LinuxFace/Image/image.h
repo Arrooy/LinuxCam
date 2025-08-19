@@ -218,6 +218,9 @@ class Image
 
     // Helper method to determine if image is RGB/RGBA based on format
     [[nodiscard]] bool isColorImage() const noexcept;
+
+    // Fast rectangle fill operation for solid backgrounds
+    void fillRect(int x, int y, int width, int height, const Pixel& color);
     [[nodiscard]] unsigned char getExpectedPixelSize() const noexcept;
     [[nodiscard]] bool hasSameDimensions(const Image& other) const noexcept;
     [[nodiscard]] bool hasSameSize(const Image& other) const noexcept;

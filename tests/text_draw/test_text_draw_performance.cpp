@@ -186,8 +186,9 @@ TEST_F(TextDrawPerformanceTest, BackgroundTextPerformance)
 
     std::cout << "Regular text: " << regular_time << " μs, Background text: " << background_time << " μs" << std::endl;
 
-    // Background text should not be more than 3x slower than regular text
-    EXPECT_LT(background_time / regular_time, 3.0)
+    // Background text should not be more than 2x slower than regular text
+    // Relaxed from 3x to account for system load variation
+    EXPECT_LT(background_time / regular_time, 2.0)
         << "Background text should not be excessively slower than regular text";
 }
 
@@ -427,8 +428,8 @@ TEST_F(TextDrawPerformanceTest, ComparativePerformanceAnalysis)
     // Basic sanity checks on relative performance
     EXPECT_LT(metrics[0].time, metrics[1].time) << "Single character should be faster than full text";
 
-    EXPECT_LT(metrics[1].time * 2, metrics[3].time)
-        << "Background text should not be more than 2x slower than basic text";
+    EXPECT_LT(metrics[3].time, metrics[1].time * 1.6)
+        << "Background text should be reasonably close to basic text performance (within 60%)";
 
     std::cout << "===========================================\n" << std::endl;
 }
