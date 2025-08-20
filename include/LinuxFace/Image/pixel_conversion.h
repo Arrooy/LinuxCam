@@ -4,9 +4,7 @@
 
 #include "LinuxFace/Image/image_utils.h"
 
-namespace linuxface
-{
-namespace pixel_conversion
+namespace linuxface::pixel_conversion
 {
 
 // Enum for conversion types to enable optimized switching
@@ -159,7 +157,7 @@ inline void convertPixel(const unsigned char* src, unsigned char* dst, Conversio
         case ConversionType::RGB_TO_GRAY:
         case ConversionType::RGBA_TO_GRAY:
         {
-            unsigned char gray = rgbToGrayscale(src[0], src[1], src[2]);
+            const unsigned char gray = rgbToGrayscale(src[0], src[1], src[2]);
             dst[0] = gray;
             break;
         }
@@ -171,7 +169,7 @@ inline void convertPixel(const unsigned char* src, unsigned char* dst, Conversio
         case ConversionType::FALLBACK:
         default:
             // Copy as many channels as possible - determine sizes dynamically
-            unsigned char maxChannels = 4; // Maximum we support
+            const unsigned char maxChannels = 4; // Maximum we support
             for (unsigned char i = 0; i < maxChannels; ++i)
             {
                 // Simple fallback copy
@@ -190,7 +188,7 @@ inline void copyPixelBlock(const unsigned char* srcData, unsigned char* dstData,
 
 // Batch convert a row of pixels using optimized loops
 inline void convertPixelRow(const unsigned char* srcRow, unsigned char* dstRow, size_t width, ConversionType convType,
-                            bool enableBlending = false)
+                            bool /*enableBlending*/ = false)
 {
     switch (convType)
     {
@@ -216,7 +214,7 @@ inline void convertPixelRow(const unsigned char* srcRow, unsigned char* dstRow, 
         case ConversionType::GRAY_TO_RGB:
             for (size_t i = 0; i < width; ++i)
             {
-                unsigned char gray = srcRow[i];
+                const unsigned char gray = srcRow[i];
                 dstRow[i * 3 + 0] = gray;
                 dstRow[i * 3 + 1] = gray;
                 dstRow[i * 3 + 2] = gray;
@@ -226,7 +224,7 @@ inline void convertPixelRow(const unsigned char* srcRow, unsigned char* dstRow, 
         case ConversionType::GRAY_TO_RGBA:
             for (size_t i = 0; i < width; ++i)
             {
-                unsigned char gray = srcRow[i];
+                const unsigned char gray = srcRow[i];
                 dstRow[i * 4 + 0] = gray;
                 dstRow[i * 4 + 1] = gray;
                 dstRow[i * 4 + 2] = gray;
@@ -237,9 +235,9 @@ inline void convertPixelRow(const unsigned char* srcRow, unsigned char* dstRow, 
         case ConversionType::RGB_TO_GRAY:
             for (size_t i = 0; i < width; ++i)
             {
-                unsigned char r = srcRow[i * 3 + 0];
-                unsigned char g = srcRow[i * 3 + 1];
-                unsigned char b = srcRow[i * 3 + 2];
+                const unsigned char r = srcRow[i * 3 + 0];
+                const unsigned char g = srcRow[i * 3 + 1];
+                const unsigned char b = srcRow[i * 3 + 2];
                 dstRow[i] = rgbToGrayscale(r, g, b);
             }
             break;
@@ -247,9 +245,9 @@ inline void convertPixelRow(const unsigned char* srcRow, unsigned char* dstRow, 
         case ConversionType::RGBA_TO_GRAY:
             for (size_t i = 0; i < width; ++i)
             {
-                unsigned char r = srcRow[i * 4 + 0];
-                unsigned char g = srcRow[i * 4 + 1];
-                unsigned char b = srcRow[i * 4 + 2];
+                const unsigned char r = srcRow[i * 4 + 0];
+                const unsigned char g = srcRow[i * 4 + 1];
+                const unsigned char b = srcRow[i * 4 + 2];
                 dstRow[i] = rgbToGrayscale(r, g, b);
             }
             break;
@@ -268,13 +266,13 @@ inline void convertPixelRow(const unsigned char* srcRow, unsigned char* dstRow, 
             // Fallback to pixel-by-pixel conversion
             for (size_t i = 0; i < width; ++i)
             {
-                size_t srcOffset =
+                const size_t srcOffset =
                     i
                     * (convType == ConversionType::GRAY_TO_RGB || convType == ConversionType::GRAY_TO_RGBA
                            ? 1
                            : (convType == ConversionType::RGB_TO_RGBA || convType == ConversionType::RGB_TO_GRAY ? 3
                                                                                                                  : 4));
-                size_t dstOffset =
+                const size_t dstOffset =
                     i
                     * (convType == ConversionType::RGBA_TO_GRAY || convType == ConversionType::RGB_TO_GRAY
                            ? 1
@@ -285,5 +283,4 @@ inline void convertPixelRow(const unsigned char* srcRow, unsigned char* dstRow, 
             break;
     }
 }
-} // namespace pixel_conversion
-} // namespace linuxface
+} // namespace linuxface::pixel_conversion

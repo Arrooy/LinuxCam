@@ -1,6 +1,7 @@
 #include "LinuxFace/Image/mediaManager.h"
 
 #include <filesystem>
+#include <utility>
 
 #include "LinuxFace/imageLoader.h"
 #include "config.hpp"
@@ -8,31 +9,31 @@
 using namespace linuxface;
 
 MediaManager::MediaManager(std::shared_ptr<ImageRenderGL> imageRenderGl)
-    : images(), gifs(), imageRenderGl_(imageRenderGl)
+    : imageRenderGl_(std::move(std::move(imageRenderGl)))
 {
-    std::string folderPath = Config::getInstance().getMediaFolderPath();
+    const std::string folderPath = Config::getInstance().getMediaFolderPath();
     loadThread_ = std::thread(&MediaManager::loadMediaFromFolder, this, folderPath);
 }
 
 std::vector<std::string> MediaManager::getImageNames()
 {
-    std::lock_guard<std::mutex> lock(imageMutex_);
-    return common::getKeysFromMap(images);
+    const std::lock_guard<std::mutex> lock(imageMutex_);
+    return common::getKeysFromMap(images_);
 }
 
 std::vector<std::string> MediaManager::getGifNames()
 {
-    std::lock_guard<std::mutex> lock(gifMutex_);
-    return common::getKeysFromMap(gifs);
+    const std::lock_guard<std::mutex> lock(gifMutex_);
+    return common::getKeysFromMap(gifs_);
 }
 
 
 std::shared_ptr<Image> MediaManager::getImage(const std::string& imageName)
 
 {
-    std::lock_guard<std::mutex> lock(imageMutex_);
-    auto it = images.find(imageName);
-    if (it != images.end())
+    const std::lock_guard<std::mutex> lock(imageMutex_);
+    auto it = images_.find(imageName);
+    if (it != images_.end())
     {
         return it->second;
     }
@@ -42,9 +43,9 @@ std::shared_ptr<Image> MediaManager::getImage(const std::string& imageName)
 
 std::shared_ptr<Gif> MediaManager::getGif(const std::string& gifName)
 {
-    std::lock_guard<std::mutex> lock(gifMutex_);
-    auto it = gifs.find(gifName);
-    if (it != gifs.end())
+    const std::lock_guard<std::mutex> lock(gifMutex_);
+    auto it = gifs_.find(gifName);
+    if (it != gifs_.end())
     {
         return it->second;
     }
@@ -54,15 +55,14 @@ std::shared_ptr<Gif> MediaManager::getGif(const std::string& gifName)
 
 size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
 {
-    namespace fs = std::filesystem;
-    std::lock_guard<std::recursive_mutex> lock(loadMutex_);
-    size_t mediaCount{0u};
+    const std::lock_guard<std::recursive_mutex> lock(loadMutex_);
+    const size_t mediaCount{0u};
 
     for (const auto& entry : fs::directory_iterator(folderPath))
     {
         if (stopLoading_)
         {
-            common::log_warn("Media loading stopped by user.");
+            common::logWarn("Media loading stopped by user.");
             break;
         }
 
@@ -77,39 +77,39 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
         {
             const auto& filename = entry.path().filename().string();
             const auto& extension = entry.path().extension();
-            const auto& full_path = entry.path().string();
+            const auto& fullPath = entry.path().string();
             bool processingOk{false};
             if (extension == ".jpg" || extension == ".jpeg")
             {
-                std::shared_ptr<Image> image = ImageLoader::loadImageFromFile(full_path);
+                const std::shared_ptr<Image> image = ImageLoader::loadImageFromFile(fullPath);
                 if (image)
                 {
-                    std::lock_guard<std::mutex> lock(imageMutex_);
-                    images[filename] = image;
+                    const std::lock_guard<std::mutex> lock(imageMutex_);
+                    image[filename] = image;
                     processingOk = true;
                 }
             }
             else if (extension == ".gif")
             {
-                std::shared_ptr<Gif> gif = std::make_shared<Gif>(full_path);
+                const std::shared_ptr<Gif> gif = std::make_shared<Gif>(fullPath);
                 if (gif->isOpen() && gif->decodeAllFrames())
                 {
-                    std::lock_guard<std::mutex> lock(gifMutex_);
-                    gifs[filename] = gif;
+                    const std::lock_guard<std::mutex> lock(gifMutex_);
+                    gif[filename] = gif;
                     processingOk = true;
                 }
                 else
                 {
-                    common::log_error("Failed to decode GIF: %s", full_path.c_str());
+                    common::logError("Failed to decode GIF: %s", fullPath.c_str());
                 }
             }
             else
             {
-                common::log_error("Unsupported file format %s in path %s", extension.c_str(), full_path.c_str());
+                common::logError("Unsupported file format %s in path %s", extension.c_str(), fullPath.c_str());
             }
             if (!processingOk)
             {
-                common::log_error("Failed to load image %s", filename.c_str());
+                common::logError("Failed to load image %s", filename.c_str());
             }
             else
             {
@@ -117,28 +117,28 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
             }
         }
     }
-    common::log_info("Loaded %zu media items from folder: %s", mediaCount, folderPath.c_str());
+    common::logInfo("Loaded %zu media items from folder: %s", mediaCount, folderPath.c_str());
     return mediaCount;
 }
 
 bool MediaManager::reloadImage(const std::string& imageName)
 {
-    std::lock_guard<std::mutex> lock(imageMutex_);
-    auto it = images.find(imageName);
-    if (it != images.end())
+    const std::lock_guard<std::mutex> lock(imageMutex_);
+    auto it = images_.find(imageName);
+    if (it != images_.end())
     {
         auto& image = it->second;
         ImageLoader loader(ImageLoader::LoadStrategy::LAZY);
         if (!loader.loadFromFile(image->info.filename))
         {
-            common::log_error("Failed to reload image: %s", imageName.c_str());
+            common::logError("Failed to reload image: %s", imageName.c_str());
             return false;
         }
 
         std::unique_ptr<Image> reloadedImage;
         if (!loader.getImage(reloadedImage))
         {
-            common::log_error("Failed to decode reloaded image: %s", imageName.c_str());
+            common::logError("Failed to decode reloaded image: %s", imageName.c_str());
             return false;
         }
 
@@ -149,7 +149,7 @@ bool MediaManager::reloadImage(const std::string& imageName)
         return true;
     }
 
-    common::log_error("Image not found: %s", imageName.c_str());
+    common::logError("Image not found: %s", imageName.c_str());
     return false;
 }
 
@@ -161,6 +161,6 @@ void MediaManager::shutdown()
     {
         loadThread_.join();
     }
-    images.clear();
-    gifs.clear();
+    images_.clear();
+    gifs_.clear();
 }

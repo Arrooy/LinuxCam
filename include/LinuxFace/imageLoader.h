@@ -19,10 +19,10 @@ class ImageFormatDetector
     static ImageFormat detectFormatFromPath(const std::string& path);
 
   private:
-    static bool isJPEG(const std::vector<unsigned char>& data);
-    static bool isPNG(const std::vector<unsigned char>& data);
-    static bool isBMP(const std::vector<unsigned char>& data);
-    static bool isPPM(const std::vector<unsigned char>& data);
+    static bool isJpeg(const std::vector<unsigned char>& data);
+    static bool isPng(const std::vector<unsigned char>& data);
+    static bool isBmp(const std::vector<unsigned char>& data);
+    static bool isPpm(const std::vector<unsigned char>& data);
 };
 
 class ImageLoader
@@ -41,13 +41,13 @@ class ImageLoader
     bool loadFromFile(const std::string& file_path);
 
     // Get decoded RGB888 image
-    bool getImage(std::unique_ptr<Image>& outImage);
+    bool getImage(std::unique_ptr<Image>& out_image);
 
     // Static factory method for convenient loading
-    static std::unique_ptr<Image> loadImageFromFile(const std::string& file_path)
+    static std::unique_ptr<Image> loadImageFromFile(const std::string& filePath)
     {
         ImageLoader loader(LoadStrategy::LAZY);
-        if (!loader.loadFromFile(file_path))
+        if (!loader.loadFromFile(filePath))
         {
             return nullptr;
         }

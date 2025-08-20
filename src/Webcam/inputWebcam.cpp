@@ -10,11 +10,10 @@
 #include "LinuxFace/profiler.h"
 using namespace linuxface;
 
-InputWebcam::InputWebcam(const std::string& name, const std::string& devicePath, const unsigned int width,
-                         const unsigned int height, const unsigned int bufferCount)
-    : Webcam(name, devicePath, WebcamType::PhysicalInput, width, height)
+InputWebcam::InputWebcam(const std::string& name, const std::string& device_path, const unsigned int width,
+                         const unsigned int height, const unsigned int buffer_count)
+    : Webcam(name, devicePath, WebcamType::PhysicalInput, width, height), buffer_count_(buffer_count)
 {
-    buffer_count_ = bufferCount;
 }
 
 bool InputWebcam::setupDevice()
@@ -37,28 +36,28 @@ bool InputWebcam::setupDevice()
     }
 
     // Here we know what format we are decoding, we can create the decoder.
-    // TODO: FIXME: Create the decoder based on the format we are using.
-    ConfigBuilder configBuilder;
-    configBuilder.imageFormat(selectedFormat_->format)
+    // TODO(arroyo): FIXME: Create the decoder based on the format we are using.
+    ConfigBuilder config_builder;
+    config_builder.imageFormat(selected_format->format)
         .pixelFormat(TJPF_RGB)
-        .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
-        .height(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height);
+        .width(selected_format->sizes[selected_format->selectedFrameSize].width)
+        .height(selected_format->sizes[selected_format->selectedFrameSize].height);
 
-    decoder_ = CodecFactory::create<Decoder>(configBuilder);
+    decoder_ = CodecFactory::create<Decoder>(config_builder);
     if (decoder_ == nullptr)
     {
-        common::log_error("InputWebcam::setupDevice - Failed to create decoder");
+        common::logError("InputWebcam::setupDevice - Failed to create decoder");
         return false;
     }
     // Configure buffers_
     if (!configureBuffers())
     {
-        common::log_error("InputWebcam::setupDevice - Failed to configure buffers_");
+        common::logError("InputWebcam::setupDevice - Failed to configure buffers_");
         return false;
     }
 
     ready_ = true;
-    common::log_info("InputWebcam::setupDevice - Successfully set up device %s", device_path_.c_str());
+    common::logInfo("InputWebcam::setupDevice - Successfully set up device %s", device_path.c_str());
     return true;
 }
 
@@ -66,7 +65,7 @@ bool InputWebcam::start()
 {
     if (!ready_)
     {
-        common::log_error("InputWebcam::start - Device not ready");
+        common::logError("InputWebcam::start - Device not ready");
         return false;
     }
 
@@ -83,14 +82,14 @@ bool InputWebcam::stop()
 {
     if (!ready_)
     {
-        common::log_error("InputWebcam::stop - Device not ready");
+        common::logError("InputWebcam::stop - Device not ready");
         return false;
     }
 
     stopRecording();
     if (!queueAllBuffersAgain(bufrequest_.count, bufrequest_.type))
     {
-        common::log_error("InputWebcam::stop - Failed to queue all buffers again");
+        common::logError("InputWebcam::stop - Failed to queue all buffers again");
         return false;
     }
     return true;
@@ -98,29 +97,32 @@ bool InputWebcam::stop()
 
 bool InputWebcam::configureBuffers()
 {
-    struct v4l2_buffer buf;
+    struct v4l2_buffer buf
+    {
+    };
 
     CLEAR(bufrequest_);
     bufrequest_.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     bufrequest_.memory = V4L2_MEMORY_MMAP;
     bufrequest_.count = buffer_count_;
 
-    if (ioctl(fd_, VIDIOC_REQBUFS, &bufrequest_) < 0)
+    if (ioctl(fd, VIDIOC_REQBUFS, &bufrequest_) < 0)
     {
-        common::errno_log("InputWebcam::configureBuffers - VIDIOC_REQBUFS");
+        common::errnoLog("InputWebcam::configureBuffers - VIDIOC_REQBUFS");
         return false;
     }
 
     if (bufrequest_.count != buffer_count_)
     {
-        common::errno_log("InputWebcam::configureBuffers - Not enough buffer memory");
+        common::errnoLog("InputWebcam::configureBuffers - Not enough buffer memory");
         return false;
     }
 
-    buffers_ = (Buffer*) calloc(bufrequest_.count, sizeof(*buffers_));
-    if (!buffers_)
+    buffers_ = static_cast<Buffer*>(calloc(bufrequest_.count, sizeof(*buffers_)));
+    if (buffers_ == nullptr)
     {
-        common::errno_log("InputWebcam::configureBuffers - Out of memory when creating buffers_");
+        common::errnoLog("InputWebcam::configureBuffers - Out of memory when creating "
+                         "buffers_");
         return false;
     }
 
@@ -132,28 +134,28 @@ bool InputWebcam::configureBuffers()
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
 
-        if (ioctl(fd_, VIDIOC_QUERYBUF, &buf) < 0)
+        if (ioctl(fd, VIDIOC_QUERYBUF, &buf) < 0)
         {
-            common::errno_log("InputWebcam::configureBuffers - VIDIOC_QUERYBUF");
+            common::errnoLog("InputWebcam::configureBuffers - VIDIOC_QUERYBUF");
             cleanupBuffers();
             return false;
         }
 
         buffers_[i].length = buf.length;
-        buffers_[i].start = mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, buf.m.offset);
+        buffers_[i].start = mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, buf.m.offset);
 
         if (buffers_[i].start == MAP_FAILED)
         {
-            common::errno_log("InputWebcam::configureBuffers - MMAP Failed");
+            common::errnoLog("InputWebcam::configureBuffers - MMAP Failed");
             cleanupBuffers();
             return false;
         }
 
         memset(buffers_[i].start, 0, buffers_[i].length);
 
-        if (ioctl(fd_, VIDIOC_QBUF, &buf) == -1)
+        if (ioctl(fd, VIDIOC_QBUF, &buf) == -1)
         {
-            common::errno_log("InputWebcam::configureBuffers - VIDIOC_QBUF");
+            common::errnoLog("InputWebcam::configureBuffers - VIDIOC_QBUF");
             cleanupBuffers();
             return false;
         }
@@ -166,16 +168,16 @@ bool InputWebcam::startStreaming()
 {
     if (fd_ >= 0)
     {
-        if (ioctl(fd_, VIDIOC_STREAMON, &bufrequest_.type) < 0)
+        if (ioctl(fd, VIDIOC_STREAMON, &bufrequest_.type) < 0)
         {
-            common::errno_log("InputWebcam::startStreaming - VIDIOC_STREAMON");
+            common::errnoLog("InputWebcam::startStreaming - VIDIOC_STREAMON");
             cleanup();
             return false;
         }
     }
     else
     {
-        common::log_error("InputWebcam::startStreaming - fd_ < 0");
+        common::logError("InputWebcam::startStreaming - fd_ < 0");
         return false;
     }
     return true;
@@ -191,15 +193,15 @@ bool InputWebcam::stopStreaming()
             return true;
         }
 
-        if (ioctl(fd_, VIDIOC_STREAMOFF, &bufrequest_.type) < 0)
+        if (ioctl(fd, VIDIOC_STREAMOFF, &bufrequest_.type) < 0)
         {
-            common::errno_log("InputWebcam::stopStreaming - VIDIOC_STREAMOFF");
+            common::errnoLog("InputWebcam::stopStreaming - VIDIOC_STREAMOFF");
             return false;
         }
     }
     else
     {
-        common::log_error("InputWebcam::stopStreaming - Unknown file descriptor");
+        common::logError("InputWebcam::stopStreaming - Unknown file descriptor");
         return false;
     }
     return true;
@@ -210,13 +212,13 @@ bool InputWebcam::startRecording()
 {
     if (isRecording_.load())
     {
-        common::log_info("InputWebcam::startRecording - already recording");
+        common::logInfo("InputWebcam::startRecording - already recording");
         return true;
     }
 
     if (!startStreaming())
     {
-        common::log_error("InputWebcam::setupDevice - Failed to start streaming");
+        common::logError("InputWebcam::setupDevice - Failed to start streaming");
         cleanup();
         return false;
     }
@@ -230,7 +232,7 @@ void InputWebcam::stopRecording()
 {
     if (!stopStreaming())
     {
-        common::log_error("InputWebcam::stopRecording - Failed to stop streaming");
+        common::logError("InputWebcam::stopRecording - Failed to stop streaming");
         return;
     }
 
@@ -249,35 +251,39 @@ bool InputWebcam::isRunning()
 
 void InputWebcam::imageAcquisitionLoop()
 {
-    struct v4l2_buffer buf;
-    unsigned int totalDiscardedHeader{0u};
-    unsigned int decodingFailureCount{0u};
-    unsigned int totalTimeouts{0u};
+    struct v4l2_buffer buf
+    {
+    };
+    const unsigned int total_discarded_header{0u};
+    unsigned int decoding_failure_count{0u};
+    unsigned int total_timeouts{0u};
 
-    unsigned int totalDiscarded{0u};
-    unsigned int maxDiscardCount{buffer_count_ * 3};
+    unsigned int total_discarded{0u};
+    const unsigned int max_discard_count{buffer_count_ * 3};
 
-    unsigned int skipCounter{0u};
-    unsigned int amountOfSkipFrames = buffer_count_; // std::max(2u, buffer_count_ / 2u);
+    unsigned int skip_counter{0u};
+    const unsigned int amount_of_skip_frames = buffer_count_; // std::max(2u, buffer_count_ / 2u);
 
-    bool readImageHeader{true};
+    bool read_image_header{true};
 
     // Image state
-    Image imageTmp;
-    ImageMetadata cameraInputInfo;
+    Image image_tmp;
+    ImageMetadata camera_input_info;
 
     while (isRecording_.load())
     {
         fd_set fds;
-        struct timeval tv;
-        int r;
+        struct timeval tv
+        {
+        };
+        const int r = 0;
 
         FD_ZERO(&fds);
-        FD_SET(fd_, &fds);
+        FD_SET(fds, &fds);
 
         tv.tv_sec = 2;
         tv.tv_usec = 0;
-        Profiler::getInstance().start(name_.c_str(), "Waiting for OS camera frame");
+        Profiler::getInstance().start(name_, "Waiting for OS camera frame");
         r = select(fd_ + 1, &fds, nullptr, nullptr, &tv);
 
         if (r == -1)
@@ -286,24 +292,25 @@ void InputWebcam::imageAcquisitionLoop()
             {
                 continue;
             }
-            common::errno_log("InputWebcam::imageAcquisitionLoop - Select failed");
+            common::errnoLog("InputWebcam::imageAcquisitionLoop - Select failed");
             break;
         }
 
         if (r == 0)
         {
-            common::log_warn("InputWebcam::imageAcquisitionLoop - Select timeout");
-            totalTimeouts++;
-            if (totalTimeouts > 5)
+            common::logWarn("InputWebcam::imageAcquisitionLoop - Select timeout");
+            total_timeouts++;
+            if (total_timeouts > 5)
             {
-                common::log_error("InputWebcam::imageAcquisitionLoop - Select timeout reached. Please unplug and plug "
-                                  "again the camera.");
+                common::logError("InputWebcam::imageAcquisitionLoop - Select timeout "
+                                 "reached. Please unplug and plug "
+                                 "again the camera.");
                 break;
             }
             continue;
         }
 
-        if (isRecording_ == false)
+        if (!isRecording_)
         {
             break;
         }
@@ -312,17 +319,15 @@ void InputWebcam::imageAcquisitionLoop()
         buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         buf.memory = V4L2_MEMORY_MMAP;
 
-        if (ioctl(fd_, VIDIOC_DQBUF, &buf) < 0)
+        if (ioctl(fd, VIDIOC_DQBUF, &buf) < 0)
         {
             if (errno == EAGAIN || errno == EIO)
             {
                 continue;
             }
-            else
-            {
-                common::errno_log("InputWebcam::imageAcquisitionLoop - VIDIOC_DQBUF");
-                break;
-            }
+
+            common::errno_log("InputWebcam::imageAcquisitionLoop - VIDIOC_DQBUF");
+            break;
         }
 
         if (buf.index >= bufrequest_.count)
@@ -332,18 +337,18 @@ void InputWebcam::imageAcquisitionLoop()
         }
 
         // Check if buffer is in error state
-        if (buf.flags & V4L2_BUF_FLAG_ERROR)
+        if ((buf.flags & V4L2_BUF_FLAG_ERROR) != 0u)
         {
             if (!requeueFrame(buf))
             {
-                common::log_error("InputWebcam::imageAcquisitionLoop - Failed to requeue frame %d", buf.index);
+                common::logError("InputWebcam::imageAcquisitionLoop - Failed to requeue frame %d", buf.index);
                 break;
             }
-            totalDiscarded++;
-            if (totalDiscarded > maxDiscardCount)
+            total_discarded++;
+            if (total_discarded > max_discard_count)
             {
-                common::log_error("InputWebcam::imageAcquisitionLoop - Too many discarded frames (%d), exiting loop",
-                                  totalDiscarded);
+                common::logError("InputWebcam::imageAcquisitionLoop - Too many discarded frames (%d), exiting loop",
+                                  total_discarded);
                 break;
             }
             continue;
@@ -351,7 +356,7 @@ void InputWebcam::imageAcquisitionLoop()
 
         if (buf.bytesused == 0)
         {
-            common::log_info("InputWebcam::imageAcquisitionLoop - Empty frame received, requeuing");
+            common::logInfo("InputWebcam::imageAcquisitionLoop - Empty frame received, requeuing");
             if (!requeueFrame(buf))
             {
                 break;
@@ -360,15 +365,15 @@ void InputWebcam::imageAcquisitionLoop()
         }
 
         // Skip inital frames to get rid of initial camera warmup frames
-        if (skipCounter < amountOfSkipFrames)
+        if (skip_counter < amount_of_skip_frames)
         {
-            common::log_info("InputWebcam::imageAcquisitionLoop - Skipping frame %d", buf.index);
+            common::logInfo("InputWebcam::imageAcquisitionLoop - Skipping frame %d", buf.index);
             if (!requeueFrame(buf))
             {
-                common::log_error("InputWebcam::imageAcquisitionLoop - Failed to requeue frame %d", buf.index);
+                common::logError("InputWebcam::imageAcquisitionLoop - Failed to requeue frame %d", buf.index);
                 break;
             }
-            skipCounter++;
+            skip_counter++;
             continue;
         }
 
@@ -376,19 +381,19 @@ void InputWebcam::imageAcquisitionLoop()
 
         Profiler::getInstance().start(name_.c_str(), "Input image decoding");
 
-        Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
-        srcImage.info.TJPixelFormat = TJPF_RGB;
+        Image src_image(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
+        src_image.info.TJPixelFormat = TJPF_RGB;
 
 
-        if (readImageHeader)
+        if (read_image_header)
         {
-            unsigned long raw_needed_size;
-            bool valid_image = decoder_->decodeHeader(srcImage, raw_needed_size);
+            unsigned long raw_needed_size = 0;
+            const bool valid_image = decoder_->decodeHeader(src_image, raw_needed_size);
             if (!valid_image)
             {
-                common::log_info(
+                common::logInfo(
                     "InputWebcam::imageAcquisitionLoop - Invalid input image. Discarded. Total discarded: %d",
-                    ++totalDiscardedHeader);
+                    ++total_discarded_header);
                 if (!requeueFrame(buf))
                 {
                     break;
@@ -396,50 +401,48 @@ void InputWebcam::imageAcquisitionLoop()
                 continue;
             }
 
-            if (imageTmp.size() != raw_needed_size)
+            if (image_tmp.size() != raw_needed_size)
             {
-                imageTmp.resize(raw_needed_size);
-                common::log_warn("InputWebcam::imageAcquisitionLoop - Reallocating raw image buffer to %lu - %s",
+                image_tmp.resize(raw_needed_size);
+                common::logWarn("InputWebcam::imageAcquisitionLoop - Reallocating raw image buffer to %lu - %s",
                                  imageTmp.size(), common::format_size(imageTmp.size()));
             }
 
-            cameraInputInfo = srcImage.info;
-            readImageHeader = false;
+            camera_input_info = src_image.info;
+            read_image_header = false;
         }
 
 
-        if (!decoder_->decode(srcImage, imageTmp))
+        if (!decoder_->decode(src_image, image_tmp))
         {
-            readImageHeader = true;
+            read_image_header = true;
             if (!requeueFrame(buf))
             {
                 break;
             }
-            if (decodingFailureCount > 10)
+            if (decoding_failure_count > 10)
             {
-                common::log_error("InputWebcam::imageAcquisitionLoop - Failed to decode image after %d attempts",
-                                  decodingFailureCount);
+                common::logError("InputWebcam::imageAcquisitionLoop - Failed to decode image after %d attempts",
+                                  decoding_failure_count);
                 break;
             }
-            else
-            {
-                decodingFailureCount++;
-                common::log_error("InputWebcam::imageAcquisitionLoop - Decoding failed %d times", decodingFailureCount);
-                continue;
-            }
+
+            decoding_failure_count++;
+            common::logError("InputWebcam::imageAcquisitionLoop - Decoding failed %d times", decoding_failure_count);
+            continue;
         }
 
-        decodingFailureCount = 0;
-        imageTmp.info =
-            cameraInputInfo; // TODO: FIXME: Here we are resetting the decoder state. We should use the decoder state
+        decoding_failure_count = 0;
+        image_tmp.info = camera_input_info; // TODO(arroyo): FIXME: Here we are resetting the
+                                         // decoder state. We should use the decoder state
         {
             std::lock_guard<std::mutex> lock(imageMutex_);
-            if (!latestImage_ || latestImage_->size() != imageTmp.size())
+            if (!latestImage_ || latestImage_->size() != image_tmp.size())
             {
-                latestImage_ = std::make_unique<Image>(imageTmp.size());
+                latestImage_ = std::make_unique<Image>(image_tmp.size());
             }
             // Copy image to latest image
-            latestImage_->copyFrom(imageTmp);
+            latestImage_->copyFrom(image_tmp);
         }
 
         Profiler::getInstance().stop(name_.c_str(), "Input image decoding");
@@ -452,18 +455,18 @@ void InputWebcam::imageAcquisitionLoop()
         }
     }
 
-    common::log_warn("InputWebcam::imageAcquisitionLoop thread dead for device: %s", device_path_.c_str());
+    common::logWarn("InputWebcam::imageAcquisitionLoop thread dead for device: %s", device_path_.c_str());
 }
 
 
-bool InputWebcam::getImage(std::unique_ptr<Image>& outImage)
+bool InputWebcam::GetImage(std::unique_ptr<Image>& out_image)
 {
     // Get the most recent frame from queue, discarding older ones
-    std::unique_ptr<Image> latestFrame;
+    std::unique_ptr<Image> latest_frame;
     if (latestImage_)
     {
         std::lock_guard<std::mutex> lock(imageMutex_);
-        outImage = latestImage_->deepCopy();
+        out_image = latestImage_->deepCopy();
         return true;
     }
 
@@ -499,7 +502,7 @@ void InputWebcam::cleanup()
 
 void InputWebcam::cleanupBuffers()
 {
-    if (buffers_)
+    if (buffers_ != nullptr)
     {
         for (unsigned int i = 0; i < bufrequest_.count; i++)
         {
@@ -516,21 +519,21 @@ void InputWebcam::cleanupBuffers()
     }
 }
 
-bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex)
+bool InputWebcam::reconfigureFormat(int format_index, int size_index, int fps_index)
 {
     const auto& new_format = capabilities_.formats[formatIndex].sizes[sizeIndex];
-    common::log_info("InputWebcam::reconfigureFormat - Reconfiguring device %s with format Index %d, size index %d and "
+    common::logInfo("InputWebcam::reconfigureFormat - Reconfiguring device %s with format Index %d, size index %d and "
                      "fps index %d that is %dx%d with %d fps",
                      name_.c_str(), formatIndex, sizeIndex, fpsIndex, new_format.width, new_format.height,
                      new_format.getFps(new_format.selectedFPS));
 
     // Stop current operation
-    bool wasRunning = isRunning();
-    if (wasRunning)
+    const bool was_running = isRunning();
+    if (was_running)
     {
         if (!stop())
         {
-            common::log_error("InputWebcam::reconfigureFormat - Failed to stop device");
+            common::logError("InputWebcam::reconfigureFormat - Failed to stop device");
             return false;
         }
     }
@@ -539,15 +542,15 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex
     if (formatIndex < 0 || formatIndex >= static_cast<int>(capabilities_.formats.size()) || sizeIndex < 0
         || sizeIndex >= static_cast<int>(capabilities_.formats[formatIndex].sizes.size()))
     {
-        common::log_error("InputWebcam::reconfigureFormat - Invalid format/size indices");
-        if (wasRunning)
+        common::logError("InputWebcam::reconfigureFormat - Invalid format/size indices");
+        if (was_running)
         {
             start(); // Try to restart with old config
         }
         return false;
     }
 
-    Format selectedFormat = capabilities_.formats[formatIndex];
+    Format selected_format = capabilities_.formats[formatIndex];
 
     // Cleanup current setup
     cleanup();
@@ -560,16 +563,16 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex
     // Reinitialize device with new selected format
     if (!setupDevice())
     {
-        common::log_error("InputWebcam::reconfigureFormat - Failed to setup device with new configuration");
+        common::logError("InputWebcam::reconfigureFormat - Failed to setup device with new configuration");
         return false;
     }
 
     // Restart if it was running before
-    if (wasRunning)
+    if (was_running)
     {
         if (!start())
         {
-            common::log_error("InputWebcam::reconfigureFormat - Failed to restart device");
+            common::logError("InputWebcam::reconfigureFormat - Failed to restart device");
             return false;
         }
     }

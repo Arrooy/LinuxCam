@@ -31,7 +31,7 @@ struct WebcamDevice
 // Class that reads configuration from a yaml file and provides access to it.
 class Config
 {
-    Config(const char* filename)
+    explicit Config(const char* filename)
     {
         try
         {
@@ -39,16 +39,16 @@ class Config
         }
         catch (const YAML::Exception& e)
         {
-            common::log_error("Failed to load config file: %s", e.what());
+            common::logError("Failed to load config file: %s", e.what());
             config_ = YAML::Node(); // Set to null node on failure
         }
     }
 
-    bool validateAndLoadInputCameras()
+    static bool validateAndLoadInputCameras()
     {
         if (!config_["input_cameras"] || !config_["input_cameras"].IsSequence() || config_["input_cameras"].size() == 0)
         {
-            common::log_error("Missing or empty input_camera section in config");
+            common::logError("Missing or empty input_camera section in config");
             return false;
         }
         auto inputs = config_["input_cameras"];
@@ -63,7 +63,7 @@ class Config
         return true;
     }
 
-    bool validateInputCameraFields(const YAML::Node& input)
+    static bool validateInputCameraFields(const YAML::Node& input)
     {
         const std::vector<std::string> requiredFields = {"name", "path", "width", "height", "buffer_count"};
 
@@ -71,30 +71,30 @@ class Config
         {
             if (!input[field])
             {
-                common::log_error("Missing required field '%s' in input_camera section", field.c_str());
+                common::logError("Missing required field '%s' in input_camera section", field.c_str());
                 return false;
             }
         }
         return true;
     }
 
-    void loadInputCameraData(const YAML::Node& input)
+    static void loadInputCameraData(const YAML::Node& input)
     {
-        WebcamDevice input_camera_;
-        input_camera_.is_input = true;
-        input_camera_.name = input["name"].as<std::string>();
-        input_camera_.device_path = input["path"].as<std::string>();
-        input_camera_.width = input["width"].as<unsigned int>();
-        input_camera_.height = input["height"].as<unsigned int>();
-        input_camera_.buffer_count = input["buffer_count"].as<unsigned int>();
-        cameras_.push_back(input_camera_);
+        WebcamDevice inputCamera;
+        inputCamera.is_input = true;
+        inputCamera.name = input["name"].as<std::string>();
+        inputCamera.device_path = input["path"].as<std::string>();
+        inputCamera.width = input["width"].as<unsigned int>();
+        inputCamera.height = input["height"].as<unsigned int>();
+        inputCamera.buffer_count = input["buffer_count"].as<unsigned int>();
+        cameras_.push_back(inputCamera);
     }
 
-    bool validateAndLoadOutputCameras()
+    static bool validateAndLoadOutputCameras()
     {
         if (!config_["output_cameras"])
         {
-            common::log_error("Missing output_camera section in config");
+            common::logError("Missing output_camera section in config");
             return false;
         }
 
@@ -110,7 +110,7 @@ class Config
         return true;
     }
 
-    bool validateOutputCameraFields(const YAML::Node& output)
+    static bool validateOutputCameraFields(const YAML::Node& output)
     {
         const std::vector<std::string> requiredFields = {"name", "path", "width", "height", "subsampling"};
 
@@ -118,32 +118,33 @@ class Config
         {
             if (!output[field])
             {
-                common::log_error("Missing required field '%s' in output_camera section", field.c_str());
+                common::logError("Missing required field '%s' in output_camera section", field.c_str());
                 return false;
             }
         }
         return true;
     }
 
-    bool loadOutputCameraData(const YAML::Node& output)
+    static bool loadOutputCameraData(const YAML::Node& output)
     {
-        WebcamDevice output_camera_;
-        output_camera_.is_input = false;
-        output_camera_.name = output["name"].as<std::string>();
-        output_camera_.device_path = output["path"].as<std::string>();
-        output_camera_.width = output["width"].as<unsigned int>();
-        output_camera_.height = output["height"].as<unsigned int>();
-        bool result = parseSubsamplingValue(output["subsampling"].as<std::string>(), output_camera_.subsampling);
+        WebcamDevice outputCamera;
+        outputCamera.is_input = false;
+        outputCamera.name = output["name"].as<std::string>();
+        outputCamera.device_path = output["path"].as<std::string>();
+        outputCamera.width = output["width"].as<unsigned int>();
+        outputCamera.height = output["height"].as<unsigned int>();
+        const bool result = false = false = false =
+            parseSubsamplingValue(output["subsampling"].as<std::string>(), outputCamera.subsampling);
         if (result)
         {
-            cameras_.push_back(output_camera_);
+            cameras_.push_back(outputCamera);
         }
         return result;
     }
 
-    bool parseSubsamplingValue(const std::string& subsample, TJSAMP& output_subsampling)
+    static bool parseSubsamplingValue(const std::string& subsample, TJSAMP& outputSubsampling)
     {
-        static const std::map<std::string, TJSAMP> subsamplingMap = {
+        static const std::map<std::string, TJSAMP> SUBSAMPLING_MAP = {
             {"444",  TJSAMP_444 },
             {"422",  TJSAMP_422 },
             {"420",  TJSAMP_420 },
@@ -152,36 +153,36 @@ class Config
             {"411",  TJSAMP_411 }
         };
 
-        auto it = subsamplingMap.find(subsample);
-        if (it != subsamplingMap.end())
+        auto it = SUBSAMPLING_MAP.find(subsample);
+        if (it != SUBSAMPLING_MAP.end())
         {
-            output_subsampling = it->second;
+            outputSubsampling = it->second;
             return true;
         }
 
-        common::log_error("Invalid subsampling value: %s", subsample.c_str());
+        common::logError("Invalid subsampling value: %s", subsample.c_str());
         return false;
     }
 
-    bool validateAndLoadExternalImages()
+    static bool validateAndLoadExternalImages()
     {
         if (!config_["external_data"])
         {
-            common::log_error("Missing external_data section in config");
+            common::logError("Missing external_data section in config");
             return false;
         }
 
         auto images = config_["external_data"];
         if (!images["media_folder_path"])
         {
-            common::log_error("Missing media_folder_path field in external_data section");
+            common::logError("Missing media_folder_path field in external_data section");
             return false;
         }
         external_data_.mediaFolderPath = normalizePath(images["media_folder_path"].as<std::string>());
 
         if (!images["models_folder_path"])
         {
-            common::log_error("Missing models_folder_path field in external_data section");
+            common::logError("Missing models_folder_path field in external_data section");
             return false;
         }
 
@@ -189,7 +190,7 @@ class Config
 
         if (!images["WFLW_folder_path"])
         {
-            common::log_error("Missing WFLW_folder_path field in external_data section");
+            common::logError("Missing WFLW_folder_path field in external_data section");
             return false;
         }
 
@@ -197,7 +198,7 @@ class Config
 
         if (!images["preload_content"])
         {
-            common::log_error("Missing preload_content field in external_data section");
+            common::logError("Missing preload_content field in external_data section");
             return false;
         }
         external_data_.preLoading = images["preload_content"].as<bool>();
@@ -208,28 +209,28 @@ class Config
     {
         if (!config_["window"])
         {
-            common::log_error("Missing window section in config");
+            common::logError("Missing window section in config");
             return false;
         }
 
         auto window = config_["window"];
         if (!window["title"])
         {
-            common::log_error("Missing title field in window section");
+            common::logError("Missing title field in window section");
             return false;
         }
         windowTitle_ = config_["window"]["title"].as<std::string>();
 
         if (!window["width"])
         {
-            common::log_error("Missing width field in window section");
+            common::logError("Missing width field in window section");
             return false;
         }
         windowWidth_ = window["width"].as<int>();
 
         if (!window["height"])
         {
-            common::log_error("Missing height field in window section");
+            common::logError("Missing height field in window section");
             return false;
         }
         windowHeight_ = window["height"].as<int>();
@@ -260,7 +261,7 @@ class Config
         }
         catch (const YAML::Exception& e)
         {
-            common::log_error("Failed to reload config file: %s", e.what());
+            common::logError("Failed to reload config file: %s", e.what());
             return false;
         }
     }
@@ -270,7 +271,7 @@ class Config
         // Fail if config is empty (file missing or invalid)
         if (!config_ || config_.IsNull())
         {
-            common::log_error("Config: YAML file missing or invalid");
+            common::logError("Config: YAML file missing or invalid");
             return false;
         }
         if (config_["enable_gpu"])
@@ -283,12 +284,12 @@ class Config
 
     // Get configuration sections
     std::vector<WebcamDevice> getWebcams() const { return cameras_; }
-    inline std::string getMediaFolderPath() const { return external_data_.mediaFolderPath; }
-    inline std::string getModelFolderPath() const { return external_data_.modelFolderPath; }
-    inline std::string getWFLWFolderPath() const { return external_data_.WFLWFolderPath; }
+    std::string getMediaFolderPath() const { return external_data_.mediaFolderPath; }
+    std::string getModelFolderPath() const { return external_data_.modelFolderPath; }
+    std::string getWflwFolderPath() const { return external_data_.WFLWFolderPath; }
 
-    inline bool preloadExternalContent() const { return external_data_.preLoading; }
-    inline bool isGPUEnabled() const { return enableGPU_; }
+    bool preloadExternalContent() const { return external_data_.preLoading; }
+    bool isGpuEnabled() const { return enableGPU_; }
     void getWindowSize(int& width, int& height) const
     {
         width = windowWidth_;
@@ -310,25 +311,28 @@ class Config
 
   private:
     YAML::Node config_;
-    std::vector<WebcamDevice> cameras_;
-    ExternalData external_data_;
+    std::vector<WebcamDevice>;
+    meras_;
+    ernalData external_data_;
 
     bool enableGPU_{true};
 
-    unsigned int windowWidth_;
-    unsigned int windowHeight_;
+    unsigned int windowWidth_{};
+    unsigned int windowHeight_{};
     std::string windowTitle_;
 
     // Helper function to ensure path ends with exactly one "/"
-    std::string normalizePath(const std::string& path) const
+    static std::string normalizePath(const std::string& path)
     {
-        if (path.empty()) {
+        if (path.empty())
+        {
             return "/";
         }
-        
+
         std::string normalized = path;
         // Remove trailing slashes
-        while (!normalized.empty() && normalized.back() == '/') {
+        while (!normalized.empty() && normalized.back() == '/')
+        {
             normalized.pop_back();
         }
         // Add exactly one slash

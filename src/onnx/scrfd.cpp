@@ -5,19 +5,18 @@
 #include "LinuxFace/profiler.h"
 using namespace linuxface;
 
-SCRFDetector::SCRFDetector(const std::string& onnx_model_path)
-    : OnnxDetector(onnx_model_path), feat_stride_fpn_{8, 16, 32}
+SCRFDetector::SCRFDetector(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path), feat_stride_fpn_{8, 16, 32}
 {
-    const int num_outputs = output_node_names_str_.size();
+    const int num_outputs = output_node_names_str.size();
     using_kps_ = num_outputs == 9;
     if (!using_kps_ && num_outputs != 6)
     {
-        common::log_error("SCRFDetector only support 6 or 9 outputs");
-        ready_ = false;
+        common::logError("SCRFDetector only support 6 or 9 outputs");
+        ready = false;
     }
     else
     {
-        generate_points();
+        generatePoints();
     }
 }
 
@@ -26,79 +25,79 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
     // Validate input image
     if (!image)
     {
-        common::log_error("SCRFDetector::transform: Null image pointer provided");
+        common::logError("SCRFDetector::transform: Null image pointer provided");
         // Return an empty/invalid tensor - this should be handled by calling code
         return Ort::Value{nullptr};
     }
 
     const int target_height = static_cast<int>(input_node_dims.at(2));
     const int target_width = static_cast<int>(input_node_dims.at(3));
-    Ort::Value input_tensor =
-        Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
+    Ort::Value input_tensor = Ort::Value::CreateTensor<float>(allocator, input_node_dims.data(), input_node_dims.size());
 
     // Get pointer to tensor data.
-    float* tensor_data = input_tensor.GetTensorMutableData<float>();
+    auto* tensor_data = input_tensor.GetTensorMutableData<float>();
     auto tensor_padding = TensorPadding::scrfd();
-    image->toTensor(tensor_data, tensor_padding, target_width, target_height, NormalizationType::MINMAX);
+    image->toTensor(tensorData, tensor_padding, target_width, target_height, NormalizationType::MINMAX);
     return input_tensor;
 }
 
-// TODO: average the face location so we dont have that much jitter in face bounding box.
-std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
+// TODO(arroyo): average the face location so we dont have that much jitter in
+// face bounding box.
+std::vector<Face> SCRFDetector::Detect(const std::unique_ptr<Image>& image)
 {
     // Validate input image
     if (!image)
     {
-        common::log_error("SCRFDetector::detect: Null image pointer provided");
+        common::logError("SCRFDetector::detect: Null image pointer provided");
         return {};
     }
 
     Profiler::getInstance().start("SCRFD", "Face detection");
     std::vector<Face> faces;
     faces.reserve(3000); // Reserve once for all strides (rough estimate)
-    // Convert from image to tensor.
-    Ort::Value input_tensor = this->transform(image);
-    
+                         // Convert from image to tensor.
+    const Ort::Value input_tensor = this->transform(image);
+
     // Check if transform succeeded
     if (!input_tensor.IsTensor())
     {
-        common::log_error("SCRFDetector::detect: Failed to create input tensor");
+        common::logError("SCRFDetector::detect: Failed to create input tensor");
         Profiler::getInstance().stop("SCRFD", "Face detection");
         return {};
     }
     try
     {
         auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,
-                                                     1, output_node_names_.data(), output_node_names_str_.size());
+                                                    1, output_node_names_.data(), output_node_names_str_.size());
 
         Profiler::getInstance().stop("SCRFD", "Face detection");
         Profiler::getInstance().start("SCRFD", "Result processing");
         if (output_tensors.size() < 6)
         {
-            common::log_error("SCRFDetector::detect: output_tensors.size() = %d", output_tensors.size());
+            common::logError("SCRFDetector::detect: output_tensors.size() = %d", output_tensors.size());
             return faces;
         }
         // score_8,score_16,score_32,bbox_8,bbox_16,bbox_32
-        Ort::Value& score_8 = output_tensors.at(0);  // e.g [1,12800,1]
-        Ort::Value& score_16 = output_tensors.at(1); // e.g [1,3200,1]
-        Ort::Value& score_32 = output_tensors.at(2); // e.g [1,800,1]
-        Ort::Value& bbox_8 = output_tensors.at(3);   // e.g [1,12800,4]
-        Ort::Value& bbox_16 = output_tensors.at(4);  // e.g [1,3200,4]
-        Ort::Value& bbox_32 = output_tensors.at(5);  // e.g [1,800,4]
-        Ort::Value kps_8;
-        Ort::Value kps_16;
-        Ort::Value kps_32;
+        Ort::Value& score8 = output_tensors.at(0);  // e.g [1,12800,1]
+        Ort::Value& score16 = output_tensors.at(1); // e.g [1,3200,1]
+        Ort::Value& score32 = output_tensors.at(2); // e.g [1,800,1]
+        Ort::Value& bbox8 = output_tensors.at(3);   // e.g [1,12800,4]
+        Ort::Value& bbox16 = output_tensors.at(4);  // e.g [1,3200,4]
+        Ort::Value& bbox32 = output_tensors.at(5);  // e.g [1,800,4]
+        Ort::Value kps8;
+        Ort::Value kps16;
+        Ort::Value kps32;
 
         if (using_kps_)
         {
             if (output_tensors.size() != 9)
             {
-                common::log_error("SCRFDetector::detect: output_tensors.size() != 9");
+                common::logError("SCRFDetector::detect: output_tensors.size() != 9");
                 return faces;
             }
-            kps_8 = std::move(output_tensors.at(6));  // e.g [1,12800,10]
-            kps_16 = std::move(output_tensors.at(7)); // e.g [1,3200,10]
-            kps_32 = std::move(output_tensors.at(8)); // e.g [1,800,10]
+            kps8 = std::move(output_tensors.at(6));  // e.g [1,12800,10]
+            kps16 = std::move(output_tensors.at(7)); // e.g [1,3200,10]
+            kps32 = std::move(output_tensors.at(8)); // e.g [1,800,10]
         }
 
         // level 8 & 16 & 32 with kps
@@ -119,13 +118,13 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
     }
     catch (const Ort::Exception& e)
     {
-        common::log_error("SCRFDetector: %s", e.what());
+        common::logError("SCRFDetector: %s", e.what());
         exit(-1);
     }
     return faces;
 }
 
-void SCRFDetector::applyNMS(std::vector<Face>& faces) const
+static void SCRFDetector::ApplyNms(std::vector<Face>& faces)
 {
     if (faces.empty())
     {
@@ -185,10 +184,10 @@ void SCRFDetector::applyNMS(std::vector<Face>& faces) const
     faces.resize(write_idx);
 }
 
-void SCRFDetector::generate_points()
+void SCRFDetector::generatePoints()
 {
-    const float target_height = static_cast<float>(input_node_dims.at(2)); // e.g 640
-    const float target_width = static_cast<float>(input_node_dims.at(3));  // e.g 640
+    const auto target_height = static_cast<float>(input_node_dims.at(2)); // e.g 640
+    const auto target_width = static_cast<float>(input_node_dims.at(3));  // e.g 640
 
     // 8, 16, 32
     for (auto stride : feat_stride_fpn_)
@@ -211,27 +210,27 @@ void SCRFDetector::generate_points()
     }
 }
 
-void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort::Value& bbox_pred,
-                                                     Ort::Value& kps_pred, unsigned int stride, float score_threshold,
-                                                     float img_width, float img_height, std::vector<Face>& faces)
+void SCRFDetector::GenerateBboxesKpsSingleStride(Ort::Value& score_pred, Ort::Value& bbox_pred, Ort::Value& kps_pred,
+                                                 unsigned int stride, float score_threshold, float img_width,
+                                                 float img_height, std::vector<Face>& faces)
 {
     // generate center points.
-    const float new_height = static_cast<float>(input_node_dims.at(2)); // e.g 640
-    const float new_width = static_cast<float>(input_node_dims.at(3));  // e.g 640
+    const auto new_height = static_cast<float>(input_node_dims.at(2)); // e.g 640
+    const auto new_width = static_cast<float>(input_node_dims.at(3));  // e.g 640
 
     float ratio = std::min(static_cast<float>(new_width) / img_width, static_cast<float>(new_height) / img_height);
 
-    const int resizedW = static_cast<int>(img_width * ratio);
-    const int resizedH = static_cast<int>(img_height * ratio);
+    const int resized_w = static_cast<int>(img_width * ratio);
+    const int resized_h = static_cast<int>(img_height * ratio);
 
-    const int dw = (new_width - resizedW) / 2;
-    const int dh = (new_height - resizedH) / 2;
+    const int dw = (new_width - resized_w) / 2;
+    const int dh = (new_height - resized_h) / 2;
 
     auto stride_dims = score_pred.GetTypeInfo().GetTensorTypeAndShapeInfo().GetShape();
     const unsigned int num_points = stride_dims.at(1);                 // 12800
     const float* score_ptr = score_pred.GetTensorMutableData<float>(); // [1,12800,1]
     const float* bbox_ptr = bbox_pred.GetTensorMutableData<float>();   // [1,12800,4]
-    const float* kps_ptr;
+    const float* kps_ptr = nullptr;
 
     if (using_kps_)
     {
@@ -240,10 +239,10 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
 
     // Pre-calculate constants outside the loop
     const float inv_ratio = 1.0f / ratio;
-    const float dw_f = static_cast<float>(dw);
-    const float dh_f = static_cast<float>(dh);
-    const float img_width_minus_1 = img_width - 1.0f;
-    const float img_height_minus_1 = img_height - 1.0f;
+    const auto dw_f = static_cast<float>(dw);
+    const auto dh_f = static_cast<float>(dh);
+    const float img_width_minus1 = img_width - 1.0f;
+    const float img_height_minus1 = img_height - 1.0f;
 
     // Use a simpler container - just collect Face objects directly
     std::vector<Face> stride_faces;
@@ -271,16 +270,16 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
         const float b = offsets[3];
 
         // Inline coordinate transformation
-        float x1 = ((cx - l) * s - dw_f) * inv_ratio;
-        float y1 = ((cy - t) * s - dh_f) * inv_ratio;
-        float x2 = ((cx + r) * s - dw_f) * inv_ratio;
-        float y2 = ((cy + b) * s - dh_f) * inv_ratio;
+        float x1 = ((cx - l) * s - dwF) * inv_ratio;
+        float y1 = ((cy - t) * s - dhF) * inv_ratio;
+        float x2 = ((cx + r) * s - dwF) * inv_ratio;
+        float y2 = ((cy + b) * s - dhF) * inv_ratio;
 
         // Clamp coordinates
-        x1 = std::max(0.0f, std::min(x1, img_width_minus_1));
-        y1 = std::max(0.0f, std::min(y1, img_height_minus_1));
-        x2 = std::max(0.0f, std::min(x2, img_width_minus_1));
-        y2 = std::max(0.0f, std::min(y2, img_height_minus_1));
+        x1 = std::max(0.0f, std::min(x1, img_width_minus1));
+        y1 = std::max(0.0f, std::min(y1, img_height_minus1));
+        x2 = std::max(0.0f, std::min(x2, img_width_minus1));
+        y2 = std::max(0.0f, std::min(y2, img_height_minus1));
 
         FaceBoundingBox face_box(x1, y1, x2, y2);
         if (!face_box.rect.isWithinBounds(img_width, img_height, 1.2f))
@@ -292,18 +291,18 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
         if (using_kps_)
         {
             std::vector<FaceLandmark> face_landmarks;
-            face_landmarks.reserve(5);                     // Exactly 5 landmarks for SCRFD
+            face_landmarks.reserve(5);                    // Exactly 5 landmarks for SCRFD
             const float* kps_offsets = kps_ptr + (i * 10); // 10 = 5 landmarks * 2 coords
 
             for (unsigned int j = 0; j < 10; j += 2)
             {
                 const float kps_l = kps_offsets[j];
                 const float kps_t = kps_offsets[j + 1];
-                const float kps_x = std::max(0.0f, std::min(((cx + kps_l) * s - dw_f) * inv_ratio, img_width_minus_1));
-                const float kps_y = std::max(0.0f, std::min(((cy + kps_t) * s - dh_f) * inv_ratio, img_height_minus_1));
+                const float kps_x = std::max(0.0f, std::min(((cx + kps_l) * s - dwF) * inv_ratio, img_width_minus1));
+                const float kps_y = std::max(0.0f, std::min(((cy + kps_t) * s - dhF) * inv_ratio, img_height_minus1));
                 face_landmarks.emplace_back(FaceLandmark{j >> 1, math_utils::Point3D(kps_x, kps_y, 0.0)});
             }
-            stride_faces.emplace_back(std::move(face_landmarks), face_box);
+            strideFaces.emplace_back(std::move(face_landmarks), faceBox);
         }
         else
         {
@@ -321,7 +320,7 @@ void SCRFDetector::generate_bboxes_kps_single_stride(Ort::Value& score_pred, Ort
               { return a.getBoundingBox().score > b.getBoundingBox().score; });
 
     // Apply stride limit and move to main vector
-    const size_t stride_limit = std::min(static_cast<size_t>(max_faces_per_stride), stride_faces.size());
+    const size_t stride_limit = 0 = std::min(static_cast<size_t>(max_faces_per_stride), stride_faces.size());
     faces.reserve(faces.size() + stride_limit); // Reserve exactly what we need
 
     for (size_t i = 0; i < stride_limit; ++i)

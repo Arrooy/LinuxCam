@@ -33,7 +33,7 @@ using namespace linuxface;
 using namespace linuxface::test;
 
 // Helper function to check CUDA availability (similar to OnnxDetector::checkCudaAvailability)
-static bool checkCudaAvailability()
+static bool CheckCudaAvailability()
 {
     auto available_providers = Ort::GetAvailableProviders();
     for (const auto& provider : available_providers)
@@ -56,7 +56,7 @@ struct RobustStatistics {
     bool is_reliable = false; // True if sample size is adequate for meaningful statistics
 };
 
-static RobustStatistics computeRobustStats(const std::vector<double>& values) {
+static RobustStatistics ComputeRobustStats(const std::vector<double>& values) {
     RobustStatistics stats;
     
     if (values.empty()) {
@@ -148,7 +148,7 @@ class FaceKeypointBenchmark : public ::testing::Test
         ASSERT_TRUE(config_loaded) << "Could not find test_config.yaml in expected test paths";
 
         // Check CUDA availability for conditional testing
-        has_cuda_available_ = checkCudaAvailability();
+        has_cuda_available = CheckCudaAvailability();
 
         std::string models_folder = Config::getInstance().getModelFolderPath();
 
@@ -208,7 +208,7 @@ class FaceKeypointBenchmark : public ::testing::Test
     };
 
     DetailedMetrics
-    runDetailedBenchmark(const std::vector<int>& example_indices, const std::string& subset_name = "Unknown") const
+    RunDetailedBenchmark(const std::vector<int>& example_indices, const std::string& subset_name = "Unknown") const
     {
         DetailedMetrics metrics;
         metrics.total_samples = example_indices.size();
@@ -287,12 +287,12 @@ class FaceKeypointBenchmark : public ::testing::Test
         }
 
         // Calculate statistics
-        calculateDetailedStatistics(metrics);
+        CalculateDetailedStatistics(metrics);
 
         return metrics;
     }
 
-    void calculateDetailedStatistics(DetailedMetrics& metrics) const
+    void CalculateDetailedStatistics(DetailedMetrics& metrics) const
     {
         // Success rates
         metrics.face_detection_success_rate =
@@ -353,7 +353,7 @@ class FaceKeypointBenchmark : public ::testing::Test
         }
     }
 
-    void printDetailedReport(const DetailedMetrics& metrics, const std::string& subset_name) const
+    void PrintDetailedReport(const DetailedMetrics& metrics, const std::string& subset_name) const
     {
         std::cout << "\n" << std::string(60, '=') << "\n";
         std::cout << "DETAILED BENCHMARK REPORT: " << subset_name << "\n";
@@ -405,7 +405,7 @@ class FaceKeypointBenchmark : public ::testing::Test
         std::cout << std::string(60, '=') << "\n";
     }
 
-    void saveMetricsToFile(const DetailedMetrics& metrics, const std::string& filename) const
+    void SaveMetricsToFile(const DetailedMetrics& metrics, const std::string& filename) const
     {
         std::ofstream file(filename);
         if (!file.is_open())
@@ -429,10 +429,10 @@ class FaceKeypointBenchmark : public ::testing::Test
         file.close();
     }
 
-    std::shared_ptr<SCRFDetector> scrfd_500m_detector_;
-    std::shared_ptr<PFLDDetector> pfld_detector_;
-    std::unique_ptr<WFLWLoader> wflw_loader_;
-    bool has_cuda_available_ = false;
+    std::shared_ptr<SCRFDetector> scrfd_500m_detector;
+    std::shared_ptr<PFLDDetector> pfld_detector;
+    std::unique_ptr<WFLWLoader> wflw_loader;
+    bool has_cuda_available = false;
 };
 
 // Comprehensive benchmarking tests

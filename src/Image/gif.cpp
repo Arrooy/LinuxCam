@@ -4,14 +4,13 @@
 namespace linuxface
 {
 
-Gif::Gif(const std::string& filename) : filename_(filename)
+Gif::Gif(const std::string& filename) : gif_(gd_open_gif(filename.c_str())), filename_(filename)
 {
-    gif_ = gd_open_gif(filename.c_str());
 }
 
 Gif::~Gif()
 {
-    if (gif_)
+    if (gif_ != nullptr)
     {
         gd_close_gif(gif_);
     }
@@ -24,7 +23,7 @@ bool Gif::isOpen() const
 
 bool Gif::decodeAllFrames()
 {
-    if (!gif_)
+    if (gif_ == nullptr)
     {
         return false;
     }
@@ -48,8 +47,8 @@ bool Gif::decodeAllFrames()
         img->info.filename = filename_ + "_" + std::to_string(i++);
         size_ += frameSize;
         frameImages_.push_back(std::move(img));
-    } while (gd_get_frame(gif_));
-    common::log_info("Gif loaded using %s", common::format_size(size_));
+    } while (gd_get_frame(gif_) != 0);
+    common::logInfo("Gif loaded using %s", common::formatSize(size_));
     return true;
 }
 
@@ -78,7 +77,7 @@ std::unique_ptr<Image>& Gif::next()
     }
     else
     {
-        common::log_error("Gif::next - No image found at index %zu", index_);
+        common::logError("Gif::next - No image found at index %zu", index_);
     }
     return img;
 }

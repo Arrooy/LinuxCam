@@ -1,6 +1,7 @@
 #include "LinuxFace/imageLoader.h"
 
 #include <algorithm>
+#include <boost/range/algorithm/transform.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -49,11 +50,11 @@ ImageFormat ImageFormatDetector::detectFormatFromPath(const std::string& path)
     }
 
     // Extract file extension
-    std::filesystem::path file_path(path);
+    const std::filesystem::path file_path(path);
     std::string extension = file_path.extension().string();
 
     // Convert to lowercase for comparison
-    std::transform(extension.begin(), extension.end(), extension.begin(),
+    boost::range::transform(extension,, extension.begin(),
                    [](unsigned char c) { return std::tolower(c); });
 
     if (extension == ".jpg" || extension == ".jpeg")
@@ -76,7 +77,7 @@ ImageFormat ImageFormatDetector::detectFormatFromPath(const std::string& path)
     return ImageFormat::UNKNOWN;
 }
 
-bool ImageFormatDetector::isJPEG(const std::vector<unsigned char>& data)
+bool ImageFormatDetector::IsJpeg(const std::vector<unsigned char>& data)
 {
     if (data.size() < 2)
     {
@@ -87,7 +88,7 @@ bool ImageFormatDetector::isJPEG(const std::vector<unsigned char>& data)
     return data[0] == 0xFF && data[1] == 0xD8;
 }
 
-bool ImageFormatDetector::isPNG(const std::vector<unsigned char>& data)
+bool ImageFormatDetector::IsPng(const std::vector<unsigned char>& data)
 {
     if (data.size() < 8)
     {
@@ -99,7 +100,7 @@ bool ImageFormatDetector::isPNG(const std::vector<unsigned char>& data)
     return std::equal(png_signature, png_signature + 8, data.begin());
 }
 
-bool ImageFormatDetector::isBMP(const std::vector<unsigned char>& data)
+bool ImageFormatDetector::IsBmp(const std::vector<unsigned char>& data)
 {
     if (data.size() < 2)
     {
@@ -110,7 +111,7 @@ bool ImageFormatDetector::isBMP(const std::vector<unsigned char>& data)
     return data[0] == 0x42 && data[1] == 0x4D;
 }
 
-bool ImageFormatDetector::isPPM(const std::vector<unsigned char>& data)
+bool ImageFormatDetector::IsPpm(const std::vector<unsigned char>& data)
 {
     // Minimal check for P6 PPM header
     // Only return true if header matches exactly 'P6' and not just any 'P' file
@@ -118,7 +119,7 @@ bool ImageFormatDetector::isPPM(const std::vector<unsigned char>& data)
 }
 
 // ImageLoader Implementation
-ImageLoader::ImageLoader(LoadStrategy strategy) : strategy_(strategy), is_decoded_(false)
+ImageLoader::ImageLoader(LoadStrategy strategy) : strategy_(strategy)
 {
     metadata_.is_valid = false;
 }
@@ -136,21 +137,21 @@ bool ImageLoader::loadFromFile(const std::string& file_path)
     // Load file data
     if (!loadFileData(file_path))
     {
-        common::log_error("Failed to load file data from: %s", file_path.c_str());
+        common::logError("Failed to load file data from: %s", file_path.c_str());
         return false;
     }
 
     // Extract metadata
     if (!extractMetadata())
     {
-        common::log_error("Failed to extract metadata from: %s", file_path.c_str());
+        common::logError("Failed to extract metadata from: %s", file_path.c_str());
         return false;
     }
 
     // Create decoder based on format
     if (!createDecoder())
     {
-        common::log_error("Failed to create decoder for format: %d", static_cast<int>(metadata_.format));
+        common::logError("Failed to create decoder for format: %d", static_cast<int>(metadata_.format));
         return false;
     }
 
@@ -160,7 +161,7 @@ bool ImageLoader::loadFromFile(const std::string& file_path)
         std::unique_ptr<Image> temp_image;
         if (!getImage(temp_image))
         {
-            common::log_error("Failed to decode image immediately");
+            common::logError("Failed to decode image immediately");
             return false;
         }
     }
@@ -168,46 +169,46 @@ bool ImageLoader::loadFromFile(const std::string& file_path)
     return true;
 }
 
-bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
+bool ImageLoader::getImage(std::unique_ptr<Image>& out_image)
 {
     if (!metadata_.is_valid)
     {
-        common::log_error("Cannot get image: metadata is invalid");
+        common::logError("Cannot get image: metadata is invalid");
         return false;
     }
 
     if (strategy_ == LoadStrategy::METADATA_ONLY)
     {
-        common::log_error("Cannot get image data with METADATA_ONLY strategy");
+        common::logError("Cannot get image data with METADATA_ONLY strategy");
         return false;
     }
 
     // Return cached copy of decoded image if available
     if (is_decoded_ && decoded_image_)
     {
-        outImage = decoded_image_->deepCopy();
+        out_image = decoded_image_->deepCopy();
         return true;
     }
 
     // Decode the image
     if (!decoder_)
     {
-        common::log_error("No decoder available");
+        common::logError("No decoder available");
         return false;
     }
 
     // Create source image from raw file data (non-owning reference)
-    Image srcImage(const_cast<unsigned char*>(raw_data_.data()), raw_data_.size(), false);
-    srcImage.info = metadata_;
+    Image src_image(const_cast<unsigned char*>(raw_data_.data()), raw_data_.size(), false);
+    src_image.info = metadata_;
 
     // Create decoded image for caching
     decoded_image_ = std::make_unique<Image>();
 
     // Step 1: Decode header to get image dimensions and required buffer size
     unsigned long raw_needed_size = 0;
-    if (!decoder_->decodeHeader(srcImage, raw_needed_size))
+    if (!decoder_->decodeHeader(src_image, raw_needed_size))
     {
-        common::log_error("Failed to decode header");
+        common::logError("Failed to decode header");
         return false;
     }
 
@@ -215,9 +216,9 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
     decoded_image_->resize(raw_needed_size);
 
     // Step 3: Perform actual decoding directly into cached image
-    if (!decoder_->decode(srcImage, *decoded_image_))
+    if (!decoder_->decode(src_image, *decoded_image_))
     {
-        common::log_error("Failed to decode image data");
+        common::logError("Failed to decode image data");
         decoded_image_.reset(); // Clean up on failure
         return false;
     }
@@ -227,11 +228,11 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
     // Mark as decoded
     is_decoded_ = true;
 
-    common::log_info("ImageLoader::loadFileData: Decoded image data successfully");
-    common::log_info("Width height: %d x %d", decoded_image_->info.width, decoded_image_->info.height);
-    common::log_info("Size of decoded image: %d bytes", decoded_image_->size());
+    common::logInfo("ImageLoader::loadFileData: Decoded image data successfully");
+    common::logInfo("Width height: %d x %d", decoded_image_->info.width, decoded_image_->info.height);
+    common::logInfo("Size of decoded image: %d bytes", decoded_image_->size());
     // Return a deep copy of the cached decoded image
-    outImage = decoded_image_->deepCopy();
+    out_image = decoded_image_->deepCopy();
     return true;
 }
 
@@ -244,7 +245,7 @@ bool ImageLoader::loadFileData(const std::string& file_path)
     }
 
     // Get file size
-    std::streamsize file_size = file.tellg();
+    const std::streamsize file_size = file.tellg();
     if (file_size <= 0)
     {
         return false;
@@ -267,7 +268,7 @@ bool ImageLoader::extractMetadata()
 {
     if (raw_data_.empty())
     {
-        common::log_info("ImageLoader::extractMetadata - Raw data is empty");
+        common::logInfo("ImageLoader::extractMetadata - Raw data is empty");
         return false;
     }
 
@@ -275,7 +276,7 @@ bool ImageLoader::extractMetadata()
     metadata_.format = ImageFormatDetector::detectFormat(raw_data_);
     if (metadata_.format == ImageFormat::UNKNOWN)
     {
-        common::log_info("ImageLoader::extractMetadata - Unknown image format");
+        common::logInfo("ImageLoader::extractMetadata - Unknown image format");
         return false;
     }
 
@@ -334,7 +335,7 @@ bool ImageLoader::createDecoder()
             // decoder_ = std::make_unique<BmpDecoder>();
             // break;
         default:
-            common::log_error("Unsupported image format: %d", static_cast<int>(metadata_.format));
+            common::logError("Unsupported image format: %d", static_cast<int>(metadata_.format));
             return false;
     }
 

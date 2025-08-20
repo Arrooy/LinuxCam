@@ -14,16 +14,16 @@ int main(int argc, char* argv[])
 {
     try
     {
-        linuxface::common::init_logger("a0.0.0");
-        std::string config_file_location{"../config.yaml"};
+        linuxface::common::initLogger("a0.0.0");
+        std::string configFileLocation{"../config.yaml"};
         if (argc > 1)
         {
-            linuxface::common::log_info("Config file: %s", argv[1]);
-            config_file_location = std::string(argv[1]);
+            linuxface::common::logInfo("Config file: %s", argv[1]);
+            configFileLocation = std::string(argv[1]);
         }
-        if (!Config::getInstance(config_file_location.c_str()).loadConfiguration())
+        if (!Config::getInstance(configFileLocation.c_str()).loadConfiguration())
         {
-            linuxface::common::log_error("Failed to load configuration");
+            linuxface::common::logError("Failed to load configuration");
             return -1;
         }
 
@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
         // Initialize the application
         if (!app.initialize())
         {
-            linuxface::common::log_error("Failed to initialize application");
+            linuxface::common::logError("Failed to initialize application");
             return -1;
         }
 
@@ -40,17 +40,17 @@ int main(int argc, char* argv[])
         app.run();
 
         // Cleanup happens automatically via destructors
-        linuxface::common::log_info("Application finished successfully");
+        linuxface::common::logInfo("Application finished successfully");
         return 0;
     }
     catch (const std::exception& e)
     {
-        linuxface::common::log_error("Unhandled exception: %s", e.what());
+        linuxface::common::logError("Unhandled exception: %s", e.what());
         return -1;
     }
     catch (...)
     {
-        linuxface::common::log_error("Unknown exception occurred");
+        linuxface::common::logError("Unknown exception occurred");
         return -1;
     }
 }

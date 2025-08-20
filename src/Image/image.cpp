@@ -14,40 +14,40 @@ using namespace linuxface;
 using namespace linuxface::pixel_conversion;
 
 // Optimized pixel operations using centralized conversion logic
-namespace linuxface::PixelOperations
+namespace linuxface::pixel_operations
 {
-void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize, unsigned char srcAlpha,
-                 unsigned char dstPixelSize, unsigned char dstAlpha) noexcept
+void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char src_pixel_size, unsigned char src_alpha,
+                 unsigned char dst_pixel_size, unsigned char /*dstAlpha*/) noexcept
 {
     // Skip transparent pixels for RGBA formats
-    if (srcPixelSize == 4 && srcAlpha == 0)
+    if (src_pixel_size == 4 && src_alpha == 0)
     {
         return;
     }
 
     // Determine conversion type and apply optimized conversion
-    ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+    const ConversionType conv_type = getConversionType(src_pixel_size, dst_pixel_size);
 
     // Special handling for RGBA->RGBA blending
-    if (convType == ConversionType::DIRECT_COPY && srcPixelSize == 4)
+    if (conv_type == ConversionType::DIRECT_COPY && src_pixel_size == 4)
     {
-        bool needsBlending = (srcAlpha != 255 && srcAlpha != 0);
-        convertPixel(src, dst, convType, srcAlpha, needsBlending);
+        const bool needs_blending = (src_alpha != 255 && src_alpha != 0);
+        convertPixel(src, dst, conv_type, src_alpha, needs_blending);
         return;
     }
 
     // For grayscale blending with alpha
-    if (srcPixelSize == 1 && srcAlpha != 255 && srcAlpha != 0)
+    if (src_pixel_size == 1 && src_alpha != 255 && src_alpha != 0)
     {
         // Blend grayscale with alpha
-        dst[0] = static_cast<unsigned char>((srcAlpha * src[0] + (255 - srcAlpha) * dst[0]) / 255);
+        dst[0] = static_cast<unsigned char>((src_alpha * src[0] + (255 - src_alpha) * dst[0]) / 255);
         return;
     }
 
     // Use unified conversion for all other cases
-    convertPixel(src, dst, convType, srcAlpha, false);
+    convertPixel(src, dst, conv_type, src_alpha, false);
 }
-} // namespace linuxface::PixelOperations
+} // namespace linuxface::pixel_operations
 
 // Constructors with improved memory management
 Image::Image(size_t size) : size_(size)
@@ -66,17 +66,17 @@ Image::Image(size_t size) : size_(size)
 
 Image::Image(unsigned char* buffer, size_t size) : size_(size)
 {
-    if (buffer && size > 0)
+    if ((buffer != nullptr) && size > 0)
     {
         data_ = std::shared_ptr<unsigned char>(buffer, std::default_delete<unsigned char[]>());
     }
 }
 
-Image::Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(size)
+Image::Image(unsigned char* buffer, size_t size, bool take_ownership) : size_(size)
 {
-    if (buffer && size > 0)
+    if ((buffer != nullptr) && size > 0)
     {
-        if (takeOwnership)
+        if (take_ownership)
         {
             data_ = std::shared_ptr<unsigned char>(buffer, std::default_delete<unsigned char[]>());
         }
@@ -88,27 +88,26 @@ Image::Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(siz
     }
 }
 
-Image::Image(Pixel color, size_t width, size_t height)
+Image::Image(Pixel color, size_t width, size_t height) : size_(width * height * info.pixelSizeBytes)
 {
     // Determine format based on alpha value
-    bool hasAlpha = (color.a != 255);
-    info.pixelSizeBytes = hasAlpha ? 4 : 3;
-    info.format = hasAlpha ? ImageFormat::RGBA : ImageFormat::RGB;
+    const bool has_alpha = (color.a != 255);
+    info.pixelSizeBytes = has_alpha ? 4 : 3;
+    info.format = has_alpha ? ImageFormat::RGBA : ImageFormat::RGB;
     info.width = width;
     info.height = height;
 
-    size_ = width * height * info.pixelSizeBytes;
     data_ = std::shared_ptr<unsigned char>(new unsigned char[size_], std::default_delete<unsigned char[]>());
 
     // Fill with the color
     unsigned char* d = data_.get();
     for (size_t i = 0; i < width * height; ++i)
     {
-        size_t idx = i * info.pixelSizeBytes;
+        const size_t idx = i * info.pixelSizeBytes;
         d[idx + 0] = color.r;
         d[idx + 1] = color.g;
         d[idx + 2] = color.b;
-        if (hasAlpha)
+        if (has_alpha)
         {
             d[idx + 3] = color.a;
         }
@@ -148,63 +147,63 @@ void Image::black()
         memset(data_.get(), 0, size_);
     }
 }
-void Image::resize(size_t newSize, bool preserveData)
+void Image::resize(size_t new_size, bool preserve_data)
 {
-    if (newSize == 0)
+    if (new_size == 0)
     {
         data_.reset();
         size_ = 0;
         return;
     }
 
-    if (size_ != newSize)
+    if (size_ != new_size)
     {
-        std::shared_ptr<unsigned char> newData(new unsigned char[newSize], std::default_delete<unsigned char[]>());
+        std::shared_ptr<unsigned char> new_data(new unsigned char[new_size], std::default_delete<unsigned char[]>());
 
         // MED-004 OPTIMIZATION: Conditional data preservation with performance analysis.
         // Analysis shows most calls use preserveData=false (copyFrom, scaleToInPlace),
         // but some legitimate cases need data preserved (JPEG codec tests, buffer reallocation).
         // Only perform memcpy when explicitly requested and both buffers are valid.
-        if (preserveData && data_ && size_ > 0)
+        if (preserve_data && data_ && size_ > 0)
         {
             // Copy existing data, preserving as much as fits in the new buffer
-            memcpy(newData.get(), data_.get(), std::min(size_, newSize));
+            memcpy(new_data.get(), data_.get(), std::min(size_, new_size));
             // Zero-fill any additional space in larger buffers
-            if (newSize > size_)
+            if (new_size > size_)
             {
-                memset(newData.get() + size_, 0, newSize - size_);
+                memset(new_data.get() + size_, 0, new_size - size_);
             }
         }
         else
         {
             // Initialize new data to zero when not preserving
-            memset(newData.get(), 0, newSize);
+            memset(new_data.get(), 0, new_size);
         }
 
-        data_ = std::move(newData);
-        size_ = newSize;
+        data_ = std::move(new_data);
+        size_ = new_size;
     }
 }
 
 Pixel Image::operator()(size_t col, size_t row) const
 {
-    size_t idx = index(col, row);
+    const size_t idx = index(col, row);
     if (idx >= size_ || !data_)
     {
-        common::log_error("Image::operator(): index out of bounds [col,row] %zu, %zu Index: %zu", col, row, idx);
-        return Pixel(0, 0, 0, DEFAULT_ALPHA);
+        common::logError("Image::operator(): index out of bounds [col,row] %zu, %zu Index: "
+                         "%zu",
+                         col, row, idx);
+        return {0, 0, 0, DefaultAlpha};
     }
 
-    // TODO: Byte order depends on pixelFormat. Forced to RGBA for now
+    // TODO(arroyo): Byte order depends on pixelFormat. Forced to RGBA for now
     unsigned char* data = data_.get();
     if (info.pixelSizeBytes == 4)
     {
-        return Pixel(data[idx], data[idx + 1], data[idx + 2], data[idx + 3]);
+        return {data[idx], data[idx + 1], data[idx + 2], data[idx + 3]};
     }
-    else
-    {
-        return Pixel(data[idx], data[idx + 1], data[idx + 2], DEFAULT_ALPHA);
-    }
+
+    return {data[idx], data[idx + 1], data[idx + 2], DefaultAlpha};
 }
 
 void Image::ppx(size_t col, size_t row, const Pixel& c)
@@ -215,10 +214,10 @@ void Image::ppx(size_t col, size_t row, const Pixel& c)
 void Image::pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b,
                 const unsigned char a)
 {
-    size_t idx = index(col, row);
+    const size_t idx = index(col, row);
     if (idx >= size_ || !data_)
     {
-        common::log_error("Image::pxy: index out of bounds [col,row] %zu, %zu Index: %zu", col, row, idx);
+        common::logError("Image::pxy: index out of bounds [col,row] %zu, %zu Index: %zu", col, row, idx);
         return;
     }
     this->pidx(idx, r, g, b, a);
@@ -229,11 +228,11 @@ void Image::pidx(size_t idx, const unsigned char r, const unsigned char g, const
     // Use PixelOperations for consistency
     if (info.pixelSizeBytes == 4)
     {
-        PixelOperations::setPixelRGBA(data_.get(), idx, r, g, b, a);
+        pixel_operations::setPixelRgba(data_.get(), idx, r, g, b, a);
     }
     else
     {
-        PixelOperations::setPixelRGB(data_.get(), idx, r, g, b);
+        pixel_operations::setPixelRgb(data_.get(), idx, r, g, b);
     }
 }
 
@@ -245,7 +244,7 @@ bool Image::isColorImage() const noexcept
 unsigned char Image::getExpectedPixelSize() const noexcept
 {
     // Use compile-time lookup for cleaner and more maintainable code
-    static constexpr std::pair<ImageFormat, unsigned char> formatSizes[] = {
+    static constexpr std::pair<ImageFormat, unsigned char> FormatSizes[] = {
         {ImageFormat::RGB,         3            },
         {ImageFormat::RGBA,        4            },
         {ImageFormat::GRAYSCALE,   1            },
@@ -253,7 +252,7 @@ unsigned char Image::getExpectedPixelSize() const noexcept
         {ImageFormat::DEPTH_Z16,   2            },
     };
 
-    for (const auto& [format, size] : formatSizes)
+    for (const auto& [format, size] : FormatSizes)
     {
         if (info.format == format)
         {
@@ -286,7 +285,7 @@ void Image::copyFrom(const Image& other)
     {
         this->resize(other.size_, false);
         // Copy data if both images have valid data pointers and size > 0
-        if (data_ && other.data() && size_ > 0)
+        if (data_ && (other.data() != nullptr) && size_ > 0)
         {
             std::memcpy(data_.get(), other.data(), size_);
         }
@@ -297,7 +296,7 @@ void Image::copyFrom(const Image& other)
 std::unique_ptr<Image> Image::deepCopy() const
 {
     auto copy = std::make_unique<Image>(size_);
-    if (data_ && copy->data() && size_ > 0)
+    if (data_ && (copy->data() != nullptr) && size_ > 0)
     {
         std::memcpy(copy->data(), data_.get(), size_);
     }
@@ -305,32 +304,33 @@ std::unique_ptr<Image> Image::deepCopy() const
     return copy;
 }
 
-void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
-                             unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth,
-                             unsigned long dstHeight, ScalingAlgorithm algorithm) const
+void Image::scaleImageBuffer(const unsigned char* src_data, unsigned long src_width, unsigned long src_height,
+                             unsigned char pixel_size, unsigned char* dst_data, unsigned long dst_width,
+                             unsigned long dst_height, ScalingAlgorithm algorithm)
 {
     // Use non-const T for both src and dst to match template requirements
-    image_utils::ImageView<unsigned char> srcView{const_cast<unsigned char*>(srcData), srcWidth, srcHeight, pixelSize};
-    image_utils::ImageView<unsigned char> dstView{dstData, dstWidth, dstHeight, pixelSize};
+    const image_utils::ImageView<unsigned char> src_view{const_cast<unsigned char*>(src_data), src_width, src_height,
+                                                        pixel_size};
+    image_utils::ImageView<unsigned char> dst_view{dst_data, dst_width, dst_height, pixel_size};
     switch (algorithm)
     {
         case ScalingAlgorithm::LANCZOS:
-            image_utils::lanczosScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::lanczosScaling<unsigned char, unsigned char, NormalizationType::NONE>(src_view, dst_view);
             break;
         case ScalingAlgorithm::BILINEAR:
-            image_utils::bilinearScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::bilinearScaling<unsigned char, unsigned char, NormalizationType::NONE>(src_view, dst_view);
             break;
         case ScalingAlgorithm::AREA_AVERAGING:
-            image_utils::areaAveragingScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::areaAveragingScaling<unsigned char, unsigned char, NormalizationType::NONE>(src_view, dst_view);
             break;
         case ScalingAlgorithm::FAST_BOX:
-            image_utils::fastBoxScaling<unsigned char, unsigned char>(srcView, dstView);
+            image_utils::fastBoxScaling<unsigned char, unsigned char>(src_view, dst_view);
             break;
         case ScalingAlgorithm::BICUBIC:
-            image_utils::bicubicScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::bicubicScaling<unsigned char, unsigned char, NormalizationType::NONE>(src_view, dst_view);
             break;
         default:
-            common::log_error("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
+            common::logError("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
             break;
     }
 }
@@ -342,48 +342,48 @@ void Image::scaleInPlace(double factor, ScalingAlgorithm algorithm)
     {
         return;
     }
-    size_t newWidth = static_cast<size_t>(info.width * factor + 0.5);
-    size_t newHeight = static_cast<size_t>(info.height * factor + 0.5);
-    if (newWidth == 0)
+    auto new_width = static_cast<size_t>((info.width * factor) + 0.5);
+    auto new_height = static_cast<size_t>((info.height * factor) + 0.5);
+    if (new_width == 0)
     {
-        newWidth = 1;
+        new_width = 1;
     }
-    if (newHeight == 0)
+    if (new_height == 0)
     {
-        newHeight = 1;
+        new_height = 1;
     }
-    scaleToInPlace(newWidth, newHeight, algorithm);
+    scaleToInPlace(new_width, new_height, algorithm);
 }
 
-void Image::scaleInPlace(unsigned long newWidth, unsigned long newHeight, ScalingAlgorithm algorithm)
+void Image::scaleInPlace(unsigned long new_width, unsigned long new_height, ScalingAlgorithm algorithm)
 {
-    scaleToInPlace(static_cast<size_t>(newWidth), static_cast<size_t>(newHeight), algorithm);
+    scaleToInPlace(static_cast<size_t>(new_width), static_cast<size_t>(new_height), algorithm);
 }
 
-void Image::scaleToInPlace(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm)
+void Image::scaleToInPlace(size_t new_width, size_t new_height, ScalingAlgorithm algorithm)
 {
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
     {
         return;
     }
-    if (newWidth == 0 || newHeight == 0)
+    if (new_width == 0 || new_height == 0)
     {
         return;
     }
 
-    if (newWidth == info.width && newHeight == info.height)
+    if (new_width == info.width && new_height == info.height)
     {
         return;
     }
 
-    std::vector<unsigned char> result(newWidth * newHeight * info.pixelSizeBytes);
-    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes, result.data(), newWidth, newHeight,
+    std::vector<unsigned char> result(new_width * new_height * info.pixelSizeBytes);
+    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes, result.data(), new_width, new_height,
                      algorithm);
 
-    resize(newWidth * newHeight * info.pixelSizeBytes, false);
-    std::memcpy(data_.get(), result.data(), newWidth * newHeight * info.pixelSizeBytes);
-    info.width = newWidth;
-    info.height = newHeight;
+    resize(new_width * new_height * info.pixelSizeBytes, false);
+    std::memcpy(data_.get(), result.data(), new_width * new_height * info.pixelSizeBytes);
+    info.width = new_width;
+    info.height = new_height;
 }
 
 std::unique_ptr<Image> Image::scale(double factor, ScalingAlgorithm algorithm) const
@@ -393,52 +393,52 @@ std::unique_ptr<Image> Image::scale(double factor, ScalingAlgorithm algorithm) c
         return nullptr;
     }
 
-    size_t newWidth = static_cast<size_t>(info.width * factor + 0.5);
-    size_t newHeight = static_cast<size_t>(info.height * factor + 0.5);
+    auto new_width = static_cast<size_t>((info.width * factor) + 0.5);
+    auto new_height = static_cast<size_t>((info.height * factor) + 0.5);
     // Ensure minimum size of 1x1
-    if (newWidth == 0)
+    if (new_width == 0)
     {
-        newWidth = 1;
+        new_width = 1;
     }
-    if (newHeight == 0)
+    if (new_height == 0)
     {
-        newHeight = 1;
+        new_height = 1;
     }
 
-    return scaleTo(newWidth, newHeight, algorithm);
+    return scaleTo(new_width, new_height, algorithm);
 }
 
-std::unique_ptr<Image> Image::scaleTo(size_t newWidth, size_t newHeight, ScalingAlgorithm algorithm) const
+std::unique_ptr<Image> Image::scaleTo(size_t new_width, size_t new_height, ScalingAlgorithm algorithm) const
 {
-    return scale(static_cast<unsigned long>(newWidth), static_cast<unsigned long>(newHeight), algorithm);
+    return scale(static_cast<unsigned long>(new_width), static_cast<unsigned long>(new_height), algorithm);
 }
 
 // Performance-optimized bilinear scaling with different algorithms for up/down scaling
-std::unique_ptr<Image> Image::scale(unsigned long newWidth, unsigned long newHeight, ScalingAlgorithm algorithm) const
+std::unique_ptr<Image> Image::scale(unsigned long new_width, unsigned long new_height, ScalingAlgorithm algorithm) const
 {
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
     {
-        common::log_error("Image::scale - Invalid source image");
+        common::logError("Image::scale - Invalid source image");
         return nullptr;
     }
 
-    if (newWidth == 0 || newHeight == 0)
+    if (new_width == 0 || new_height == 0)
     {
-        common::log_error("Image::scale - Invalid target dimensions: %lux%lu", newWidth, newHeight);
+        common::logError("Image::scale - Invalid target dimensions: %lux%lu", new_width, new_height);
         return nullptr;
     }
 
-    if (newWidth == info.width && newHeight == info.height)
+    if (new_width == info.width && new_height == info.height)
     {
         return deepCopy();
     }
 
-    auto result = std::make_unique<Image>(newWidth * newHeight * info.pixelSizeBytes);
-    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes, result->data(), newWidth, newHeight,
+    auto result = std::make_unique<Image>(new_width * new_height * info.pixelSizeBytes);
+    scaleImageBuffer(data_.get(), info.width, info.height, info.pixelSizeBytes, result->data(), new_width, new_height,
                      algorithm);
     result->info = info;
-    result->info.width = newWidth;
-    result->info.height = newHeight;
+    result->info.width = new_width;
+    result->info.height = new_height;
     return result;
 }
 
@@ -448,52 +448,53 @@ void Image::move(size_t new_x, size_t new_y)
     info.y = new_y;
 }
 
-Image& Image::paste(const Image& other, bool expandCanvas)
+Image& Image::paste(const Image& other, bool expand_canvas)
 {
-    pasteAt(other, static_cast<long>(other.info.x), static_cast<long>(other.info.y), expandCanvas);
+    pasteAt(other, static_cast<long>(other.info.x), static_cast<long>(other.info.y), expand_canvas);
     return *this;
 }
 
-Image& Image::pasteAt(const Image& other, long x, long y, bool expandCanvas)
+Image& Image::pasteAt(const Image& other, long x, long y, bool expand_canvas)
 {
-    pasteImpl(other, x, y, expandCanvas);
+    pasteImpl(other, x, y, expand_canvas);
     return *this;
 }
 
-void Image::toTensor(float* outputData, TensorPadding& padding, int new_width, int new_height,
-                     NormalizationType normType) const
+void Image::toTensor(float* output_data, TensorPadding& padding, int new_width, int new_height,
+                     NormalizationType norm_type) const
 {
     if (!isColorImage() || info.pixelSizeBytes != 3)
     {
-        common::log_error("Image::toTensor - Expected RGB format, got format: %s with pixel size: %d",
-                          fromImageFormatToString(info.format).c_str(), info.pixelSizeBytes);
+        common::logError("Image::toTensor - Expected RGB format, got format: %s with pixel "
+                         "size: %d",
+                         fromImageFormatToString(info.format).c_str(), info.pixelSizeBytes);
         return;
     }
 
-    if (!outputData || !data_ || size_ == 0)
+    if ((output_data == nullptr) || !data_ || size_ == 0)
     {
-        common::log_error("Image::toTensor - Invalid input data");
+        common::logError("Image::toTensor - Invalid input data");
         return;
     }
 
-    const int origW = info.width;
-    const int origH = info.height;
+    const int orig_w = info.width;
+    const int orig_h = info.height;
 
     // Step 1: Compute scale ratio (preserve aspect ratio)
-    float r = std::min(static_cast<float>(new_width) / origW, static_cast<float>(new_height) / origH);
-    const int resizedW = static_cast<int>(origW * r);
-    const int resizedH = static_cast<int>(origH * r);
-    const int offsetX = (new_width - resizedW) / 2;
-    const int offsetY = (new_height - resizedH) / 2;
-    const int paddedSize = new_width * new_height;
+    const float r = std::min(static_cast<float>(new_width) / orig_w, static_cast<float>(new_height) / orig_h);
+    const int resized_w = static_cast<int>(orig_w * r);
+    const int resized_h = static_cast<int>(orig_h * r);
+    const int offset_x = (new_width - resized_w) / 2;
+    const int offset_y = (new_height - resized_h) / 2;
+    const int padded_size = new_width * new_height;
 
     // Store transform metadata in the padding object
     padding.tensor_width = new_width;
     padding.tensor_height = new_height;
-    padding.resized_width = resizedW;
-    padding.resized_height = resizedH;
-    padding.offset_x = offsetX;
-    padding.offset_y = offsetY;
+    padding.resized_width = resized_w;
+    padding.resized_height = resized_h;
+    padding.offset_x = offset_x;
+    padding.offset_y = offset_y;
     padding.scale_ratio = r;
     padding.has_transform = true;
 
@@ -503,12 +504,12 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int new_width, i
         case PaddingType::NO_PADDING:
             break;
         case PaddingType::ZERO:
-            std::memset(outputData, 0, paddedSize * 3 * sizeof(float));
+            std::memset(output_data, 0, padded_size * 3 * sizeof(float));
             break;
         case PaddingType::CONSTANT:
         {
-            float* ptr = outputData;
-            float* end = outputData + (paddedSize * 3);
+            float* ptr = output_data;
+            float* end = output_data + (padded_size * 3);
             while (ptr < end)
             {
                 *ptr++ = padding.constant_value;
@@ -518,11 +519,11 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int new_width, i
         case PaddingType::RGB_CONSTANT:
         {
             // Fill each channel separately with direct assignment
-            float* r_channel = outputData;
-            float* g_channel = outputData + paddedSize;
-            float* b_channel = outputData + 2 * paddedSize;
+            float* r_channel = output_data;
+            float* g_channel = output_data + padded_size;
+            float* b_channel = output_data + (2 * padded_size);
 
-            for (int i = 0; i < paddedSize; i++)
+            for (int i = 0; i < padded_size; i++)
             {
                 r_channel[i] = padding.rgb_values[0];
                 g_channel[i] = padding.rgb_values[1];
@@ -531,194 +532,199 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int new_width, i
         }
         break;
         default:
-            std::memset(outputData, 0, paddedSize * 3 * sizeof(float));
+            std::memset(output_data, 0, padded_size * 3 * sizeof(float));
             break;
     }
 
-    const unsigned char* srcData = data_.get();
+    const unsigned char* src_data = data_.get();
 
-    // TODO: Test resize with bilinear interpolation or even bicubic interpolation.
-    // Resize original image using nearest neighbor
-    // For each pixel in resized image
-    for (int h = 0; h < resizedH; ++h)
+    // TODO(arroyo): Test resize with bilinear interpolation or even bicubic
+    // interpolation. Resize original image using nearest neighbor For each
+    // pixel in resized image
+    for (int h = 0; h < resized_h; ++h)
     {
-        int srcH = static_cast<int>((static_cast<float>(h) / resizedH) * origH);
-        if (srcH >= origH)
+        int src_h = static_cast<int>((static_cast<float>(h) / resized_h) * orig_h);
+        if (src_h >= orig_h)
         {
-            srcH = origH - 1;
+            src_h = orig_h - 1;
         }
 
-        for (int w = 0; w < resizedW; ++w)
+        for (int w = 0; w < resized_w; ++w)
         {
-            int srcW = static_cast<int>((static_cast<float>(w) / resizedW) * origW);
-            if (srcW >= origW)
+            int src_w = static_cast<int>((static_cast<float>(w) / resized_w) * orig_w);
+            if (src_w >= orig_w)
             {
-                srcW = origW - 1;
+                src_w = orig_w - 1;
             }
 
-            int srcIdx = (srcH * origW + srcW) * 3; // RGB interleaved
+            const int src_idx = (src_h * orig_w + src_w) * 3; // RGB interleaved
 
             // Bounds check for source data
-            if (srcIdx + 2 >= static_cast<int>(size_))
+            if (src_idx + 2 >= static_cast<int>(size_))
             {
-                common::log_error("Image::toTensor - Source index out of bounds: %d >= %zu", srcIdx + 2, size_);
+                common::logError("Image::toTensor - Source index out of bounds: %d >= %zu", src_idx + 2, size_);
                 continue;
             }
 
             // Location in padded (output) image
-            int dstH = h + offsetY;
-            int dstW = w + offsetX;
-            int dstIdx = dstH * new_width + dstW;
+            const int dst_h = h + offset_y;
+            const int dst_w = w + offset_x;
+            const int dst_idx = (dst_h * new_width) + dst_w;
 
             // Bounds check for destination
-            if (dstIdx >= paddedSize)
+            if (dst_idx >= padded_size)
             {
-                common::log_error("Image::toTensor - Destination index out of bounds: %d >= %d", dstIdx, paddedSize);
+                common::logError("Image::toTensor - Destination index out of bounds: %d >= "
+                                 "%d",
+                                 dst_idx, padded_size);
                 continue;
             }
-            if (normType == NormalizationType::NONE)
+            if (norm_type == NormalizationType::NONE)
             {
-                outputData[0 * paddedSize + dstIdx] = srcData[srcIdx];     // R
-                outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1]; // G
-                outputData[2 * paddedSize + dstIdx] = srcData[srcIdx + 2]; // B
+                output_data[(0 * padded_size) + dst_idx] = src_data[src_idx];     // R
+                output_data[(1 * padded_size) + dst_idx] = src_data[src_idx + 1]; // G
+                output_data[(2 * padded_size) + dst_idx] = src_data[src_idx + 2]; // B
             }
-            else if (normType == NormalizationType::MINMAX)
+            else if (norm_type == NormalizationType::MINMAX)
             {
-                outputData[0 * paddedSize + dstIdx] = srcData[srcIdx] / 255.0f;     // R
-                outputData[1 * paddedSize + dstIdx] = srcData[srcIdx + 1] / 255.0f; // G
-                outputData[2 * paddedSize + dstIdx] = srcData[srcIdx + 2] / 255.0f; // B
+                output_data[(0 * padded_size) + dst_idx] = src_data[src_idx] / 255.0f;     // R
+                output_data[(1 * padded_size) + dst_idx] = src_data[src_idx + 1] / 255.0f; // G
+                output_data[(2 * padded_size) + dst_idx] = src_data[src_idx + 2] / 255.0f; // B
             }
-            else if (normType == NormalizationType::ZERO_CENTER)
+            else if (norm_type == NormalizationType::ZERO_CENTER)
             {
-                outputData[0 * paddedSize + dstIdx] = (static_cast<float>(srcData[srcIdx]) - 127.5f) / 127.5f;     // R
-                outputData[1 * paddedSize + dstIdx] = (static_cast<float>(srcData[srcIdx + 1]) - 127.5f) / 127.5f; // G
-                outputData[2 * paddedSize + dstIdx] = (static_cast<float>(srcData[srcIdx + 2]) - 127.5f) / 127.5f; // B
+                output_data[(0 * padded_size) + dst_idx] = (static_cast<float>(src_data[src_idx]) - 127.5f) / 127.5f;     // R
+                output_data[(1 * padded_size) + dst_idx] = (static_cast<float>(src_data[src_idx + 1]) - 127.5f) / 127.5f; // G
+                output_data[(2 * padded_size) + dst_idx] = (static_cast<float>(src_data[src_idx + 2]) - 127.5f) / 127.5f; // B
             }
         }
     }
 }
 
-void Image::fromTensor(const float* tensorData, std::vector<int64_t> tensorShape, int tensor_width, int tensor_height,
-                       const TensorPadding& padding, NormalizationType normType)
+void Image::fromTensor(const float* tensor_data, std::vector<int64_t> tensor_shape, int tensor_width, int tensor_height,
+                       const TensorPadding& padding, NormalizationType norm_type)
 {
-    if (!tensorData || !data_ || size_ == 0)
+    if ((tensor_data == nullptr) || !data_ || size_ == 0)
     {
-        common::log_error("Image::fromTensor - Invalid input data");
+        common::logError("Image::fromTensor - Invalid input data");
         return;
     }
 
     // Use stored transform metadata if available, otherwise calculate it
-    int offsetX, offsetY, resizedW, resizedH;
-    float r;
+    int offset_x = 0;
+    int offset_y = 0;
+    int resized_w = 0;
+    int resized_h = 0;
+    float r = NAN;
 
-    // common::log_info("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
-    // common::log_info("Tensor padding = %d width, %d height", padding.tensor_width, padding.tensor_height);
+    // common::logInfo("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
+    // common::logInfo("Tensor padding = %d width, %d height", padding.tensor_width, padding.tensor_height);
 
     if (padding.has_transform && padding.tensor_width == tensor_width && padding.tensor_height == tensor_height)
     {
         // Use stored transform metadata from padding
-        offsetX = padding.offset_x;
-        offsetY = padding.offset_y;
-        resizedW = padding.resized_width;
-        resizedH = padding.resized_height;
+        offset_x = padding.offset_x;
+        offset_y = padding.offset_y;
+        resized_w = padding.resized_width;
+        resized_h = padding.resized_height;
         r = padding.scale_ratio;
 
-        // common::log_info(
+        // common::logInfo(
         //     "Image::fromTensor - Using stored transform metadata: offset(%d,%d), resized(%dx%d), scale=%.3f",
         //     offsetX, offsetY, resizedW, resizedH, r);
     }
     else
     {
         // Fallback: calculate transform parameters
-        const int origW = info.width;
-        const int origH = info.height;
+        const int orig_w = info.width;
+        const int orig_h = info.height;
 
-        r = std::min(static_cast<float>(tensor_width) / origW, static_cast<float>(tensor_height) / origH);
-        resizedW = static_cast<int>(origW * r);
-        resizedH = static_cast<int>(origH * r);
-        offsetX = (tensor_width - resizedW) / 2;
-        offsetY = (tensor_height - resizedH) / 2;
+        r = std::min(static_cast<float>(tensor_width) / orig_w, static_cast<float>(tensor_height) / orig_h);
+        resized_w = static_cast<int>(orig_w * r);
+        resized_h = static_cast<int>(orig_h * r);
+        offset_x = (tensor_width - resized_w) / 2;
+        offset_y = (tensor_height - resized_h) / 2;
 
-        // common::log_warn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
+        // common::logWarn("Image::fromTensor - No stored transform metadata, calculating: offset(%d,%d), "
         //                  "resized(%dx%d), scale=%.3f",
         //                  offsetX, offsetY, resizedW, resizedH, r);
     }
 
-    unsigned char* dstData = data_.get();
-    int tensor_size = tensor_width * tensor_height;
+    unsigned char* dst_data = data_.get();
+    const int tensor_size = tensor_width * tensor_height;
     // Extract and resize depth data back to original dimensions
     for (int y = 0; y < static_cast<int>(info.height); ++y)
     {
         for (int x = 0; x < static_cast<int>(info.width); ++x)
         {
             // Map to tensor coordinates
-            int tensorH = static_cast<int>((static_cast<float>(y) / info.height) * resizedH) + offsetY;
-            int tensorW = static_cast<int>((static_cast<float>(x) / info.width) * resizedW) + offsetX;
+            int tensor_h = static_cast<int>((static_cast<float>(y) / info.height) * resized_h) + offset_y;
+            int tensor_w = static_cast<int>((static_cast<float>(x) / info.width) * resized_w) + offset_x;
 
             // Clamp to tensor bounds
-            tensorH = std::max(0, std::min(tensorH, tensor_height - 1));
-            tensorW = std::max(0, std::min(tensorW, tensor_width - 1));
+            tensor_h = std::max(0, std::min(tensor_h, tensor_height - 1));
+            tensor_w = std::max(0, std::min(tensor_w, tensor_width - 1));
 
             int channels = 1;
             // Check if the tensor has a single channel
-            if (tensorShape[1] == 3)
+            if (tensor_shape[1] == 3)
             {
                 channels = 3;
             }
 
-            int tensorIdx = (tensorH * tensor_width + tensorW);
+            const int tensor_idx = ((tensor_h * tensor_width) + tensor_w);
 
             // Convert tensor value to unsigned char
-            unsigned char pixelValues[3];
-            if (normType == NormalizationType::NONE)
+            unsigned char pixel_values[3];
+            if (norm_type == NormalizationType::NONE)
             {
-                pixelValues[0] = static_cast<unsigned char>(tensorData[tensorIdx]);
+                pixel_values[0] = static_cast<unsigned char>(tensor_data[tensor_idx]);
                 if (channels == 3)
                 {
                     // Remember that thi is in CHW not HWC
-                    pixelValues[1] = static_cast<unsigned char>(tensorData[1 * tensor_size + tensorIdx]);
-                    pixelValues[2] = static_cast<unsigned char>(tensorData[2 * tensor_size + tensorIdx]);
+                    pixel_values[1] = static_cast<unsigned char>(tensor_data[(1 * tensor_size) + tensor_idx]);
+                    pixel_values[2] = static_cast<unsigned char>(tensor_data[(2 * tensor_size) + tensor_idx]);
                 }
             }
-            else if (normType == NormalizationType::MINMAX)
+            else if (norm_type == NormalizationType::MINMAX)
             {
-                pixelValues[0] = static_cast<unsigned char>(tensorData[tensorIdx] * 255.0f);
+                pixel_values[0] = static_cast<unsigned char>(tensor_data[tensor_idx] * 255.0f);
                 if (channels == 3)
                 {
-                    pixelValues[1] = static_cast<unsigned char>(tensorData[1 * tensor_size + tensorIdx] * 255.0f);
-                    pixelValues[2] = static_cast<unsigned char>(tensorData[2 * tensor_size + tensorIdx] * 255.0f);
+                    pixel_values[1] = static_cast<unsigned char>(tensor_data[(1 * tensor_size) + tensor_idx] * 255.0f);
+                    pixel_values[2] = static_cast<unsigned char>(tensor_data[(2 * tensor_size) + tensor_idx] * 255.0f);
                 }
             }
-            else if (normType == NormalizationType::ZERO_CENTER)
+            else if (norm_type == NormalizationType::ZERO_CENTER)
             {
-                pixelValues[0] = static_cast<unsigned char>((tensorData[tensorIdx] + 1.0) / 2.0f * 255.0f);
+                pixel_values[0] = static_cast<unsigned char>((tensor_data[tensor_idx] + 1.0) / 2.0f * 255.0f);
                 if (channels == 3)
                 {
-                    pixelValues[1] =
-                        static_cast<unsigned char>((tensorData[1 * tensor_size + tensorIdx] + 1.0) / 2.0f * 255.0f);
-                    pixelValues[2] =
-                        static_cast<unsigned char>((tensorData[2 * tensor_size + tensorIdx] + 1.0) / 2.0f * 255.0f);
+                    pixel_values[1] =
+                        static_cast<unsigned char>((tensor_data[(1 * tensor_size) + tensor_idx] + 1.0) / 2.0f * 255.0f);
+                    pixel_values[2] =
+                        static_cast<unsigned char>((tensor_data[(2 * tensor_size) + tensor_idx] + 1.0) / 2.0f * 255.0f);
                 }
             }
             else
             {
-                common::log_error("Unknown normalization type");
+                common::logError("Unknown normalization type");
                 return;
             }
 
-            int dstIdx = (y * info.width + x) * 3;
-            dstData[dstIdx] = pixelValues[0];
+            const int dst_idx = (y * info.width + x) * 3;
+            dst_data[dst_idx] = pixel_values[0];
             if (channels == 3)
             {
                 // RGB
-                dstData[dstIdx + 1] = pixelValues[1];
-                dstData[dstIdx + 2] = pixelValues[2];
+                dst_data[dst_idx + 1] = pixel_values[1];
+                dst_data[dst_idx + 2] = pixel_values[2];
             }
             else
             {
                 // Grayscale
-                dstData[dstIdx + 1] = pixelValues[0];
-                dstData[dstIdx + 2] = pixelValues[0];
+                dst_data[dst_idx + 1] = pixel_values[0];
+                dst_data[dst_idx + 2] = pixel_values[0];
             }
         }
     }
@@ -746,21 +752,21 @@ void Image::fillRect(int x, int y, int width, int height, const Pixel& color)
     }
 
     // Clip rectangle to image bounds
-    int x1 = std::max(0, x);
-    int y1 = std::max(0, y);
-    int x2 = std::min(static_cast<int>(info.width), x + width);
-    int y2 = std::min(static_cast<int>(info.height), y + height);
-    
-    int clippedWidth = x2 - x1;
-    int clippedHeight = y2 - y1;
-    
-    if (clippedWidth <= 0 || clippedHeight <= 0)
+    const int x1 = std::max(0, x);
+    const int y1 = std::max(0, y);
+    const int x2 = std::min(static_cast<int>(info.width), x + width);
+    const int y2 = std::min(static_cast<int>(info.height), y + height);
+
+    const int clipped_width = x2 - x1;
+    const int clipped_height = y2 - y1;
+
+    if (clipped_width <= 0 || clipped_height <= 0)
     {
         return;
     }
 
-    const int bytesPerPixel = info.pixelSizeBytes;
-    
+    const int bytes_per_pixel = info.pixelSizeBytes;
+
     // Only optimize for RGB and RGBA formats
     if (info.format != ImageFormat::RGB && info.format != ImageFormat::RGBA)
     {
@@ -776,35 +782,35 @@ void Image::fillRect(int x, int y, int width, int height, const Pixel& color)
     }
 
     // Fast fill using block-based approach
-    const int rowBytes = clippedWidth * bytesPerPixel;
-    
+    const int row_bytes = clipped_width * bytes_per_pixel;
+
     // Allocate row buffer
-    auto rowBuffer = std::make_unique<unsigned char[]>(rowBytes);
-    
-    if (bytesPerPixel == 3) // RGB
+    auto row_buffer = std::make_unique<unsigned char[]>(row_bytes);
+
+    if (bytes_per_pixel == 3) // RGB
     {
         // Prepare a 4-pixel (12-byte) block for RGB
         unsigned char block[12];
         for (int i = 0; i < 4; i++)
         {
-            block[i*3 + 0] = color.r;
-            block[i*3 + 1] = color.g;
-            block[i*3 + 2] = color.b;
+            block[(i * 3) + 0] = color.r;
+            block[(i * 3) + 1] = color.g;
+            block[(i * 3) + 2] = color.b;
         }
-        
+
         // Fill the row buffer with unrolled copies of the 12-byte block
-        int nBlocks = clippedWidth / 4;    // full 4-pixel blocks
-        int rem = clippedWidth % 4;        // leftover pixels
-        
-        unsigned char* ptr = rowBuffer.get();
-        
+        const int n_blocks = clipped_width / 4; // full 4-pixel blocks
+        const int rem = clipped_width % 4;     // leftover pixels
+
+        unsigned char* ptr = row_buffer.get();
+
         // Copy full 4-pixel blocks
-        for (int i = 0; i < nBlocks; i++)
+        for (int i = 0; i < n_blocks; i++)
         {
             std::memcpy(ptr, block, 12);
             ptr += 12;
         }
-        
+
         // Handle leftover pixels
         for (int i = 0; i < rem; i++)
         {
@@ -813,31 +819,31 @@ void Image::fillRect(int x, int y, int width, int height, const Pixel& color)
             *ptr++ = color.b;
         }
     }
-    else if (bytesPerPixel == 4) // RGBA
+    else if (bytes_per_pixel == 4) // RGBA
     {
         // Prepare a 4-pixel (16-byte) block for RGBA
         unsigned char block[16];
         for (int i = 0; i < 4; i++)
         {
-            block[i*4 + 0] = color.r;
-            block[i*4 + 1] = color.g;
-            block[i*4 + 2] = color.b;
-            block[i*4 + 3] = color.a;
+            block[(i * 4) + 0] = color.r;
+            block[(i * 4) + 1] = color.g;
+            block[(i * 4) + 2] = color.b;
+            block[(i * 4) + 3] = color.a;
         }
-        
+
         // Fill the row buffer with unrolled copies of the 16-byte block
-        int nBlocks = clippedWidth / 4;    // full 4-pixel blocks
-        int rem = clippedWidth % 4;        // leftover pixels
-        
-        unsigned char* ptr = rowBuffer.get();
-        
+        const int n_blocks = clipped_width / 4; // full 4-pixel blocks
+        const int rem = clipped_width % 4;     // leftover pixels
+
+        unsigned char* ptr = row_buffer.get();
+
         // Copy full 4-pixel blocks
-        for (int i = 0; i < nBlocks; i++)
+        for (int i = 0; i < n_blocks; i++)
         {
             std::memcpy(ptr, block, 16);
             ptr += 16;
         }
-        
+
         // Handle leftover pixels
         for (int i = 0; i < rem; i++)
         {
@@ -847,12 +853,12 @@ void Image::fillRect(int x, int y, int width, int height, const Pixel& color)
             *ptr++ = color.a;
         }
     }
-    
+
     // Copy row buffer to each image row efficiently
     for (int row = y1; row < y2; ++row)
     {
-        unsigned char* dest = data() + (row * info.width + x1) * bytesPerPixel;
-        std::memcpy(dest, rowBuffer.get(), rowBytes);
+        unsigned char* dest = data() + ((row * info.width + x1) * bytes_per_pixel);
+        std::memcpy(dest, row_buffer.get(), row_bytes);
     }
 }
 
@@ -902,16 +908,16 @@ std::unique_ptr<Image> Image::crop(const math_utils::Rect<float>& rect) const
         return nullptr;
     }
 
-    size_t result_size = crop_width * crop_height * info.pixelSizeBytes;
+    size_t const result_size = crop_width * crop_height * info.pixelSizeBytes;
     std::unique_ptr<Image> result = std::make_unique<Image>(result_size);
 
-    const unsigned char* srcImg = data_.get();
-    unsigned char* dstImg = result->data();
+    const unsigned char* src_img = data_.get();
+    unsigned char* dst_img = result->data();
 
     for (int y = 0; y < crop_height; ++y)
     {
-        const unsigned char* src_row = srcImg + ((y0 + y) * info.width + x0) * info.pixelSizeBytes;
-        unsigned char* dst_row = dstImg + (y * crop_width) * info.pixelSizeBytes;
+        const unsigned char* src_row = src_img + (((y0 + y) * info.width + x0) * info.pixelSizeBytes);
+        unsigned char* dst_row = dst_img + ((y * crop_width) * info.pixelSizeBytes);
         std::memcpy(dst_row, src_row, crop_width * info.pixelSizeBytes);
     }
     result->info = info;
@@ -928,49 +934,50 @@ bool Image::saveToDisk(const std::string& dest_path) const
     if (info.format != ImageFormat::JPEG && info.format != ImageFormat::PPM && info.format != ImageFormat::GRAYSCALE
         && info.format != ImageFormat::RGB && info.format != ImageFormat::RGBA)
     {
-        common::log_error(
-            "Image::saveToDisk - Only JPEG or PPM formats are supported for saving to disk. Image is %s. Path was %s",
-            fromImageFormatToString(info.format).c_str(), dest_path.c_str());
+        common::logError("Image::saveToDisk - Only JPEG or PPM formats are supported for "
+                         "saving to disk. Image is %s. Path was %s",
+                         fromImageFormatToString(info.format).c_str(), dest_path.c_str());
         return false;
     }
 
     if (!data_ || size_ == 0u)
     {
-        common::log_error("Image::saveToDisk - No data to save");
+        common::logError("Image::saveToDisk - No data to save");
         return false;
     }
 
     // Use O_TRUNC to overwrite file if it exists
-    int file = open(dest_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0660);
+    const int file = open(dest_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0660);
     if (file < 0)
     {
-        common::log_error("Image::saveToDisk - Error opening file for writing: %s", dest_path.c_str());
-        common::errno_log("Image::saveToDisk - Error opening file for writing");
+        common::logError("Image::saveToDisk - Error opening file for writing: %s", dest_path.c_str());
+        common::errnoLog("Image::saveToDisk - Error opening file for writing");
         return false;
     }
-    common::log_info("Image::saveToDisk - Saving image to %s with size %lux%lu", dest_path.c_str(), info.width,
-                     info.height);
+    common::logInfo("Image::saveToDisk - Saving image to %s with size %lux%lu", dest_path.c_str(), info.width,
+                    info.height);
     // Handle PPM (RGB, RGBA, Grayscale)
     if (info.format == ImageFormat::PPM || info.format == ImageFormat::RGB || info.format == ImageFormat::RGBA
         || info.format == ImageFormat::GRAYSCALE)
     {
         char header[64];
         // Write the P6 header
-        int header_len = std::snprintf(header, sizeof(header), "P6\n%lu %lu\n255\n", info.width, info.height);
+        const int header_len = std::snprintf(header, sizeof(header), "P6\n%lu %lu\n255\n", info.width, info.height);
         if (write(file, header, header_len) != header_len)
         {
-            common::errno_log("Image::saveToDisk - write header failed");
+            common::errnoLog("Image::saveToDisk - write header failed");
             close(file);
             return false;
         }
-        size_t pixel_count = info.width * info.height;
+        const size_t pixel_count = info.width * info.height;
         // Grayscale: convert to RGB
         if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
         {
-            std::vector<unsigned char> rgb_data = convertToRGB();
-            if (!common::long_write(file, rgb_data.data(), rgb_data.size()))
+            std::vector<unsigned char> rgb_data = convertToRgb();
+            if (!common::longWrite(file, rgb_data.data(), rgb_data.size()))
             {
-                common::log_error("Image::saveToDisk - Error saving grayscale as RGB PPM. Not all bytes were stored.");
+                common::logError("Image::saveToDisk - Error saving grayscale as RGB PPM. "
+                                 "Not all bytes were stored.");
                 close(file);
                 return false;
             }
@@ -984,13 +991,14 @@ bool Image::saveToDisk(const std::string& dest_path) const
             const unsigned char* rgba = data_.get();
             for (size_t i = 0; i < pixel_count; ++i)
             {
-                rgb_data[i * 3 + 0] = rgba[i * 4 + 0];
-                rgb_data[i * 3 + 1] = rgba[i * 4 + 1];
-                rgb_data[i * 3 + 2] = rgba[i * 4 + 2];
+                rgb_data[(i * 3) + 0] = rgba[(i * 4) + 0];
+                rgb_data[(i * 3) + 1] = rgba[(i * 4) + 1];
+                rgb_data[(i * 3) + 2] = rgba[(i * 4) + 2];
             }
-            if (!common::long_write(file, rgb_data.data(), rgb_data.size()))
+            if (!common::longWrite(file, rgb_data.data(), rgb_data.size()))
             {
-                common::log_error("Image::saveToDisk - Error saving RGBA as RGB PPM. Not all bytes were stored.");
+                common::logError("Image::saveToDisk - Error saving RGBA as RGB PPM. Not all "
+                                 "bytes were stored.");
                 close(file);
                 return false;
             }
@@ -1000,9 +1008,10 @@ bool Image::saveToDisk(const std::string& dest_path) const
         // RGB: direct write
         if (info.format == ImageFormat::RGB || info.pixelSizeBytes == 3)
         {
-            if (!common::long_write(file, data_.get(), pixel_count * 3))
+            if (!common::longWrite(file, data_.get(), pixel_count * 3))
             {
-                common::log_error("Image::saveToDisk - Error saving RGB PPM. Not all bytes were stored.");
+                common::logError("Image::saveToDisk - Error saving RGB PPM. Not all bytes "
+                                 "were stored.");
                 close(file);
                 return false;
             }
@@ -1010,7 +1019,7 @@ bool Image::saveToDisk(const std::string& dest_path) const
             return true;
         }
         // If pixel size is not 1, 3, or 4, error
-        common::log_error("Image::saveToDisk - Unsupported pixel size for PPM: %d", info.pixelSizeBytes);
+        common::logError("Image::saveToDisk - Unsupported pixel size for PPM: %d", info.pixelSizeBytes);
         close(file);
         return false;
     }
@@ -1018,9 +1027,10 @@ bool Image::saveToDisk(const std::string& dest_path) const
     // JPEG: direct write (assume data_ is already JPEG encoded)
     if (info.format == ImageFormat::JPEG)
     {
-        if (!common::long_write(file, data_.get(), size_))
+        if (!common::longWrite(file, data_.get(), size_))
         {
-            common::log_error("Image::saveToDisk - Error saving JPEG. Not all bytes were stored.");
+            common::logError("Image::saveToDisk - Error saving JPEG. Not all bytes were "
+                             "stored.");
             close(file);
             return false;
         }
@@ -1029,36 +1039,36 @@ bool Image::saveToDisk(const std::string& dest_path) const
     }
 
     // If we reach here, format is not supported for saving
-    common::log_error("Image::saveToDisk - Unsupported format for saving: %s",
-                      fromImageFormatToString(info.format).c_str());
+    common::logError("Image::saveToDisk - Unsupported format for saving: %s",
+                     fromImageFormatToString(info.format).c_str());
     close(file);
     return false;
 }
 
-std::vector<unsigned char> Image::convertToRGB() const
+std::vector<unsigned char> Image::convertToRgb() const
 {
     if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
     {
-        size_t pixel_count = info.width * info.height;
+        const size_t pixel_count = info.width * info.height;
         std::vector<unsigned char> rgb_data(pixel_count * 3);
         const unsigned char* gray = data_.get();
         for (size_t i = 0; i < pixel_count; ++i)
         {
-            rgb_data[i * 3 + 0] = gray[i];
-            rgb_data[i * 3 + 1] = gray[i];
-            rgb_data[i * 3 + 2] = gray[i];
+            rgb_data[(i * 3) + 0] = gray[i];
+            rgb_data[(i * 3) + 1] = gray[i];
+            rgb_data[(i * 3) + 2] = gray[i];
         }
         return rgb_data;
     }
     return {};
 }
 
-bool Image::convertToRGBAInplace()
+bool Image::convertToRgbaInplace()
 {
     if (info.format == ImageFormat::RGB && info.pixelSizeBytes == 3)
     {
-        size_t pixel_count = info.width * info.height;
-        size_t new_size = pixel_count * 4;
+        const size_t pixel_count = info.width * info.height;
+        const size_t new_size = pixel_count * 4;
 
         // Create new RGBA data
         auto new_data =
@@ -1070,10 +1080,10 @@ bool Image::convertToRGBAInplace()
 
         for (size_t i = 0; i < pixel_count; ++i)
         {
-            rgba[i * 4 + 0] = rgb[i * 3 + 0]; // R
-            rgba[i * 4 + 1] = rgb[i * 3 + 1]; // G
-            rgba[i * 4 + 2] = rgb[i * 3 + 2]; // B
-            rgba[i * 4 + 3] = 255;            // A
+            rgba[(i * 4) + 0] = rgb[(i * 3) + 0]; // R
+            rgba[(i * 4) + 1] = rgb[(i * 3) + 1]; // G
+            rgba[(i * 4) + 2] = rgb[(i * 3) + 2]; // B
+            rgba[(i * 4) + 3] = 255;            // A
         }
 
         // Update image properties
@@ -1087,22 +1097,22 @@ bool Image::convertToRGBAInplace()
     return false;
 }
 
-bool Image::convertToRGBInplace()
+bool Image::convertToRgbInplace()
 {
     if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
     {
-        std::vector<unsigned char> rgb_data = convertToRGB();
+        std::vector<unsigned char> const rgb_data = convertToRgb();
         size_t i = 0;
-        size_t pixel_count = info.width * info.height * 3;
+        const size_t pixel_count = info.width * info.height * 3;
         resize(pixel_count, true);
-        for (unsigned char pixel : rgb_data)
+        for (unsigned char const pixel : rgb_data)
         {
             data_.get()[i] = pixel;
             i += 1;
         }
         if (i != pixel_count)
         {
-            common::log_error("Image::convertToRGB - Error converting grayscale to RGB. Size mismatch.");
+            common::logError("Image::convertToRGB - Error converting grayscale to RGB. Size mismatch.");
             return false;
         }
         info.format = ImageFormat::RGB;
@@ -1117,36 +1127,36 @@ void Image::changeBackgroundImage(const Image& matting, const Image& background)
 {
     if (matting.info.width != background.info.width || matting.info.height != background.info.height)
     {
-        common::log_error("Background image and matting image have different dimensions");
-        common::log_info("Dimensions are matting %d x %d", matting.info.width, matting.info.height);
-        common::log_info("Dimensions are background %d x %d", background.info.width, background.info.height);
+        common::logError("Background image and matting image have different dimensions");
+        common::logInfo("Dimensions are matting %d x %d", matting.info.width, matting.info.height);
+        common::logInfo("Dimensions are background %d x %d", background.info.width, background.info.height);
         return;
     }
 
     if (matting.info.pixelSizeBytes != background.info.pixelSizeBytes)
     {
-        common::log_error("Background image and matting image have different pixel sizes");
+        common::logError("Background image and matting image have different pixel sizes");
         return;
     }
 
     if (matting.data() == nullptr || background.data() == nullptr)
     {
-        common::log_error("Background image or matting image have no data");
+        common::logError("Background image or matting image have no data");
         return;
     }
 
-    unsigned char* phaData = matting.data();
-    unsigned char* frgData = data();
-    unsigned char* backgroundData = background.data();
+    unsigned char* pha_data = matting.data();
+    unsigned char* frg_data = data();
+    unsigned char* background_data = background.data();
     for (unsigned long y = 0; y < info.height; ++y)
     {
         for (unsigned long x = 0; x < info.width; ++x)
         {
-            unsigned long idx = (y * info.width + x) * 3;
-            unsigned char alpha = phaData[idx];
-            frgData[idx] = (alpha * frgData[idx] + (255 - alpha) * backgroundData[idx]) / 255;
-            frgData[idx + 1] = (alpha * frgData[idx + 1] + (255 - alpha) * backgroundData[idx + 1]) / 255;
-            frgData[idx + 2] = (alpha * frgData[idx + 2] + (255 - alpha) * backgroundData[idx + 2]) / 255;
+            const unsigned long idx = (y * info.width + x) * 3;
+            const unsigned char alpha = pha_data[idx];
+            frg_data[idx] = (alpha * frg_data[idx] + (255 - alpha) * background_data[idx]) / 255;
+            frg_data[idx + 1] = (alpha * frg_data[idx + 1] + (255 - alpha) * background_data[idx + 1]) / 255;
+            frg_data[idx + 2] = (alpha * frg_data[idx + 2] + (255 - alpha) * background_data[idx + 2]) / 255;
         }
     }
 }
@@ -1168,17 +1178,17 @@ void Image::toGrayscale()
     {
         for (unsigned long x = 0; x < info.width; ++x)
         {
-            unsigned long idx = (y * info.width + x) * info.pixelSizeBytes;
-            unsigned char r = data_.get()[idx];
-            unsigned char g = data_.get()[idx + 1];
-            unsigned char b = data_.get()[idx + 2];
-            unsigned char gray = pixel_conversion::rgbToGrayscale(r, g, b);
+            const unsigned long idx = (y * info.width + x) * info.pixelSizeBytes;
+            const unsigned char r = data_.get()[idx];
+            const unsigned char g = data_.get()[idx + 1];
+            const unsigned char b = data_.get()[idx + 2];
+            const unsigned char gray = pixel_conversion::rgbToGrayscale(r, g, b);
             data_.get()[idx] = gray;
             data_.get()[idx + 1] = gray;
             data_.get()[idx + 2] = gray;
             if (info.pixelSizeBytes == 4)
             {
-                data_.get()[idx + 3] = DEFAULT_ALPHA;
+                data_.get()[idx + 3] = DefaultAlpha;
             }
         }
     }
@@ -1196,11 +1206,11 @@ void Image::flipHorizontal()
     {
         for (unsigned long x = 0; x < info.width / 2; ++x)
         {
-            unsigned long idx1 = (y * info.width + x) * info.pixelSizeBytes;
-            unsigned long idx2 = (y * info.width + (info.width - 1 - x)) * info.pixelSizeBytes;
+            const unsigned long idx1 = (y * info.width + x) * info.pixelSizeBytes;
+            const unsigned long idx2 = (y * info.width + (info.width - 1 - x)) * info.pixelSizeBytes;
             for (unsigned char c = 0; c < info.pixelSizeBytes; ++c)
             {
-                unsigned char tmp = d[idx1 + c];
+                const unsigned char tmp = d[idx1 + c];
                 d[idx1 + c] = d[idx2 + c];
                 d[idx2 + c] = tmp;
             }
@@ -1215,15 +1225,15 @@ void Image::flipVertical()
         return;
     }
     unsigned char* d = data_.get();
-    unsigned long rowBytes = info.width * info.pixelSizeBytes;
-    std::vector<unsigned char> tmp(rowBytes);
+    const unsigned long row_bytes = info.width * info.pixelSizeBytes;
+    std::vector<unsigned char> tmp(row_bytes);
     for (unsigned long y = 0; y < info.height / 2; ++y)
     {
-        unsigned char* row1 = d + y * rowBytes;
-        unsigned char* row2 = d + (info.height - 1 - y) * rowBytes;
-        std::memcpy(tmp.data(), row1, rowBytes);
-        std::memcpy(row1, row2, rowBytes);
-        std::memcpy(row2, tmp.data(), rowBytes);
+        unsigned char* row1 = d + (y * row_bytes);
+        unsigned char* row2 = d + ((info.height - 1 - y) * row_bytes);
+        std::memcpy(tmp.data(), row1, row_bytes);
+        std::memcpy(row1, row2, row_bytes);
+        std::memcpy(row2, tmp.data(), row_bytes);
     }
 }
 
@@ -1232,96 +1242,99 @@ void Image::flipVertical()
 // float cx = (info.width - 1) / 2.0f;
 // float cy = (info.height - 1) / 2.0f;
 
-math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<double> center)
+math_utils::Point<double> Image::rotate(double angle_rad, math_utils::Point<double> center)
 {
     if (!data_ || info.width == 0 || info.height == 0)
     {
         return {0.0, 0.0};
     }
 
-    double cosA = std::cos(angleRad);
-    double sinA = std::sin(angleRad);
+    const double cos_a = std::cos(angle_rad);
+    const double sin_a = std::sin(angle_rad);
 
     // Compute corners relative to center
-    double corners[4][2] = {
+    double const corners[4][2] = {
         {-center.x,                 -center.y                 },
         {info.width - 1 - center.x, -center.y                 },
         {-center.x,                 info.height - 1 - center.y},
         {info.width - 1 - center.x, info.height - 1 - center.y}
     };
 
-    double minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-    for (int i = 0; i < 4; ++i)
+    double min_x = 1e9;
+    double min_y = 1e9;
+    double max_x = -1e9;
+    double max_y = -1e9;
+    for (auto & corner : corners)
     {
-        double x = corners[i][0] * cosA - corners[i][1] * sinA;
-        double y = corners[i][0] * sinA + corners[i][1] * cosA;
-        minX = std::min(minX, x);
-        minY = std::min(minY, y);
-        maxX = std::max(maxX, x);
-        maxY = std::max(maxY, y);
+        const double x = (corner[0] * cos_a) - (corner[1] * sin_a);
+        const double y = (corner[0] * sin_a) + (corner[1] * cos_a);
+        min_x = std::min(min_x, x);
+        min_y = std::min(min_y, y);
+        max_x = std::max(max_x, x);
+        max_y = std::max(max_y, y);
     }
 
-    unsigned long newWidth = static_cast<unsigned long>(std::ceil(maxX - minX));
-    unsigned long newHeight = static_cast<unsigned long>(std::ceil(maxY - minY));
-    size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
-    std::vector<unsigned char> rotated(newSize, 0);
+    const auto new_width = static_cast<unsigned long>(std::ceil(max_x - min_x));
+    const auto new_height = static_cast<unsigned long>(std::ceil(max_y - min_y));
+    const size_t new_size = new_width * new_height * info.pixelSizeBytes;
+    std::vector<unsigned char> rotated(new_size, 0);
 
-    for (unsigned long y = 0; y < newHeight; ++y)
+    for (unsigned long y = 0; y < new_height; ++y)
     {
-        for (unsigned long x = 0; x < newWidth; ++x)
+        for (unsigned long x = 0; x < new_width; ++x)
         {
             // Map back to original image
-            double dx = x + minX;
-            double dy = y + minY;
+            const double dx = x + min_x;
+            const double dy = y + min_y;
 
-            double srcX = cosA * dx + sinA * dy + center.x;
-            double srcY = -sinA * dx + cosA * dy + center.y;
+            double const src_x = (cos_a * dx) + (sin_a * dy) + center.x;
+            double const src_y = (-sin_a * dx) + (cos_a * dy) + center.y;
 
-            int x0 = static_cast<int>(std::floor(srcX));
-            int y0 = static_cast<int>(std::floor(srcY));
-            int x1 = x0 + 1;
-            int y1 = y0 + 1;
-            double wx = srcX - x0;
-            double wy = srcY - y0;
+            const int x0 = static_cast<int>(std::floor(src_x));
+            const int y0 = static_cast<int>(std::floor(src_y));
+            const int x1 = x0 + 1;
+            const int y1 = y0 + 1;
+            const double wx = src_x - x0;
+            const double wy = src_y - y0;
 
             for (unsigned char c = 0; c < info.pixelSizeBytes; ++c)
             {
                 float val = 0.0f;
                 for (int j = 0; j <= 1; ++j)
                 {
-                    int sy = (j == 0) ? y0 : y1;
+                    const int sy = (j == 0) ? y0 : y1;
                     if (sy < 0 || sy >= static_cast<int>(info.height))
                     {
                         continue;
                     }
-                    double wyf = (j == 0) ? (1.0 - wy) : wy;
+                    const double wyf = (j == 0) ? (1.0 - wy) : wy;
 
                     for (int i = 0; i <= 1; ++i)
                     {
-                        int sx = (i == 0) ? x0 : x1;
+                        const int sx = (i == 0) ? x0 : x1;
                         if (sx < 0 || sx >= static_cast<int>(info.width))
                         {
                             continue;
                         }
-                        double wxf = (i == 0) ? (1.0 - wx) : wx;
+                        const double wxf = (i == 0) ? (1.0 - wx) : wx;
 
-                        size_t srcIdx = (sy * info.width + sx) * info.pixelSizeBytes + c;
-                        val += data_.get()[srcIdx] * wyf * wxf;
+                        const size_t src_idx = ((sy * info.width + sx) * info.pixelSizeBytes) + c;
+                        val += data_.get()[src_idx] * wyf * wxf;
                     }
                 }
-                size_t dstIdx = (y * newWidth + x) * info.pixelSizeBytes + c;
-                rotated[dstIdx] = static_cast<unsigned char>(std::clamp(val, 0.0f, 255.0f));
+                const size_t dst_idx = ((y * new_width + x) * info.pixelSizeBytes) + c;
+                rotated[dst_idx] = static_cast<unsigned char>(std::clamp(val, 0.0f, 255.0f));
             }
         }
     }
 
     // Resize internal buffer and update info
-    data_.reset(new unsigned char[newSize]);
-    size_ = newSize;
-    std::memcpy(data_.get(), rotated.data(), newSize);
-    info.width = newWidth;
-    info.height = newHeight;
-    return {-minX, -minY};
+    data_.reset(new unsigned char[new_size]);
+    size_ = new_size;
+    std::memcpy(data_.get(), rotated.data(), new_size);
+    info.width = new_width;
+    info.height = new_height;
+    return {-min_x, -min_y};
 }
 
 void Image::rotate90()
@@ -1330,24 +1343,24 @@ void Image::rotate90()
     {
         return;
     }
-    unsigned long newWidth = info.height;
-    unsigned long newHeight = info.width;
-    size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
-    std::vector<unsigned char> rotated(newSize);
+    const unsigned long new_width = info.height;
+    const unsigned long new_height = info.width;
+    const size_t new_size = new_width * new_height * info.pixelSizeBytes;
+    std::vector<unsigned char> rotated(new_size);
 
     for (unsigned long y = 0; y < info.height; ++y)
     {
         for (unsigned long x = 0; x < info.width; ++x)
         {
-            unsigned long srcIdx = (y * info.width + x) * info.pixelSizeBytes;
-            unsigned long dstIdx = (x * newWidth + (newWidth - 1 - y)) * info.pixelSizeBytes;
-            std::memcpy(&rotated[dstIdx], &data_.get()[srcIdx], info.pixelSizeBytes);
+            const unsigned long src_idx = (y * info.width + x) * info.pixelSizeBytes;
+            const unsigned long dst_idx = (x * new_width + (new_width - 1 - y)) * info.pixelSizeBytes;
+            std::memcpy(&rotated[dst_idx], &data_.get()[src_idx], info.pixelSizeBytes);
         }
     }
-    resize(newSize);
-    std::memcpy(data_.get(), rotated.data(), newSize);
-    info.width = newWidth;
-    info.height = newHeight;
+    resize(new_size);
+    std::memcpy(data_.get(), rotated.data(), new_size);
+    info.width = new_width;
+    info.height = new_height;
 }
 
 void Image::rotate180()
@@ -1357,15 +1370,15 @@ void Image::rotate180()
         return;
     }
     unsigned char* d = data_.get();
-    unsigned long total = info.width * info.height;
+    const unsigned long total = info.width * info.height;
     for (unsigned long i = 0; i < total / 2; ++i)
     {
-        unsigned long j = total - 1 - i;
+        const unsigned long j = total - 1 - i;
         for (unsigned char c = 0; c < info.pixelSizeBytes; ++c)
         {
-            unsigned char tmp = d[i * info.pixelSizeBytes + c];
-            d[i * info.pixelSizeBytes + c] = d[j * info.pixelSizeBytes + c];
-            d[j * info.pixelSizeBytes + c] = tmp;
+            const unsigned char tmp = d[(i * info.pixelSizeBytes) + c];
+            d[(i * info.pixelSizeBytes) + c] = d[(j * info.pixelSizeBytes) + c];
+            d[(j * info.pixelSizeBytes) + c] = tmp;
         }
     }
 }
@@ -1376,24 +1389,24 @@ void Image::rotate270()
     {
         return;
     }
-    unsigned long newWidth = info.height;
-    unsigned long newHeight = info.width;
-    size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
-    std::vector<unsigned char> rotated(newSize);
+    const unsigned long new_width = info.height;
+    const unsigned long new_height = info.width;
+    const size_t new_size = new_width * new_height * info.pixelSizeBytes;
+    std::vector<unsigned char> rotated(new_size);
 
     for (unsigned long y = 0; y < info.height; ++y)
     {
         for (unsigned long x = 0; x < info.width; ++x)
         {
-            unsigned long srcIdx = (y * info.width + x) * info.pixelSizeBytes;
-            unsigned long dstIdx = ((info.width - 1 - x) * newWidth + y) * info.pixelSizeBytes;
-            std::memcpy(&rotated[dstIdx], &data_.get()[srcIdx], info.pixelSizeBytes);
+            const unsigned long src_idx = (y * info.width + x) * info.pixelSizeBytes;
+            const unsigned long dst_idx = ((info.width - 1 - x) * new_width + y) * info.pixelSizeBytes;
+            std::memcpy(&rotated[dst_idx], &data_.get()[src_idx], info.pixelSizeBytes);
         }
     }
-    resize(newSize);
-    std::memcpy(data_.get(), rotated.data(), newSize);
-    info.width = newWidth;
-    info.height = newHeight;
+    resize(new_size);
+    std::memcpy(data_.get(), rotated.data(), new_size);
+    info.width = new_width;
+    info.height = new_height;
 }
 
 // Private methods
@@ -1402,124 +1415,126 @@ size_t Image::index(size_t col, size_t row) const noexcept
     return (row * info.width + col) * info.pixelSizeBytes;
 }
 
-void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGlobalY, long canvasX, long canvasY,
-                                   size_t canvasWidth, size_t canvasHeight)
+void Image::copyPixelsWithBlending(const Image& src, long src_global_x, long src_global_y, long canvas_x, long canvas_y,
+                                   size_t canvas_width, size_t canvas_height)
 {
-    if (!src.data() || !data_)
+    if ((src.data() == nullptr) || !data_)
     {
-        common::log_error("copyPixelsWithBlending - Aborting no data");
+        common::logError("copyPixelsWithBlending - Aborting no data");
         return;
     }
 
     // Use signed arithmetic for proper bounds handling
-    long srcLeft = srcGlobalX;
-    long srcTop = srcGlobalY;
-    long srcRight = srcLeft + static_cast<long>(src.info.width);
-    long srcBottom = srcTop + static_cast<long>(src.info.height);
-    long canvasLeft = canvasX;
-    long canvasTop = canvasY;
-    long canvasRight = canvasLeft + static_cast<long>(canvasWidth);
-    long canvasBottom = canvasTop + static_cast<long>(canvasHeight);
+    const long src_left = src_global_x;
+    const long src_top = src_global_y;
+    const long src_right = src_left + static_cast<long>(src.info.width);
+    const long src_bottom = src_top + static_cast<long>(src.info.height);
+    const long canvas_left = canvas_x;
+    const long canvas_top = canvas_y;
+    const long canvas_right = canvas_left + static_cast<long>(canvas_width);
+    const long canvas_bottom = canvas_top + static_cast<long>(canvas_height);
 
-    long clipLeft = std::max(srcLeft, canvasLeft);
-    long clipTop = std::max(srcTop, canvasTop);
-    long clipRight = std::min(srcRight, canvasRight);
-    long clipBottom = std::min(srcBottom, canvasBottom);
+    long const clip_left = std::max(src_left, canvas_left);
+    long const clip_top = std::max(src_top, canvas_top);
+    long const clip_right = std::min(src_right, canvas_right);
+    long const clip_bottom = std::min(src_bottom, canvas_bottom);
 
     // Skip if no intersection
-    if (clipLeft >= clipRight || clipTop >= clipBottom)
+    if (clip_left >= clip_right || clip_top >= clip_bottom)
     {
         return;
     }
 
-    const unsigned char* srcData = src.data();
-    unsigned char* dstData = data_.get();
-    const unsigned char dstPixelSize = info.pixelSizeBytes;
-    const unsigned char srcPixelSize = src.info.pixelSizeBytes;
+    const unsigned char* src_data = src.data();
+    unsigned char* dst_data = data_.get();
+    const unsigned char dst_pixel_size = info.pixelSizeBytes;
+    const unsigned char src_pixel_size = src.info.pixelSizeBytes;
 
     // Determine conversion type once for the entire operation
-    ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+    const ConversionType conv_type = getConversionType(src_pixel_size, dst_pixel_size);
 
-    for (long y = clipTop; y < clipBottom; y++)
+    for (long y = clip_top; y < clip_bottom; y++)
     {
-        long srcRow = y - srcTop;
-        long dstRow = y - canvasTop;
-        for (long x = clipLeft; x < clipRight; x++)
+        const long src_row = y - src_top;
+        const long dst_row = y - canvas_top;
+        for (long x = clip_left; x < clip_right; x++)
         {
-            long srcCol = x - srcLeft;
-            long dstCol = x - canvasLeft;
+            const long src_col = x - src_left;
+            const long dst_col = x - canvas_left;
 
             // Bounds check before calculating indices
-            if (srcRow < 0 || srcRow >= static_cast<long>(src.info.height) || srcCol < 0
-                || srcCol >= static_cast<long>(src.info.width) || dstRow < 0
-                || dstRow >= static_cast<long>(canvasHeight) || dstCol < 0 || dstCol >= static_cast<long>(canvasWidth))
+            if (src_row < 0 || src_row >= static_cast<long>(src.info.height) || src_col < 0
+                || src_col >= static_cast<long>(src.info.width) || dst_row < 0
+                || dst_row >= static_cast<long>(canvas_height) || dst_col < 0 || dst_col >= static_cast<long>(canvas_width))
             {
                 continue;
             }
 
-            size_t srcIdx = (static_cast<size_t>(srcRow) * src.info.width + static_cast<size_t>(srcCol)) * srcPixelSize;
-            size_t dstIdx = (static_cast<size_t>(dstRow) * canvasWidth + static_cast<size_t>(dstCol)) * dstPixelSize;
+            const size_t src_idx =
+                (static_cast<size_t>(src_row) * src.info.width + static_cast<size_t>(src_col)) * src_pixel_size;
+            const size_t dst_idx =
+                (static_cast<size_t>(dst_row) * canvas_width + static_cast<size_t>(dst_col)) * dst_pixel_size;
 
             // Bounds check for buffer access
-            if (srcIdx + srcPixelSize > src.size() || dstIdx + dstPixelSize > size_)
+            if (src_idx + src_pixel_size > src.size() || dst_idx + dst_pixel_size > size_)
             {
                 continue;
             }
 
             // Handle RGBA->RGBA blending with alpha transparency
-            if (convType == ConversionType::DIRECT_COPY && srcPixelSize == 4)
+            if (conv_type == ConversionType::DIRECT_COPY && src_pixel_size == 4)
             {
-                unsigned char srcAlpha = srcData[srcIdx + 3];
-                if (srcAlpha == 0)
+                const unsigned char src_alpha = src_data[src_idx + 3];
+                if (src_alpha == 0)
                 {
                     continue; // Skip completely transparent pixels
                 }
-                convertPixel(&srcData[srcIdx], &dstData[dstIdx], convType, srcAlpha, srcAlpha != 255);
+                convertPixel(&src_data[src_idx], &dst_data[dst_idx], conv_type, src_alpha, src_alpha != 255);
             }
             else
             {
                 // Use centralized conversion for all other format combinations
-                convertPixel(&srcData[srcIdx], &dstData[dstIdx], convType);
+                convertPixel(&src_data[src_idx], &dst_data[dst_idx], conv_type);
             }
         }
     }
 }
 
-void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,
-                                size_t copyHeight)
+void Image::copyPixelsOptimized(const Image& src, long src_x, long src_y, long dst_x, long dst_y, size_t copy_width,
+                                size_t copy_height)
 {
-    if (!src.data() || !data_)
+    if ((src.data() == nullptr) || !data_)
     {
         return;
     }
 
-    const unsigned char* srcData = src.data();
-    unsigned char* dstData = data_.get();
-    const unsigned char dstPixelSize = info.pixelSizeBytes;
-    const unsigned char srcPixelSize = src.info.pixelSizeBytes;
+    const unsigned char* src_data = src.data();
+    unsigned char* dst_data = data_.get();
+    const unsigned char dst_pixel_size = info.pixelSizeBytes;
+    const unsigned char src_pixel_size = src.info.pixelSizeBytes;
 
     // Determine conversion type once for the entire operation
-    ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+    const ConversionType conv_type = getConversionType(src_pixel_size, dst_pixel_size);
 
     // Optimize for direct copy cases
-    if (convType == ConversionType::DIRECT_COPY)
+    if (conv_type == ConversionType::DIRECT_COPY)
     {
-        for (size_t row = 0; row < copyHeight; ++row)
+        for (size_t row = 0; row < copy_height; ++row)
         {
-            size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
-            size_t dstRowIdx = ((dstY + row) * info.width + dstX) * dstPixelSize;
-            copyPixelBlock(srcData, dstData, srcRowIdx, dstRowIdx, copyWidth, srcPixelSize);
+            const size_t src_row_idx = ((src_y + row) * src.info.width + src_x) * src_pixel_size;
+            const size_t dst_row_idx = ((dst_y + row) * info.width + dst_x) * dst_pixel_size;
+            copyPixelBlock(src_data, dst_data, src_row_idx, dst_row_idx, copy_width, src_pixel_size);
         }
         return;
     }
 
     // Use row-based conversion for better performance
-    for (size_t row = 0; row < copyHeight; ++row)
+    for (size_t row = 0; row < copy_height; ++row)
     {
-        size_t srcRowStart = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
-        size_t dstRowStart = ((dstY + row) * info.width + dstX) * dstPixelSize;
+        const size_t src_row_start = ((src_y + row) * src.info.width + src_x) * src_pixel_size;
+        const size_t dst_row_start = ((dst_y + row) * info.width + dst_x) * dst_pixel_size;
 
-        convertPixelRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, convType);
+        convertPixelRow(src_data + src_row_start, dst_data + dst_row_start, copy_width, conv_type);
     }
 }
 
@@ -1544,67 +1559,67 @@ bool Image::isFullyOpaque() const
     return true;
 }
 
-// TODO: FIXME: This has a high execution cost!
-Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expandCanvas)
+// TODO(arroyo): FIXME: This has a high execution cost!
+Image& Image::pasteImpl(const Image& other, long other_x, long other_y, bool expand_canvas)
 {
     // Validation
     if (!data_ || size_ == 0 || info.width == 0 || info.height == 0)
     {
-        common::log_error("Image::paste - Invalid base image");
+        common::logError("Image::paste - Invalid base image");
         return *this;
     }
 
-    if (!other.data() || other.size() == 0 || other.info.width == 0 || other.info.height == 0)
+    if ((other.data() == nullptr) || other.size() == 0 || other.info.width == 0 || other.info.height == 0)
     {
-        common::log_error("Image::paste - Invalid source image to paste");
+        common::logError("Image::paste - Invalid source image to paste");
         return *this;
     }
 
     // Calculate bounds for both images
-    long baseLeft = static_cast<long>(info.x);
-    long baseTop = static_cast<long>(info.y);
-    long baseRight = baseLeft + static_cast<long>(info.width);
-    long baseBottom = baseTop + static_cast<long>(info.height);
+    const long base_left = static_cast<long>(info.x);
+    const long base_top = static_cast<long>(info.y);
+    const long base_right = base_left + static_cast<long>(info.width);
+    const long base_bottom = base_top + static_cast<long>(info.height);
 
-    long otherLeft = otherX;
-    long otherTop = otherY;
-    long otherRight = otherLeft + static_cast<long>(other.info.width);
-    long otherBottom = otherTop + static_cast<long>(other.info.height);
-
+    const long other_left = other_x;
+    const long other_top = other_y;
+    const long other_right = other_left + static_cast<long>(other.info.width);
+    const long other_bottom = other_top + static_cast<long>(other.info.height);
 
     // Calculate new dimensions
-    long minX = std::min(baseLeft, otherLeft);
-    long minY = std::min(baseTop, otherTop);
-    long maxX = std::max(baseRight, otherRight);
-    long maxY = std::max(baseBottom, otherBottom);
+    const long min_x = std::min(base_left, other_left);
+    const long min_y = std::min(base_top, other_top);
+    const long max_x = std::max(base_right, other_right);
+    const long max_y = std::max(base_bottom, other_bottom);
 
-    unsigned long newWidth = static_cast<unsigned long>(maxX - minX);
-    unsigned long newHeight = static_cast<unsigned long>(maxY - minY);
+    const auto new_width = static_cast<unsigned long>(max_x - min_x);
+    const auto new_height = static_cast<unsigned long>(max_y - min_y);
 
-    bool sameCanvasSize = newWidth == info.width && newHeight == info.height && minX == baseLeft && minY == baseTop;
-    if (!expandCanvas || sameCanvasSize)
+    const bool same_canvas_size =
+        new_width == info.width && new_height == info.height && min_x == base_left && min_y == base_top;
+    if (!expand_canvas || same_canvas_size)
     {
         // Fast path: fully in-bounds, same format, fully opaque
-        bool fullyOpaque = (info.pixelSizeBytes != 4) || other.isFullyOpaque();
-        bool fullyInBounds =
-            otherLeft >= baseLeft && otherTop >= baseTop && otherRight <= baseRight && otherBottom <= baseBottom;
-        if (fullyInBounds)
+        const bool fully_opaque = (info.pixelSizeBytes != 4) || other.isFullyOpaque();
+        const bool fully_in_bounds =
+            other_left >= base_left && other_top >= base_top && other_right <= base_right && other_bottom <= base_bottom;
+        if (fully_in_bounds)
         {
-            long dstX = otherLeft - baseLeft;
-            long dstY = otherTop - baseTop;
-            if (fullyOpaque)
+            const long dst_x = other_left - base_left;
+            const long dst_y = other_top - base_top;
+            if (fully_opaque)
             {
-                copyPixelsOptimized(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
+                copyPixelsOptimized(other, 0, 0, dst_x, dst_y, other.info.width, other.info.height);
             }
             else
             {
                 // Only blend the region corresponding to the pasted image
-                copyPixelsWithBlending(other, 0, 0, dstX, dstY, info.width, info.height);
+                copyPixelsWithBlending(other, 0, 0, dst_x, dst_y, info.width, info.height);
             }
             return *this;
         }
         // Fallback to blending (legacy, for partial overlap)
-        copyPixelsWithBlending(other, otherLeft, otherTop, 0, 0, info.width, info.height);
+        copyPixelsWithBlending(other, other_left, other_top, 0, 0, info.width, info.height);
         return *this;
     }
 
@@ -1612,51 +1627,52 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     // Avoid full buffer memset; only clear new regions if needed.
     // This minimizes memory operations and improves performance for large images.
     Image backup;
-    if (!sameCanvasSize)
+    if (!same_canvas_size)
     {
         // Region-aware backup and copy is now correct and safe (see CRIT-002 resolution)
         backup.copyFrom(*this);
-        size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
-        this->resize(newSize);
-        info.x = static_cast<unsigned long>(minX);
-        info.y = static_cast<unsigned long>(minY);
-        info.width = newWidth;
-        info.height = newHeight;
-        copyPixelsWithBlending(backup, baseLeft, baseTop, minX, minY, baseRight - baseLeft, baseBottom - baseTop);
+        const size_t new_size = new_width * new_height * info.pixelSizeBytes;
+        this->resize(new_size);
+        info.x = static_cast<unsigned long>(min_x);
+        info.y = static_cast<unsigned long>(min_y);
+        info.width = new_width;
+        info.height = new_height;
+        copyPixelsWithBlending(backup, base_left, base_top, min_x, min_y, base_right - base_left, base_bottom - base_top);
     }
     // Copy the pasted image (other) to the correct region
-    copyPixelsWithBlending(other, otherLeft, otherTop, minX, minY, other.info.width, other.info.height);
+    copyPixelsWithBlending(other, other_left, other_top, min_x, min_y, other.info.width, other.info.height);
     return *this;
 }
-// TODO: SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM EDGE.
+// TODO(arroyo): SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM
+// EDGE.
 std::unique_ptr<Image>
-Image::affineWarpBilinear(const double* M, int out_width, int out_height, const double* invM) const
+Image::affineWarpBilinear(const double* /*m*/, int out_width, int out_height, const double* inv_m) const
 {
     if (info.pixelSizeBytes != 3)
     {
-        common::log_error("Image::affineWarpBilinear - Only RGB images are supported");
+        common::logError("Image::affineWarpBilinear - Only RGB images are supported");
         return nullptr;
     }
 
 
     // Accept optional inverse matrix for performance
-    double localInvM[6];
-    const double* useInvM = nullptr;
-    if (invM)
+    double local_inv_m[6];
+    const double* use_inv_m = nullptr;
+    if (inv_m != nullptr)
     {
-        useInvM = invM;
+        use_inv_m = inv_m;
     }
     else
     {
-        if (!math_utils::invert_affine(M, localInvM))
+        if (!math_utils::invertAffine(M, local_inv_m))
         {
-            common::log_error("Image::affineWarpGeneric - Invalid affine matrix provided");
+            common::logError("Image::affineWarpGeneric - Invalid affine matrix provided");
             return nullptr;
         }
-        useInvM = localInvM;
+        use_inv_m = local_inv_m;
     }
 
-    size_t out_size = out_width * out_height * info.pixelSizeBytes;
+    const size_t out_size = out_width * out_height * info.pixelSizeBytes;
     auto out_img = std::make_unique<Image>(out_size);
     out_img->info = info;
     out_img->info.width = out_width;
@@ -1673,25 +1689,25 @@ Image::affineWarpBilinear(const double* M, int out_width, int out_height, const 
     {
         for (int x = 0; x < out_width; ++x)
         {
-            double src_x = useInvM[0] * x + useInvM[1] * y + useInvM[2];
-            double src_y = useInvM[3] * x + useInvM[4] * y + useInvM[5];
-            unsigned char* pdst = dst + (y * out_width + x) * 3;
-            int x0 = static_cast<int>(std::floor(src_x));
-            int y0 = static_cast<int>(std::floor(src_y));
-            int x1 = x0 + 1;
-            int y1 = y0 + 1;
+            const double src_x = (use_inv_m[0] * x) + (use_inv_m[1] * y) + use_inv_m[2];
+            const double src_y = (use_inv_m[3] * x) + (use_inv_m[4] * y) + use_inv_m[5];
+            unsigned char* pdst = dst + ((y * out_width + x) * 3);
+            const int x0 = static_cast<int>(std::floor(src_x));
+            const int y0 = static_cast<int>(std::floor(src_y));
+            const int x1 = x0 + 1;
+            const int y1 = y0 + 1;
 
             if (x0 >= 0 && x1 < in_width && y0 >= 0 && y1 < in_height)
             {
-                double wx = src_x - x0;
-                double wy = src_y - y0;
+                const double wx = src_x - x0;
+                const double wy = src_y - y0;
 
                 for (int c = 0; c < 3; ++c)
                 {
-                    double v = (1 - wx) * (1 - wy) * src[(y0 * in_width + x0) * 3 + c]
-                               + wx * (1 - wy) * src[(y0 * in_width + x1) * 3 + c]
-                               + (1 - wx) * wy * src[(y1 * in_width + x0) * 3 + c]
-                               + wx * wy * src[(y1 * in_width + x1) * 3 + c];
+                    const double v = ((1 - wx) * (1 - wy) * src[((y0 * in_width + x0) * 3) + c])
+                                     + (wx * (1 - wy) * src[((y0 * in_width + x1) * 3) + c])
+                                     + ((1 - wx) * wy * src[((y1 * in_width + x0) * 3) + c])
+                                     + (wx * wy * src[((y1 * in_width + x1) * 3) + c]);
 
                     pdst[c] = static_cast<unsigned char>(std::round(std::clamp(v, 0.0, 255.0)));
                 }
@@ -1708,32 +1724,32 @@ Image::affineWarpBilinear(const double* M, int out_width, int out_height, const 
 }
 
 std::unique_ptr<Image>
-Image::affineWarpNearestNeighbour(const double* M, int out_width, int out_height, const double* invM) const
+Image::affineWarpNearestNeighbour(const double* /*m*/, int out_width, int out_height, const double* inv_m) const
 {
     if (info.pixelSizeBytes != 1)
     {
-        common::log_error("Image::affineWarpNearestNeighbour - Only single-channel images are supported");
+        common::logError("Image::affineWarpNearestNeighbour - Only single-channel images are supported");
         return nullptr;
     }
 
-    // Matrix inversion optimization (MED-003): use optional invM parameter
-    double localInvM[6];
-    const double* useInvM = nullptr;
-    if (invM)
+    // Matrix inversion optimization use optional invM parameter
+    double local_inv_m[6];
+    const double* use_inv_m = nullptr;
+    if (inv_m != nullptr)
     {
-        useInvM = invM;
+        use_inv_m = inv_m;
     }
     else
     {
-        if (!math_utils::invert_affine(M, localInvM))
+        if (!math_utils::invertAffine(M, local_inv_m))
         {
-            common::log_error("Image::affineWarpNearestNeighbour - Invalid affine matrix provided");
+            common::logError("Image::affineWarpNearestNeighbour - Invalid affine matrix provided");
             return nullptr;
         }
-        useInvM = localInvM;
+        use_inv_m = local_inv_m;
     }
 
-    size_t out_size = out_width * out_height;
+    const size_t out_size = out_width * out_height;
     auto out_img = std::make_unique<Image>(out_size);
     out_img->info = info;
     out_img->info.width = out_width;
@@ -1750,14 +1766,13 @@ Image::affineWarpNearestNeighbour(const double* M, int out_width, int out_height
     {
         for (int x = 0; x < out_width; ++x)
         {
-            double src_x = useInvM[0] * x + useInvM[1] * y + useInvM[2];
-            double src_y = useInvM[3] * x + useInvM[4] * y + useInvM[5];
+            const double src_x = (use_inv_m[0] * x) + (use_inv_m[1] * y) + use_inv_m[2];
+            const double src_y = (use_inv_m[3] * x) + (use_inv_m[4] * y) + use_inv_m[5];
             unsigned char* pdst = dst + (y * out_width + x);
 
-
             // Nearest neighbor
-            int ix = static_cast<int>(std::round(src_x));
-            int iy = static_cast<int>(std::round(src_y));
+            const int ix = static_cast<int>(std::round(src_x));
+            const int iy = static_cast<int>(std::round(src_y));
 
             if (ix >= 0 && ix < in_width && iy >= 0 && iy < in_height)
             {
@@ -1782,7 +1797,7 @@ void Image::alphaBlend(const Image& src, const Image& mask)
         || mask.info.pixelSizeBytes != 1)
     {
         // Invalid input, do nothing
-        common::log_error("Image::alphaBlend - Image sizes or pixel formats do not match");
+        common::logError("Image::alphaBlend - Image sizes or pixel formats do not match");
         return;
     }
     unsigned char* dst_data = this->data();
@@ -1792,6 +1807,6 @@ void Image::alphaBlend(const Image& src, const Image& mask)
     for (int i = 0; i < npixels; ++i)
     {
         // Blend each pixel using the mask
-        PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i], 3, 255);
+        pixel_operations::blendPixels(dst_data + (i * 3), src_data + (i * 3), 3, mask_data[i], 3, 255);
     }
 }

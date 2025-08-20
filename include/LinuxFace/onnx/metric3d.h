@@ -1,8 +1,8 @@
 #ifndef METRIC3D_H
 #define METRIC3D_H
 
-#include "LinuxFace/onnx/onnxDetector.h"
 #include "LinuxFace/Image/tensor_padding.h"
+#include "LinuxFace/onnx/onnxDetector.h"
 
 // Source https://github.com/YvanYin/Metric3D/tree/main
 //  tested python inference, small model doesnt work well.
@@ -20,7 +20,7 @@ class Metric3D : public OnnxDetector
 
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
-    std::unique_ptr<DepthImage> detect_depth(const std::unique_ptr<Image>& image);
+    std::unique_ptr<DepthImage> detectDepth(const std::unique_ptr<Image>& image);
 
   private:
     int target_width_;

@@ -11,6 +11,7 @@
 #include <map>
 #include <memory>
 #include <queue>
+#include <utility>
 #include <vector>
 
 #include "LinuxFace/Image/gif.h"
@@ -31,7 +32,7 @@ struct Resolution
     const char* name;
 };
 
-static constexpr Resolution common_resolutions_[] = {
+static constexpr Resolution CommonResolutions[] = {
     {640,  480,  "640x480 (VGA) [4:3]"       },
     {800,  600,  "800x600 (SVGA) [4:3]"      },
     {1024, 768,  "1024x768 (XGA) [4:3]"      },
@@ -51,40 +52,40 @@ static constexpr Resolution common_resolutions_[] = {
 class UI
 {
   public:
-    UI(std::shared_ptr<LayerManager> layerManager);
+    explicit UI(std::shared_ptr<LayerManager> layerManager);
     ~UI();
 
     // Initialize the UI system
-    bool initialize(GLFWwindow* window, const char* glsl_version = "#version 130");
+    bool initialize(GLFWwindow* window, const char* glslVersion = "#version 130");
 
-    inline void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = newCameraManager; }
-    inline void connect(std::shared_ptr<MediaManager> newMediaManager)
+    void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = std::move(newCameraManager); }
+    void connect(std::shared_ptr<MediaManager> newMediaManager)
     {
-        mediaManager_ = newMediaManager;
+        mediaManager_ = std::move(newMediaManager);
         mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_, layerManager_);
     }
 
     // Cleanup the UI system
-    void shutdown();
+    void shutdown() const;
 
     // Start a new frame (call this at the beginning of your render loop)
-    void newFrame();
+    static void newFrame();
 
     // Paint/render all UI elements (call this to draw your UI)
     void paint();
 
     // Render the final UI (call this after paint(), before swapping buffers)
-    void render();
+    static void render();
 
     void handleKeyboard();
 
-    void loadingScreen();
+    static void loadingScreen();
 
     // Handle dragging of selected layer (image or text)
     void handleLayerDragging();
-    
+
     // Helper function to find the topmost layer under mouse position
-    Layer* findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& mousePos);
+    static Layer* findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& mousePos);
 
   private:
     bool ready_{false};
@@ -124,7 +125,7 @@ class UI
     bool mediaBrowserVisible_{false};
 
     // Tracked camera state On/Off
-    std::unordered_map<std::string, bool> cameraDesiredStates;
+    std::unordered_map<std::string, bool> cameraDesiredStates_;
 
     // UI drawing functions
     void paintMainWindow();

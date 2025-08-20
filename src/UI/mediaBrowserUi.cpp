@@ -2,38 +2,37 @@
 
 #include <GL/gl.h>
 #include <algorithm>
+#include <utility>
 
 namespace linuxface
 {
 MediaBrowserUI::MediaBrowserUI(std::shared_ptr<MediaManager> manager, std::shared_ptr<LayerManager> layerManager)
-    : mediaManager(manager), layerManager_(layerManager)
+    : mediaManager_(std::move(std::move(manager))), layerManager_(std::move(std::move(layerManager)))
 {
-    if (!mediaManager)
+    if (!mediaManager_)
     {
-        common::log_error("MediaManager is not initialized in MediaBrowserUI");
+        common::logError("MediaManager is not initialized in MediaBrowserUI");
     }
 }
 
-MediaBrowserUI::~MediaBrowserUI()
-{
-}
+MediaBrowserUI::~MediaBrowserUI() = default;
 
 bool MediaBrowserUI::render()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImVec2 viewportPos = viewport->Pos;
-    ImVec2 viewportSize = viewport->Size;
+    const ImVec2 viewportPos = viewport->Pos;
+    const ImVec2 viewportSize = viewport->Size;
 
     // Get menu bar height (same as in UI.cpp)
-    float menuBarHeight = ImGui::GetFrameHeight();
+    const float menuBarHeight = ImGui::GetFrameHeight();
 
     // Adjust sidebar size and position to not overlap menu bar
-    float sidebarY = viewportPos.y + menuBarHeight;
-    float sidebarHeight = viewportSize.y - menuBarHeight;
+    const float sidebarY = viewportPos.y + menuBarHeight;
+    const float sidebarHeight = viewportSize.y - menuBarHeight;
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
-                             | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
-                             | ImGuiWindowFlags_NoScrollbar;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+                                   | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
+                                   | ImGuiWindowFlags_NoScrollbar;
 
     ImGui::SetNextWindowPos(ImVec2(viewportPos.x + viewportSize.x, sidebarY), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
     ImGui::SetNextWindowSize(ImVec2(0, sidebarHeight), ImGuiCond_Always);
@@ -55,9 +54,9 @@ bool MediaBrowserUI::render()
     }
 
     // Get the actual window width after rendering
-    ImVec2 actualSidebarSize = ImGui::GetWindowSize();
+    const ImVec2 actualSidebarSize = ImGui::GetWindowSize();
     // Immediately reposition and resize the window to be flush right and clamped
-    float sidebarX = viewportPos.x + viewportSize.x - actualSidebarSize.x;
+    const float sidebarX = viewportPos.x + viewportSize.x - actualSidebarSize.x;
     ImGui::SetWindowPos(ImVec2(sidebarX, sidebarY), ImGuiCond_Always);
     ImGui::End();
     return true;
@@ -66,7 +65,7 @@ bool MediaBrowserUI::render()
 void MediaBrowserUI::renderImageDataContent()
 {
     Layer* selected = getSelectedLayer();
-    if (!selected)
+    if (selected == nullptr)
     {
         ImGui::TextDisabled("No layer selected");
         return;
@@ -74,7 +73,7 @@ void MediaBrowserUI::renderImageDataContent()
 
     ImGui::Text("Layer (%zu): %s", selected->id, selected->name.c_str());
     ImGui::Text("File: %s", selected->getLayerName().c_str());
-    ImGui::Text("Size: %s", common::format_size(selected->getSize()));
+    ImGui::Text("Size: %s", common::formatSize(selected->getSize()));
     ImGui::Text("Position (x, y): (%.1f, %.1f)", selected->x, selected->y);
     ImGui::Text("Layer number: %d", selected->getLayerNumber());
     ImGui::Text("Dimensions: %lu x %lu", selected->getWidth(), selected->getHeight());
@@ -82,7 +81,7 @@ void MediaBrowserUI::renderImageDataContent()
 
     // Layer lock checkbox
     ImGui::Separator();
-    bool lockChanged = ImGui::Checkbox("Lock Position", &selected->locked);
+    const bool lockChanged = ImGui::Checkbox("Lock Position", &selected->locked);
     if (lockChanged)
     {
         selected->dirty = true;
@@ -100,8 +99,9 @@ void MediaBrowserUI::renderImageDataContent()
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 100, 100, 255)); // Red text
         ImGui::Text("📹 Output Camera Overlay");
         ImGui::PopStyleColor();
-        ImGui::TextWrapped("This shows the recording region for the output camera. Move this layer to adjust what area gets recorded.");
-        
+        ImGui::TextWrapped("This shows the recording region for the output camera. Move this layer to adjust what area "
+                           "gets recorded.");
+
         if (ImGui::Button("Center Recording Region"))
         {
             selected->x = 0.0f;
@@ -199,31 +199,31 @@ void MediaBrowserUI::renderImageOperationsContent()
 
         // Slider-based resize
         ImGui::Separator();
-        
+
         // Check if this is a camera layer
         if (!selected->cameraDevicePath.empty())
         {
             ImGui::Text("Camera Layer Resize (Applied Each Frame):");
-            
-            bool scaleChanged = ImGui::SliderFloat("Scale", &selected->resizeScale, 0.1f, 3.0f, "%.2f");
-            
+
+            const bool scaleChanged = ImGui::SliderFloat("Scale", &selected->resizeScale, 0.1f, 3.0f, "%.2f");
+
             if (scaleChanged)
             {
                 selected->dirty = true;
             }
-            
+
             if (ImGui::Button("Reset Scale"))
             {
                 selected->resizeScale = 1.0f;
                 selected->dirty = true;
             }
-            
+
             ImGui::Text("Current Scale: %.2f", selected->resizeScale);
             ImGui::Text("Original Size: %ldx%ld", selected->getWidth(), selected->getHeight());
             if (selected->resizeScale != 1.0f)
             {
-                int scaledWidth = static_cast<int>(selected->getWidth() * selected->resizeScale);
-                int scaledHeight = static_cast<int>(selected->getHeight() * selected->resizeScale);
+                const int scaledWidth = static_cast<int>(selected->getWidth() * selected->resizeScale);
+                const int scaledHeight = static_cast<int>(selected->getHeight() * selected->resizeScale);
                 ImGui::Text("Scaled Size: %dx%d", scaledWidth, scaledHeight);
             }
         }
@@ -235,7 +235,7 @@ void MediaBrowserUI::renderImageOperationsContent()
             static bool sliderActive = false;
             static float resizeScale = 1.0f;
 
-            bool sliderChanged = ImGui::SliderFloat("Scale", &resizeScale, 0.1f, 3.0f, "%.2f");
+            const bool sliderChanged = ImGui::SliderFloat("Scale", &resizeScale, 0.1f, 3.0f, "%.2f");
 
             if (sliderChanged && !sliderActive)
             {
@@ -246,8 +246,8 @@ void MediaBrowserUI::renderImageOperationsContent()
             {
                 // User released the slider, apply the resize
                 sliderActive = false;
-                int targetWidth = static_cast<int>(image->info.width * resizeScale);
-                int targetHeight = static_cast<int>(image->info.height * resizeScale);
+                const int targetWidth = static_cast<int>(image->info.width * resizeScale);
+                const int targetHeight = static_cast<int>(image->info.height * resizeScale);
 
                 if (targetWidth > 0 && targetHeight > 0)
                 {
@@ -262,8 +262,8 @@ void MediaBrowserUI::renderImageOperationsContent()
             // Show preview dimensions while dragging
             if (sliderActive || ImGui::IsItemActive())
             {
-                int previewWidth = static_cast<int>(image->info.width * resizeScale);
-                int previewHeight = static_cast<int>(image->info.height * resizeScale);
+                const int previewWidth = static_cast<int>(image->info.width * resizeScale);
+                const int previewHeight = static_cast<int>(image->info.height * resizeScale);
                 ImGui::Text("Preview: %dx%d", previewWidth, previewHeight);
             }
         }
@@ -271,16 +271,16 @@ void MediaBrowserUI::renderImageOperationsContent()
         ImGui::Spacing();
         if (ImGui::Button("Reset"))
         {
-            if (!mediaManager->reloadImage(selected->name))
+            if (!mediaManager_->reloadImage(selected->name))
             {
-                common::log_error("Failed to reload image: %s", selected->name.c_str());
+                common::logError("Failed to reload image: %s", selected->name.c_str());
             }
             else
             {
                 // Force recreation of texture and geometry by marking layer as dirty
                 selected->dirty = true;
                 // Also reset the image pointer to the reloaded one
-                selected->img = mediaManager->getImage(selected->name);
+                selected->img = mediaManager_->getImage(selected->name);
             }
         }
     }
@@ -299,14 +299,14 @@ void MediaBrowserUI::renderSceneCompositor()
     auto& layers = layerManager_->getLayers();
 
     int removeIndex = -1;
-    for (int i = 0; i < (int) layers.size(); ++i)
+    for (int i = 0; i < static_cast<int>(layers.size()); ++i)
     {
         Layer& layer = layers[i];
-        std::string label = layer.name + " #" + std::to_string(layer.getLayerNumber());
+        const std::string label = layer.name + " #" + std::to_string(layer.getLayerNumber());
         ImGui::AlignTextToFramePadding();
         ImGui::PushID(i);
         ImGui::BeginGroup();
-        bool isSelected = layer.selected;
+        const bool isSelected = layer.selected;
         if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(120, 0)))
         {
             // Deselect all, select this one
@@ -352,7 +352,7 @@ void MediaBrowserUI::renderSceneCompositor()
         }
         if (ImGui::Button("Down"))
         {
-            if (i < (int) layers.size() - 1)
+            if (i < static_cast<int>(layers.size()) - 1)
             {
                 std::swap(layers[i], layers[i + 1]);
                 // Keep selection on the moved layer
@@ -379,9 +379,9 @@ void MediaBrowserUI::renderSceneCompositor()
         ImGui::EndGroup();
         ImGui::PopID();
     }
-    if (removeIndex >= 0 && removeIndex < (int) layers.size())
+    if (removeIndex >= 0 && removeIndex < static_cast<int>(layers.size()))
     {
-        bool wasSelected = layers[removeIndex].selected;
+        const bool wasSelected = layers[removeIndex].selected;
         layers.erase(layers.begin() + removeIndex);
         // Select first layer if none selected
         bool anySelected = false;
@@ -405,7 +405,7 @@ void MediaBrowserUI::renderSceneCompositor()
             layerManager_->markDirty();
         }
     }
-    for (int i = 0; i < (int) layers.size(); ++i)
+    for (int i = 0; i < static_cast<int>(layers.size()); ++i)
     {
         if (layers[i].type == LayerType::Image && layers[i].img)
         {

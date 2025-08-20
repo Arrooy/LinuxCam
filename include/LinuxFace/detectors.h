@@ -18,7 +18,7 @@ class ShapeDetector
 {
   public:
     virtual std::vector<Face>
-    detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) = 0;
+    detect(const std::unique_ptr<Image>& image, std::vector<math_utils::Rect<float>>& facesRect) = 0;
 };
 
 } // namespace linuxface

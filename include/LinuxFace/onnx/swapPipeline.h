@@ -18,7 +18,7 @@ class SwapPipeline
                  std::shared_ptr<SCRFDetector> scrfd);
 
     // Call once per frame. Returns true if swap was performed.
-    bool run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& target_img);
+    bool run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& targetImg);
 
   private:
     std::shared_ptr<InSwapper> inswapper_;

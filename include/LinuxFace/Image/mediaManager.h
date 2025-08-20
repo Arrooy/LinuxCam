@@ -30,9 +30,9 @@ class MediaManager
     void shutdown();
 
   private:
-    size_t loadMediaFromFolder(const std::string& folderPath);
-    std::unordered_map<std::string, std::shared_ptr<Image>> images;
-    std::unordered_map<std::string, std::shared_ptr<Gif>> gifs;
+    static size_t loadMediaFromFolder(const std::string& folderPath);
+    std::unordered_map<std::string, std::shared_ptr<Image>> images_;
+    std::unordered_map<std::string, std::shared_ptr<Gif>> gifs_;
 
     std::shared_ptr<ImageRenderGL> imageRenderGl_;
 

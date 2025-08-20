@@ -25,6 +25,7 @@ class MediaBrowserUI
     bool render();
 
     Layer* getSelectedLayer();
+
   private:
     void renderLeftSidebar();
     void renderRightSidebar();
@@ -41,17 +42,16 @@ class MediaBrowserUI
     ImVec2 calculateCenterPosition(const ImVec2& previewSize);
     void resetPreviewControls();
 
-    std::shared_ptr<MediaManager> mediaManager;
+    std::shared_ptr<MediaManager> mediaManager_;
     std::shared_ptr<LayerManager> layerManager_;
 
     // UI State
-    bool showImages = true;
-    bool showGifs = true;
+    bool showImages_ = true;
+    bool showGifs_ = true;
 
     // Preview controls
-    float previewScale = 1.0f;
-    bool fitToWindow = true;
-
+    float previewScale_ = 1.0f;
+    bool fitToWindow_ = true;
 
     // Texture cache for images (now handled by LayerManager)
     // std::unordered_map<std::string, ImTextureID> textureCache;

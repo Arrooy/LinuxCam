@@ -16,16 +16,16 @@ namespace linuxface
 // Helper struct for cache
 struct TextureCacheEntry
 {
-    GLuint texId;
-    int width;
-    int height;
-    int layer;
+    GLuint texId{};
+    int width{};
+    int height{};
+    int layer{};
     // Add buffer objects for VAO/VBO/EBO caching
     GLuint vao = 0;
     GLuint vbo = 0;
     GLuint ebo = 0;
     // Add position tracking for text overlays
-    float lastX = -999999.0f;  // Use impossible values to force initial setup
+    float lastX = -999999.0f; // Use impossible values to force initial setup
     float lastY = -999999.0f;
 };
 
@@ -46,13 +46,15 @@ class ImageRenderGL
 
   private:
     // Simplified rendering structures
-    struct RenderBounds {
+    struct RenderBounds
+    {
         float x, y, width, height;
         RenderBounds() : x(0), y(0), width(0), height(0) {}
-        RenderBounds(float x_, float y_, float w_, float h_) : x(x_), y(y_), width(w_), height(h_) {}
+        RenderBounds(float x, float y, float w, float h) : x(x), y(y), width(w), height(h) {}
     };
 
-    struct LayerRenderInfo {
+    struct LayerRenderInfo
+    {
         Image* image = nullptr;
         GLuint textureId = 0;
         RenderBounds bounds;
@@ -60,32 +62,31 @@ class ImageRenderGL
     };
 
     // Core rendering pipeline
-    bool initializeRenderingContext(int windowWidth, int windowHeight);
-    bool prepareLayerForRendering(const Layer& layer, LayerRenderInfo& renderInfo);
-    Image* getRenderableImage(const Layer& layer);
-    
+    bool initializeRenderingContext(int window_width, int window_height) const;
+    bool prepareLayerForRendering(const Layer& layer, LayerRenderInfo& render_info);
+    static Image* getRenderableImage(const Layer& layer);
+
     // Layer rendering (unified interface with consistent parameters)
-    bool renderLayer(const Layer& layer, const LayerRenderInfo& renderInfo, 
-                     int windowWidth, int windowHeight);
-    void renderLayerNameOverlay(const Layer& layer, const LayerRenderInfo& renderInfo,
-                               int windowWidth, int windowHeight);
-    void renderSelectionIndicator(const Layer& layer, const LayerRenderInfo& renderInfo);
-    void finalizeRenderingContext();
+    bool renderLayer(const Layer& layer, const LayerRenderInfo& render_info, int window_width, int window_height);
+    void
+    renderLayerNameOverlay(const Layer& layer, const LayerRenderInfo& renderInfo, int window_width, int window_height);
+    static void renderSelectionIndicator(const Layer& layer, const LayerRenderInfo& render_info);
+    static void finalizeRenderingContext();
 
     // Internal OpenGL helpers (unified interface)
-    GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
-    bool setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, 
-                         int windowWidth, int windowHeight);
-    bool executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId);
+    GLuint getOrCreateTexture(Image& image, size_t layer_id, bool force = false);
+    static bool
+    setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, int window_width, int window_height);
+    bool executeOpenGlRender(const TextureCacheEntry& entry, GLuint tex_id) const;
     void cleanupTextures();
 
     // Shader management
     bool createShaders();
-    GLuint compileShader(const char* source, GLenum type);
-    GLuint createShaderProgram(const char* vertexSource, const char* fragmentSource);
+    static GLuint compileShader(const char* source, GLenum type);
+    static GLuint createShaderProgram(const char* vertex_source, const char* fragment_source);
 
-    GLuint vao_, vbo_, ebo_;
-    GLuint shaderProgram_;
+    GLuint vao_{0}, vbo_{0}, ebo_{0};
+    GLuint shaderProgram_{0};
 
     // Texture cache: maps layer id (as string) to OpenGL texture ID and VAO/VBO/EBO
     std::unordered_map<std::string, TextureCacheEntry> textureCache_;

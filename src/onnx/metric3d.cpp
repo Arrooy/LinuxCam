@@ -10,9 +10,10 @@ Metric3D::Metric3D(const std::string& onnx_model_path) : OnnxDetector(onnx_model
 {
     if (output_node_names_str_.size() != 3)
     {
-        common::log_error("Metric3D expects 3 outputs (predicted_depth, predicted_normal, normal_confidence), got %zu",
-                          output_node_names_str_.size());
-        ready_ = false;
+        common::logError("Metric3D expects 3 outputs (predicted_depth, predicted_normal, "
+                         "normal_confidence), got %zu",
+                         output_node_names_str.size());
+        ready = false;
         return;
     }
 
@@ -20,7 +21,7 @@ Metric3D::Metric3D(const std::string& onnx_model_path) : OnnxDetector(onnx_model
     target_height_ = 616; // Reduced from 616 (about 3x smaller)
     target_width_ = 1064; // Reduced from 1064 (about 3x smaller)
 
-    ready_ = true;
+    ready = true;
 }
 
 Ort::Value Metric3D::transform(const std::unique_ptr<Image>& image)
@@ -28,86 +29,86 @@ Ort::Value Metric3D::transform(const std::unique_ptr<Image>& image)
     // Create tensor with fixed dimensions instead of dynamic input_node_dims
     std::vector<int64_t> input_shape = {1, 3, target_height_, target_width_}; // [batch, channels, height, width]
 
-    Ort::Value input_tensor = Ort::Value::CreateTensor<float>(allocator_, input_shape.data(), input_shape.size());
+    Ort::Value input_tensor = Ort::Value::CreateTensor<float>(allocator, inputShape.data(), inputShape.size());
 
     // Get pointer to tensor data.
-    float* tensor_data = input_tensor.GetTensorMutableData<float>();
+    auto* tensor_data = input_tensor.GetTensorMutableData<float>();
 
     // Store the padding for later use in fromTensor
     padding_ = TensorPadding::metric3d();
 
     // Use Metric3D specific padding
-    image->toTensor(tensor_data, padding_, target_width_, target_height_, NormalizationType::NONE);
+    image->toTensor(tensorData, padding_, target_width_, target_height_, NormalizationType::NONE);
 
     return input_tensor;
 }
 
-std::unique_ptr<DepthImage> Metric3D::detect_depth(const std::unique_ptr<Image>& image)
+std::unique_ptr<DepthImage> Metric3D::DetectDepth(const std::unique_ptr<Image>& image)
 {
     Profiler::getInstance().start("Metric3D", "Depth detection");
-    Ort::Value input_tensor = this->transform(image);
+    const Ort::Value input_tensor = this->transform(image);
 
     try
     {
-        auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,
-                                                     1, output_node_names_.data(), output_node_names_str_.size());
+        auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
+                                                    output_node_names_.data(), output_node_names_str_.size());
 
         if (output_tensors.size() != 3)
         {
-            common::log_error("Metric3D::detect_depth: expected 3 output tensors, got %zu", output_tensors.size());
+            common::logError("Metric3D::detect_depth: expected 3 output tensors, got %zu", output_tensors.size());
             return nullptr;
         }
 
         // Extract all three outputs
-        Ort::Value& depth_output = output_tensors.at(0);      // predicted_depth
-        Ort::Value& normal_output = output_tensors.at(1);     // predicted_normal
-        Ort::Value& confidence_output = output_tensors.at(2); // normal_confidence
+        const Ort::Value& depth_output = outputTensors.at(0);      // predicted_depth
+        const Ort::Value& normal_output = outputTensors.at(1);     // predicted_normal
+        const Ort::Value& confidence_output = outputTensors.at(2); // normal_confidence
 
         // Get shape information for all outputs
         auto depth_type_info = depth_output.GetTensorTypeAndShapeInfo();
-        auto depth_shape = depth_type_info.GetShape();
+        auto depth_shape = depthTypeInfo.GetShape();
 
         auto normal_type_info = normal_output.GetTensorTypeAndShapeInfo();
-        auto normal_shape = normal_type_info.GetShape();
+        auto normal_shape = normalTypeInfo.GetShape();
 
         auto confidence_type_info = confidence_output.GetTensorTypeAndShapeInfo();
-        auto confidence_shape = confidence_type_info.GetShape();
+        auto confidence_shape = confidenceTypeInfo.GetShape();
 
-        common::log_info("Metric3D depth output shape dimensions: %zu", depth_shape.size());
+        common::logInfo("Metric3D depth output shape dimensions: %zu", depth_shape.size());
         for (size_t i = 0; i < depth_shape.size(); ++i)
         {
-            common::log_info("Metric3D depth output shape[%zu]: %lld", i, depth_shape[i]);
+            common::logInfo("Metric3D depth output shape[%zu]: %lld", i, depth_shape[i]);
         }
 
-        common::log_info("Metric3D normal output shape dimensions: %zu", normal_shape.size());
+        common::logInfo("Metric3D normal output shape dimensions: %zu", normal_shape.size());
         for (size_t i = 0; i < normal_shape.size(); ++i)
         {
-            common::log_info("Metric3D normal output shape[%zu]: %lld", i, normal_shape[i]);
+            common::logInfo("Metric3D normal output shape[%zu]: %lld", i, normal_shape[i]);
         }
 
-        common::log_info("Metric3D confidence output shape dimensions: %zu", confidence_shape.size());
+        common::logInfo("Metric3D confidence output shape dimensions: %zu", confidence_shape.size());
         for (size_t i = 0; i < confidence_shape.size(); ++i)
         {
-            common::log_info("Metric3D confidence output shape[%zu]: %lld", i, confidence_shape[i]);
+            common::logInfo("Metric3D confidence output shape[%zu]: %lld", i, confidence_shape[i]);
         }
 
         // Calculate actual tensor size from shape - use tensor output dimensions
-        int tensor_height;
-        int tensor_width;
+        int tensor_height = 0;
+        int tensor_width = 0;
 
         // Assuming format is [batch, height, width] or [batch, 1, height, width]
         if (depth_shape.size() == 3)
         {
-            tensor_height = static_cast<int>(depth_shape[1]);
-            tensor_width = static_cast<int>(depth_shape[2]);
+            tensor_height = static_cast<int>(depthShape[1]);
+            tensor_width = static_cast<int>(depthShape[2]);
         }
         else if (depth_shape.size() == 4)
         {
-            tensor_height = static_cast<int>(depth_shape[2]);
-            tensor_width = static_cast<int>(depth_shape[3]);
+            tensor_height = static_cast<int>(depthShape[2]);
+            tensor_width = static_cast<int>(depthShape[3]);
         }
 
-        common::log_info("Metric3D using tensor dimensions: %dx%d", tensor_width, tensor_height);
+        common::logInfo("Metric3D using tensor dimensions: %dx%d", tensor_width, tensor_height);
 
         // Get tensor data pointers
         auto depth_data = depth_output.GetTensorMutableData<float>();
@@ -116,40 +117,40 @@ std::unique_ptr<DepthImage> Metric3D::detect_depth(const std::unique_ptr<Image>&
 
         // Step 1: Remove padding from tensor output to get back to scaled image size
         // Calculate the scaled image dimensions that were used during padding
-        const int origW = image->info.width;
-        const int origH = image->info.height;
-        float scale = std::min(static_cast<float>(target_width_) / origW, static_cast<float>(target_height_) / origH);
-        int scaledW = static_cast<int>(origW * scale);
-        int scaledH = static_cast<int>(origH * scale);
+        const int orig_w = image->info.width;
+        const int orig_h = image->info.height;
+        float scale = std::min(static_cast<float>(target_width_) / orig_w, static_cast<float>(target_height_) / orig_h);
+        const int scaled_w = static_cast<int>(orig_w * scale);
+        const int scaled_h = static_cast<int>(orig_h * scale);
 
         // Calculate padding that was added (same logic as Python pad_info)
-        int pad_h = target_height_ - scaledH;
-        int pad_w = target_width_ - scaledW;
-        int pad_h_half = pad_h / 2;
-        int pad_w_half = pad_w / 2;
+        const int pad_h = target_height_ - scaled_h;
+        const int pad_w = target_width_ - scaled_w;
+        const int pad_h_half = pad_h / 2;
+        const int pad_w_half = pad_w / 2;
 
-        common::log_info("Metric3D padding info: pad_h_half=%d, pad_w_half=%d, scaledW=%d, scaledH=%d", pad_h_half,
+        common::logInfo("Metric3D padding info: pad_h_half=%d, pad_w_half=%d, scaledW=%d, scaledH=%d", pad_h_half,
                          pad_w_half, scaledW, scaledH);
 
         // Create intermediate depth image with the unpadded (scaled) dimensions
-        std::unique_ptr<DepthImage> scaled_depth_image = std::make_unique<DepthImage>(scaledW, scaledH);
+        std::unique_ptr<DepthImage> scaled_depth_image = std::make_unique<DepthImage>(scaled_w, scaled_h);
         float* scaled_depth_data = scaled_depth_image->getDepthData();
 
         // Copy depth data from tensor, removing padding (equivalent to Python's
         // depth[pad_info[0]:input_size[0]-pad_info[1], ...])
-        for (int h = 0; h < scaledH; ++h)
+        for (int h = 0; h < scaled_h; ++h)
         {
-            for (int w = 0; w < scaledW; ++w)
+            for (int w = 0; w < scaled_w; ++w)
             {
-                int tensor_h = h + pad_h_half; // Add back the padding offset
-                int tensor_w = w + pad_w_half; // Add back the padding offset
+                const int tensor_h = h + pad_h_half; // Add back the padding offset
+                const int tensor_w = w + pad_w_half; // Add back the padding offset
 
                 // Bounds check
                 if (tensor_h >= 0 && tensor_h < tensor_height && tensor_w >= 0 && tensor_w < tensor_width)
                 {
-                    int tensor_idx = tensor_h * tensor_width + tensor_w;
-                    int scaled_idx = h * scaledW + w;
-                    scaled_depth_data[scaled_idx] = depth_data[tensor_idx];
+                    const int tensor_idx = tensor_h * tensor_width + tensor_w;
+                    const int scaled_idx = h * scaled_w + w;
+                    scaledDepthData[scaledIdx] = depth_data[tensorIdx];
                 }
             }
         }
@@ -158,7 +159,7 @@ std::unique_ptr<DepthImage> Metric3D::detect_depth(const std::unique_ptr<Image>&
         auto final_depth_image = scaled_depth_image->scale(origW, origH);
         if (!final_depth_image)
         {
-            common::log_error("Failed to scale depth image back to original dimensions");
+            common::logError("Failed to scale depth image back to original dimensions");
             return nullptr;
         }
 
@@ -167,7 +168,7 @@ std::unique_ptr<DepthImage> Metric3D::detect_depth(const std::unique_ptr<Image>&
     }
     catch (const Ort::Exception& e)
     {
-        common::log_error("Metric3D::detect_depth ONNX error: %s", e.what());
+        common::logError("Metric3D::detect_depth ONNX error: %s", e.what());
         Profiler::getInstance().stop("Metric3D", "Depth detection");
         return nullptr;
     }
@@ -185,7 +186,7 @@ if (metric3dDetector_ != nullptr && metric3dDetector_->isReady())
 
             if (stats.validPixels > 0)
             {
-                common::log_info("Depth stats - Min: %.2f, Max: %.2f, Mean: %.2f, Valid pixels: %lu", stats.minDepth,
+                common::logInfo("Depth stats - Min: %.2f, Max: %.2f, Mean: %.2f, Valid pixels: %lu", stats.minDepth,
                                  stats.maxDepth, stats.meanDepth, stats.validPixels);
 
 

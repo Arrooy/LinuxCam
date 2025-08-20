@@ -29,24 +29,24 @@ class FaceIoUMatchingTest : public ::testing::Test
     void SetUp() override
     {
         // Create some test faces with known bounding boxes
-        face1_ = Face(FaceBoundingBox(100.0f, 100.0f, 200.0f, 200.0f)); // 100x100 square at (100,100)
-        face2_ = Face(FaceBoundingBox(150.0f, 150.0f, 250.0f, 250.0f)); // 100x100 square at (150,150) - 50% overlap
-        face3_ = Face(FaceBoundingBox(300.0f, 300.0f, 400.0f, 400.0f)); // 100x100 square at (300,300) - no overlap
-        face4_ = Face(FaceBoundingBox(100.0f, 100.0f, 200.0f, 200.0f)); // Identical to face1_
+        face1 = Face(FaceBoundingBox(100.0f, 100.0f, 200.0f, 200.0f)); // 100x100 square at (100,100)
+        face2 = Face(FaceBoundingBox(150.0f, 150.0f, 250.0f, 250.0f)); // 100x100 square at (150,150) - 50% overlap
+        face3 = Face(FaceBoundingBox(300.0f, 300.0f, 400.0f, 400.0f)); // 100x100 square at (300,300) - no overlap
+        face4 = Face(FaceBoundingBox(100.0f, 100.0f, 200.0f, 200.0f)); // Identical to face1_
 
         // Ground truth bounding box for comparison
-        ground_truth_box_ = math_utils::Rect<double>(100.0, 100.0, 200.0, 200.0); // Same as face1_
+        ground_truth_box = math_utils::Rect<double>(100.0, 100.0, 200.0, 200.0); // Same as face1_
     }
 
-    Face face1_, face2_, face3_, face4_;
-    math_utils::Rect<double> ground_truth_box_;
+    Face face1, face2, face3, face4;
+    math_utils::Rect<double> ground_truth_box;
 };
 
 TEST_F(FaceIoUMatchingTest, PerfectOverlapReturnsIoUOfOne)
 {
-    std::vector<Face> faces = {face1_}; // Face1 matches ground truth perfectly
+    std::vector<Face> faces = {face1}; // Face1 matches ground truth perfectly
 
-    auto result = Face::findBestMatchingFace(faces, ground_truth_box_, 0.1);
+    auto result = Face::findBestMatchingFace(faces, ground_truth_box, 0.1);
 
     EXPECT_TRUE(result.found_match) << "Should find perfect match";
     EXPECT_EQ(result.face_index, 0) << "Should select first (and only) face";
@@ -56,9 +56,9 @@ TEST_F(FaceIoUMatchingTest, PerfectOverlapReturnsIoUOfOne)
 
 TEST_F(FaceIoUMatchingTest, PartialOverlapCalculatesCorrectIoU)
 {
-    std::vector<Face> faces = {face2_}; // Face2 has 50% overlap with ground truth
+    std::vector<Face> faces = {face2}; // Face2 has 50% overlap with ground truth
 
-    auto result = Face::findBestMatchingFace(faces, ground_truth_box_, 0.1);
+    auto result = Face::findBestMatchingFace(faces, ground_truth_box, 0.1);
 
     EXPECT_TRUE(result.found_match) << "Should find match above threshold";
     EXPECT_EQ(result.face_index, 0) << "Should select the face";
@@ -76,9 +76,9 @@ TEST_F(FaceIoUMatchingTest, PartialOverlapCalculatesCorrectIoU)
 
 TEST_F(FaceIoUMatchingTest, NoOverlapReturnsZeroIoU)
 {
-    std::vector<Face> faces = {face3_}; // Face3 has no overlap with ground truth
+    std::vector<Face> faces = {face3}; // Face3 has no overlap with ground truth
 
-    auto result = Face::findBestMatchingFace(faces, ground_truth_box_, 0.1);
+    auto result = Face::findBestMatchingFace(faces, ground_truth_box, 0.1);
 
     EXPECT_FALSE(result.found_match) << "Should not find match below threshold";
     EXPECT_EQ(result.face_index, -1) << "Should not select any face";
@@ -88,9 +88,9 @@ TEST_F(FaceIoUMatchingTest, NoOverlapReturnsZeroIoU)
 
 TEST_F(FaceIoUMatchingTest, MultipleFacesSelectsBestMatch)
 {
-    std::vector<Face> faces = {face3_, face2_, face1_}; // No overlap, partial overlap, perfect overlap
+    std::vector<Face> faces = {face3, face2, face1}; // No overlap, partial overlap, perfect overlap
 
-    auto result = Face::findBestMatchingFace(faces, ground_truth_box_, 0.1);
+    auto result = Face::findBestMatchingFace(faces, ground_truth_box, 0.1);
 
     EXPECT_TRUE(result.found_match) << "Should find best match";
     EXPECT_EQ(result.face_index, 2) << "Should select face1_ (index 2) as best match";
@@ -100,14 +100,14 @@ TEST_F(FaceIoUMatchingTest, MultipleFacesSelectsBestMatch)
 
 TEST_F(FaceIoUMatchingTest, ThresholdFilteringWorks)
 {
-    std::vector<Face> faces = {face2_}; // Face2 has IoU ≈ 0.1429
+    std::vector<Face> faces = {face2}; // Face2 has IoU ≈ 0.1429
 
     // Test with threshold below IoU value - should match
-    auto result_low = Face::findBestMatchingFace(faces, ground_truth_box_, 0.1);
+    auto result_low = Face::findBestMatchingFace(faces, ground_truth_box, 0.1);
     EXPECT_TRUE(result_low.found_match) << "Should match with low threshold";
 
     // Test with threshold above IoU value - should not match
-    auto result_high = Face::findBestMatchingFace(faces, ground_truth_box_, 0.2);
+    auto result_high = Face::findBestMatchingFace(faces, ground_truth_box, 0.2);
     EXPECT_FALSE(result_high.found_match) << "Should not match with high threshold";
     EXPECT_NEAR(result_high.iou_score, result_low.iou_score, 0.001)
         << "IoU score should be same regardless of threshold";
@@ -117,7 +117,7 @@ TEST_F(FaceIoUMatchingTest, EmptyFaceListReturnsNoMatch)
 {
     std::vector<Face> empty_faces;
 
-    auto result = Face::findBestMatchingFace(empty_faces, ground_truth_box_, 0.1);
+    auto result = Face::findBestMatchingFace(empty_faces, ground_truth_box, 0.1);
 
     EXPECT_FALSE(result.found_match) << "Should not find match in empty list";
     EXPECT_EQ(result.face_index, -1) << "Should not select any face";
@@ -127,9 +127,9 @@ TEST_F(FaceIoUMatchingTest, EmptyFaceListReturnsNoMatch)
 
 TEST_F(FaceIoUMatchingTest, IdenticalFacesReturnSameIoU)
 {
-    std::vector<Face> faces = {face1_, face4_}; // Both identical to ground truth
+    std::vector<Face> faces = {face1, face4}; // Both identical to ground truth
 
-    auto result = Face::findBestMatchingFace(faces, ground_truth_box_, 0.1);
+    auto result = Face::findBestMatchingFace(faces, ground_truth_box, 0.1);
 
     EXPECT_TRUE(result.found_match) << "Should find match";
     EXPECT_EQ(result.face_index, 0) << "Should select first face (both are equally good)";
@@ -164,10 +164,10 @@ TEST_F(FaceIoUMatchingTest, EdgeCasesHandledCorrectly)
 
     std::vector<Face> edge_faces = {zero_area_face, tiny_face};
 
-    auto result = Face::findBestMatchingFace(edge_faces, ground_truth_box_, 0.1);
+    auto result = Face::findBestMatchingFace(edge_faces, ground_truth_box, 0.1);
 
     // Should handle gracefully without crashing
-    EXPECT_NO_THROW({ Face::findBestMatchingFace(edge_faces, ground_truth_box_, 0.1); })
+    EXPECT_NO_THROW({ Face::findBestMatchingFace(edge_faces, ground_truth_box, 0.1); })
         << "Should handle edge cases without throwing";
 
     // Result behavior for edge cases may vary, but should not crash
