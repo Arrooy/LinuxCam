@@ -1,7 +1,7 @@
 #ifndef MODNET_H
 #define MODNET_H
-#include "LinuxFace/onnx/onnxDetector.h"
 #include "LinuxFace/Image/tensor_padding.h"
+#include "LinuxFace/onnx/onnxDetector.h"
 namespace linuxface
 {
 // Source https://github.com/ZHKKKe/MODNet
@@ -13,18 +13,16 @@ namespace linuxface
 class MODNetDetector : public OnnxDetector
 {
   public:
-   explicit MODNetDetector(const std::string& onnxModelPath)
-       : OnnxDetector(onnxModelPath){};
-   ~MODNetDetector() = default;
-   Ort::Value transform(const std::unique_ptr<Image>& image) override;
-   void detect(const std::unique_ptr<Image>& image,
-               std::unique_ptr<Image>& matte);
+    explicit MODNetDetector(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath){};
+    ~MODNetDetector() = default;
+    Ort::Value transform(const std::unique_ptr<Image>& image) override;
+    void detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& matte);
 
   private:
-   static constexpr const int InputWidth = 512;
-   static constexpr const int InputHeight = 512;
+    static constexpr const int InputWidth = 512;
+    static constexpr const int InputHeight = 512;
 
-   TensorPadding padding_;
+    TensorPadding padding_;
 };
 
 } // namespace linuxface

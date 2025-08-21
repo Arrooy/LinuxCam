@@ -1,7 +1,7 @@
 #ifndef RVM_H
 #define RVM_H
-#include "LinuxFace/onnx/onnxDetector.h"
 #include "LinuxFace/Image/tensor_padding.h"
+#include "LinuxFace/onnx/onnxDetector.h"
 
 /**
  * Model source https://github.com/PeterL1n/RobustVideoMatting
@@ -13,16 +13,15 @@ class RobustVideoMatting : public OnnxDetector
 {
 
   public:
-   explicit RobustVideoMatting(const std::string& onnxModelPath);
-   ~RobustVideoMatting() = default;
-   Ort::Value transform(const std::unique_ptr<Image>& image) override;
+    explicit RobustVideoMatting(const std::string& onnxModelPath);
+    ~RobustVideoMatting() = default;
+    Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
-   void detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& frg,
-               std::unique_ptr<Image>& matte);
+    void detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& frg, std::unique_ptr<Image>& matte);
 
-   void initialize();
+    void initialize();
 
-   bool isImageCompatible(const std::unique_ptr<Image>& image);
+    bool isImageCompatible(const std::unique_ptr<Image>& image);
 
   private:
     // The downsample must make the downsampled_resolution between 256px and 512px.

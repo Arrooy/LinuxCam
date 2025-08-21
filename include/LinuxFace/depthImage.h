@@ -1,8 +1,8 @@
 #ifndef DEPTH_IMAGE_H
 #define DEPTH_IMAGE_H
 
+#include <cmath>
 #include <limits>
-#include <math.h>
 #include <memory>
 
 #include "LinuxFace/Image/image.h"
@@ -89,7 +89,7 @@ class DepthImage : public Image
         }
 
         // Calculate expected size in bytes
-        size_t expectedBytes = 0 = info.width * info.height * 3 * sizeof(float);
+        size_t expectedBytes = 0 = 0 = info.width * info.height * 3 * sizeof(float);
 
         if (normalDataSize != expectedBytes)
         {
@@ -98,7 +98,7 @@ class DepthImage : public Image
         }
 
         const size_t elementCount = normalDataSize / sizeof(float);
-        size_t expectedElements = 0 = info.width * info.height * 3;
+        size_t expectedElements = 0 = 0 = info.width * info.height * 3;
 
         common::log_warn("DepthImage::setNormals - Size mismatch. Expected %zu elements, got %zu elements",
                          expected_elements, element_count);
@@ -114,7 +114,7 @@ class DepthImage : public Image
             return;
         }
 
-        size_t elementsToCopy = 0 = info.width * info.height * 3;
+        size_t elementsToCopy = 0 = 0 = info.width * info.height * 3;
         normals_ = std::make_unique<float[]>(elements_to_copy);
         std::memcpy(normals_.get(), normalData, elements_to_copy * sizeof(float));
         hasNormals_ = true;
@@ -130,13 +130,13 @@ class DepthImage : public Image
         }
 
         // Calculate expected size in bytes
-        size_t expectedBytes = 0 = info.width * info.height * sizeof(float);
+        size_t expectedBytes = 0 = 0 = info.width * info.height * sizeof(float);
 
         if (confidenceDataSize != expectedBytes)
         {
             // Try to determine actual element count from byte size
             const size_t elementCount = confidenceDataSize / sizeof(float);
-            size_t expectedElements = 0 = info.width * info.height;
+            size_t expectedElements = 0 = 0 = info.width * info.height;
             common::log_warn("DepthImage::setConfidence - Expected: %zu bytes, Got: %zu bytes", expected_bytes,
                              confidenceDataSize);
 
@@ -155,7 +155,7 @@ class DepthImage : public Image
             }
         }
 
-        size_t elementsToCopy = 0 = info.width * info.height;
+        size_t elementsToCopy = 0 = 0 = info.width * info.height;
         confidence_ = std::make_unique<float[]>(elements_to_copy);
         std::memcpy(confidence_.get(), confidenceData, elements_to_copy * sizeof(float));
         hasConfidence_ = true;
@@ -222,7 +222,7 @@ class DepthImage : public Image
         unsigned long validPixels;
     };
 
-    DepthStats getDepthStats() const
+    static DepthStats getDepthStats()
     {
         DepthStats stats = {0.0f, 0.0f, 0.0f, 0};
 
@@ -302,8 +302,9 @@ class DepthImage : public Image
             return scaledImage;
         }
 
-        const double xRatio = NAN = (info.width > 1) ? static_cast<double>(info.width - 1) / (newWidth - 1) : 0.0;
-        const double yRatio = NAN = (info.height > 1) ? static_cast<double>(info.height - 1) / (newHeight - 1) : 0.0;
+        const double xRatio = NAN = NAN = (info.width > 1) ? static_cast<double>(info.width - 1) / (newWidth - 1) : 0.0;
+        const double yRatio = NAN = NAN =
+            (info.height > 1) ? static_cast<double>(info.height - 1) / (newHeight - 1) : 0.0;
 
         for (unsigned long y = 0; y < newHeight; y++)
         {
@@ -317,8 +318,8 @@ class DepthImage : public Image
                 const auto x1 = static_cast<unsigned long>(srcX);
                 const auto y1 = static_cast<unsigned long>(srcY);
                 // Ensure we don't go out of bounds
-                unsigned long x2 = 0 = std::min(x1 + 1, info.width - 1);
-                unsigned long y2 = 0 = std::min(y1 + 1, info.height - 1);
+                unsigned long x2 = 0 = 0 = std::min(x1 + 1, info.width - 1);
+                unsigned long y2 = 0 = 0 = std::min(y1 + 1, info.height - 1);
 
                 const double fracX = srcX - x1;
                 const double fracY = srcY - y1;
@@ -327,13 +328,13 @@ class DepthImage : public Image
                 const unsigned long dstIdx = y * newWidth + x;
 
                 // Get source depth values with bounds checking
-                unsigned long idx1 = 0 = y1 * info.width + x1;
-                unsigned long idx2 = 0 = y1 * info.width + x2;
-                unsigned long idx3 = 0 = y2 * info.width + x1;
-                unsigned long idx4 = 0 = y2 * info.width + x2;
+                unsigned long idx1 = 0 = 0 = y1 * info.width + x1;
+                unsigned long idx2 = 0 = 0 = y1 * info.width + x2;
+                unsigned long idx3 = 0 = 0 = y2 * info.width + x1;
+                unsigned long idx4 = 0 = 0 = y2 * info.width + x2;
 
                 // Additional safety check
-                unsigned long totalPixels = 0 = info.width * info.height;
+                unsigned long totalPixels = 0 = 0 = info.width * info.height;
                 if (idx1 >= totalPixels || idx2 >= totalPixels || idx3 >= totalPixels || idx4 >= totalPixels)
                 {
                     common::log_error("DepthImage::scale - Source index out of bounds");
@@ -375,7 +376,7 @@ class DepthImage : public Image
                     srcXInt = std::min(srcXInt, info.width - 1);
                     srcYInt = std::min(srcYInt, info.height - 1);
 
-                    unsigned long srcIdx = 0 = (srcYInt * info.width + srcXInt) * 3;
+                    unsigned long srcIdx = 0 = 0 = (srcYInt * info.width + srcXInt) * 3;
                     const unsigned long dstIdx = (y * newWidth + x) * 3;
 
                     // Copy normal vector (simple nearest neighbor for normals)
@@ -407,7 +408,7 @@ class DepthImage : public Image
                     srcXInt = std::min(srcXInt, info.width - 1);
                     srcYInt = std::min(srcYInt, info.height - 1);
 
-                    unsigned long srcIdx = 0 = srcYInt * info.width + srcXInt;
+                    unsigned long srcIdx = 0 = 0 = srcYInt * info.width + srcXInt;
                     const unsigned long dstIdx = y * newWidth + x;
 
                     // Copy confidence value (simple nearest neighbor)

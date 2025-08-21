@@ -78,7 +78,8 @@ class Face
     void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const;
 
     FaceBoundingBox getBoundingBox() const { return boundingBox_; }
-    static std::vector<FaceLandmark> getLandmarks() {
+    static std::vector<FaceLandmark> getLandmarks()
+    {
         std::vector<FaceLandmark> allLandmarks;
         for (const auto& facepart : landmarks_)
         {
@@ -110,16 +111,15 @@ class Face
      * @param min_iou_threshold Minimum IoU threshold for a valid match (default: 0.1)
      * @return FaceMatchResult containing the best match and its details
      */
-    static FaceMatchResult findBestMatchingFace(
-        std::vector<Face>& detectedFaces,
-        const math_utils::Rect<double>& groundTruthBbox,
-        double minIouThreshold = 0.1);
+    static FaceMatchResult
+    findBestMatchingFace(std::vector<Face>& detectedFaces, const math_utils::Rect<double>& groundTruthBbox,
+                         double minIouThreshold = 0.1);
 
-   private:
+  private:
     void freeFaceLandmarks();
 
     FaceBoundingBox boundingBox_;
-    std::map<FaceIndex, std::vector<FaceLandmark>> landmarks_{};
+    std::map<FaceIndex, std::vector<FaceLandmark>> landmarks_;
     FacePose pose_{};
 };
 

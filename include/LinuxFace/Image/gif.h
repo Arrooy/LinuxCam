@@ -20,7 +20,7 @@ class Gif
   public:
     explicit Gif(const std::string& filename);
     ~Gif();
-    
+
     // Rule of five
     Gif(const Gif&) = delete;
     Gif& operator=(const Gif&) = delete;

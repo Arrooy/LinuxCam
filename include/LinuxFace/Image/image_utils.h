@@ -9,12 +9,10 @@
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/math_utils.h"
 
-namespace linuxface
-{
-namespace image_utils
+namespace linuxface::image_utils
 {
 
-const double template_112[5][2] = {
+const double TEMPLATE_112[5][2] = {
     {0.34191607, 0.46157411},
     {0.65653393, 0.45983393},
     {0.50022500, 0.64050536},
@@ -22,7 +20,7 @@ const double template_112[5][2] = {
     {0.63151696, 0.82325089}
 };
 
-const double template_128[5][2] = {
+const double TEMPLATE_128[5][2] = {
     {0.36167656, 0.40387734},
     {0.63696719, 0.40235469},
     {0.50019687, 0.56044219},
@@ -30,14 +28,14 @@ const double template_128[5][2] = {
     {0.61507734, 0.72034453}
 };
 
-const double template_192_old[5][2] = {
+const double TEMPLATE_192_OLD[5][2] = {
     {0.40625,  0.390625},
     {0.59375,  0.390625},
     {0.5,      0.46875 },
     {0.442708, 0.598958},
     {0.557292, 0.598958}
 };
-const double template_192[5][2] = {
+const double TEMPLATE_192[5][2] = {
     {0.35546875, 0.396484375},
     {0.64453125, 0.396484375},
     {0.5,        0.482421875},
@@ -47,7 +45,7 @@ const double template_192[5][2] = {
 
 // Alternative template with slightly different proportions
 // that may work better with certain face shapes
-const double template_192_alt[5][2] = {
+const double TEMPLATE_192_ALT[5][2] = {
     {0.36328125, 0.40234375},
     {0.63671875, 0.40234375},
     {0.5,        0.48828125},
@@ -55,7 +53,7 @@ const double template_192_alt[5][2] = {
     {0.6171875,  0.61328125}
 };
 
-const double template_512[5][2] = {
+const double TEMPLATE_512[5][2] = {
     {0.37691676, 0.46864664},
     {0.62285697, 0.46912813},
     {0.50123859, 0.61331904},
@@ -78,76 +76,75 @@ constexpr size_t calculateDestIndex(unsigned long y, unsigned long x, unsigned c
     }
 }
 
-
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
-face_transform(const std::vector<math_utils::Point<>>& landmarks, const double template_points[5][2], int target_size,
-               std::function<bool(const double*, const double*, int, double*)> estimate_transform,
-               std::function<std::unique_ptr<Image>(const double*, int, int)> warp_fn, bool align_to_template = true)
+faceTransform(const std::vector<math_utils::Point<>>& landmarks, const double templatePoints[5][2], int targetSize,
+              const std::function<bool(const double*, const double*, int, double*)>& estimateTransform,
+              const std::function<std::unique_ptr<Image>(const double*, int, int)>& warpFn, bool alignToTemplate = true)
 {
     if (landmarks.size() != 5)
     {
         return std::make_pair(nullptr, std::array<double, 6>{1.0, 0.0, 0.0, 0.0, 1.0, 0.0});
     }
 
-    double src[10], dst[10];
+    double src[10];
+    double dst[10];
     for (int i = 0; i < 5; ++i)
     {
-        if (align_to_template)
+        if (alignToTemplate)
         {
             src[2 * i] = static_cast<double>(landmarks[i].x);
             src[2 * i + 1] = static_cast<double>(landmarks[i].y);
-            dst[2 * i] = static_cast<double>(template_points[i][0] * target_size);
-            dst[2 * i + 1] = static_cast<double>(template_points[i][1] * target_size);
+            dst[2 * i] = static_cast<double>(templatePoints[i][0] * targetSize);
+            dst[2 * i + 1] = static_cast<double>(templatePoints[i][1] * targetSize);
         }
         else
         {
-            src[2 * i] = static_cast<double>(template_points[i][0] * target_size);
-            src[2 * i + 1] = static_cast<double>(template_points[i][1] * target_size);
+            src[2 * i] = static_cast<double>(templatePoints[i][0] * targetSize);
+            src[2 * i + 1] = static_cast<double>(templatePoints[i][1] * targetSize);
             dst[2 * i] = static_cast<double>(landmarks[i].x);
             dst[2 * i + 1] = static_cast<double>(landmarks[i].y);
         }
     }
-    double M[6] = {0};
-    estimate_transform(src, dst, 5, M);
-    std::array<double, 6> arrM;
+    double m[6] = {0};
+    estimateTransform(src, dst, 5, m);
+    std::array<double, 6> arrM{};
     for (int i = 0; i < 6; ++i)
     {
-        arrM[i] = M[i];
+        arrM[i] = m[i];
     }
-    return {warp_fn(M, target_size, target_size), arrM};
+    return {warpFn(m, targetSize, targetSize), arrM};
 }
 
 // Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
 // Now returns both the aligned image and the affine matrix used
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
-affine_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
-                      const double template_points[5][2], int target_size, bool align_to_template = true)
+affineFaceTransform(const Image& inputImg, const std::vector<math_utils::Point<>>& landmarks,
+                    const double templatePoints[5][2], int targetSize, bool alignToTemplate = true)
 {
-    return face_transform(
-        landmarks, template_points, target_size, math_utils::estimate_affine_2d,
-        [&](const double* M, int out_width, int out_height)
-        { return input_img.affineWarpBilinear(M, out_width, out_height); }, align_to_template);
+    return faceTransform(
+        landmarks, templatePoints, targetSize, math_utils::estimateAffine2d,
+        [&](const double* m, int outWidth, int outHeight)
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight); }, alignToTemplate);
 }
 
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
-similarity_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
-                          const double template_points[5][2], int target_size, bool align_to_template = true)
+similarityFaceTransform(const Image& inputImg, const std::vector<math_utils::Point<>>& landmarks,
+                        const double templatePoints[5][2], int targetSize, bool alignToTemplate = true)
 {
-    return face_transform(
-        landmarks, template_points, target_size, math_utils::estimate_similarity_2d,
-        [&](const double* M, int out_width, int out_height)
-        { return input_img.affineWarpBilinear(M, out_width, out_height); }, align_to_template);
+    return faceTransform(
+        landmarks, templatePoints, targetSize, math_utils::estimateSimilarity2d,
+        [&](const double* m, int outWidth, int outHeight)
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight); }, alignToTemplate);
 }
 
-
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
-procrustes_similarity_face_transform(const Image& input_img, const std::vector<math_utils::Point<>>& landmarks,
-                                     const double template_points[5][2], int target_size, bool align_to_template = true)
+procrustesSimilarityFaceTransform(const Image& inputImg, const std::vector<math_utils::Point<>>& landmarks,
+                                  const double templatePoints[5][2], int targetSize, bool alignToTemplate = true)
 {
-    return face_transform(
-        landmarks, template_points, target_size, math_utils::estimate_procrustes_similarity,
-        [&](const double* M, int out_width, int out_height)
-        { return input_img.affineWarpBilinear(M, out_width, out_height); }, align_to_template);
+    return faceTransform(
+        landmarks, templatePoints, targetSize, math_utils::estimateProcrustesSimilarity,
+        [&](const double* m, int outWidth, int outHeight)
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight); }, alignToTemplate);
 }
 
 /**
@@ -423,7 +420,7 @@ inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& 
     return blurred;
 }*/
 
-inline void fast_box_blur(unsigned char* src, unsigned char* dst, int width, int height, int radius)
+inline void fastBoxBlur(const unsigned char* src, unsigned char* dst, int width, int height, int radius)
 {
     std::vector<unsigned char> temp(width * height, 0);
 
@@ -438,8 +435,8 @@ inline void fast_box_blur(unsigned char* src, unsigned char* dst, int width, int
         for (int x = 0; x < width; ++x)
         {
             temp[y * width + x] = static_cast<unsigned char>(sum / (2 * radius + 1));
-            int left = x - radius;
-            int right = x + radius + 1;
+            const int left = x - radius;
+            const int right = x + radius + 1;
             if (left >= 0)
             {
                 sum -= src[y * width + left];
@@ -462,8 +459,8 @@ inline void fast_box_blur(unsigned char* src, unsigned char* dst, int width, int
         for (int y = 0; y < height; ++y)
         {
             dst[y * width + x] = static_cast<unsigned char>(sum / (2 * radius + 1));
-            int top = y - radius;
-            int bottom = y + radius + 1;
+            const int top = y - radius;
+            const int bottom = y + radius + 1;
             if (top >= 0)
             {
                 sum -= temp[top * width + x];
@@ -476,78 +473,78 @@ inline void fast_box_blur(unsigned char* src, unsigned char* dst, int width, int
     }
 }
 
-inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
+inline std::unique_ptr<Image> createStaticBoxMask(const std::vector<double>& cropSize)
 {
-    int width = static_cast<int>(crop_size[0]);
-    int height = static_cast<int>(crop_size[1]);
-    double face_mask_blur = 0.6;
-    std::vector<int> face_mask_padding = {0, 0, 0, 0};
-    int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
-    int blur_area = std::max(blur_amount / 2, 1);
+    const int width = static_cast<int>(cropSize[0]);
+    const int height = static_cast<int>(cropSize[1]);
+    const double faceMaskBlur = 0.6;
+    std::vector<int> faceMaskPadding = {0, 0, 0, 0};
+    const int blurAmount = static_cast<int>(width * 0.5 * faceMaskBlur);
+    const int blurArea = std::max(blurAmount / 2, 1);
 
-    std::unique_ptr<Image> box_mask = std::make_unique<Image>(width * height);
-    box_mask->info.width = width;
-    box_mask->info.height = height;
-    box_mask->info.pixelSizeBytes = 1;
-    box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
-    std::fill(box_mask->data(), box_mask->data() + width * height, 255);
+    std::unique_ptr<Image> boxMask = std::make_unique<Image>(width * height);
+    boxMask->info.width = width;
+    boxMask->info.height = height;
+    boxMask->info.pixelSizeBytes = 1;
+    boxMask->info.format = linuxface::ImageFormat::GRAYSCALE;
+    std::fill(boxMask->data(), boxMask->data() + width * height, 255);
 
-    int top = std::max(blur_area, static_cast<int>(height * face_mask_padding[0] / 100.0));
-    int bottom = std::max(blur_area, static_cast<int>(height * face_mask_padding[2] / 100.0));
-    int right = std::max(blur_area, static_cast<int>(width * face_mask_padding[1] / 100.0));
-    int left = std::max(blur_area, static_cast<int>(width * face_mask_padding[3] / 100.0));
+    const int top = std::max(blurArea, static_cast<int>(height * faceMaskPadding[0] / 100.0));
+    const int bottom = std::max(blurArea, static_cast<int>(height * faceMaskPadding[2] / 100.0));
+    const int right = std::max(blurArea, static_cast<int>(width * faceMaskPadding[1] / 100.0));
+    const int left = std::max(blurArea, static_cast<int>(width * faceMaskPadding[3] / 100.0));
 
     // Zero out padding regions
     for (int y = 0; y < top; ++y)
     {
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
+        std::fill(boxMask->data() + y * width, boxMask->data() + (y + 1) * width, 0);
     }
     for (int y = height - bottom; y < height; ++y)
     {
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
+        std::fill(boxMask->data() + y * width, boxMask->data() + (y + 1) * width, 0);
     }
     for (int y = 0; y < height; ++y)
     {
-        std::fill(box_mask->data() + y * width, box_mask->data() + y * width + left, 0);
-        std::fill(box_mask->data() + y * width + (width - right), box_mask->data() + (y + 1) * width, 0);
+        std::fill(boxMask->data() + y * width, boxMask->data() + y * width + left, 0);
+        std::fill(boxMask->data() + y * width + (width - right), boxMask->data() + (y + 1) * width, 0);
     }
 
-    if (blur_amount > 0)
+    if (blurAmount > 0)
     {
-        std::unique_ptr<Image> blurred = box_mask->deepCopy();
-        fast_box_blur(box_mask->data(), blurred->data(), width, height, blur_amount / 2);
+        std::unique_ptr<Image> blurred = boxMask->deepCopy();
+        fastBoxBlur(boxMask->data(), blurred->data(), width, height, blurAmount / 2);
         blurred->info.pixelSizeBytes = 1;
         blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
         return blurred;
     }
 
-    return box_mask;
+    return boxMask;
 }
 
 // Normalization traits for different types
 template <typename T>
 struct NormalizationTraits
 {
-    static constexpr T min_value() { return std::numeric_limits<T>::min(); }
-    static constexpr T max_value() { return std::numeric_limits<T>::max(); }
-    static constexpr T zero_value() { return T(0); }
+    static constexpr T minValue() { return std::numeric_limits<T>::min(); }
+    static constexpr T maxValue() { return std::numeric_limits<T>::max(); }
+    static constexpr T zeroValue() { return T(0); }
 };
 
 // Specialization for floating point types
 template <>
 struct NormalizationTraits<float>
 {
-    static constexpr float min_value() { return 0.0f; }
-    static constexpr float max_value() { return 1.0f; }
-    static constexpr float zero_value() { return 0.0f; }
+    static constexpr float minValue() { return 0.0f; }
+    static constexpr float maxValue() { return 1.0f; }
+    static constexpr float zeroValue() { return 0.0f; }
 };
 
 template <>
 struct NormalizationTraits<double>
 {
-    static constexpr double min_value() { return 0.0; }
-    static constexpr double max_value() { return 1.0; }
-    static constexpr double zero_value() { return 0.0; }
+    static constexpr double minValue() { return 0.0; }
+    static constexpr double maxValue() { return 1.0; }
+    static constexpr double zeroValue() { return 0.0; }
 };
 
 // Statistics structure for normalization
@@ -556,13 +553,10 @@ struct ImageStats
 {
     T min_val;
     T max_val;
-    double mean;
-    size_t count;
+    double mean{0.0};
+    size_t count{0};
 
-    ImageStats()
-        : min_val(std::numeric_limits<T>::max()), max_val(std::numeric_limits<T>::lowest()), mean(0.0), count(0)
-    {
-    }
+    ImageStats() : min_val(std::numeric_limits<T>::max()), max_val(std::numeric_limits<T>::lowest()) {}
 
     void update(T value)
     {
@@ -585,7 +579,7 @@ struct ImageStats
 template <typename T, NormalizationType Type>
 struct Normalizer
 {
-    T operator()(T value, const ImageStats<T>& stats) const
+    T operator()(T value, const ImageStats<T>& /*stats*/) const
     {
         return value; // NONE case
     }
@@ -656,8 +650,8 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
     {
-        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
-                          dst.width, dst.height);
+        common::logError("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
+                         dst.width, dst.height);
         return;
     }
 
@@ -711,10 +705,10 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                         const unsigned long idx3 = (clampedY2 * src.width + clampedX1) * src.pixelBytes + ch;
                         const unsigned long idx4 = (clampedY2 * src.width + clampedX2) * src.pixelBytes + ch;
 
-                        const double p1 = static_cast<double>(src.data[idx1]);
-                        const double p2 = static_cast<double>(src.data[idx2]);
-                        const double p3 = static_cast<double>(src.data[idx3]);
-                        const double p4 = static_cast<double>(src.data[idx4]);
+                        const auto p1 = static_cast<double>(src.data[idx1]);
+                        const auto p2 = static_cast<double>(src.data[idx2]);
+                        const auto p3 = static_cast<double>(src.data[idx3]);
+                        const auto p4 = static_cast<double>(src.data[idx4]);
 
                         // Optimized bilinear interpolation
                         const double top = p1 + fracX * (p2 - p1);
@@ -729,8 +723,8 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                         else
                         {
                             // Use traits for proper clamping range
-                            const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
-                            const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                            const auto minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                            const auto maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
                             scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                         }
                         // Calculate destination index based on output layout
@@ -772,8 +766,8 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
     {
-        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
-                          dst.width, dst.height);
+        common::logError("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
+                         dst.width, dst.height);
         return;
     }
     const double xScale = static_cast<double>(src.width) / dst.width;
@@ -815,10 +809,10 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
                     for (int sx = clampedMinX; sx < clampedMaxX; sx++)
                     {
                         // Calculate the overlap area between source pixel and destination region
-                        const double pixelX1 = static_cast<double>(sx);
-                        const double pixelY1 = static_cast<double>(sy);
-                        const double pixelX2 = static_cast<double>(sx + 1);
-                        const double pixelY2 = static_cast<double>(sy + 1);
+                        const auto pixelX1 = static_cast<double>(sx);
+                        const auto pixelY1 = static_cast<double>(sy);
+                        const auto pixelX2 = static_cast<double>(sx + 1);
+                        const auto pixelY2 = static_cast<double>(sy + 1);
 
                         // Calculate intersection area
                         const double overlapX1 = std::max(pixelX1, srcX1);
@@ -839,7 +833,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
                 }
 
                 // Calculate final pixel value
-                double result = (totalWeight > 0.0) ? (sum / totalWeight) : 0.0;
+                const double result = (totalWeight > 0.0) ? (sum / totalWeight) : 0.0;
                 K scaledValue;
                 if constexpr (std::is_floating_point_v<K>)
                 {
@@ -848,8 +842,8 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
                 else
                 {
                     // Use traits for proper clamping range
-                    const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
-                    const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    const auto minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
                     scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                 }
                 // Calculate destination index based on output layout
@@ -884,7 +878,7 @@ class LanczosKernel
   public:
     static constexpr int RADIUS = 3; // Lanczos-3 for good quality/speed balance
 
-    inline static double lanczos(double x)
+    static double lanczos(double x)
     {
         if (x == 0.0)
         {
@@ -895,10 +889,10 @@ class LanczosKernel
             return 0.0;
         }
 
-        const double pi_x = M_PI * x;
-        const double pi_x_over_radius = pi_x / RADIUS;
+        const double piX = M_PI * x;
+        const double piXOverRadius = piX / RADIUS;
 
-        return (std::sin(pi_x) / pi_x) * (std::sin(pi_x_over_radius) / pi_x_over_radius);
+        return (std::sin(piX) / piX) * (std::sin(piXOverRadius) / piXOverRadius);
     }
 };
 
@@ -911,8 +905,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
     {
-        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
-                          dst.width, dst.height);
+        common::logError("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
+                         dst.width, dst.height);
         return;
     }
 
@@ -926,8 +920,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
     // Pre-calculate horizontal weights for each destination column
     struct HorizontalContrib
     {
-        int startIdx;
-        int endIdx;
+        int startIdx{};
+        int endIdx{};
         std::vector<double> weights;
     };
 
@@ -964,8 +958,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
     // Pre-calculate vertical weights for each destination row
     struct VerticalContrib
     {
-        int startIdx;
-        int endIdx;
+        int startIdx{};
+        int endIdx{};
         std::vector<double> weights;
     };
 
@@ -1050,8 +1044,8 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
                 }
                 else
                 {
-                    const double minVal = static_cast<double>(std::numeric_limits<K>::min());
-                    const double maxVal = static_cast<double>(std::numeric_limits<K>::max());
+                    const auto minVal = static_cast<double>(std::numeric_limits<K>::min());
+                    const auto maxVal = static_cast<double>(std::numeric_limits<K>::max());
                     scaledValue = static_cast<K>(std::clamp(sum + 0.5, minVal, maxVal));
                 }
 
@@ -1086,7 +1080,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
     }
     else if constexpr (normalizationType == NormalizationType::ZERO_CENTER)
     {
-        common::log_warn("NON TESTED: Applying zero-centering normalization");
+        common::logWarn("NON TESTED: Applying zero-centering normalization");
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
         ImageStats<K> stats;
 
@@ -1193,12 +1187,12 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 }
 
 // Bicubic kernel helper
-inline float cubicHermite(float A, float B, float C, float D, float t)
+inline float cubicHermite(float a, float b, float c, float d, float t)
 {
-    float a = -A / 2.0f + (3.0f * B) / 2.0f - (3.0f * C) / 2.0f + D / 2.0f;
-    float b = A - (5.0f * B) / 2.0f + 2.0f * C - D / 2.0f;
-    float c = -A / 2.0f + C / 2.0f;
-    float d = B;
+    const float a = -a / 2.0f + (3.0f * b) / 2.0f - (3.0f * c) / 2.0f + d / 2.0f;
+    const float b = a - (5.0f * b) / 2.0f + 2.0f * c - d / 2.0f;
+    const float c = -a / 2.0f + c / 2.0f;
+    const float d = b;
     return a * t * t * t + b * t * t + c * t + d;
 }
 
@@ -1210,8 +1204,8 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
     // Handle edge cases
     if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
     {
-        common::log_error("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
-                          dst.width, dst.height);
+        common::logError("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
+                         dst.width, dst.height);
         return;
     }
 
@@ -1247,7 +1241,7 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
                     }
                     col[m + 1] = cubicHermite(row[0], row[1], row[2], row[3], fracX);
                 }
-                double value = cubicHermite(col[0], col[1], col[2], col[3], fracY);
+                const double value = cubicHermite(col[0], col[1], col[2], col[3], fracY);
 
                 K scaledValue;
                 if constexpr (std::is_floating_point_v<K>)
@@ -1256,8 +1250,8 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
                 }
                 else
                 {
-                    const double minVal = static_cast<double>(NormalizationTraits<K>::min_value());
-                    const double maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    const auto minVal = static_cast<double>(NormalizationTraits<K>::min_value());
+                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
                     scaledValue = static_cast<K>(std::clamp(value + 0.5, minVal, maxVal));
                 }
                 // Calculate destination index based on output layout
@@ -1287,47 +1281,45 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
 
 // Transform a vector of math_utils::Point using a 2x3 affine matrix (row-major)
 inline std::vector<math_utils::Point<>>
-transform_points_affine(const std::vector<math_utils::Point<>>& points, const double M[6])
+transformPointsAffine(const std::vector<math_utils::Point<>>& points, const double m[6])
 {
     std::vector<math_utils::Point<>> result;
     result.reserve(points.size());
     for (const auto& pt : points)
     {
-        double x = static_cast<double>(pt.x);
-        double y = static_cast<double>(pt.y);
-        double x_new = M[0] * x + M[1] * y + M[2];
-        double y_new = M[3] * x + M[4] * y + M[5];
-        result.emplace_back(static_cast<long>(std::round(x_new)), static_cast<long>(std::round(y_new)));
+        const auto x = static_cast<double>(pt.x);
+        const auto y = static_cast<double>(pt.y);
+        const double xNew = m[0] * x + m[1] * y + m[2];
+        const double yNew = m[3] * x + m[4] * y + m[5];
+        result.emplace_back(static_cast<long>(std::round(xNew)), static_cast<long>(std::round(yNew)));
     }
     return result;
 }
 
 // Transform a vector of (x, y) pairs using a 2x3 affine matrix (row-major)
 inline std::vector<std::pair<double, double>>
-transform_points_affine(const std::vector<std::pair<double, double>>& points, const double M[6])
+transformPointsAffine(const std::vector<std::pair<double, double>>& points, const double m[6])
 {
     std::vector<std::pair<double, double>> result;
     result.reserve(points.size());
-    for (size_t i = 0; i < points.size(); ++i)
+    for (const auto& pt : points)
     {
-        const auto& pt = points[i];
-        double x = pt.first;
-        double y = pt.second;
-        double x_new = M[0] * x + M[1] * y + M[2];
-        double y_new = M[3] * x + M[4] * y + M[5];
-        result.emplace_back(x_new, y_new);
+        const double x = pt.first;
+        const double y = pt.second;
+        const double xNew = m[0] * x + m[1] * y + m[2];
+        const double yNew = m[3] * x + m[4] * y + m[5];
+        result.emplace_back(xNew, yNew);
     }
     return result;
 }
 
-
 inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D& center, float radius, Pixel color)
 {
-    int cx = static_cast<int>(std::round(center.x));
-    int cy = static_cast<int>(std::round(center.y));
-    int r = static_cast<int>(std::round(radius));
-    int w = static_cast<int>(image->info.width);
-    int h = static_cast<int>(image->info.height);
+    const int cx = static_cast<int>(std::round(center.x));
+    const int cy = static_cast<int>(std::round(center.y));
+    const int r = static_cast<int>(std::round(radius));
+    const int w = static_cast<int>(image->info.width);
+    const int h = static_cast<int>(image->info.height);
 
     // Always paint the center pixel if in bounds
     if (cx >= 0 && cx < w && cy >= 0 && cy < h)
@@ -1341,8 +1333,8 @@ inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D
         {
             if (x * x + y * y <= r * r)
             {
-                int px = cx + x;
-                int py = cy + y;
+                const int px = cx + x;
+                const int py = cy + y;
                 if (px >= 0 && px < w && py >= 0 && py < h)
                 {
                     image->ppx(px, py, color);
@@ -1359,7 +1351,7 @@ inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D
 // width, height: image dimensions
 // channels: number of channels (usually 3 for RGB)
 template <typename T>
-void hwc_to_chw(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
+void hwcToChw(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
 {
     for (unsigned long h = 0; h < height; ++h)
     {
@@ -1375,7 +1367,7 @@ void hwc_to_chw(const T* src, T* dst, unsigned long width, unsigned long height,
     }
 }
 template <typename T>
-void chw_to_hwc(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
+void chwToHwc(const T* src, T* dst, unsigned long width, unsigned long height, unsigned long channels)
 {
     for (unsigned long h = 0; h < height; ++h)
     {
@@ -1396,14 +1388,14 @@ std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsign
 {
     if (src == nullptr || width == 0 || height == 0)
     {
-        common::log_error("Invalid parameters for converting to raw image");
+        common::logError("Invalid parameters for converting to raw image");
         return nullptr;
     }
 
     // Convert CHW (channels, height, width) to HWC (height, width, channels)
     size_t dataSize = width * height * 3; // Assuming RGB format
-    std::vector<float> hwc_data(dataSize);
-    chw_to_hwc(src, hwc_data.data(), width, height, 3);
+    std::vector<float> hwcData(dataSize);
+    chwToHwc(src, hwcData.data(), width, height, 3);
 
     auto image = std::make_unique<Image>(dataSize);
     image->info.width = width;
@@ -1419,7 +1411,7 @@ std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsign
         // Assume input is in [0,1], scale to [0,255] for visualization
         for (size_t i = 0; i < dataSize; ++i)
         {
-            image->data()[i] = static_cast<unsigned char>(std::clamp(hwc_data[i] * 255.0f, 0.0f, 255.0f));
+            image->data()[i] = static_cast<unsigned char>(std::clamp(hwcData[i] * 255.0f, 0.0f, 255.0f));
         }
     }
     else if constexpr (normalizationType == NormalizationType::ZERO_CENTER)
@@ -1427,7 +1419,7 @@ std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsign
         // Assume input is zero-centered in [-1,1], scale to [0,255] for visualization
         for (size_t i = 0; i < dataSize; ++i)
         {
-            float val = (hwc_data[i] + 1.0f) * 0.5f * 255.0f; // Map [-1,1] to [0,255]
+            const float val = (hwcData[i] + 1.0f) * 0.5f * 255.0f; // Map [-1,1] to [0,255]
             image->data()[i] = static_cast<unsigned char>(std::clamp(val, 0.0f, 255.0f));
         }
     }
@@ -1436,13 +1428,12 @@ std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsign
         // Fill the image data directly
         for (size_t i = 0; i < dataSize; ++i)
         {
-            image->data()[i] = static_cast<unsigned char>(hwc_data[i]);
+            image->data()[i] = static_cast<unsigned char>(hwcData[i]);
         }
     }
 
     return image;
 }
-} // namespace image_utils
-} // namespace linuxface
+} // namespace linuxface::image_utils
 
 #endif // IMAGE_UTILS_H

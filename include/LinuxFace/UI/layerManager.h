@@ -1,6 +1,8 @@
 #ifndef LAYERMANAGER_H
 #define LAYERMANAGER_H
 
+#include "imgui.h"
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -10,13 +12,17 @@
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_renderer.h"
-#include "imgui.h"
 
 namespace linuxface
 {
 
 // Layer type for compositing
-enum class LayerType { IMAGE, GIF, TEXT };
+enum class LayerType
+{
+    IMAGE,
+    GIF,
+    TEXT
+};
 
 struct Layer
 {
@@ -24,15 +30,15 @@ struct Layer
     std::string name;
     bool selected{false};
     bool dirty{true};
-    bool locked{false};           // Prevents layer from being dragged when true
+    bool locked{false}; // Prevents layer from being dragged when true
 
     // Unique identifier for this layer instance
     size_t id = 0;
     static size_t next_id_;
 
     // Camera-specific fields
-    std::string cameraDevicePath;  // Empty for non-camera layers
-    float resizeScale{1.0f};       // For camera layers resize functionality
+    std::string cameraDevicePath; // Empty for non-camera layers
+    float resizeScale{1.0f};      // For camera layers resize functionality
 
     // For image layers
     std::shared_ptr<Image> img{nullptr};
@@ -42,33 +48,35 @@ struct Layer
     size_t gifFrameIndex{0};           // Track current frame for GIFs
 
     // For text layers - store minimal info for regeneration if needed
-    std::string textContent;             // Store text content for potential regeneration
-    int layerNumber = 0;                  // Layer number for text layers
+    std::string textContent; // Store text content for potential regeneration
+    int layerNumber = 0;     // Layer number for text layers
     float x = 0.0f;
     float y = 0.0f;
 
     // Text overlay system - attached to every layer
-    struct TextOverlay {
-        bool enabled = true;                    // Show/hide layer name overlay
-        float offsetX = 5.0f;                   // Relative offset from layer position
+    struct TextOverlay
+    {
+        bool enabled = true;  // Show/hide layer name overlay
+        float offsetX = 5.0f; // Relative offset from layer position
         float offsetY = 5.0f;
-        std::shared_ptr<Image> cachedImage;     // Cached text overlay image
-        bool needsRefresh = true;               // Flag to regenerate overlay
-        
+        std::shared_ptr<Image> cachedImage; // Cached text overlay image
+        bool needsRefresh = true;           // Flag to regenerate overlay
+
         // Get absolute position based on layer position
         float getAbsoluteX(float layerX) const { return layerX + offsetX; }
         float getAbsoluteY(float layerY) const { return layerY + offsetY; }
     } textOverlay;
 
     // Helper: get layer number (delegates to image/gif if present)
-    int getLayerNumber() const {
+    int getLayerNumber() const
+    {
         if (type == LayerType::Image && img)
         {
-            return static_cast<int>(img->info.layer);
+            return img->info.layer;
         }
         if (type == LayerType::Gif && gif && !gif->frames().empty())
         {
-            return static_cast<int>(gif->frames()[0]->info.layer);
+            return gif->frames()[0]->info.layer;
         }
         // For text layers, return layerNumber if set, otherwise default to 0 (0-based index)
         // For gifs with no frames, also default to 0
@@ -76,7 +84,8 @@ struct Layer
     }
 
     // Helper: set layer number (delegates to image/gif if present)
-    void setLayerNumber(int n) {
+    void setLayerNumber(int n)
+    {
         if (type == LayerType::Image && img)
         {
             img->info.layer = n;
@@ -84,13 +93,16 @@ struct Layer
         else if (type == LayerType::Gif && gif && !gif->frames().empty())
         {
             gif->frames()[0]->info.layer = n;
-        } else if (type == LayerType::TEXT) {
+        }
+        else if (type == LayerType::TEXT)
+        {
             layerNumber = n;
         }
     }
 
     // Helper: get layer name
-    std::string getLayerName() const {
+    std::string getLayerName() const
+    {
         if (type == LayerType::Image && img)
         {
             return img->info.filename;
@@ -99,14 +111,16 @@ struct Layer
         {
             return gif->frames()[0]->info.filename;
         }
-        if (type == LayerType::TEXT) {
+        if (type == LayerType::TEXT)
+        {
             return textContent.empty() ? ("Text Layer " + std::to_string(id)) : textContent;
         }
         return "Unknown Layer " + std::to_string(id);
     }
 
     // Update layer animation (for GIF layers)
-    void updateAnimation() {
+    void updateAnimation()
+    {
         if (type == LayerType::Gif && gif && !gif->frames().empty())
         {
             gifFrameIndex = (gifFrameIndex + 1) % gif->frames().size();
@@ -115,23 +129,26 @@ struct Layer
     }
 
     // Text overlay management
-    void setPosition(float newX, float newY) {
+    void setPosition(float newX, float newY)
+    {
         x = newX;
         y = newY;
         dirty = true;
-        textOverlay.needsRefresh = true;  // Invalidate overlay when position changes
+        textOverlay.needsRefresh = true; // Invalidate overlay when position changes
     }
 
-    void moveBy(float deltaX, float deltaY) {
+    void moveBy(float deltaX, float deltaY)
+    {
         x += deltaX;
         y += deltaY;
         dirty = true;
-        textOverlay.needsRefresh = true;  // Invalidate overlay when position changes
+        textOverlay.needsRefresh = true; // Invalidate overlay when position changes
     }
 
     void invalidateTextOverlay() { textOverlay.needsRefresh = true; }
 
-    static void setTextOverlayEnabled(bool enabled) {
+    static void setTextOverlayEnabled(bool enabled)
+    {
         if (textOverlay.enabled != enabled)
         {
             textOverlay.enabled = enabled;
@@ -139,17 +156,19 @@ struct Layer
         }
     }
 
-    void setSelected(bool isSelected) {
+    void setSelected(bool isSelected)
+    {
         if (selected != isSelected)
         {
             selected = isSelected;
-            textOverlay.needsRefresh = true;  // Refresh text overlay for opacity change
+            textOverlay.needsRefresh = true; // Refresh text overlay for opacity change
         }
     }
 
     // Helper: get textureId (delegates to image/gif if present)
-    static unsigned int getTextureId() {
-        if ((type == LayerType::Image || type == LayerType::Text) && img)
+    static unsigned int getTextureId()
+    {
+        if ((type == LayerType::Image || type == ImGui::Text) && img)
         {
             return img->info.textureId;
         }
@@ -160,7 +179,8 @@ struct Layer
         return 0;
     }
 
-    static size_t getSize() {
+    static size_t getSize()
+    {
         if ((type == LayerType::Image || type == LayerType::Text) && img)
         {
             return img->size();
@@ -172,7 +192,8 @@ struct Layer
         return 0;
     }
 
-    static unsigned long getWidth() {
+    static unsigned long getWidth()
+    {
         if (type == LayerType::Image && img)
         {
             return img->info.width;
@@ -189,7 +210,8 @@ struct Layer
         return 0;
     }
 
-    static unsigned long getHeight() {
+    static unsigned long getHeight()
+    {
         if (type == LayerType::Image && img)
         {
             return img->info.height;
@@ -205,7 +227,8 @@ struct Layer
         }
         return 0;
     }
-    static ImageFormat getFormat() {
+    static ImageFormat getFormat()
+    {
         if (type == LayerType::Image && img)
         {
             return img->info.format;
@@ -223,19 +246,15 @@ struct Layer
     }
 
     // Factory method: Create a text image using text_draw.h
-    static std::shared_ptr<Image> createTextImage(
-        const std::string& text,
-        ImU32 textColor = IM_COL32_WHITE,
-        int textScale = 1,
-        bool useBackground = false,
-        ImU32 backgroundColor = IM_COL32_BLACK,
-        bool centerText = false,
-        bool multilineText = false,
-        int textHAlignment = 1,     // 0=LEFT, 1=CENTER, 2=RIGHT
-        int textVAlignment = 1,     // 0=TOP, 1=MIDDLE, 2=BOTTOM
-        int textPadding = 2,
-        int boundingWidth = 0,      // 0 = auto-size
-        int boundingHeight = 0      // 0 = auto-size
+    static std::shared_ptr<Image>
+    createTextImage(const std::string& text, ImU32 textColor = IM_COL32_WHITE, int textScale = 1,
+                    bool useBackground = false, ImU32 backgroundColor = IM_COL32_BLACK, bool centerText = false,
+                    bool multilineText = false,
+                    int textHAlignment = 1, // 0=LEFT, 1=CENTER, 2=RIGHT
+                    int textVAlignment = 1, // 0=TOP, 1=MIDDLE, 2=BOTTOM
+                    int textPadding = 2,
+                    int boundingWidth = 0, // 0 = auto-size
+                    int boundingHeight = 0 // 0 = auto-size
     );
 };
 // Initialize static member

@@ -44,10 +44,11 @@ class ImageLoader
     bool getImage(std::unique_ptr<Image>& outImage);
 
     // Static factory method for convenient loading
-    static std::unique_ptr<Image> loadImageFromFile(
-        const std::string& filePath) {
+    static std::unique_ptr<Image> loadImageFromFile(const std::string& filePath)
+    {
         ImageLoader loader(LoadStrategy::LAZY);
-        if (!loader.loadFromFile(filePath)) {
+        if (!loader.loadFromFile(filePath))
+        {
             return nullptr;
         }
 
@@ -67,16 +68,16 @@ class ImageLoader
     bool isValid() const { return metadata_.is_valid; }
 
   private:
-   bool loadFileData(const std::string& filePath);
-   bool extractMetadata();
-   bool createDecoder();
+    bool loadFileData(const std::string& filePath);
+    bool extractMetadata();
+    bool createDecoder();
 
-   LoadStrategy strategy_;
-   ImageMetadata metadata_;
-   std::vector<unsigned char> raw_data_;
-   std::unique_ptr<Decoder> decoder_;
-   std::unique_ptr<Image> decoded_image_;
-   bool is_decoded_{false};
+    LoadStrategy strategy_;
+    ImageMetadata metadata_;
+    std::vector<unsigned char> raw_data_;
+    std::unique_ptr<Decoder> decoder_;
+    std::unique_ptr<Image> decoded_image_;
+    bool is_decoded_{false};
 };
 
 } // namespace linuxface

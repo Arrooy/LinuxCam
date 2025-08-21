@@ -18,58 +18,58 @@ namespace linuxface
 struct DlibImageWrapper
 {
   public:
-    DlibImageWrapper(const std::unique_ptr<Image>& image) : image_(image) {}
+    explicit DlibImageWrapper(const std::unique_ptr<Image>& image) : image_(image) {}
 
     long nr() const { return image_->info.height; }
     long nc() const { return image_->info.width; }
 
-    long num_rows() const { return image_->info.height; }
-    long num_columns() const { return image_->info.width; }
+    long numRows() const { return image_->info.height; }
+    long numColumns() const { return image_->info.width; }
 
-    long width_step() const { return nc() * image_->info.pixelSizeBytes; }
+    long widthStep() const { return nc() * image_->info.pixelSizeBytes; }
 
     dlib::rgb_pixel operator()(long row, long col) const
     {
-        Pixel px = (*image_)(row, col);
-        return dlib::rgb_pixel(px.r, px.g, px.b);
+        const Pixel px = (*image_)(row, col);
+        return {px.r, px.g, px.b};
     }
 
     const std::unique_ptr<Image>& image_;
 };
 
-inline long num_rows(const DlibImageWrapper& img)
+inline long numRows(const DlibImageWrapper& img)
 {
-    return img.num_rows();
+    return img.numRows();
 }
 
-inline long num_columns(const DlibImageWrapper& img)
+inline long numColumns(const DlibImageWrapper& img)
 {
-    return img.num_columns();
+    return img.numColumns();
 }
 
-inline long width_step(const DlibImageWrapper& img)
+inline long widthStep(const DlibImageWrapper& img)
 {
-    return img.width_step();
+    return img.widthStep();
 }
 
-inline const void* image_data(const DlibImageWrapper& img)
+inline const void* imageData(const DlibImageWrapper& img)
 {
     return static_cast<const void*>(img.image_->data());
 }
 
-inline void* image_data(DlibImageWrapper& img)
+inline void* imageData(DlibImageWrapper& img)
 {
     return static_cast<void*>(img.image_->data());
 }
 
-inline void set_image_size(DlibImageWrapper& img, long rows, long cols)
+inline void setImageSize(DlibImageWrapper& /*img*/, long /*rows*/, long /*cols*/)
 {
-    common::log_error("DlibImageWrapper::set_image_size is not implemented!!");
+    common::logError("DlibImageWrapper::set_image_size is not implemented!!");
 }
 
-inline void swap(DlibImageWrapper& a, DlibImageWrapper& b)
+inline void swap(DlibImageWrapper& /*a*/, DlibImageWrapper& /*b*/) noexcept
 {
-    common::log_error("DlibImageWrapper::swap is not implemented!!");
+    common::logError("DlibImageWrapper::swap is not implemented!!");
 }
 
 class DlibFaceDetector : public FaceDetector
@@ -77,7 +77,7 @@ class DlibFaceDetector : public FaceDetector
   public:
     DlibFaceDetector();
     ~DlibFaceDetector() = default;
-    virtual std::vector<Face> detect(const std::unique_ptr<Image>& image) override;
+    std::vector<Face> detect(const std::unique_ptr<Image>& image) override;
 
   private:
     dlib::frontal_face_detector detector_;
@@ -88,11 +88,11 @@ class DlibFaceDetector : public FaceDetector
 class DlibShapeDetector : public ShapeDetector
 {
   public:
-    explicit DlibShapeDetector(const std::string& model_path = "../models/shape_predictor_68_face_landmarks.dat");
+    explicit DlibShapeDetector(const std::string& modelPath = "../models/shape_predictor_68_face_landmarks.dat");
     ~DlibShapeDetector();
     // Given an image and bounding boxes, returns Face objects with landmarks
-    virtual std::vector<Face>
-    detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) override;
+    std::vector<Face>
+    detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& facesRect) override;
 
   private:
     std::unique_ptr<dlib::shape_predictor> predictor_;

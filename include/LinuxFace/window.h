@@ -7,9 +7,8 @@
 #include <functional>
 #include <string>
 
-class window
-{
-  public:
+class Window {
+   public:
     Window();
     ~Window();
 

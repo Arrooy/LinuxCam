@@ -15,20 +15,12 @@ namespace linuxface
 class ConfigBuilder
 {
   public:
-   static ConfigBuilder& quality(int q) { return set("quality", q); }
-   static ConfigBuilder& width(unsigned int w) {
-       return set("width", static_cast<int>(w));
-   }
-   static ConfigBuilder& height(unsigned int h) {
-       return set("height", static_cast<int>(h));
-   }
-   static ConfigBuilder& chrominanceSubsampling(TJSAMP c) {
-       return set("chrominance_subsampling", c);
-   }
-   static ConfigBuilder& pixelFormat(TJPF p) { return set("pixelFormat", p); }
-   static ConfigBuilder& imageFormat(ImageFormat i) {
-       return set("imageFormat", i);
-   }
+    static ConfigBuilder& quality(int q) { return set("quality", q); }
+    static ConfigBuilder& width(unsigned int w) { return set("width", static_cast<int>(w)); }
+    static ConfigBuilder& height(unsigned int h) { return set("height", static_cast<int>(h)); }
+    static ConfigBuilder& chrominanceSubsampling(TJSAMP c) { return set("chrominance_subsampling", c); }
+    static ConfigBuilder& pixelFormat(TJPF p) { return set("pixelFormat", p); }
+    static ConfigBuilder& imageFormat(ImageFormat i) { return set("imageFormat", i); }
 
     // Generic property setter
     template <typename T>
@@ -62,7 +54,7 @@ class ConfigBuilder
     bool has(const std::string& key) const { return props_.find(key) != props_.end(); }
 
   private:
-   std::unordered_map<std::string, std::any> props_{};
+    std::unordered_map<std::string, std::any> props_;
 };
 
 class Encoder
@@ -117,8 +109,7 @@ class Decoder
      * @param raw_needed_size The size of the raw image data needed to decode the image.
      * @return true if the header decoding is successful, false otherwise.
      */
-    virtual bool decodeHeader(Image& srcImage,
-                              unsigned long& rawNeededSize) = 0;
+    virtual bool decodeHeader(Image& srcImage, unsigned long& rawNeededSize) = 0;
 };
 
 class CodecFactory
