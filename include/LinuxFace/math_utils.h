@@ -1,12 +1,13 @@
 #ifndef MATH_UTILS_H
 #define MATH_UTILS_H
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
-#include <stdlib.h>
 #include <type_traits>
 #include <vector>
 
-namespace linuxface::math_utils {
+namespace linuxface::math_utils
+{
 
 struct Anchor
 {
@@ -65,7 +66,8 @@ struct Rect
     T y() const { return t; }
 
     // Assuming r >= l and b >= t
-    T width() const {
+    T width() const
+    {
         if constexpr (std::is_floating_point_v<T>)
         {
             return r - l;
@@ -75,7 +77,8 @@ struct Rect
             return r - l + 1;
         }
     }
-    T height() const {
+    T height() const
+    {
         if constexpr (std::is_floating_point_v<T>)
         {
             return b - t;
@@ -137,7 +140,7 @@ std::vector<Point<long>> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
 
     for (int i = 0; i < steps; i++)
     {
-        result.emplace_back(Point<long>(std::lround(x), std::lround(y)));
+        result.emplace_back(std::lround(x), std::lround(y));
         x += xInc;
         y += yInc;
     }
@@ -176,9 +179,9 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
     T area2 = (rect2.r - rect2.l) * (rect2.b - rect2.t);
 
     // Area-based pre-filter: if areas are vastly different, skip expensive intersection calculation
-    float areaRatio = static_cast<float>(std::min(area1, area2)) /
-                      static_cast<float>(std::max(area1, area2));
-    if (areaRatio < 0.1f) {
+    float areaRatio = static_cast<float>(std::min(area1, area2)) / static_cast<float>(std::max(area1, area2));
+    if (areaRatio < 0.1f)
+    {
         return 0.0f;
     }
 
@@ -189,7 +192,8 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
     T yBottom = std::min(rect1.b, rect2.b);
 
     // Check if there's no intersection
-    if (xLeft >= xRight || yTop >= yBottom) {
+    if (xLeft >= xRight || yTop >= yBottom)
+    {
         return 0.0f;
     }
 
@@ -200,7 +204,8 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
     T unionArea = area1 + area2 - intersectionArea;
 
     // Avoid division by zero
-    if (unionArea <= 0) {
+    if (unionArea <= 0)
+    {
         return 0.0f;
     }
 
@@ -210,8 +215,8 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
 // Estimate 2D affine transform (least squares fit) from src_pts to dst_pts
 // src: [x0, y0, x1, y1, ...], dst: [x0', y0', x1', y1', ...], n: number of points, M: output 2x3 row-major
 // Returns true if successful, false if failed (M is set to identity on failure)
-inline bool estimateAffine2d(const double* src, const double* dst, int n,
-                             double* m) {
+inline bool estimateAffine2d(const double* src, const double* dst, int n, double* m)
+{
     // Input validation: check for NaN/Inf
     for (int i = 0; i < 2 * n; ++i)
     {
@@ -241,10 +246,10 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n,
     std::vector<double> b(2 * n, 0.0);
     for (int i = 0; i < n; ++i)
     {
-        double x = src[2 * i];
-        double y = src[2 * i + 1];
-        double xp = dst[2 * i];
-        double yp = dst[2 * i + 1];
+        const double x = src[2 * i];
+        const double y = src[2 * i + 1];
+        const double xp = dst[2 * i];
+        const double yp = dst[2 * i + 1];
         // Row for x'
         a[(2 * i) * 6 + 0] = x;
         a[(2 * i) * 6 + 1] = y;
@@ -264,7 +269,7 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n,
     }
     // Compute AtA (6x6) and Atb (6)
     double atA[6][6] = {0};
-    double atb[6] = {0};
+    const double atb[6] = {0};
     for (int i = 0; i < 6; ++i)
     {
         for (int j = 0; j < 6; ++j)
@@ -321,7 +326,7 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n,
                 std::swap(aug[i][j], aug[pivot][j]);
             }
         }
-        double const div = aug[i][i];
+        const double div = aug[i][i];
         for (int j = 0; j < 7; ++j)
         {
             aug[i][j] /= div;
@@ -332,7 +337,7 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n,
             {
                 continue;
             }
-            double const f = aug[j][i];
+            const double f = aug[j][i];
             for (int k = 0; k < 7; ++k)
             {
                 aug[j][k] -= f * aug[i][k];
@@ -368,12 +373,14 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n,
     bool allZero = true;
     for (int i = 0; i < 6; ++i)
     {
-        if (std::abs(m[i]) > 1e-8) {
+        if (std::abs(m[i]) > 1e-8)
+        {
             allZero = false;
             break;
         }
     }
-    if (allZero) {
+    if (allZero)
+    {
         m[0] = 1;
         m[1] = 0;
         m[2] = 0;
@@ -387,8 +394,8 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n,
     return true;
 }
 
-inline bool estimateSimilarity2d(const double* src, const double* dst, int n,
-                                 double* m) {
+inline bool estimateSimilarity2d(const double* src, const double* dst, int n, double* m)
+{
     // Input validation: check for NaN/Inf
     for (int i = 0; i < 2 * n; ++i)
     {
@@ -457,20 +464,21 @@ inline bool estimateSimilarity2d(const double* src, const double* dst, int n,
         srcVar += xs * xs + ys * ys;
     }
 
-    if (srcVar == 0) {
+    if (srcVar == 0)
+    {
         std::memset(m, 0, sizeof(double) * 6);
         m[0] = m[4] = 1.0;
         return false;
     }
 
     // Compute scale and rotation
-    double const scale = (covXx + covYy) / srcVar;
-    double r00 = (covXx + covYy) / (covXx + covYy);  // normalized to 1
+    const double scale = (covXx + covYy) / srcVar;
+    double r00 = (covXx + covYy) / (covXx + covYy); // normalized to 1
     double r01 = (covXy - covYx) / (covXx + covYy);
     double r10 = (covYx - covXy) / (covXx + covYy);
     double r11 = r00;
 
-    double const norm = std::sqrt(r00 * r00 + r10 * r10);
+    const double norm = std::sqrt(r00 * r00 + r10 * r10);
     if (norm < 1e-10)
     {
         std::memset(m, 0, sizeof(double) * 6);
@@ -484,8 +492,8 @@ inline bool estimateSimilarity2d(const double* src, const double* dst, int n,
     r11 = scale * r11 / norm;
 
     // Translation
-    double const tx = muDst[0] - (r00 * muSrc[0] + r01 * muSrc[1]);
-    double const ty = muDst[1] - (r10 * muSrc[0] + r11 * muSrc[1]);
+    const double tx = muDst[0] - (r00 * muSrc[0] + r01 * muSrc[1]);
+    const double ty = muDst[1] - (r10 * muSrc[0] + r11 * muSrc[1]);
 
     m[0] = r00;
     m[1] = r01;
@@ -497,8 +505,8 @@ inline bool estimateSimilarity2d(const double* src, const double* dst, int n,
     return true;
 }
 
-inline bool estimateProcrustesSimilarity(const double* src, const double* dst,
-                                         int n, double* m) {
+inline bool estimateProcrustesSimilarity(const double* src, const double* dst, int n, double* m)
+{
     if (n < 2)
     {
         return false;
@@ -522,7 +530,8 @@ inline bool estimateProcrustesSimilarity(const double* src, const double* dst,
     dy /= n;
 
     // 2. Centered coordinates
-    std::vector<double> s(2 * n), d(2 * n);
+    std::vector<double> s(2 * n);
+    std::vector<double> d(2 * n);
     for (int i = 0; i < n; ++i)
     {
         s[2 * i] = src[2 * i] - sx;
@@ -532,33 +541,33 @@ inline bool estimateProcrustesSimilarity(const double* src, const double* dst,
     }
 
     // 3. Compute covariance and variance
-    double var_s = 0;
-    double cov_xx = 0;
-    double cov_xy = 0;
-    double cov_yx = 0;
-    double cov_yy = 0;
+    double varS = 0;
+    double covXx = 0;
+    double covXy = 0;
+    double covYx = 0;
+    double covYy = 0;
     for (int i = 0; i < n; ++i)
     {
-        double xs = s[2 * i];
-        double ys = s[2 * i + 1];
-        double xd = d[2 * i];
-        double yd = d[2 * i + 1];
-        var_s += xs * xs + ys * ys;
-        cov_xx += xd * xs;
-        cov_xy += xd * ys;
-        cov_yx += yd * xs;
-        cov_yy += yd * ys;
+        const double xs = s[2 * i];
+        const double ys = s[2 * i + 1];
+        const double xd = d[2 * i];
+        const double yd = d[2 * i + 1];
+        varS += xs * xs + ys * ys;
+        covXx += xd * xs;
+        covXy += xd * ys;
+        covYx += yd * xs;
+        covYy += yd * ys;
     }
-    if (var_s == 0)
+    if (varS == 0)
     {
         return false;
     }
 
     // 4. Compute rotation & scale
-    const double trace = cov_xx + cov_yy;
+    const double trace = covXx + covYy;
     // double det = cov_xx*cov_yy - cov_xy*cov_yx;
-    const double scale = trace / var_s;
-    const double theta = atan2(cov_xy - cov_yx, cov_xx + cov_yy); // rotation angle
+    const double scale = trace / varS;
+    const double theta = atan2(covXy - covYx, covXx + covYy); // rotation angle
 
     const double cs = cos(theta);
     const double sn = sin(theta);
@@ -574,15 +583,16 @@ inline bool estimateProcrustesSimilarity(const double* src, const double* dst,
     return true;
 }
 
-inline bool invertAffine(const double* M, double invM[6]) {
+inline bool invertAffine(const double* m, double invM[6])
+{
     // Invert the affine transformation matrix for inverse mapping
-    double a = M[0];
-    double b = M[1];
-    double c = M[2];
-    double d = M[3];
-    double e = M[4];
-    double f = M[5];
-    double const det = a * e - b * d;
+    const double a = m[0];
+    const double b = m[1];
+    const double c = m[2];
+    const double d = m[3];
+    const double e = m[4];
+    const double f = m[5];
+    const double det = a * e - b * d;
     if (fabs(det) < 1e-12)
     {
         return false;
@@ -597,17 +607,16 @@ inline bool invertAffine(const double* M, double invM[6]) {
 }
 
 template <typename T>
-math_utils::Point<T> rotatePoint(const math_utils::Point<T>& pt,
-                                 const math_utils::Point<T>& origin,
-                                 double angleRad) {
+math_utils::Point<T> rotatePoint(const math_utils::Point<T>& pt, const math_utils::Point<T>& origin, double angleRad)
+{
     double dx = static_cast<double>(pt.x) - static_cast<double>(origin.x);
     double dy = static_cast<double>(pt.y) - static_cast<double>(origin.y);
-    double const cosA = std::cos(angleRad);
-    double const sinA = std::sin(angleRad);
+    const double cosA = std::cos(angleRad);
+    const double sinA = std::sin(angleRad);
     return {static_cast<T>(std::round(cosA * dx - sinA * dy + origin.x)),
             static_cast<T>(std::round(sinA * dx + cosA * dy + origin.y))};
 }
 
-}  // namespace linuxface::math_utils
+} // namespace linuxface::math_utils
 
 #endif // MATH_UTILS_H

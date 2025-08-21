@@ -17,6 +17,12 @@ class PaintWebcam
   public:
     PaintWebcam() = default;
     ~PaintWebcam() = default;
+    
+    // Rule of five compliance
+    PaintWebcam(const PaintWebcam&) = delete;
+    PaintWebcam& operator=(const PaintWebcam&) = delete;
+    PaintWebcam(PaintWebcam&&) = default;
+    PaintWebcam& operator=(PaintWebcam&&) = default;
 
     void setWebcam(std::shared_ptr<Webcam> webcam);
     void setNewDeviceModalWebcam(std::shared_ptr<Webcam> webcam);
@@ -32,7 +38,7 @@ class PaintWebcam
      */
     bool paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> tempWebcams);
 
-   private:
+  private:
     void paintPhysicalInput();
     void paintVirtualOutput();
 
@@ -43,7 +49,7 @@ class PaintWebcam
     std::shared_ptr<Webcam> webcam_new_device_;
 
     // State tracking for UI selections per camera
-    std::map<std::string, int> selected_subsampling_{};
+    std::map<std::string, int> selected_subsampling_;
     int selected_quality_value_{100};
 };
 

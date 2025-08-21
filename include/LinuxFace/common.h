@@ -2,14 +2,14 @@
 #define COMMON_H
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdarg>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <cerrno>
 #include <fcntl.h>
 #include <memory>
-#include <cstdarg>
-#include <cstdio>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -22,18 +22,23 @@
 // I did replace all static for inline to remove warnings. Dont know if its good or no...
 namespace linuxface::common
 {
-inline bool fileExists(const std::string& port) {
-    struct stat sb{};
+inline bool fileExists(const std::string& port)
+{
+    struct stat sb
+    {
+    };
     return stat(port.c_str(), &sb) == 0;
 }
 
 template <typename T>
 inline const T& clamp(const T& v, const T& lo, const T& hi)
 {
-    if (v < lo) {
+    if (v < lo)
+    {
         return lo;
     }
-    if (hi < v) {
+    if (hi < v)
+    {
         return hi;
     }
     return v;
@@ -41,7 +46,8 @@ inline const T& clamp(const T& v, const T& lo, const T& hi)
 
 
 // Helper function to format the size into human-readable format
-inline const char* formatSize(unsigned long size) {
+inline const char* formatSize(unsigned long size)
+{
     static char buffer[64];
 
     // If size is smaller than 1 KB, print in bytes
@@ -94,7 +100,8 @@ inline int& getLogFd()
     return logFd;
 }
 
-inline const char* logLevelStr(LogLevel level) {
+inline const char* logLevelStr(LogLevel level)
+{
     switch (level)
     {
         case LogLevel::INFO:
@@ -108,7 +115,8 @@ inline const char* logLevelStr(LogLevel level) {
     }
 }
 
-inline const char* logColor(LogLevel level) {
+inline const char* logColor(LogLevel level)
+{
     switch (level)
     {
         case LogLevel::INFO:
@@ -122,9 +130,13 @@ inline const char* logColor(LogLevel level) {
     }
 }
 
-inline const char* logColorReset() { return "\033[0m"; }
+inline const char* logColorReset()
+{
+    return "\033[0m";
+}
 
-inline void initLogger(const char* prefix, bool saveLogToFile = false) {
+inline void initLogger(const char* prefix, bool saveLogToFile = false)
+{
     if (getLogFd() != -1)
     {
         close(getLogFd());
@@ -135,8 +147,8 @@ inline void initLogger(const char* prefix, bool saveLogToFile = false) {
 
     // Format: prefix-<timestamp>.log
     char* logFilename = nullptr;
-    if (asprintf(&logFilename, "%ld-%s.log", now, prefix) == -1 ||
-        logFilename == nullptr) {
+    if (asprintf(&logFilename, "%ld-%s.log", now, prefix) == -1 || logFilename == nullptr)
+    {
         fprintf(stderr, "Failed to generate log file name\n");
         std::exit(EXIT_FAILURE);
     }
@@ -145,20 +157,21 @@ inline void initLogger(const char* prefix, bool saveLogToFile = false) {
     {
         auto& logFd = getLogFd();
         logFd = open(logFilename, O_WRONLY | O_CREAT | O_APPEND, 0644);
-        if (logFd == -1) {
+        if (logFd == -1)
+        {
             fprintf(stderr, "Failed to open log file: %s\n", strerror(errno));
             std::exit(EXIT_FAILURE);
         }
     }
 
-    fprintf(stdout, "Logging to file: %s %s\n", logFilename,
-            saveLogToFile ? "enabled" : "disabled");
+    fprintf(stdout, "Logging to file: %s %s\n", logFilename, saveLogToFile ? "enabled" : "disabled");
     fflush(stdout);
 
     free(logFilename);
 }
 
-inline void logToFile(const char* msg) {
+inline void logToFile(const char* msg)
+{
     if (getLogFd() != -1)
     {
         const ssize_t msgLen = strlen(msg);
@@ -170,7 +183,8 @@ inline void logToFile(const char* msg) {
     }
 }
 
-inline void logMessage(LogLevel level, const char* format, ...) {
+inline void logMessage(LogLevel level, const char* format, ...)
+{
     // Timestamp
     const time_t now = time(nullptr);
     char timeBuf[64];
@@ -180,27 +194,30 @@ inline void logMessage(LogLevel level, const char* format, ...) {
     char* userMsg = nullptr;
     va_list args;
     va_start(args, format);
-    if (vasprintf(&userMsg, format, args) == -1) {
+    if (vasprintf(&userMsg, format, args) == -1)
+    {
         fprintf(stderr, "log_message: vasprintf failed\n");
         std::exit(EXIT_FAILURE);
     }
     va_end(args);
 
-    if (userMsg == nullptr) {
+    if (userMsg == nullptr)
+    {
         fprintf(stderr, "log_message: vasprintf failed\n");
         std::exit(EXIT_FAILURE);
     }
 
     // Final full log message
     char* fullMsg = nullptr;
-    if (asprintf(&fullMsg, "[%s] [%s] %s\n", timeBuf, logLevelStr(level),
-                 userMsg) == -1) {
+    if (asprintf(&fullMsg, "[%s] [%s] %s\n", timeBuf, logLevelStr(level), userMsg) == -1)
+    {
         free(userMsg);
         fprintf(stderr, "log_message: asprintf failed\n");
         std::exit(EXIT_FAILURE);
     }
 
-    if (fullMsg == nullptr) {
+    if (fullMsg == nullptr)
+    {
         fprintf(stderr, "log_message: asprintf failed\n");
         free(userMsg);
         std::exit(EXIT_FAILURE);
@@ -217,7 +234,8 @@ inline void logMessage(LogLevel level, const char* format, ...) {
     free(fullMsg);
 }
 
-inline void logVformatted(LogLevel level, const char* format, va_list args) {
+inline void logVformatted(LogLevel level, const char* format, va_list args)
+{
     char* msg = nullptr;
     if (vasprintf(&msg, format, args) == -1)
     {
@@ -234,32 +252,37 @@ inline void logVformatted(LogLevel level, const char* format, va_list args) {
     }
 }
 
-inline void logInfo(const char* format, ...) {
+inline void logInfo(const char* format, ...)
+{
     va_list args;
     va_start(args, format);
     logVformatted(LogLevel::INFO, format, args);
     va_end(args);
 }
 
-inline void logError(const char* format, ...) {
+inline void logError(const char* format, ...)
+{
     va_list args;
     va_start(args, format);
     logVformatted(LogLevel::ERROR, format, args);
     va_end(args);
 }
 
-inline void logWarn(const char* format, ...) {
+inline void logWarn(const char* format, ...)
+{
     va_list args;
     va_start(args, format);
     logVformatted(LogLevel::WARN, format, args);
     va_end(args);
 }
 
-inline void errnoLog(const char* s) {
+inline void errnoLog(const char* s)
+{
     logError("%s error %d, %s", s, errno, std::strerror(errno));
 }
 
-inline bool longWrite(int fd, const void* buf, size_t size) {
+inline bool longWrite(int fd, const void* buf, size_t size)
+{
     // Write the buff data
     size_t written{0u};
     const char* ptr = static_cast<const char*>(buf);
@@ -268,9 +291,7 @@ inline bool longWrite(int fd, const void* buf, size_t size) {
         const ssize_t result = write(fd, ptr + written, size - written);
         if (result <= 0)
         {
-            logError(
-                "common::long_write - Write buf data failed. Written %zd bytes",
-                written);
+            logError("common::long_write - Write buf data failed. Written %zd bytes", written);
             return false;
         }
         written += static_cast<size_t>(result);
