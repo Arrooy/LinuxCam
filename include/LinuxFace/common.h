@@ -5,11 +5,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <errno.h>
+#include <cerrno>
 #include <fcntl.h>
 #include <memory>
-#include <stdarg.h>
-#include <stdio.h>
+#include <cstdarg>
+#include <cstdio>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -20,20 +20,24 @@
 
 
 // I did replace all static for inline to remove warnings. Dont know if its good or no...
-namespace linuxface
-{
-namespace common
+namespace linuxface::common
 {
 inline bool file_exists(const std::string& port)
 {
-    struct stat sb;
+    struct stat sb{};
     return stat(port.c_str(), &sb) == 0;
 }
 
 template <typename T>
 inline const T& clamp(const T& v, const T& lo, const T& hi)
 {
-    return (v < lo) ? lo : (hi < v) ? hi : v;
+    if (v < lo) {
+        return lo;
+    }
+    if (hi < v) {
+        return hi;
+    }
+    return v;
 }
 
 
@@ -51,17 +55,17 @@ inline const char* format_size(unsigned long size)
         }
     }
     // If size is smaller than 1 MB, print in KB
-    else if (size < 1024 * 1024)
+    else if (size < static_cast<unsigned long>(1024) * 1024)
     {
-        if (snprintf(buffer, sizeof(buffer), "%.2f KB", size / 1024.0) == -1)
+        if (snprintf(buffer, sizeof(buffer), "%.2f KB", static_cast<double>(size) / 1024.0) == -1)
         {
             return "Error formatting size";
         }
     }
     // If size is smaller than 1 GB, print in MB
-    else if (size < 1024 * 1024 * 1024)
+    else if (size < static_cast<unsigned long>(1024) * 1024 * 1024)
     {
-        if (snprintf(buffer, sizeof(buffer), "%.2f MB", size / (1024.0 * 1024)) == -1)
+        if (snprintf(buffer, sizeof(buffer), "%.2f MB", static_cast<double>(size) / (1024.0 * 1024)) == -1)
         {
             return "Error formatting size";
         }
@@ -69,7 +73,7 @@ inline const char* format_size(unsigned long size)
     // If size is 1 GB or larger, print in GB
     else
     {
-        if (snprintf(buffer, sizeof(buffer), "%.2f GB", size / (1024.0 * 1024 * 1024)) == -1)
+        if (snprintf(buffer, sizeof(buffer), "%.2f GB", static_cast<double>(size) / (1024.0 * 1024 * 1024)) == -1)
         {
             return "Error formatting size";
         }
@@ -135,7 +139,7 @@ inline void init_logger(const char* prefix, bool saveLogToFile = false)
     }
 
     // Get UNIX timestamp (seconds since epoch)
-    time_t now = time(nullptr);
+    const time_t now = time(nullptr);
 
     // Format: prefix-<timestamp>.log
     char* log_filename = nullptr;
@@ -178,7 +182,7 @@ inline void log_to_file(const char* msg)
 inline void log_message(LogLevel level, const char* format, ...)
 {
     // Timestamp
-    time_t now = time(nullptr);
+    const time_t now = time(nullptr);
     char time_buf[64];
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", localtime(&now));
 
@@ -233,7 +237,7 @@ inline void log_vformatted(LogLevel level, const char* format, va_list args)
     {
         log_message(level, "log_vformatted: vasprintf failed");
     }
-    if (msg)
+    if (msg != nullptr)
     {
         log_message(level, "%s", msg);
         free(msg);
@@ -281,7 +285,7 @@ inline bool long_write(int fd, const void* buf, size_t size)
     const char* ptr = static_cast<const char*>(buf);
     while (written < size)
     {
-        ssize_t result = write(fd, ptr + written, size - written);
+        const ssize_t result = write(fd, ptr + written, size - written);
         if (result <= 0)
         {
             log_error("common::long_write - Write buf data failed. Written %zd bytes", written);
@@ -313,7 +317,6 @@ T lerp(T a, T b, T t)
     return a + t * (b - a);
 }
 
-} // namespace common
-} // namespace linuxface
+} // namespace linuxface::common
 
 #endif // COMMON_H
