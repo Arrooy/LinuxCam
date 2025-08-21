@@ -131,93 +131,20 @@ void MediaBrowserUI::renderImageOperationsContent()
     Layer* selected = getSelectedLayer();
     if (selected && selected->type == LayerType::Image && selected->img)
     {
-        auto image = selected->img;
-        if (!image)
-        {
-            return;
-        }
-
-        static int newWidth = 0;
-        static int newHeight = 0;
-
-        if (ImGui::Button("Grayscale"))
-        {
-            image->toGrayscale();
-            selected->dirty = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Flip Horizontal"))
-        {
-            image->flipHorizontal();
-            selected->dirty = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Flip Vertical"))
-        {
-            image->flipVertical();
-            selected->dirty = true;
-        }
-
-        ImGui::Text("Rotate:");
-        ImGui::SameLine();
-        if (ImGui::Button("90°"))
-        {
-            image->rotate90();
-            selected->dirty = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("180°"))
-        {
-            image->rotate180();
-            selected->dirty = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("270°"))
-        {
-            image->rotate270();
-            selected->dirty = true;
-        }
-
-        if (newWidth == 0 || newHeight == 0)
-        {
-            newWidth = static_cast<int>(image->info.width);
-            newHeight = static_cast<int>(image->info.height);
-        }
-
-        ImGui::Text("Resize Image:");
-        ImGui::InputInt("Width", &newWidth);
-        ImGui::InputInt("Height", &newHeight);
-
-        if (ImGui::Button("Apply Resize"))
-        {
-            if (newWidth > 0 && newHeight > 0)
-            {
-                image->scaleToInPlace(static_cast<size_t>(newWidth), static_cast<size_t>(newHeight));
-                selected->dirty = true;
-            }
-        }
-
-        // Slider-based resize
-        ImGui::Separator();
-        
-        // Check if this is a camera layer
+        // Only show scale slider for webcam/streaming layers
         if (!selected->cameraDevicePath.empty())
         {
-            ImGui::Text("Camera Layer Resize (Applied Each Frame):");
-            
+            ImGui::Text("Camera Layer Scale (applied each frame):");
             bool scaleChanged = ImGui::SliderFloat("Scale", &selected->resizeScale, 0.1f, 3.0f, "%.2f");
-            
             if (scaleChanged)
             {
                 selected->dirty = true;
             }
-            
             if (ImGui::Button("Reset Scale"))
             {
                 selected->resizeScale = 1.0f;
                 selected->dirty = true;
             }
-            
             ImGui::Text("Current Scale: %.2f", selected->resizeScale);
             ImGui::Text("Original Size: %ldx%ld", selected->getWidth(), selected->getHeight());
             if (selected->resizeScale != 1.0f)
@@ -227,9 +154,76 @@ void MediaBrowserUI::renderImageOperationsContent()
                 ImGui::Text("Scaled Size: %dx%d", scaledWidth, scaledHeight);
             }
         }
+        // Only show image operations for static image layers
         else
         {
-            // Original resize logic for non-camera layers
+            auto image = selected->img;
+            if (!image)
+            {
+                return;
+            }
+
+            static int newWidth = 0;
+            static int newHeight = 0;
+
+            if (ImGui::Button("Grayscale"))
+            {
+                image->toGrayscale();
+                selected->dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Flip Horizontal"))
+            {
+                image->flipHorizontal();
+                selected->dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Flip Vertical"))
+            {
+                image->flipVertical();
+                selected->dirty = true;
+            }
+
+            ImGui::Text("Rotate:");
+            ImGui::SameLine();
+            if (ImGui::Button("90°"))
+            {
+                image->rotate90();
+                selected->dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("180°"))
+            {
+                image->rotate180();
+                selected->dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("270°"))
+            {
+                image->rotate270();
+                selected->dirty = true;
+            }
+
+            if (newWidth == 0 || newHeight == 0)
+            {
+                newWidth = static_cast<int>(image->info.width);
+                newHeight = static_cast<int>(image->info.height);
+            }
+
+            ImGui::Text("Resize Image:");
+            ImGui::InputInt("Width", &newWidth);
+            ImGui::InputInt("Height", &newHeight);
+
+            if (ImGui::Button("Apply Resize"))
+            {
+                if (newWidth > 0 && newHeight > 0)
+                {
+                    image->scaleToInPlace(static_cast<size_t>(newWidth), static_cast<size_t>(newHeight));
+                    selected->dirty = true;
+                }
+            }
+
+            // Slider-based resize for static images
             ImGui::Text("Resize with Slider:");
 
             static bool sliderActive = false;
@@ -266,21 +260,22 @@ void MediaBrowserUI::renderImageOperationsContent()
                 int previewHeight = static_cast<int>(image->info.height * resizeScale);
                 ImGui::Text("Preview: %dx%d", previewWidth, previewHeight);
             }
-        }
 
-        ImGui::Spacing();
-        if (ImGui::Button("Reset"))
-        {
-            if (!mediaManager->reloadImage(selected->name))
+            ImGui::Spacing();
+            // Only show Reset for static images
+            if (ImGui::Button("Reset"))
             {
-                common::log_error("Failed to reload image: %s", selected->name.c_str());
-            }
-            else
-            {
-                // Force recreation of texture and geometry by marking layer as dirty
-                selected->dirty = true;
-                // Also reset the image pointer to the reloaded one
-                selected->img = mediaManager->getImage(selected->name);
+                if (!mediaManager->reloadImage(selected->name))
+                {
+                    common::log_error("Failed to reload image: %s", selected->name.c_str());
+                }
+                else
+                {
+                    // Force recreation of texture and geometry by marking layer as dirty
+                    selected->dirty = true;
+                    // Also reset the image pointer to the reloaded one
+                    selected->img = mediaManager->getImage(selected->name);
+                }
             }
         }
     }
