@@ -2,7 +2,10 @@
 
 #include "LinuxFace/codec.h"
 
-using namespace linuxface;
+using linuxface::ImageFormat;
+using linuxface::Decoder;
+using linuxface::Encoder;
+using linuxface::CodecFactory;
 
 // Create a fresh decoder instance
 template <typename T>

@@ -15,13 +15,13 @@ int main(int argc, char* argv[])
     try
     {
         linuxface::common::init_logger("a0.0.0");
-        std::string config_file_location{"../config.yaml"};
+        std::string configFileLocation{"../config.yaml"};
         if (argc > 1)
         {
             linuxface::common::log_info("Config file: %s", argv[1]);
-            config_file_location = std::string(argv[1]);
+            configFileLocation = std::string(argv[1]);
         }
-        if (!Config::getInstance(config_file_location.c_str()).loadConfiguration())
+        if (!Config::getInstance(configFileLocation.c_str()).loadConfiguration())
         {
             linuxface::common::log_error("Failed to load configuration");
             return -1;
