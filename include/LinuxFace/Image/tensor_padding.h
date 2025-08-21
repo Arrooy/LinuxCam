@@ -58,12 +58,13 @@ struct TensorPadding
         p.constant_value = value;
         return p;
     }
-    struct RgbValues {
+    struct RgbValues
+    {
         float r;
-        float g; 
+        float g;
         float b;
     };
-    
+
     static TensorPadding rgb(const RgbValues& rgbVals)
     {
         TensorPadding p;

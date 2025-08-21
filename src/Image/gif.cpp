@@ -48,7 +48,7 @@ bool Gif::decodeAllFrames()
         size_ += frameSize;
         frameImages_.push_back(std::move(img));
     }
-    
+
     // Process remaining frames
     while (gd_get_frame(gif_) != 0)
     {
@@ -68,7 +68,7 @@ bool Gif::decodeAllFrames()
         size_ += frameSize;
         frameImages_.push_back(std::move(img));
     }
-    common::log_info("Gif loaded using %s", common::format_size(size_));
+    common::logInfo("Gif loaded using %s", common::formatSize(size_));
     return true;
 }
 
@@ -97,7 +97,7 @@ std::unique_ptr<Image>& Gif::next()
     }
     else
     {
-        common::log_error("Gif::next - No image found at index %zu", index_);
+        common::logError("Gif::next - No image found at index %zu", index_);
     }
     return img;
 }

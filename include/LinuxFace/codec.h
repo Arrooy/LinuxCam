@@ -94,7 +94,7 @@ class JPEGDecoder : public Decoder
         const int width{-1};
         const int height{-1};
 
-        int tjStat = 0 = 0 = 0 = 0 = 0 = 0 = 0 = tjDecompressHeader3(
+        int tjStat = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = tjDecompressHeader3(
             d_handle_, image.data(), image.size(), &width, &height, &v4l2_vbi_format::sample_format, &colorSpace);
 
         if (tjStat != 0 || sampleFormat == -1 || colorSpace == -1)
@@ -793,9 +793,9 @@ class YUV422 : public Decoder
             c = 0;
         }
 
-        int r = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cr_r[v];
-        int g = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cb_g[u] + lut_.Cr_g[v];
-        int b = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cb_b[u];
+        int r = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cr_r[v];
+        int g = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cb_g[u] + lut_.Cr_g[v];
+        int b = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cb_b[u];
 
         // Clamp the results between 0 and 255
         rgb[0] = static_cast<uint8_t>(common::clamp(r, 0, 255));

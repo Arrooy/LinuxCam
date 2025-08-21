@@ -4,13 +4,11 @@
 
 using namespace linuxface;
 
-
 V4L2LoopbackWriter::V4L2LoopbackWriter(const std::string& name, const std::string& devicePath, const unsigned int width,
                                        const unsigned int height, const TJSAMP subsample)
-    : Webcam(name, devicePath, WebcamType::VirtualOutput, width, height), streaming_(false)
+    : Webcam(name, devicePath, WebcamType::VirtualOutput, width, height), chrominance_subsampling_(subsample)
+
 {
-    chrominance_subsampling_ = subsample;
-    quality_ = 100;
 }
 
 V4L2LoopbackWriter::~V4L2LoopbackWriter()
@@ -24,7 +22,7 @@ bool V4L2LoopbackWriter::setupDevice()
     fd_ = ::open(device_path_.c_str(), O_RDWR);
     if (fd_ < 0)
     {
-        common::errno_log("V4L2LoopbackWriter::setupDevice - Open fd failed.");
+        common::errnoLog("V4L2LoopbackWriter::setupDevice - Open fd failed.");
         return false;
     }
 
@@ -39,7 +37,7 @@ bool V4L2LoopbackWriter::setupDevice()
 
     if (ioctl(fd_, VIDIOC_S_FMT, &fmt) < 0)
     {
-        common::errno_log("V4L2LoopbackWriter::setupDevice - VIDIOC_S_FMT");
+        common::errnoLog("V4L2LoopbackWriter::setupDevice - VIDIOC_S_FMT");
         cleanup();
         return false;
     }
@@ -63,7 +61,7 @@ bool V4L2LoopbackWriter::setupDevice()
 
     if (ioctl(fd_, VIDIOC_REQBUFS, &reqbuf) < 0)
     {
-        common::errno_log("V4L2LoopbackWriter::setupDevice - VIDIOC_REQBUFS");
+        common::errnoLog("V4L2LoopbackWriter::setupDevice - VIDIOC_REQBUFS");
         cleanup();
         return false;
     }
@@ -79,17 +77,17 @@ bool V4L2LoopbackWriter::setupDevice()
 
         if (ioctl(fd_, VIDIOC_QUERYBUF, &buf) < 0)
         {
-            common::errno_log("V4L2LoopbackWriter::setupDevice - VIDIOC_QUERYBUF");
+            common::errnoLog("V4L2LoopbackWriter::setupDevice - VIDIOC_QUERYBUF");
             cleanup();
             return false;
         }
 
         buffers_[i].length = buf.length;
-        buffers_[i].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, buf.m.offset);
+        buffers_[i].start = mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, buf.m.offset);
 
         if (buffers_[i].start == MAP_FAILED)
         {
-            common::errno_log("V4L2LoopbackWriter::setupDevice - mmap");
+            common::errnoLog("V4L2LoopbackWriter::setupDevice - mmap");
             cleanup();
             return false;
         }
@@ -98,23 +96,16 @@ bool V4L2LoopbackWriter::setupDevice()
     // Create encoder
     auto pixelFormat = TJPF_RGB;
 
-    ConfigBuilder configBuilder;
+    const ConfigBuilder configBuilder;
     configBuilder.imageFormat(selectedFormat_->format)
         .pixelFormat(pixelFormat)
         .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
         .height(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height)
         .quality(100)
-        .chrominance_subsampling(chrominance_subsampling_);
+        .chrominanceSubsampling(chrominance_subsampling_);
 
     encoder_ = CodecFactory::create<Encoder>(configBuilder);
-    if (encoder_ == nullptr)
-    {
-        common::log_error("V4L2LoopbackWriter::setupDevice - Failed to create encoder");
-        return false;
-    }
-
-    common::log_info("V4L2LoopbackWriter::setupDevice - V4L2 streaming_ initialized successfully");
-    return true;
+    return !(encoder_ == nullptr);
 }
 
 bool V4L2LoopbackWriter::start()
@@ -167,8 +158,8 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
 
     // Check if we need to scale the image
     std::unique_ptr<Image> scaledImage = nullptr;
-    unsigned long desiredWidth = getDesiredWidth();
-    unsigned long desiredHeight = getDesiredHeight();
+    const unsigned long desiredWidth = getDesiredWidth();
+    const unsigned long desiredHeight = getDesiredHeight();
     if (image.info.width != desiredWidth || image.info.height != desiredHeight)
     {
         scaledImage = image.scale(desiredWidth, desiredHeight);
@@ -194,10 +185,10 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         return false;
     }
 
-    const size_t buf_len = buffers_[buf.index].length;
+    const size_t bufLen = buffers_[buf.index].length;
 
     // Wrap v4l2 buffer to Image so encoder can encode there the image.
-    Image v4l2Image = Image((unsigned char*) buffers_[buf.index].start, buf_len, false);
+    Image v4l2Image = Image(static_cast<unsigned char*>(buffers_[buf.index].start), bufLen, false);
 
     // Encode image and store it into v4l2 buffer
     unsigned long actualCompressedSize{0u};
@@ -213,7 +204,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         return false;
     }
 
-    if (actualCompressedSize > buf_len)
+    if (actualCompressedSize > bufLen)
     {
         common::log_error("Compressed image too large: %lu > %lu", actualCompressedSize, buf_len);
         // Queue the buffer back (send it to the device)
@@ -291,7 +282,7 @@ void V4L2LoopbackWriter::cleanup()
 bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
 {
     // Stop current operation
-    bool wasStreaming = streaming_;
+    const bool wasStreaming = streaming_;
     if (wasStreaming)
     {
         if (!stop())
@@ -311,7 +302,7 @@ bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
         encoder_.reset();
     }
 
-    ConfigBuilder configBuilder;
+    const ConfigBuilder configBuilder;
     configBuilder.imageFormat(selectedFormat_->format)
         .pixelFormat(TJPF_RGB)
         .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)

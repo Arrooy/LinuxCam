@@ -40,7 +40,7 @@ struct FrameSize
         common::logInfo("\t\tSelected fps index is %d", selectedFPS);
         for (const auto& fps : fps)
         {
-            common::log_info("\t\t\tFPS: %d", fps);
+            common::logInfo("\t\t\tFPS: %d", fps);
         }
         common::logInfo("\t\tSelected fps value is %d", getFps(selectedFPS));
     }
@@ -56,7 +56,7 @@ struct Format
 {
     std::string description;
     ImageFormat format{ImageFormat::UNKNOWN};
-    unsigned int pixelformat;
+    unsigned int pixelformat{};
     unsigned int selectedFrameSize{0u};
     std::vector<FrameSize> sizes;
 
@@ -75,8 +75,8 @@ struct Format
         }
         const auto& selSize = sizes[selectedFrameSize];
         common::logInfo("\tSelected frame size value: %dx%d with %dFPS",
-                        sel_size.width, sel_size.height,
-                        sel_size.getFps(sel_size.selectedFPS));
+                        selSize.width, selSize.height,
+                        FrameSize::getFps(selSize.selectedFPS));
     }
 };
 

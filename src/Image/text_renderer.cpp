@@ -151,13 +151,13 @@ void TextRenderer::drawText(Image& img, int x, int y, const std::string& text, c
 
     if (center)
     {
-        TextSize ts = getTextSize(text, scale);
+        const TextSize ts = getTextSize(text, scale);
         drawX = x - ts.width / 2;
         drawY = y - ts.height / 2;
     }
 
     int cursorX = drawX;
-    for (char c : text)
+    for (const char c : text)
     {
         drawChar(img, cursorX, drawY, c, color, scale);
         cursorX += CHAR_WIDTH * scale;
@@ -172,7 +172,7 @@ void TextRenderer::drawChar(Image& img, int x, int y, char c, const Pixel& color
     }
 
     const unsigned char* glyph = getFontGlyph(c);
-    if (glyph)
+    if (glyph != nullptr)
     {
         renderGlyph(img, x, y, glyph, color, scale);
     }
@@ -186,7 +186,7 @@ void TextRenderer::drawTextWithBackground(Image& img, int x, int y, const std::s
         return;
     }
 
-    TextSize ts = getTextSize(text, scale);
+    const TextSize ts = getTextSize(text, scale);
     int drawX = x;
     int drawY = y;
 
@@ -197,10 +197,10 @@ void TextRenderer::drawTextWithBackground(Image& img, int x, int y, const std::s
     }
 
     // Draw background rectangle with padding
-    int bgX = drawX - padding;
-    int bgY = drawY - padding;
-    int bgWidth = ts.width + 2 * padding;
-    int bgHeight = ts.height + 2 * padding;
+    const int bgX = drawX - padding;
+    const int bgY = drawY - padding;
+    const int bgWidth = ts.width + 2 * padding;
+    const int bgHeight = ts.height + 2 * padding;
 
     img.fillRect(bgX, bgY, bgWidth, bgHeight, bgColor);
     drawText(img, drawX, drawY, text, textColor, scale, false);
@@ -242,7 +242,7 @@ void TextRenderer::drawTextAligned(Image& img, int rectX, int rectY, int rectWid
         return;
     }
 
-    TextSize ts = getTextSize(text, scale);
+    const TextSize ts = getTextSize(text, scale);
 
     int textX = rectX;
     switch (hAlign)
@@ -316,7 +316,7 @@ TextSize TextRenderer::getMultilineTextSize(const std::string& text, int scale, 
 
     int lineHeight = CHAR_HEIGHT * scale + lineSpacing;
     int width = static_cast<int>(maxLineLength) * CHAR_WIDTH * scale;
-    int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing;
+    const int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing;
 
     return {width, height};
 }
@@ -328,7 +328,7 @@ bool TextRenderer::textFitsInRect(const std::string& text, int scale, int maxWid
         return false;
     }
 
-    TextSize ts = getTextSize(text, scale);
+    const TextSize ts = getTextSize(text, scale);
     return ts.width <= maxWidth && ts.height <= maxHeight;
 }
 
@@ -357,7 +357,7 @@ bool TextRenderer::isCharacterRenderable(char c)
 size_t TextRenderer::countRenderableCharacters(const std::string& text)
 {
     size_t count = 0;
-    for (char c : text)
+    for (const char c : text)
     {
         if (isCharacterRenderable(c))
         {
@@ -377,7 +377,7 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
 
     // Determine the text lines to render based on wrap mode
     std::vector<std::string> lines;
-    TextSize textSize;
+    TextSize textSize{};
 
     switch (config.wrapMode)
     {
@@ -388,14 +388,14 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
             if (config.maxWidth > 0)
             {
                 // Truncate text if it exceeds maxWidth
-                TextSize singleLineSize = getTextSize(config.text, config.scale);
+                const TextSize singleLineSize = getTextSize(config.text, config.scale);
                 if (singleLineSize.width > config.maxWidth)
                 {
                     // Find the maximum number of characters that fit
                     std::string truncated;
-                    for (char c : config.text)
+                    for (const char c : config.text)
                     {
-                        std::string test = truncated + c;
+                        const std::string test = truncated + c;
                         if (getTextSize(test, config.scale).width > config.maxWidth)
                         {
                             break;
@@ -446,21 +446,24 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
     if (canvasWidth <= 0 || canvasHeight <= 0)
     {
         // Auto-size canvas
-        int padding = config.useBackground ? config.padding : 0;
-        
-        if (config.wrapMode == TextWrapMode::AUTO_WIDTH && config.maxWidth > 0) {
+        const int padding = config.useBackground ? config.padding : 0;
+
+        if (config.wrapMode == TextWrapMode::AUTO_WIDTH && config.maxWidth > 0)
+        {
             // For text wrapping, respect the maxWidth constraint
             canvasWidth = canvasWidth > 0 ? canvasWidth : config.maxWidth + 2 * padding;
-        } else {
+        }
+        else
+        {
             // For other modes, size to fit text
             canvasWidth = canvasWidth > 0 ? canvasWidth : textSize.width + 2 * padding;
         }
-        
+
         canvasHeight = canvasHeight > 0 ? canvasHeight : textSize.height + 2 * padding;
     }
 
     // Create image with transparent background
-    Pixel transparent = {0, 0, 0, 0};
+    const Pixel transparent = {0, 0, 0, 0};
     auto image = std::make_shared<Image>(transparent, canvasWidth, canvasHeight);
     if (!image)
     {
@@ -532,12 +535,12 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
             // For multi-line text, each line can be aligned individually
             if (lines.size() > 1 && config.horizontalAlign == TextAlignment::CENTER)
             {
-                TextSize lineSize = getTextSize(line, config.scale);
+                const TextSize lineSize = getTextSize(line, config.scale);
                 lineX = (canvasWidth - lineSize.width) / 2;
             }
             else if (lines.size() > 1 && config.horizontalAlign == TextAlignment::RIGHT)
             {
-                TextSize lineSize = getTextSize(line, config.scale);
+                const TextSize lineSize = getTextSize(line, config.scale);
                 lineX = canvasWidth - lineSize.width - (config.useBackground ? config.padding : 0);
             }
 
@@ -550,7 +553,7 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
     image->info.width = canvasWidth;
     image->info.height = canvasHeight;
     image->info.format = ImageFormat::RGBA;
-    image->info.filename = "text_" + config.text.substr(0, std::min(config.text.length(), size_t(20)));
+    image->info.filename = "text_" + config.text.substr(0, std::min(config.text.length(), static_cast<size_t>(20)));
 
     return image;
 }
@@ -571,8 +574,8 @@ std::vector<std::string> TextRenderer::wrapText(const std::string& text, int max
 
     while (ss >> word)
     {
-        std::string testLine = currentLine.empty() ? word : currentLine + " " + word;
-        TextSize testSize = getTextSize(testLine, scale);
+        const std::string testLine = currentLine.empty() ? word : currentLine + " " + word;
+        const TextSize testSize = getTextSize(testLine, scale);
 
         if (testSize.width <= maxWidth)
         {
@@ -588,9 +591,9 @@ std::vector<std::string> TextRenderer::wrapText(const std::string& text, int max
             else
             {
                 // Single word is too long, split it
-                for (char c : word)
+                for (const char c : word)
                 {
-                    std::string testChar = currentLine + c;
+                    const std::string testChar = currentLine + c;
                     if (getTextSize(testChar, scale).width <= maxWidth)
                     {
                         currentLine += c;
@@ -615,7 +618,7 @@ std::vector<std::string> TextRenderer::wrapText(const std::string& text, int max
 
     if (lines.empty())
     {
-        lines.push_back("");
+        lines.emplace_back("");
     }
 
     return lines;
@@ -630,7 +633,7 @@ TextSize TextRenderer::calculateWrappedTextSize(const std::string& text, int max
 
     for (const auto& line : lines)
     {
-        TextSize lineSize = getTextSize(line, scale);
+        const TextSize lineSize = getTextSize(line, scale);
         totalWidth = std::max(totalWidth, lineSize.width);
         totalHeight += CHAR_HEIGHT * scale;
         if (totalHeight > CHAR_HEIGHT * scale)
@@ -656,10 +659,10 @@ void TextRenderer::renderGlyph(Image& img, int x, int y, const unsigned char* gl
 {
     for (int row = 0; row < CHAR_HEIGHT; row++)
     {
-        uint8_t bits = glyph[row];
+        const uint8_t bits = glyph[row];
         for (int col = 0; col < CHAR_WIDTH; col++)
         {
-            if (bits & (1 << col))
+            if ((bits & (1 << col)) != 0)
             {
                 img.fillRect(x + col * scale, y + row * scale, scale, scale, color);
             }

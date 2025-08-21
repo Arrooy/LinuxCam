@@ -2,10 +2,10 @@
 
 #include "LinuxFace/codec.h"
 
-using linuxface::ImageFormat;
+using linuxface::CodecFactory;
 using linuxface::Decoder;
 using linuxface::Encoder;
-using linuxface::CodecFactory;
+using linuxface::ImageFormat;
 
 // Create a fresh decoder instance
 template <typename T>
@@ -19,11 +19,11 @@ std::unique_ptr<T> CodecFactory::create(const linuxface::ConfigBuilder& config)
 
     if constexpr (std::is_base_of_v<linuxface::Decoder, T>)
     {
-    return CodecFactory::createDecoder<T>(format, config);
+        return CodecFactory::createDecoder<T>(format, config);
     }
     else if constexpr (std::is_base_of_v<linuxface::Encoder, T>)
     {
-    return CodecFactory::createEncoder<T>(format, config);
+        return CodecFactory::createEncoder<T>(format, config);
     }
     else
     {
@@ -71,5 +71,7 @@ std::unique_ptr<T> CodecFactory::createEncoder(ImageFormat format, const linuxfa
     }
 }
 
-template std::unique_ptr<linuxface::Decoder> CodecFactory::create<linuxface::Decoder>(const linuxface::ConfigBuilder& config);
-template std::unique_ptr<linuxface::Encoder> CodecFactory::create<linuxface::Encoder>(const linuxface::ConfigBuilder& config);
+template std::unique_ptr<linuxface::Decoder>
+CodecFactory::create<linuxface::Decoder>(const linuxface::ConfigBuilder& config);
+template std::unique_ptr<linuxface::Encoder>
+CodecFactory::create<linuxface::Encoder>(const linuxface::ConfigBuilder& config);

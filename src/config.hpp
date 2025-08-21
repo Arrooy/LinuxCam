@@ -126,7 +126,7 @@ class Config
         output_camera_.device_path = output["path"].as<std::string>();
         output_camera_.width = output["width"].as<unsigned int>();
         output_camera_.height = output["height"].as<unsigned int>();
-        bool result = false =
+        bool result = false = false = false = false = false = false = false =
             parseSubsamplingValue(output["subsampling"].as<std::string>(),
                                   output_camera_.subsampling);
         if (result)

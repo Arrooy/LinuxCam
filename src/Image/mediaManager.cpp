@@ -5,30 +5,28 @@
 #include "LinuxFace/imageLoader.h"
 #include "config.hpp"
 
-using linuxface::MediaManager;
 using linuxface::Config;
-using linuxface::Image;
 using linuxface::Gif;
+using linuxface::Image;
+using linuxface::MediaManager;
 
-MediaManager::MediaManager(std::shared_ptr<ImageRenderGL> imageRenderGl)
-    : imageRenderGl_(std::move(imageRenderGl))
+MediaManager::MediaManager(std::shared_ptr<ImageRenderGL> imageRenderGl) : imageRenderGl_(std::move(imageRenderGl))
 {
     const std::string folderPath = Config::getInstance().getMediaFolderPath();
     loadThread_ = std::thread(&MediaManager::loadMediaFromFolder, this, folderPath);
 }
 
-std::vector<std::string> MediaManager::getImageNames()
+static std::vector<std::string> MediaManager::getImageNames()
 {
     const std::lock_guard<std::mutex> lock(imageMutex_);
     return linuxface::common::getKeysFromMap(images);
 }
 
-std::vector<std::string> MediaManager::getGifNames()
+static std::vector<std::string> MediaManager::getGifNames()
 {
     const std::lock_guard<std::mutex> lock(gifMutex_);
     return linuxface::common::getKeysFromMap(gifs);
 }
-
 
 std::shared_ptr<Image> MediaManager::getImage(const std::string& imageName)
 
@@ -57,9 +55,8 @@ std::shared_ptr<Gif> MediaManager::getGif(const std::string& gifName)
 
 size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
 {
-    namespace fs = std::filesystem;
     const std::lock_guard<std::recursive_mutex> lock(loadMutex_);
-    size_t mediaCount{0u};
+    const size_t mediaCount{0u};
 
     for (const auto& entry : fs::directory_iterator(folderPath))
     {
@@ -108,7 +105,8 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
             }
             else
             {
-                linuxface::common::log_error("Unsupported file format %s in path %s", extension.c_str(), fullPath.c_str());
+                linuxface::common::log_error("Unsupported file format %s in path %s", extension.c_str(),
+                                             fullPath.c_str());
             }
             if (!processingOk)
             {
