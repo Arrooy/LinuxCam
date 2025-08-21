@@ -12,12 +12,7 @@
 namespace linuxface
 {
 
-enum class WebcamType
-{
-    UNKNOWN,
-    PhysicalInput,
-    VirtualOutput
-};
+enum class WebcamType { UNKNOWN, PHYSICAL_INPUT, VIRTUAL_OUTPUT };
 
 struct Buffer
 {
@@ -27,12 +22,11 @@ struct Buffer
 
 struct FrameSize
 {
-    unsigned int width;
-    unsigned int height;
+    unsigned int width{};
+    unsigned int height{};
     unsigned int selectedFPS{0u};
     std::vector<unsigned int> fps{0u};
-    unsigned int getFps(size_t index) const
-    {
+    static unsigned int getFps(size_t index) {
         if (index < fps.size())
         {
             return fps[index];
@@ -42,13 +36,13 @@ struct FrameSize
 
     void print() const
     {
-        common::log_info("\t\tSize width: %d height: %d", width, height);
-        common::log_info("\t\tSelected fps index is %d", selectedFPS);
+        common::logInfo("\t\tSize width: %d height: %d", width, height);
+        common::logInfo("\t\tSelected fps index is %d", selectedFPS);
         for (const auto& fps : fps)
         {
             common::log_info("\t\t\tFPS: %d", fps);
         }
-        common::log_info("\t\tSelected fps value is %d", getFps(selectedFPS));
+        common::logInfo("\t\tSelected fps value is %d", getFps(selectedFPS));
     }
 
     bool operator==(const FrameSize& other) const
@@ -68,19 +62,21 @@ struct Format
 
     void print() const
     {
-        common::log_info("\tFormat description %s", description.c_str());
-        common::log_info("\tFormat enum: %s", fromImageFormatToString(format).c_str());
-        common::log_info("\tPixel format raw: %d", pixelformat);
-        common::log_info("\tSelected frame size index: %d", selectedFrameSize);
+        common::logInfo("\tFormat description %s", description.c_str());
+        common::logInfo("\tFormat enum: %s",
+                        fromImageFormatToString(format).c_str());
+        common::logInfo("\tPixel format raw: %d", pixelformat);
+        common::logInfo("\tSelected frame size index: %d", selectedFrameSize);
 
-        common::log_info("\tAvailable frame sizes:");
+        common::logInfo("\tAvailable frame sizes:");
         for (const auto& size : sizes)
         {
             size.print();
         }
-        const auto& sel_size = sizes[selectedFrameSize];
-        common::log_info("\tSelected frame size value: %dx%d with %dFPS", sel_size.width, sel_size.height,
-                         sel_size.getFps(sel_size.selectedFPS));
+        const auto& selSize = sizes[selectedFrameSize];
+        common::logInfo("\tSelected frame size value: %dx%d with %dFPS",
+                        sel_size.width, sel_size.height,
+                        sel_size.getFps(sel_size.selectedFPS));
     }
 };
 
@@ -93,9 +89,9 @@ struct CameraCapabilities
 
     void print() const
     {
-        common::log_info("Driver name: %s", driver.c_str());
-        common::log_info("Driver card: %s", card.c_str());
-        common::log_info("Driver bus info: %s", bus_info.c_str());
+        common::logInfo("Driver name: %s", driver.c_str());
+        common::logInfo("Driver card: %s", card.c_str());
+        common::logInfo("Driver bus info: %s", bus_info.c_str());
         for (const auto& format : formats)
         {
             format.print();
@@ -107,35 +103,31 @@ struct CameraCapabilities
 class Webcam
 {
   public:
-    Webcam(const std::string& name, const std::string& devicePath, const WebcamType type, const unsigned int width,
-           const unsigned int height);
-    virtual ~Webcam() = default;
-    // Webcam(const Webcam&) = delete;
-    // Webcam& operator=(Webcam&&) = delete;
-    // Webcam& operator=(const Webcam&) = delete;
-    // Webcam(Webcam&&) = delete;
+   Webcam(const std::string& name, const std::string& devicePath,
+          WebcamType type, unsigned int width, unsigned int height);
+   virtual ~Webcam() = default;
+   // Webcam(const Webcam&) = delete;
+   // Webcam& operator=(Webcam&&) = delete;
+   // Webcam& operator=(const Webcam&) = delete;
+   // Webcam(Webcam&&) = delete;
 
-    virtual bool setupDevice() = 0;
-    virtual bool start() = 0;
-    virtual bool stop() = 0;
-    virtual bool isRunning() = 0;
+   virtual bool setupDevice() = 0;
+   virtual bool start() = 0;
+   virtual bool stop() = 0;
+   virtual bool isRunning() = 0;
 
+   std::string getDevicePath() const { return device_path_; }
+   WebcamType getType() const { return type_; }
 
-    std::string getDevicePath() const { return device_path_; }
-    WebcamType getType() const { return type_; }
+   std::string getName() const { return name_; }
+   CameraCapabilities getCapabilities() const { return capabilities_; }
 
-    std::string getName() const { return name_; }
-    CameraCapabilities getCapabilities() const { return capabilities_; }
-
-
-    Format getSelectedFormat() const
-    {
-        if (selectedFormat_)
-        {
-            return *selectedFormat_;
-        }
-        return Format{};
-    }
+   static Format getSelectedFormat() {
+       if (selectedFormat_) {
+           return *selectedFormat_;
+       }
+       return Format{};
+   }
     unsigned int getDesiredWidth() const
     {
         return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width : 0;

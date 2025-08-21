@@ -1,16 +1,7 @@
 #ifndef LAYERMANAGER_H
 #define LAYERMANAGER_H
 
-#include "imgui.h"
-
 #include <functional>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
-#include "LinuxFace/Image/image.h"
-#include "LinuxFace/Image/text_renderer.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -18,17 +9,14 @@
 
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/image.h"
+#include "LinuxFace/Image/text_renderer.h"
+#include "imgui.h"
 
 namespace linuxface
 {
 
 // Layer type for compositing
-enum class LayerType
-{
-    Image,
-    Gif,
-    Text
-};
+enum class LayerType { IMAGE, GIF, TEXT };
 
 struct Layer
 {
@@ -40,8 +28,8 @@ struct Layer
 
     // Unique identifier for this layer instance
     size_t id = 0;
-    static size_t next_id;
-    
+    static size_t next_id_;
+
     // Camera-specific fields
     std::string cameraDevicePath;  // Empty for non-camera layers
     float resizeScale{1.0f};       // For camera layers resize functionality
@@ -68,13 +56,12 @@ struct Layer
         bool needsRefresh = true;               // Flag to regenerate overlay
         
         // Get absolute position based on layer position
-        inline float getAbsoluteX(float layerX) const { return layerX + offsetX; }
-        inline float getAbsoluteY(float layerY) const { return layerY + offsetY; }
+        float getAbsoluteX(float layerX) const { return layerX + offsetX; }
+        float getAbsoluteY(float layerY) const { return layerY + offsetY; }
     } textOverlay;
 
     // Helper: get layer number (delegates to image/gif if present)
-    inline int getLayerNumber() const
-    {
+    int getLayerNumber() const {
         if (type == LayerType::Image && img)
         {
             return static_cast<int>(img->info.layer);
@@ -89,8 +76,7 @@ struct Layer
     }
 
     // Helper: set layer number (delegates to image/gif if present)
-    inline void setLayerNumber(int n)
-    {
+    void setLayerNumber(int n) {
         if (type == LayerType::Image && img)
         {
             img->info.layer = n;
@@ -98,16 +84,13 @@ struct Layer
         else if (type == LayerType::Gif && gif && !gif->frames().empty())
         {
             gif->frames()[0]->info.layer = n;
-        }
-        else if (type == LayerType::Text)
-        {
+        } else if (type == LayerType::TEXT) {
             layerNumber = n;
         }
     }
 
     // Helper: get layer name
-    inline std::string getLayerName() const
-    {
+    std::string getLayerName() const {
         if (type == LayerType::Image && img)
         {
             return img->info.filename;
@@ -116,16 +99,14 @@ struct Layer
         {
             return gif->frames()[0]->info.filename;
         }
-        if (type == LayerType::Text)
-        {
+        if (type == LayerType::TEXT) {
             return textContent.empty() ? ("Text Layer " + std::to_string(id)) : textContent;
         }
         return "Unknown Layer " + std::to_string(id);
     }
 
     // Update layer animation (for GIF layers)
-    inline void updateAnimation()
-    {
+    void updateAnimation() {
         if (type == LayerType::Gif && gif && !gif->frames().empty())
         {
             gifFrameIndex = (gifFrameIndex + 1) % gif->frames().size();
@@ -134,29 +115,23 @@ struct Layer
     }
 
     // Text overlay management
-    inline void setPosition(float newX, float newY)
-    {
+    void setPosition(float newX, float newY) {
         x = newX;
         y = newY;
         dirty = true;
         textOverlay.needsRefresh = true;  // Invalidate overlay when position changes
     }
 
-    inline void moveBy(float deltaX, float deltaY)
-    {
+    void moveBy(float deltaX, float deltaY) {
         x += deltaX;
         y += deltaY;
         dirty = true;
         textOverlay.needsRefresh = true;  // Invalidate overlay when position changes
     }
 
-    inline void invalidateTextOverlay()
-    {
-        textOverlay.needsRefresh = true;
-    }
+    void invalidateTextOverlay() { textOverlay.needsRefresh = true; }
 
-    inline void setTextOverlayEnabled(bool enabled)
-    {
+    static void setTextOverlayEnabled(bool enabled) {
         if (textOverlay.enabled != enabled)
         {
             textOverlay.enabled = enabled;
@@ -164,8 +139,7 @@ struct Layer
         }
     }
 
-    inline void setSelected(bool isSelected)
-    {
+    void setSelected(bool isSelected) {
         if (selected != isSelected)
         {
             selected = isSelected;
@@ -174,8 +148,7 @@ struct Layer
     }
 
     // Helper: get textureId (delegates to image/gif if present)
-    inline unsigned int getTextureId() const
-    {
+    static unsigned int getTextureId() {
         if ((type == LayerType::Image || type == LayerType::Text) && img)
         {
             return img->info.textureId;
@@ -187,8 +160,7 @@ struct Layer
         return 0;
     }
 
-    inline size_t getSize() const
-    {
+    static size_t getSize() {
         if ((type == LayerType::Image || type == LayerType::Text) && img)
         {
             return img->size();
@@ -200,8 +172,7 @@ struct Layer
         return 0;
     }
 
-    inline unsigned long getWidth() const
-    {
+    static unsigned long getWidth() {
         if (type == LayerType::Image && img)
         {
             return img->info.width;
@@ -218,8 +189,7 @@ struct Layer
         return 0;
     }
 
-    inline unsigned long getHeight() const
-    {
+    static unsigned long getHeight() {
         if (type == LayerType::Image && img)
         {
             return img->info.height;
@@ -235,8 +205,7 @@ struct Layer
         }
         return 0;
     }
-    inline ImageFormat getFormat() const
-    {
+    static ImageFormat getFormat() {
         if (type == LayerType::Image && img)
         {
             return img->info.format;
@@ -252,7 +221,7 @@ struct Layer
         }
         return ImageFormat::UNKNOWN;
     }
-    
+
     // Factory method: Create a text image using text_draw.h
     static std::shared_ptr<Image> createTextImage(
         const std::string& text,
@@ -270,7 +239,7 @@ struct Layer
     );
 };
 // Initialize static member
-inline size_t Layer::next_id = 0;
+inline size_t Layer::next_id_ = 0;
 
 class LayerManager
 {

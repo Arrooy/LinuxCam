@@ -31,38 +31,40 @@ struct Resolution
     const char* name;
 };
 
-static constexpr Resolution common_resolutions_[] = {
-    {640,  480,  "640x480 (VGA) [4:3]"       },
-    {800,  600,  "800x600 (SVGA) [4:3]"      },
-    {1024, 768,  "1024x768 (XGA) [4:3]"      },
-    {1280, 720,  "1280x720 (HD) [16:9]"      },
-    {1280, 800,  "1280x800 (WXGA) [16:10]"   },
-    {1280, 1024, "1280x1024 (SXGA) [5:4]"    },
-    {1366, 768,  "1366x768 [16:9]"           },
-    {1440, 900,  "1440x900 [16:10]"          },
-    {1600, 900,  "1600x900 [16:9]"           },
-    {1600, 1200, "1600x1200 (UXGA) [4:3]"    },
+static constexpr Resolution CommonResolutions[] = {
+    {640, 480, "640x480 (VGA) [4:3]"},
+    {800, 600, "800x600 (SVGA) [4:3]"},
+    {1024, 768, "1024x768 (XGA) [4:3]"},
+    {1280, 720, "1280x720 (HD) [16:9]"},
+    {1280, 800, "1280x800 (WXGA) [16:10]"},
+    {1280, 1024, "1280x1024 (SXGA) [5:4]"},
+    {1366, 768, "1366x768 [16:9]"},
+    {1440, 900, "1440x900 [16:10]"},
+    {1600, 900, "1600x900 [16:9]"},
+    {1600, 1200, "1600x1200 (UXGA) [4:3]"},
     {1920, 1080, "1920x1080 (Full HD) [16:9]"},
-    {1920, 1200, "1920x1200 [16:10]"         },
-    {2560, 1440, "2560x1440 (QHD) [16:9]"    },
-    {3840, 2160, "3840x2160 (4K UHD) [16:9]" }
-};
+    {1920, 1200, "1920x1200 [16:10]"},
+    {2560, 1440, "2560x1440 (QHD) [16:9]"},
+    {3840, 2160, "3840x2160 (4K UHD) [16:9]"}};
 
 class UI
 {
   public:
-    UI(std::shared_ptr<LayerManager> layerManager);
-    ~UI();
+   explicit UI(std::shared_ptr<LayerManager> layerManager);
+   ~UI();
 
-    // Initialize the UI system
-    bool initialize(GLFWwindow* window, const char* glsl_version = "#version 130");
+   // Initialize the UI system
+   bool initialize(GLFWwindow* window,
+                   const char* glslVersion = "#version 130");
 
-    inline void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = newCameraManager; }
-    inline void connect(std::shared_ptr<MediaManager> newMediaManager)
-    {
-        mediaManager_ = newMediaManager;
-        mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_, layerManager_);
-    }
+   void connect(std::shared_ptr<CameraManager> newCameraManager) {
+       cameraManager_ = newCameraManager;
+   }
+   void connect(std::shared_ptr<MediaManager> newMediaManager) {
+       mediaManager_ = newMediaManager;
+       mediaBrowserUI_ =
+           std::make_unique<MediaBrowserUI>(mediaManager_, layerManager_);
+   }
 
     // Cleanup the UI system
     void shutdown();

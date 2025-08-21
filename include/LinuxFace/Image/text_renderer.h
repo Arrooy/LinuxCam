@@ -2,7 +2,9 @@
 #define IMAGE_TEXT_RENDERER_H
 
 #include <string>
+#include <utility>
 #include <vector>
+
 #include "LinuxFace/Image/image.h"
 
 namespace linuxface {
@@ -56,12 +58,19 @@ struct TextRenderConfig {
     int canvasHeight = 0;
     
     // Helper constructor for simple text
-    TextRenderConfig(const std::string& text, const Pixel& color = {255, 255, 255, 255}, int scale = 1)
-        : text(text), textColor(color), scale(scale) {}
-        
+    explicit TextRenderConfig(std::string text,
+                              const Pixel& color = {255, 255, 255, 255},
+                              int scale = 1)
+        : text(std::move(text)), textColor(color), scale(scale) {}
+
     // Helper constructor for bounded text with wrapping
-    TextRenderConfig(const std::string& text, int maxWidth, const Pixel& color = {255, 255, 255, 255}, int scale = 1)
-        : text(text), textColor(color), scale(scale), wrapMode(TextWrapMode::AUTO_WIDTH), maxWidth(maxWidth) {}
+    TextRenderConfig(std::string text, int maxWidth,
+                     const Pixel& color = {255, 255, 255, 255}, int scale = 1)
+        : text(std::move(text)),
+          textColor(color),
+          scale(scale),
+          wrapMode(TextWrapMode::AUTO_WIDTH),
+          maxWidth(maxWidth) {}
 };
 
 /**
@@ -115,10 +124,10 @@ private:
     static const unsigned char FONT_8X8_BASIC[128][8];
     
     // Constants
-    static constexpr int CHAR_WIDTH = 8;
-    static constexpr int CHAR_HEIGHT = 8;
-    static constexpr int MIN_PRINTABLE_CHAR = 32;
-    static constexpr int MAX_PRINTABLE_CHAR = 126;
+    static constexpr int CharWidth = 8;
+    static constexpr int CharHeight = 8;
+    static constexpr int MinPrintableChar = 32;
+    static constexpr int MaxPrintableChar = 126;
 };
 
 } // namespace linuxface

@@ -16,10 +16,10 @@ namespace linuxface
 // Helper struct for cache
 struct TextureCacheEntry
 {
-    GLuint texId;
-    int width;
-    int height;
-    int layer;
+    GLuint texId{};
+    int width{};
+    int height{};
+    int layer{};
     // Add buffer objects for VAO/VBO/EBO caching
     GLuint vao = 0;
     GLuint vbo = 0;
@@ -63,7 +63,8 @@ class ImageRenderGL
     struct RenderBounds {
         float x, y, width, height;
         RenderBounds() : x(0), y(0), width(0), height(0) {}
-        RenderBounds(float x_, float y_, float w_, float h_) : x(x_), y(y_), width(w_), height(h_) {}
+        RenderBounds(float x, float y, float w, float h)
+            : x(x), y(y), width(w), height(h) {}
     };
 
     struct LayerRenderInfo {

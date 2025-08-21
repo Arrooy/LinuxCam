@@ -15,12 +15,20 @@ namespace linuxface
 class ConfigBuilder
 {
   public:
-    ConfigBuilder& quality(int q) { return set("quality", q); }
-    ConfigBuilder& width(unsigned int w) { return set("width", static_cast<int>(w)); }
-    ConfigBuilder& height(unsigned int h) { return set("height", static_cast<int>(h)); }
-    ConfigBuilder& chrominance_subsampling(TJSAMP c) { return set("chrominance_subsampling", c); }
-    ConfigBuilder& pixelFormat(TJPF p) { return set("pixelFormat", p); }
-    ConfigBuilder& imageFormat(ImageFormat i) { return set("imageFormat", i); }
+   static ConfigBuilder& quality(int q) { return set("quality", q); }
+   static ConfigBuilder& width(unsigned int w) {
+       return set("width", static_cast<int>(w));
+   }
+   static ConfigBuilder& height(unsigned int h) {
+       return set("height", static_cast<int>(h));
+   }
+   static ConfigBuilder& chrominanceSubsampling(TJSAMP c) {
+       return set("chrominance_subsampling", c);
+   }
+   static ConfigBuilder& pixelFormat(TJPF p) { return set("pixelFormat", p); }
+   static ConfigBuilder& imageFormat(ImageFormat i) {
+       return set("imageFormat", i);
+   }
 
     // Generic property setter
     template <typename T>
@@ -44,7 +52,7 @@ class ConfigBuilder
             }
             catch (const std::bad_any_cast&)
             {
-                common::log_error("Failed to cast property value to type T");
+                common::logError("Failed to cast property value to type T");
                 return false;
             }
         }
@@ -54,7 +62,7 @@ class ConfigBuilder
     bool has(const std::string& key) const { return props_.find(key) != props_.end(); }
 
   private:
-    std::unordered_map<std::string, std::any> props_;
+   std::unordered_map<std::string, std::any> props_{};
 };
 
 class Encoder
@@ -109,7 +117,8 @@ class Decoder
      * @param raw_needed_size The size of the raw image data needed to decode the image.
      * @return true if the header decoding is successful, false otherwise.
      */
-    virtual bool decodeHeader(Image& srcImage, unsigned long& raw_needed_size) = 0;
+    virtual bool decodeHeader(Image& srcImage,
+                              unsigned long& rawNeededSize) = 0;
 };
 
 class CodecFactory

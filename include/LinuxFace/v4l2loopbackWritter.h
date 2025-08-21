@@ -21,24 +21,24 @@ class V4L2LoopbackWriter : public Webcam
 {
 
   public:
-    V4L2LoopbackWriter(const std::string& name, const std::string& devicePath, const unsigned int width,
-                       const unsigned int height, const TJSAMP subsample);
+   V4L2LoopbackWriter(const std::string& name, const std::string& devicePath,
+                      unsigned int width, unsigned int height,
+                      TJSAMP subsample);
 
-    ~V4L2LoopbackWriter();
+   ~V4L2LoopbackWriter() override;
 
-    bool setupDevice() override;
-    bool start() override;
-    bool stop() override;
-    bool isRunning() override { return streaming_; }
+   bool setupDevice() override;
+   bool start() override;
+   bool stop() override;
+   bool isRunning() override { return streaming_; }
 
+   bool writeFrame(Image& image);
+   void cleanup();
 
-    bool writeFrame(Image& image);
-    void cleanup();
+   bool reconfigure(TJSAMP subsampling, int quality);
 
-    bool reconfigure(TJSAMP subsampling, int quality);
-
-    TJSAMP getChrominanceSubsampling() const { return chrominance_subsampling_; }
-    int getQuality() const { return quality_; }
+   TJSAMP getChrominanceSubsampling() const { return chrominance_subsampling_; }
+   int getQuality() const { return quality_; }
   private:
     std::vector<Buffer> buffers_;
     bool streaming_;

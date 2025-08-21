@@ -30,9 +30,9 @@ class PaintWebcam
      * This is used to populate the dropdown menu for selecting the webcam.
      * @return True if the modal should continue to display, false otherwise
      */
-    bool paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> temp_webcams);
+    bool paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> tempWebcams);
 
-  private:
+   private:
     void paintPhysicalInput();
     void paintVirtualOutput();
 
@@ -43,7 +43,7 @@ class PaintWebcam
     std::shared_ptr<Webcam> webcam_new_device_;
 
     // State tracking for UI selections per camera
-    std::map<std::string, int> selected_subsampling_;
+    std::map<std::string, int> selected_subsampling_{};
     int selected_quality_value_{100};
 };
 

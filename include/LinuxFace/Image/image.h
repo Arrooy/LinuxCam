@@ -196,8 +196,7 @@ class Image
     [[nodiscard]] bool empty() const noexcept { return !data_ || size_ == 0; }
 
     // Fast pixel access (unsafe but fast for performance-critical code)
-    [[nodiscard]] inline size_t pixelIndex(size_t x, size_t y) const noexcept
-    {
+    [[nodiscard]] size_t pixelIndex(size_t x, size_t y) const noexcept {
         return (y * info.width + x) * info.pixelSizeBytes;
     }
 
@@ -210,10 +209,10 @@ class Image
     // Legacy pixel access methods (for backward compatibility)
     [[nodiscard]] Pixel operator()(size_t x, size_t y) const;
     void ppx(size_t col, size_t row, const Pixel& c);
-    void pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b,
-             const unsigned char a = DefaultAlpha);
-    void pidx(size_t idx, const unsigned char r, const unsigned char g, const unsigned char b,
-              const unsigned char a = DefaultAlpha);
+    void pxy(size_t col, size_t row, unsigned char r, unsigned char g,
+             unsigned char b, unsigned char a = DefaultAlpha);
+    void pidx(size_t idx, unsigned char r, unsigned char g, unsigned char b,
+              unsigned char a = DefaultAlpha);
     [[nodiscard]] size_t index(size_t col, size_t row) const noexcept;
 
     // Helper method to determine if image is RGB/RGBA based on format
@@ -250,15 +249,16 @@ class Image
     Image& pasteAt(const Image& other, long x, long y, bool expandCanvas = false);
 
     // Tensor operations
-    void toTensor(float* outputData, TensorPadding& padding, int new_width, int new_height,
-                  NormalizationType normType) const;
+    void toTensor(float* outputData, TensorPadding& padding, int newWidth,
+                  int newHeight, NormalizationType normType) const;
 
-    void fromTensor(const float* tensorData, std::vector<int64_t> tensorShape, int tensor_width, int tensor_height,
+    void fromTensor(const float* tensorData, std::vector<int64_t> tensorShape,
+                    int tensorWidth, int tensorHeight,
                     const TensorPadding& padding, NormalizationType normType);
 
     // Image operations
     [[nodiscard]] std::unique_ptr<Image> crop(const math_utils::Rect<float>& rect) const;
-    bool saveToDisk(const std::string& dest_path) const;
+    bool saveToDisk(const std::string& destPath) const;
 
     // Image manipulation methods
     void toGrayscale();
@@ -286,12 +286,14 @@ class Image
     // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
     // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
     // If invM is provided, it is used directly; otherwise, the inverse is computed from M
-    std::unique_ptr<Image>
-    affineWarpBilinear(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
+    std::unique_ptr<Image> affineWarpBilinear(
+        const double* m, int outWidth, int outHeight,
+        const double* invM = nullptr) const;
 
     // Affine warp for single-channel mask
-    std::unique_ptr<Image>
-    affineWarpNearestNeighbour(const double* M, int out_width, int out_height, const double* invM = nullptr) const;
+    std::unique_ptr<Image> affineWarpNearestNeighbour(
+        const double* m, int outWidth, int outHeight,
+        const double* invM = nullptr) const;
 
     // Alpha blend src onto this image using mask (mask: 0=background, 255=full src)
     void alphaBlend(const Image& src, const Image& mask);
@@ -323,8 +325,9 @@ class Image
                           unsigned long dstHeight, ScalingAlgorithm algorithm) const;
 
     // Internal helper for affine warp (supports RGB and single-channel mask)
-    std::unique_ptr<Image>
-    affineWarpGeneric(const double* M, int out_width, int out_height, int channels, bool bilinear) const;
+    std::unique_ptr<Image> affineWarpGeneric(const double* m, int outWidth,
+                                             int outHeight, int channels,
+                                             bool bilinear) const;
 
     std::shared_ptr<unsigned char> data_;
     size_t size_{0};

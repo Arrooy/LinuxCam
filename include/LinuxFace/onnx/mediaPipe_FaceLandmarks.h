@@ -10,17 +10,16 @@ namespace linuxface
 class MediaPipeFaceLandmarks : public OnnxDetector
 {
   public:
-    MediaPipeFaceLandmarks(const std::string& onnx_model_path);
-    ~MediaPipeFaceLandmarks() = default;
+   explicit MediaPipeFaceLandmarks(const std::string& onnxModelPath);
+   ~MediaPipeFaceLandmarks() = default;
 
-    // Prepares the input tensor for the model
-    Ort::Value transform(const std::unique_ptr<Image>& image) override;
+   // Prepares the input tensor for the model
+   Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
-    // Runs inference and returns the raw output (score and landmarks)
-    struct Result
-    {
-        float score;
-        std::vector<std::vector<float>> landmarks; // [468][3]
+   // Runs inference and returns the raw output (score and landmarks)
+   struct Result {
+       float score{};
+       std::vector<std::vector<float>> landmarks{};  // [468][3]
     };
     // Detect landmarks from a face image (expects cropped face, 192x192)
     Result detect(const std::unique_ptr<Image>& image);

@@ -13,18 +13,19 @@ namespace linuxface
 class InputWebcam : public Webcam
 {
   public:
-    InputWebcam(const std::string& name, const std::string& devicePath, const unsigned int width,
-                const unsigned int height, const unsigned int bufferCount);
+   InputWebcam(const std::string& name, const std::string& devicePath,
+               unsigned int width, unsigned int height,
+               unsigned int bufferCount);
 
-    ~InputWebcam();
-    bool setupDevice() override;
-    bool start() override;
-    bool stop() override;
-    bool isRunning() override;
+   ~InputWebcam() override;
+   bool setupDevice() override;
+   bool start() override;
+   bool stop() override;
+   bool isRunning() override;
 
-    bool getImage(std::unique_ptr<Image>& outImage);
+   bool getImage(std::unique_ptr<Image>& outImage);
 
-    bool reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex);
+   bool reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex);
 
   private:
     bool startRecording();

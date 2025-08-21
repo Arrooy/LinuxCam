@@ -65,7 +65,10 @@ bool addCameraImpl(std::vector<std::shared_ptr<T>>& container, std::shared_ptr<T
 
     if (it != container.end())
     {
-        common::log_error("CameraManager::addCamera - Camera with device path %s already exists.", devicePath.c_str());
+        common::logError(
+            "CameraManager::addCamera - Camera with device path %s already "
+            "exists.",
+            devicePath.c_str());
         return false; // Already exists
     }
 
@@ -84,7 +87,9 @@ bool removeCameraImpl(std::vector<std::shared_ptr<T>>& container, const std::str
         container.erase(it, container.end());
         return true;
     }
-    common::log_error("CameraManager::removeCamera - Camera with device path %s not found.", devicePath.c_str());
+    common::logError(
+        "CameraManager::removeCamera - Camera with device path %s not found.",
+        devicePath.c_str());
     return false;
 }
 
