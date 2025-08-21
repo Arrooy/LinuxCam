@@ -66,11 +66,12 @@ bool ImageRenderGL::initialize()
 bool ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, 
                                      int windowWidth, int windowHeight)
 {
-    // Check if buffers need recreation (size OR position change)
+    // Check if buffers need recreation (size, position, OR window size change)
     if (entry.vao != 0 && entry.vbo != 0 && entry.ebo != 0 &&
         static_cast<float>(entry.width) == bounds.width &&
         static_cast<float>(entry.height) == bounds.height &&
-        entry.lastX == bounds.x && entry.lastY == bounds.y)
+        entry.lastX == bounds.x && entry.lastY == bounds.y &&
+        entry.lastWindowWidth == windowWidth && entry.lastWindowHeight == windowHeight)
     {
         return true; // Buffers are already set up correctly
     }
@@ -114,8 +115,12 @@ bool ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, const RenderBound
     
     entry.width = static_cast<int>(bounds.width);
     entry.height = static_cast<int>(bounds.height);
-    entry.lastX = bounds.x;  // Track position changes
+    entry.lastX = bounds.x;
     entry.lastY = bounds.y;
+    entry.lastWindowWidth = windowWidth;  
+    entry.lastWindowHeight = windowHeight;
+    // Bump generation since we (re)created buffers
+    entry.bufferGeneration++;
     
     return true;
 }
@@ -318,16 +323,20 @@ void ImageRenderGL::renderLayerNameOverlay(const Layer& layer, const LayerRender
                               static_cast<float>(overlay.cachedImage->info.height));
     
     std::string nameKey = "name_" + std::to_string(layer.id);
-    GLuint nameTexId = getOrCreateTexture(*overlay.cachedImage, 
-                                        static_cast<size_t>(std::hash<std::string>{}(nameKey)), 
-                                        shouldRefreshTexture); // Use saved refresh flag
+    // Use a stable hashed key for both texture creation and cache lookup
+    size_t nameKeyHash = std::hash<std::string>{}(nameKey);
+    GLuint nameTexId = getOrCreateTexture(*overlay.cachedImage,
+                                          nameKeyHash,
+                                          shouldRefreshTexture); // Use saved refresh flag
     
     if (!nameTexId)
     {
         return;
     }
 
-    auto& nameEntry = textureCache_[nameKey];
+    // getOrCreateTexture uses std::to_string(layerId) as the cache key
+    std::string textureCacheKey = std::to_string(nameKeyHash);
+    auto& nameEntry = textureCache_[textureCacheKey];
     if (setupQuadBuffers(nameEntry, overlayBounds, windowWidth, windowHeight))
     {
         executeOpenGLRender(nameEntry, nameTexId);
@@ -581,7 +590,14 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool forc
     glBindTexture(GL_TEXTURE_2D, 0);
 
     textureCache_[key] = TextureCacheEntry{
-        texId, static_cast<int>(image.info.width), static_cast<int>(image.info.height), image.info.layer, 0, 0, 0, -999999.0f, -999999.0f};
+        texId,
+        static_cast<int>(image.info.width),
+        static_cast<int>(image.info.height),
+        image.info.layer,
+        0, 0, 0,
+        0,
+        -999999.0f, -999999.0f,
+        0, 0};
     image.setTextureId(texId);
     return texId;
 }
@@ -605,4 +621,20 @@ void ImageRenderGL::cleanupTextures()
         glDeleteTextures(1, &pair.second.texId);
     }
     textureCache_.clear();
+}
+
+bool ImageRenderGL::getRenderInfoForLayer(size_t layerId, RenderInfo& out) const
+{
+    auto it = textureCache_.find(std::to_string(layerId));
+    if (it == textureCache_.end()) return false;
+    out = RenderInfo{it->second.bufferGeneration, it->second.lastWindowWidth, it->second.lastWindowHeight};
+    return true;
+}
+
+bool ImageRenderGL::getRenderInfoForKey(const std::string& key, RenderInfo& out) const
+{
+    auto it = textureCache_.find(key);
+    if (it == textureCache_.end()) return false;
+    out = RenderInfo{it->second.bufferGeneration, it->second.lastWindowWidth, it->second.lastWindowHeight};
+    return true;
 }

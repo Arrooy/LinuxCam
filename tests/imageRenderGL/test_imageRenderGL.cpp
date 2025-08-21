@@ -500,3 +500,67 @@ TEST_F(ImageRenderGLTest, LayerPositioning)
             << "Failed to render at position (" << pos.first << ", " << pos.second << ")";
     }
 }
+
+// Ensure buffers are refreshed on window resize (to avoid distorted overlays)
+TEST_F(ImageRenderGLTest, BuffersRefreshOnWindowResize)
+{
+    ASSERT_TRUE(renderer->initialize());
+
+    // Prepare an image layer with fixed bounds
+    Layer imageLayer;
+    imageLayer.type = LayerType::Image;
+    imageLayer.name = "resize_test_image";
+    imageLayer.img = testImage;
+    imageLayer.x = 20.0f;
+    imageLayer.y = 30.0f;
+    imageLayer.id = 101;
+    imageLayer.dirty = true;
+    // Enable name overlay to exercise text overlay path as well
+    imageLayer.textOverlay.enabled = true;
+    imageLayer.name = "Layer 101";
+
+    std::vector<Layer> layers = {imageLayer};
+
+    // Initial render at baseline size
+    int w1 = 800, h1 = 600;
+    EXPECT_NO_THROW(renderer->renderLayers(layers, w1, h1));
+
+        // Query public render info instead of touching internals
+        ImageRenderGL::RenderInfo infoBefore{};
+        ASSERT_TRUE(renderer->getRenderInfoForLayer(layers[0].id, infoBefore));
+
+        std::string overlayNameKey = "name_" + std::to_string(layers[0].id);
+        size_t overlayHash = std::hash<std::string>{}(overlayNameKey);
+        std::string overlayCacheKey = std::to_string(overlayHash);
+        ImageRenderGL::RenderInfo overlayInfoBefore{};
+        ASSERT_TRUE(renderer->getRenderInfoForKey(overlayCacheKey, overlayInfoBefore));
+
+        // Render again with the same size: generation should not change
+        EXPECT_NO_THROW(renderer->renderLayers(layers, w1, h1));
+        ImageRenderGL::RenderInfo infoSame{};
+        ASSERT_TRUE(renderer->getRenderInfoForLayer(layers[0].id, infoSame));
+        EXPECT_EQ(infoBefore.bufferGeneration, infoSame.bufferGeneration);
+        EXPECT_EQ(infoSame.lastWindowWidth, w1);
+        EXPECT_EQ(infoSame.lastWindowHeight, h1);
+
+        ImageRenderGL::RenderInfo overlayInfoSame{};
+        ASSERT_TRUE(renderer->getRenderInfoForKey(overlayCacheKey, overlayInfoSame));
+        EXPECT_EQ(overlayInfoBefore.bufferGeneration, overlayInfoSame.bufferGeneration);
+        EXPECT_EQ(overlayInfoSame.lastWindowWidth, w1);
+        EXPECT_EQ(overlayInfoSame.lastWindowHeight, h1);
+
+        // Now resize the window; bounds and image are unchanged, but buffers must refresh
+        int w2 = 1024, h2 = 768;
+        EXPECT_NO_THROW(renderer->renderLayers(layers, w2, h2));
+        ImageRenderGL::RenderInfo infoAfter{};
+        ASSERT_TRUE(renderer->getRenderInfoForLayer(layers[0].id, infoAfter));
+        EXPECT_GT(infoAfter.bufferGeneration, infoBefore.bufferGeneration);
+        EXPECT_EQ(infoAfter.lastWindowWidth, w2);
+        EXPECT_EQ(infoAfter.lastWindowHeight, h2);
+
+        ImageRenderGL::RenderInfo overlayInfoAfter{};
+        ASSERT_TRUE(renderer->getRenderInfoForKey(overlayCacheKey, overlayInfoAfter));
+        EXPECT_GT(overlayInfoAfter.bufferGeneration, overlayInfoBefore.bufferGeneration);
+        EXPECT_EQ(overlayInfoAfter.lastWindowWidth, w2);
+        EXPECT_EQ(overlayInfoAfter.lastWindowHeight, h2);
+}

@@ -24,9 +24,14 @@ struct TextureCacheEntry
     GLuint vao = 0;
     GLuint vbo = 0;
     GLuint ebo = 0;
+  // Incremented whenever VAO/VBO/EBO are (re)created
+  uint32_t bufferGeneration = 0;
     // Add position tracking for text overlays
     float lastX = -999999.0f;  // Use impossible values to force initial setup
     float lastY = -999999.0f;
+    // Track window dimensions used for NDC calculations
+    int lastWindowWidth = 0;
+    int lastWindowHeight = 0;
 };
 
 class ImageRenderGL
@@ -43,6 +48,15 @@ class ImageRenderGL
 
     // Render a list of layers (images and text)
     void renderLayers(const std::vector<Layer>& layers, int windowWidth, int windowHeight);
+
+  // Read-only inspection API for tests and diagnostics
+  struct RenderInfo {
+    uint32_t bufferGeneration;
+    int lastWindowWidth;
+    int lastWindowHeight;
+  };
+  bool getRenderInfoForLayer(size_t layerId, RenderInfo& out) const;
+  bool getRenderInfoForKey(const std::string& key, RenderInfo& out) const;
 
   private:
     // Simplified rendering structures
