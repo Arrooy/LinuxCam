@@ -36,8 +36,6 @@ endfunction()
 # Global coverage setup for Debug builds when explicitly enabled
 if(ENABLE_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Code coverage enabled for Debug build")
-    add_compile_options(--coverage -fprofile-arcs -ftest-coverage -O0 -g)
-    add_link_options(--coverage)
     
     # Find gcov
     find_program(GCOV_PATH gcov)
@@ -234,6 +232,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
+# Disable coverage for external yaml-cpp library
+if(ENABLE_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set_target_properties(yaml-cpp PROPERTIES
+        COMPILE_FLAGS ""
+        LINK_FLAGS ""
+    )
+    target_compile_options(yaml-cpp PRIVATE -O2)  # Override the debug flags
+endif()
+
 include(FetchContent)
 
 # Fetch gifdec from GitHub
@@ -253,6 +260,11 @@ if(NOT gifdec_POPULATED)
 
     # Make headers available to users of gifdec
     target_include_directories(gifdec PUBLIC ${gifdec_SOURCE_DIR})
+    
+    # Disable coverage for external gifdec library
+    if(ENABLE_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(gifdec PRIVATE -O2)  # Override debug/coverage flags
+    endif()
 endif()
 
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
@@ -301,6 +313,9 @@ target_include_directories(LinuxFace PRIVATE
     "${LIBJPEG_TURBO_INSTALL_DIR}/include"
 )
 target_link_libraries(LinuxFace PRIVATE linuxface)
+
+# Enable coverage for the main executable too
+enable_coverage(LinuxFace)
 
 # Ensure include directory is set *after* it exists
 add_dependencies(LinuxFace libjpeg_include_dir)

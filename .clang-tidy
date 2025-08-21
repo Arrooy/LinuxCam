@@ -1,4 +1,5 @@
 FormatStyle: '{BasedOnStyle: google, IndentWidth: 4}'
+HeaderFilterRegex: '^.*/LinuxCam/(src|include)/.*'
 
 Checks: >
   -*,
@@ -31,7 +32,9 @@ Checks: >
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-avoid-c-arrays,
   -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
   modernize-use-override,
+  -cppcoreguidelines-pro-type-vararg,
   cppcoreguidelines-pro-type-const-cast,
   misc-unused-parameters
 
@@ -47,13 +50,13 @@ CheckOptions:
   - key:             readability-identifier-naming.EnumConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.FunctionCase
-    value:           camelCase
+    value:           camelBack
   - key:             readability-identifier-naming.GlobalConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.StaticConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.StaticVariableCase
-    value:           camelCase
+    value:           camelBack
   - key:             readability-identifier-naming.MacroDefinitionCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.MacroDefinitionIgnoredRegexp
@@ -67,14 +70,14 @@ CheckOptions:
   - key:             readability-identifier-naming.NamespaceCase
     value:           lower_case
   - key:             readability-identifier-naming.ParameterCase
-    value:           camelCase
+    value:           camelBack
   - key:             readability-identifier-naming.TypeAliasCase
     value:           CamelCase
   - key:             readability-identifier-naming.TypedefCase
     value:           CamelCase
   - key:             readability-identifier-naming.VariableCase
-    value:           camelCase
+    value:           camelBack
   - key:             readability-identifier-naming.IgnoreMainLikeFunctions
     value:           1
   - key:             IncludeStyle
-    value:           Google
+    value:           google
