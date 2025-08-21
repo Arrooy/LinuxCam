@@ -1,7 +1,7 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
-#include <math.h>
+#include <cmath>
 #include <memory>
 #include <mutex>
 #include <onnxruntime_cxx_api.h>
@@ -14,7 +14,7 @@
 namespace linuxface
 {
 
-enum class ImageFormat
+enum class ImageFormat : std::uint8_t
 {
     UNKNOWN,
     JPEG,
@@ -32,7 +32,7 @@ enum class ImageFormat
     PPM, // Portable Pixmap
 };
 
-enum class ImageLayout
+enum class ImageLayout : std::uint8_t
 {
     HWC, // Height-Width-Channel
     CHW  // Channel-Height-Width
@@ -67,7 +67,7 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
     }
 }
 
-constexpr unsigned char DEFAULT_ALPHA = 255;
+constexpr unsigned char DefaultAlpha = 255;
 
 struct Pixel
 {
@@ -76,8 +76,8 @@ struct Pixel
     unsigned char b;
     unsigned char a;
 
-    Pixel(unsigned char r_, unsigned char g_, unsigned char b_, unsigned char a_ = DEFAULT_ALPHA)
-        : r(r_), g(g_), b(b_), a(a_)
+    Pixel(unsigned char r, unsigned char g, unsigned char b, unsigned char a = DefaultAlpha)
+        : r(r), g(g), b(b), a(a)
     {
     }
     Pixel() = default;
@@ -104,21 +104,21 @@ struct ImageMetadata
     TJPF TJPixelFormat{};                 // TJPF_RGB
     ImageFormat format{ImageFormat::RGB}; // Default to RGB
     bool is_valid{false};
-    std::string filename{};
+    std::string filename;
     unsigned int textureId{0};
     int layer{0}; // Layer for rendering, default is 0
     ImageMetadata() = default;
 };
 
 
-enum class NormalizationType
+enum class NormalizationType : std::uint8_t
 {
     NONE,
     MINMAX,
     ZERO_CENTER
 };
 
-enum class ScalingAlgorithm
+enum class ScalingAlgorithm : std::uint8_t
 {
     //              Quality Speed Anti-aliasing / Downscale Sharpness Consistency / Artifact-free Overall Score
     LANCZOS,        // 9	3	9	8	7.25
@@ -130,7 +130,7 @@ enum class ScalingAlgorithm
 
 
 // Separate pixel operations for better performance
-namespace PixelOperations
+namespace pixel_operations
 {
 // Fast pixel access without bounds checking for performance-critical loops
 inline void setPixelRGB(unsigned char* data, size_t idx, unsigned char r, unsigned char g, unsigned char b) noexcept
@@ -152,7 +152,7 @@ inline void setPixelRGBA(unsigned char* data, size_t idx, unsigned char r, unsig
 // Alpha blending optimized for different pixel formats
 void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize, unsigned char srcAlpha,
                  unsigned char dstPixelSize, unsigned char dstAlpha = 255) noexcept;
-} // namespace PixelOperations
+} // namespace pixel_operations
 
 // Image class with proper resource management
 class Image
@@ -205,15 +205,15 @@ class Image
     [[nodiscard]] Pixel getPixel(size_t x, size_t y) const;
     void setPixel(size_t x, size_t y, const Pixel& pixel);
     void
-    setPixel(size_t x, size_t y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = DEFAULT_ALPHA);
+    setPixel(size_t x, size_t y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = DefaultAlpha);
 
     // Legacy pixel access methods (for backward compatibility)
     [[nodiscard]] Pixel operator()(size_t x, size_t y) const;
     void ppx(size_t col, size_t row, const Pixel& c);
     void pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b,
-             const unsigned char a = DEFAULT_ALPHA);
+             const unsigned char a = DefaultAlpha);
     void pidx(size_t idx, const unsigned char r, const unsigned char g, const unsigned char b,
-              const unsigned char a = DEFAULT_ALPHA);
+              const unsigned char a = DefaultAlpha);
     [[nodiscard]] size_t index(size_t col, size_t row) const noexcept;
 
     // Helper method to determine if image is RGB/RGBA based on format

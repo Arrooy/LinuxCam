@@ -4,7 +4,7 @@
 namespace linuxface
 {
 
-Gif::Gif(const std::string& filename) : filename_(filename), gif_(gd_open_gif(filename.c_str()))
+Gif::Gif(const std::string& filename) : gif_(gd_open_gif(filename.c_str())), filename_(filename)
 {
 }
 

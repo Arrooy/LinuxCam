@@ -14,7 +14,7 @@ using namespace linuxface;
 using namespace linuxface::pixel_conversion;
 
 // Optimized pixel operations using centralized conversion logic
-namespace linuxface::PixelOperations
+namespace linuxface::pixel_operations
 {
 void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize, unsigned char srcAlpha,
                  unsigned char dstPixelSize, unsigned char dstAlpha) noexcept
@@ -47,7 +47,7 @@ void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char src
     // Use unified conversion for all other cases
     convertPixel(src, dst, convType, srcAlpha, false);
 }
-} // namespace linuxface::PixelOperations
+} // namespace linuxface::pixel_operations
 
 // Constructors with improved memory management
 Image::Image(size_t size) : size_(size)
@@ -192,7 +192,7 @@ Pixel Image::operator()(size_t col, size_t row) const
     if (idx >= size_ || !data_)
     {
         common::log_error("Image::operator(): index out of bounds [col,row] %zu, %zu Index: %zu", col, row, idx);
-        return Pixel(0, 0, 0, DEFAULT_ALPHA);
+        return Pixel(0, 0, 0, DefaultAlpha);
     }
 
     // TODO: Byte order depends on pixelFormat. Forced to RGBA for now
@@ -203,7 +203,7 @@ Pixel Image::operator()(size_t col, size_t row) const
     }
     else
     {
-        return Pixel(data[idx], data[idx + 1], data[idx + 2], DEFAULT_ALPHA);
+        return Pixel(data[idx], data[idx + 1], data[idx + 2], DefaultAlpha);
     }
 }
 
@@ -229,11 +229,11 @@ void Image::pidx(size_t idx, const unsigned char r, const unsigned char g, const
     // Use PixelOperations for consistency
     if (info.pixelSizeBytes == 4)
     {
-        PixelOperations::setPixelRGBA(data_.get(), idx, r, g, b, a);
+        pixel_operations::setPixelRGBA(data_.get(), idx, r, g, b, a);
     }
     else
     {
-        PixelOperations::setPixelRGB(data_.get(), idx, r, g, b);
+        pixel_operations::setPixelRGB(data_.get(), idx, r, g, b);
     }
 }
 
@@ -1178,7 +1178,7 @@ void Image::toGrayscale()
             data_.get()[idx + 2] = gray;
             if (info.pixelSizeBytes == 4)
             {
-                data_.get()[idx + 3] = DEFAULT_ALPHA;
+                data_.get()[idx + 3] = DefaultAlpha;
             }
         }
     }
@@ -1792,6 +1792,6 @@ void Image::alphaBlend(const Image& src, const Image& mask)
     for (int i = 0; i < npixels; ++i)
     {
         // Blend each pixel using the mask
-        PixelOperations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i], 3, 255);
+        pixel_operations::blendPixels(dst_data + i * 3, src_data + i * 3, 3, mask_data[i], 3, 255);
     }
 }
