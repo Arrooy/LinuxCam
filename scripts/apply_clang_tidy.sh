@@ -43,7 +43,21 @@ if [[ $# -eq 1 && "$1" != "--help" && "$1" != "-h" ]]; then
     fi
     echo "Single file mode: Processing $TARGET_FILE"
     process_file "$TARGET_FILE" "false"
-    echo "Single file processing completed!"
+    
+    # Check compilation after single file change
+    echo "Checking compilation after processing $TARGET_FILE..."
+    cd build || exit 1
+    if make -j1 >/dev/null 2>&1; then
+        echo "✓ Compilation successful after processing $TARGET_FILE"
+        cd .. || exit 1
+    else
+        echo "✗ Compilation failed after processing $TARGET_FILE"
+        echo "You may need to process related files or fix issues manually"
+        cd .. || exit 1
+        exit 1
+    fi
+    
+    echo "Single file processing completed successfully!"
     exit 0
 elif [[ $# -eq 2 && "$1" == "--check" ]]; then
     # Check mode for single file
