@@ -4,6 +4,7 @@
  */
 // TODO: This is not fully finished. Probably the conversion is wrong for some landmarks.
 #include "LinuxFace/landmark_converter.h"
+#include "LinuxFace/common.h"
 
 #include <algorithm>
 #include <cmath>

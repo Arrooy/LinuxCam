@@ -44,10 +44,11 @@ void CameraManager::shutdown()
 
 bool CameraManager::updateInput()
 {
+    // If no LayerManager is attached, there's nothing to update but this should not be an error
     if (!layerManager_)
     {
-        common::log_error("CameraManager::updateInput - LayerManager not set");
-        return false;
+        common::log_warn("CameraManager::updateInput - LayerManager not set; nothing to do");
+        return true;
     }
 
     for (auto& input : inWebcam_)

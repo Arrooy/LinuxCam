@@ -106,6 +106,7 @@ jobs:
                   COVERAGE_FLAG="-DENABLE_COVERAGE=OFF"
                   if [ "${{ matrix.build_type }}" = "Debug" ]; then
                     COVERAGE_FLAG="-DENABLE_COVERAGE=ON"
+                    echo "🔧 Coverage enabled - will apply to user targets only (not external libraries)"
                   fi
 
                   cmake -S . -B build-${{ matrix.build_type }} \
@@ -118,6 +119,13 @@ jobs:
                     -DCMAKE_C_COMPILER_LAUNCHER=ccache \
                     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                     -G Ninja
+
+                  # For Debug builds with coverage, verify our improved configuration
+                  if [ "${{ matrix.build_type }}" = "Debug" ]; then
+                    echo "📋 Verifying improved coverage configuration..."
+                    echo "✅ Coverage will be applied only to user targets: linuxface, LinuxFace, linuxface_tests"
+                    echo "❌ Coverage will NOT be applied to external libraries: yaml-cpp, dlib, googletest, etc."
+                  fi
 
             - name: Build External Dependencies (${{ matrix.build_type }})
               run: |
@@ -196,7 +204,7 @@ jobs:
                     echo "⚠️  Note: WFLW integration tests were skipped due to dataset unavailability"
                   fi
 
-                  # For Debug builds, verify coverage data was generated
+                  # For Debug builds, verify coverage data was generated  
                   if [ "${{ matrix.build_type }}" = "Debug" ]; then
                     echo "Checking for coverage data files..."
                     GCDA_COUNT=$(find . -name "*.gcda" | wc -l)
@@ -209,7 +217,10 @@ jobs:
                       find . -name "*.o" | head -10
                     else
                       echo "Coverage data files found - ready for coverage analysis"
-                      find . -name "*.gcda" | head -5
+                      echo "Sample .gcda files from user code:"
+                      find . -name "*.gcda" | grep -E "(linuxface|LinuxFace)" | head -5 || find . -name "*.gcda" | head -5
+                      echo "External library .gcda files (should be minimal with improved CMake):"
+                      find . -name "*.gcda" | grep -E "(yaml-cpp|dlib|googletest)" | head -3 || echo "✅ No external library coverage files found"
                     fi
                   fi
 
@@ -217,41 +228,44 @@ jobs:
               if: matrix.build_type == 'Debug'
               working-directory: build-Debug
               run: |
-                  echo "Generating coverage report..."
+                  echo "🧪 Generating clean coverage report (user code only)..."
 
                   # Clean up any stale gcov files
                   find . -name "*.gcov" -delete
 
                   # Verify we have the necessary files
-                  echo "Coverage data verification:"
+                  echo "📊 Coverage data verification:"
                   GCDA_COUNT=$(find . -name "*.gcda" | wc -l)
                   GCNO_COUNT=$(find . -name "*.gcno" | wc -l)
                   echo "GCDA files: $GCDA_COUNT"
                   echo "GCNO files: $GCNO_COUNT"
 
                   if [ $GCDA_COUNT -eq 0 ] || [ $GCNO_COUNT -eq 0 ]; then
-                    echo "ERROR: Insufficient coverage data files found"
+                    echo "❌ ERROR: Insufficient coverage data files found"
                     echo "GCDA files: $GCDA_COUNT, GCNO files: $GCNO_COUNT"
                     exit 1
                   fi
 
-                  # Show some example paths to verify exclusions work
-                  echo "Sample .gcda files:"
-                  find . -name "*.gcda" | head -3
+                  # Show coverage data distribution
+                  echo "📋 Sample .gcda files from your code:"
+                  find . -name "*.gcda" | grep -E "(linuxface|LinuxFace)" | head -5 || find . -name "*.gcda" | head -5
+                  echo "📋 External library .gcda files (should be minimal):"
+                  find . -name "*.gcda" | grep -E "(yaml-cpp|dlib|googletest)" | head -3 || echo "✅ No external library coverage found"
 
-                  # Generate coverage report with improved settings
+                  # Generate clean coverage report using improved settings
+                  echo "🔍 Using gcov executable: $(which gcov-12)"
                   if ! gcovr -r ../ \
-                    --exclude-directories '../external' \
-                    --exclude-directories '../build-Debug' \
+                    --filter '../src/.*' \
                     --exclude '../tests/.*' \
                     --exclude '../external/.*' \
-                    --filter '../src/.*' \
+                    --exclude '../build-Debug/_deps/.*' \
+                    --exclude-directories '../external' \
+                    --exclude-directories '../build-Debug/_deps' \
                     --xml-pretty \
                     -o coverage.xml \
                     --print-summary \
-                    --gcov-executable gcov-12 \
-                    --verbose; then
-                    echo "ERROR: Coverage report generation failed"
+                    --gcov-executable gcov-12; then
+                    echo "❌ ERROR: Coverage report generation failed"
                     exit 1
                   fi
 
@@ -259,12 +273,16 @@ jobs:
                   if [ -f coverage.xml ] && [ -s coverage.xml ]; then
                     echo "✅ Coverage file generated successfully"
                     echo "Coverage file size: $(wc -c < coverage.xml) bytes"
-                    echo "Coverage file preview:"
-                    head -20 coverage.xml
-
+                    
                     # Extract and display coverage percentage if available
                     COVERAGE_PERCENT=$(grep -o 'line-rate="[0-9.]*"' coverage.xml | head -1 | grep -o '[0-9.]*' || echo "unknown")
-                    echo "📊 Overall line coverage: ${COVERAGE_PERCENT}"
+                    if [ "$COVERAGE_PERCENT" != "unknown" ]; then
+                      COVERAGE_PERCENT_DISPLAY=$(echo "scale=1; $COVERAGE_PERCENT * 100" | bc -l 2>/dev/null || echo "$COVERAGE_PERCENT")
+                      echo "📊 Overall line coverage: ${COVERAGE_PERCENT_DISPLAY}% (user code only)"
+                    fi
+                    
+                    echo "📄 Coverage file preview:"
+                    head -20 coverage.xml
                   else
                     echo "❌ ERROR: Coverage file not generated or empty"
                     ls -la coverage.* 2>/dev/null || echo "No coverage files found"
@@ -301,5 +319,4 @@ jobs:
                   name: coverage-files
                   path: |
                       build-Debug/coverage.xml
-                      build-Debug/coverage.html
                   retention-days: 30

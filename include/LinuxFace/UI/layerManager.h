@@ -111,9 +111,15 @@ struct Layer
         {
             return gif->frames()[0]->info.filename;
         }
-        if (type == LayerType::TEXT)
+        if (type == LayerType::Gif && gif && gif->frames().empty())
         {
-            return textContent.empty() ? ("Text Layer " + std::to_string(id)) : textContent;
+            // If GIF failed to decode frames, fall back to the original filename stored in the Gif wrapper
+            return gif->getFilename();
+        }
+        if (type == LayerType::Text)
+        {
+            // When text content is empty, return a simple default name used by tests/UI
+            return textContent.empty() ? std::string("Text Layer") : textContent;
         }
         return "Unknown Layer " + std::to_string(id);
     }
