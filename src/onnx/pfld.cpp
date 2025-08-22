@@ -151,14 +151,17 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     face.loadNewFaceLandmarks({});
 
     double scale = 112.0 / box_size;
-    std::vector<math_utils::Point<>> aligned_pts(num_landmarks);
+    // Preserve floating-point precision for landmark coordinates
+    std::vector<math_utils::Point<double>> aligned_pts(num_landmarks);
     for (unsigned int i = 0; i < num_landmarks; ++i)
     {
         double x = data[2 * i] * 112.0;
         double y = data[2 * i + 1] * 112.0;
         auto pt = alignedToOriginalCoords(x, y, crop_left, crop_top, minX, minY, angleRad, eye_center, scale);
-        aligned_pts[i] = {static_cast<long>(pt.x), static_cast<long>(pt.y)};
+        aligned_pts[i] = {pt.x, pt.y};
     }
+
+
 
     std::vector<FaceLandmark> pfld_landmarks;
     pfld_landmarks.reserve(num_landmarks);

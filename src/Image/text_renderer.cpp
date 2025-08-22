@@ -550,7 +550,14 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
     image->info.width = canvasWidth;
     image->info.height = canvasHeight;
     image->info.format = ImageFormat::RGBA;
-    image->info.filename = "text_" + config.text.substr(0, std::min(config.text.length(), size_t(20)));
+    // Tests expect filename in the form "text_layer_<text>" for easier identification.
+    std::string safeText = config.text;
+    if (safeText.empty()) {
+        safeText = "layer";
+    }
+    // Keep spaces as-is so tests that expect the original text in the filename pass
+    if (safeText.length() > 30) safeText = safeText.substr(0, 30);
+    image->info.filename = std::string("text_layer_") + safeText;
 
     return image;
 }

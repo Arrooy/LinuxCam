@@ -1,6 +1,7 @@
 #include "LinuxFace/face.h"
 
 #include <utility>
+#include <cmath>
 
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/math_utils.h"
@@ -332,9 +333,12 @@ std::vector<linuxface::math_utils::Point<>> Face::getFivePointLandmarksArcFaceOr
     std::vector<math_utils::Point<>> result;
     auto pts3d = getFivePointLandmarksArcFaceOrder();
     result.reserve(pts3d.size());
+    
     for (const auto& pt : pts3d)
     {
-        result.emplace_back(static_cast<long>(pt.x), static_cast<long>(pt.y));
+        long rx = static_cast<long>(std::lround(pt.x));
+        long ry = static_cast<long>(std::lround(pt.y));
+        result.emplace_back(rx, ry);
     }
     return result;
 }
