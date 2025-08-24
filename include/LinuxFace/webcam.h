@@ -12,7 +12,12 @@
 namespace linuxface
 {
 
-enum class WebcamType { UNKNOWN, PHYSICAL_INPUT, VIRTUAL_OUTPUT };
+enum class WebcamType
+{
+    UNKNOWN,
+    PHYSICAL_INPUT,
+    VIRTUAL_OUTPUT
+};
 
 struct Buffer
 {
@@ -26,12 +31,13 @@ struct FrameSize
     unsigned int height{};
     unsigned int selectedFPS{0u};
     std::vector<unsigned int> fps{0u};
-    static unsigned int getFps(size_t index) {
+    unsigned int getFps(size_t index) const
+    {
         if (index < fps.size())
         {
             return fps[index];
         }
-        return 0u; // Return 0 if index is out of bounds
+        return 0u;
     }
 
     void print() const
@@ -58,13 +64,12 @@ struct Format
     ImageFormat format{ImageFormat::UNKNOWN};
     unsigned int pixelformat{};
     unsigned int selectedFrameSize{0u};
-    std::vector<FrameSize> sizes;
+    std::vector<FrameSize> sizes{};
 
     void print() const
     {
         common::logInfo("\tFormat description %s", description.c_str());
-        common::logInfo("\tFormat enum: %s",
-                        fromImageFormatToString(format).c_str());
+        common::logInfo("\tFormat enum: %s", fromImageFormatToString(format).c_str());
         common::logInfo("\tPixel format raw: %d", pixelformat);
         common::logInfo("\tSelected frame size index: %d", selectedFrameSize);
 
@@ -74,9 +79,8 @@ struct Format
             size.print();
         }
         const auto& selSize = sizes[selectedFrameSize];
-        common::logInfo("\tSelected frame size value: %dx%d with %dFPS",
-                        selSize.width, selSize.height,
-                        FrameSize::getFps(selSize.selectedFPS));
+        common::logInfo("\tSelected frame size value: %dx%d with %dFPS", selSize.width, selSize.height,
+                        selSize.getFps(selSize.selectedFPS));
     }
 };
 
@@ -103,31 +107,32 @@ struct CameraCapabilities
 class Webcam
 {
   public:
-   Webcam(const std::string& name, const std::string& devicePath,
-          WebcamType type, unsigned int width, unsigned int height);
-   virtual ~Webcam() = default;
-   // Webcam(const Webcam&) = delete;
-   // Webcam& operator=(Webcam&&) = delete;
-   // Webcam& operator=(const Webcam&) = delete;
-   // Webcam(Webcam&&) = delete;
+    Webcam(std::string name, std::string devicePath, WebcamType type, unsigned int width, unsigned int height);
+    virtual ~Webcam() = default;
+    // Webcam(const Webcam&) = delete;
+    // Webcam& operator=(Webcam&&) = delete;
+    // Webcam& operator=(const Webcam&) = delete;
+    // Webcam(Webcam&&) = delete;
 
-   virtual bool setupDevice() = 0;
-   virtual bool start() = 0;
-   virtual bool stop() = 0;
-   virtual bool isRunning() = 0;
+    virtual bool setupDevice() = 0;
+    virtual bool start() = 0;
+    virtual bool stop() = 0;
+    virtual bool isRunning() = 0;
 
-   std::string getDevicePath() const { return device_path_; }
-   WebcamType getType() const { return type_; }
+    std::string getDevicePath() const { return device_path_; }
+    WebcamType getType() const { return type_; }
 
-   std::string getName() const { return name_; }
-   CameraCapabilities getCapabilities() const { return capabilities_; }
+    std::string getName() const { return name_; }
+    CameraCapabilities getCapabilities() const { return capabilities_; }
 
-   static Format getSelectedFormat() {
-       if (selectedFormat_) {
-           return *selectedFormat_;
-       }
-       return Format{};
-   }
+    Format getSelectedFormat() const
+    {
+        if (selectedFormat_)
+        {
+            return *selectedFormat_;
+        }
+        return Format{};
+    }
     unsigned int getDesiredWidth() const
     {
         return selectedFormat_ ? selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width : 0;
@@ -142,17 +147,16 @@ class Webcam
 
   protected:
     bool open();
-    bool configureDeviceFormat();
+    bool configureDeviceFormat() const;
     bool updateDeviceCapabilities();
 
-    bool requeueFrame(struct v4l2_buffer& buf);
+    bool requeueFrame(struct v4l2_buffer& buf) const;
     bool queueAllBuffersAgain(int numBuffers, int bufferType);
-
 
     void selectBestFormat();
     std::tuple<unsigned int, unsigned int, double> findBestFrameSize(const Format& fmt) const;
-    double
-    calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2) const;
+    static double
+    calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2);
 
     std::string name_;
     std::string device_path_;
@@ -161,7 +165,7 @@ class Webcam
     WebcamType type_{WebcamType::UNKNOWN};
 
     CameraCapabilities capabilities_;
-    std::unique_ptr<Format> selectedFormat_;
+    std::unique_ptr<Format> selectedFormat_{};
 
     bool currentlySelected_{false}; // True if the user has selected this webcam in the UI
 };

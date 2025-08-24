@@ -70,13 +70,13 @@ class ImageLoader
   private:
     bool loadFileData(const std::string& filePath);
     bool extractMetadata();
-    bool createDecoder();
+    bool createDecoder() const;
 
     LoadStrategy strategy_;
     ImageMetadata metadata_;
-    std::vector<unsigned char> raw_data_;
-    std::unique_ptr<Decoder> decoder_;
-    std::unique_ptr<Image> decoded_image_;
+    std::vector<unsigned char> raw_data_{};
+    std::unique_ptr<Decoder> decoder_{};
+    std::unique_ptr<Image> decoded_image_{};
     bool is_decoded_{false};
 };
 

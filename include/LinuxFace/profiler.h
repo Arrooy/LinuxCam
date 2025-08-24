@@ -52,8 +52,8 @@ class Profiler
 
     static std::string makeKey(const std::string& sourceName, const std::string& name);
 
-    std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> timers_;
-    std::unordered_map<std::string, std::chrono::microseconds> durations_;
+    std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> timers_{};
+    std::unordered_map<std::string, std::chrono::microseconds> durations_{};
     mutable std::mutex mutex_;
 };
 
@@ -112,7 +112,7 @@ inline std::string Profiler::formatDuration(std::chrono::high_resolution_clock::
                                             std::chrono::high_resolution_clock::time_point end) noexcept
 {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    return Profiler::format_duration(duration);
+    return Profiler::formatDuration(duration);
 }
 
 inline std::string Profiler::formatDuration(std::chrono::microseconds duration) noexcept

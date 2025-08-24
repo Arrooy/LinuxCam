@@ -56,8 +56,8 @@ class ImageRenderGL
         int lastWindowWidth;
         int lastWindowHeight;
     };
-    bool getRenderInfoForLayer(size_t layerId, RenderInfo& out) const;
-    bool getRenderInfoForKey(const std::string& key, RenderInfo& out) const;
+    bool getRenderInfoForLayer(size_t layerId, RenderInfo& out);
+    bool getRenderInfoForKey(const std::string& key, RenderInfo& out);
 
   private:
     // Simplified rendering structures
@@ -77,33 +77,34 @@ class ImageRenderGL
     };
 
     // Core rendering pipeline
-    bool initializeRenderingContext(int windowWidth, int windowHeight);
+    bool initializeRenderingContext(int windowWidth, int windowHeight) const;
     bool prepareLayerForRendering(const Layer& layer, LayerRenderInfo& renderInfo);
-    Image* getRenderableImage(const Layer& layer);
+    static Image* getRenderableImage(const Layer& layer);
 
     // Layer rendering (unified interface with consistent parameters)
     bool renderLayer(const Layer& layer, const LayerRenderInfo& renderInfo, int windowWidth, int windowHeight);
     void
     renderLayerNameOverlay(const Layer& layer, const LayerRenderInfo& renderInfo, int windowWidth, int windowHeight);
-    void renderSelectionIndicator(const Layer& layer, const LayerRenderInfo& renderInfo);
-    void finalizeRenderingContext();
+    static void renderSelectionIndicator(const Layer& layer, const LayerRenderInfo& renderInfo);
+    static void finalizeRenderingContext();
 
     // Internal OpenGL helpers (unified interface)
-    GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
-    bool setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, int windowWidth, int windowHeight);
-    bool executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId);
+    static GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
+    static bool
+    setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, int windowWidth, int windowHeight);
+    bool executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId) const;
     void cleanupTextures();
 
     // Shader management
     bool createShaders();
-    GLuint compileShader(const char* source, GLenum type);
+    static GLuint compileShader(const char* source, GLenum type);
     GLuint createShaderProgram(const char* vertexSource, const char* fragmentSource);
 
-    GLuint vao_, vbo_, ebo_;
-    GLuint shaderProgram_;
+    GLuint vao_{0}, vbo_{0}, ebo_{0};
+    GLuint shaderProgram_{0};
 
     // Texture cache: maps layer id (as string) to OpenGL texture ID and VAO/VBO/EBO
-    std::unordered_map<std::string, TextureCacheEntry> textureCache_;
+    std::unordered_map<std::string, TextureCacheEntry> textureCache_{};
 };
 
 } // namespace linuxface

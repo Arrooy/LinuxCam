@@ -7,7 +7,7 @@
 #include <functional>
 #include <string>
 
-class window
+class Window
 {
   public:
     Window();
@@ -46,11 +46,11 @@ class window
     void onFramebufferResize(int width, int height);
 
     // Set a callback to be called on framebuffer resize
-    void setResizeCallback(std::function<void(int, int)> cb);
+    void setResizeCallback(const std::function<void(int, int)>& cb);
 
   private:
-    GLFWwindow* window_;
-    const char* glslVersion_;
+    GLFWwindow* window_{nullptr};
+    const char* glslVersion_{"#version 400"};
     std::function<void(int, int)> resizeCallback_;
 
     // For resize throttling/debouncing

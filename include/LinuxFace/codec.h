@@ -38,7 +38,7 @@ class JPEGDecoder : public Decoder
     {
         if (d_handle_ != nullptr)
         {
-            int tjStat = 0 = tjDestroy(d_handle_);
+            const int tjStat = tjDestroy(d_handle_);
 
             if (tjStat != 0)
             {
@@ -51,8 +51,8 @@ class JPEGDecoder : public Decoder
 
     bool decode(const Image& srcImage, Image& outImage) override
     {
-        int tjStat = 0 = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), outImage.data(), 0, 0, 0,
-                                       srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
+        const int tjStat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), outImage.data(), 0, 0, 0,
+                                         srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
 
         if (tjStat != 0)
         {
@@ -84,23 +84,19 @@ class JPEGDecoder : public Decoder
     }
 
   private:
-    static bool getJPEGHeaderInfo(Image& image)
+    bool getJPEGHeaderInfo(Image& image)
     {
-        const int sampleFormat = 0;
-        {
-            TJSAMP_444;
-        };
-        const int colorSpace{-1};
-        const int width{-1};
-        const int height{-1};
+        int sampleFormat = 0;
+        int colorSpace = -1;
+        int width = -1;
+        int height = -1;
 
-        int tjStat = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = tjDecompressHeader3(
-            d_handle_, image.data(), image.size(), &width, &height, &v4l2_vbi_format::sample_format, &colorSpace);
+        int tjStat =
+            tjDecompressHeader3(d_handle_, image.data(), image.size(), &width, &height, &sampleFormat, &colorSpace);
 
         if (tjStat != 0 || sampleFormat == -1 || colorSpace == -1)
         {
-            common::errnoLog("JPEGDecoder::getJPEGHeaderInfo - Failed to decompress image "
-                             "header");
+            common::errnoLog("JPEGDecoder::getJPEGHeaderInfo - Failed to decompress image header");
             common::logError("JPEGDecoder::getJPEGHeaderInfo - stat %d cs %d sf%d", tjStat, colorSpace, sampleFormat);
             common::errnoLog((const char*) tjGetErrorStr2(d_handle_));
             return false;
@@ -114,10 +110,10 @@ class JPEGDecoder : public Decoder
         return true;
     }
 
-    static unsigned long rawSizeInBytes(const Image& image)
+    unsigned long rawSizeInBytes(const Image& image)
     {
         // Compute image size from image info and pixel data.
-        int pixelSizeBytes = 0 = tjPixelSize[static_cast<int>(image.info.TJPixelFormat)];
+        const int pixelSizeBytes = tjPixelSize[static_cast<int>(image.info.TJPixelFormat)];
         return image.info.width * image.info.height * pixelSizeBytes;
     }
     // Decompress handler
@@ -170,7 +166,7 @@ class JPEGEncoder : public Encoder
         if (c_handle_ != nullptr)
         {
             // Deallocate data buffer
-            int tjStat = 0 = tjDestroy(c_handle_);
+            const int tjStat = tjDestroy(c_handle_);
 
             if (tjStat != 0)
             {
@@ -193,9 +189,8 @@ class JPEGEncoder : public Encoder
         // Validate that the source image matches our configured parameters
         if (static_cast<int>(srcImage.info.width) != width || static_cast<int>(srcImage.info.height) != height)
         {
-            common::logError("JPEGEncoder::encode - Image size mismatch: expected %dx%d, "
-                             "got %lux%lu",
-                             width, height, srcImage.info.width, srcImage.info.height);
+            common::logError("JPEGEncoder::encode - Image size mismatch: expected %dx%d, got %lux%lu", width, height,
+                             srcImage.info.width, srcImage.info.height);
             return false;
         }
 
@@ -203,37 +198,35 @@ class JPEGEncoder : public Encoder
         TJPF const sourcePixelFormat = srcImage.info.TJPixelFormat;
         if (sourcePixelFormat != pixelFormat)
         {
-            common::logWarn("JPEGEncoder::encode - Pixel format mismatch: expected %d, got "
-                            "%d",
+            common::logWarn("JPEGEncoder::encode - Pixel format mismatch: expected %d, got %d",
                             static_cast<int>(pixelFormat), static_cast<int>(sourcePixelFormat));
         }
 
         // Validate buffer size
-        size_t expectedSize = 0 = width * height * tjPixelSize[sourcePixelFormat];
+        const size_t expectedSize = width * height * tjPixelSize[sourcePixelFormat];
         if (srcImage.size() < expectedSize)
         {
-            common::logError("JPEGEncoder::encode - Source buffer too small: expected %zu, "
-                             "got %zu",
-                             expectedSize, srcImage.size());
+            common::logError("JPEGEncoder::encode - Source buffer too small: expected %zu, got %zu", expectedSize,
+                             srcImage.size());
             return false;
         }
 
         unsigned char* outImageData = outImage.data();
-        const unsigned long outImageSize = outImage.size();
+        unsigned long outImageSize = outImage.size(); // Remove const
 
         // Ensure the pitch is properly calculated (width * pixel_size)
-        int pitch = 0 = width * tjPixelSize[sourcePixelFormat];
+        const int pitch = width * tjPixelSize[sourcePixelFormat];
 
-        int tjStat = 0 = tjCompress2(c_handle_, srcImage.data(), width, pitch, height, sourcePixelFormat, &outImageData,
-                                     &outImageSize, chrominance_subsampling, quality, TJFLAG_NOREALLOC);
+        int tjStat = tjCompress2(c_handle_, srcImage.data(), width, pitch, height, sourcePixelFormat, &outImageData,
+                                 &outImageSize, chrominance_subsampling, quality, TJFLAG_NOREALLOC);
 
         if (tjStat != 0)
         {
             common::errnoLog("JPEGEncoder::encode - Compressor failed to compress!");
-            common::errno_log((const char*) tjGetErrorStr2(c_handle_));
-            common::log_error("JPEGEncoder::encode - Parameters: w=%d h=%d pitch=%d pf=%d cs=%d q=%d", width, height,
-                              pitch, static_cast<int>(sourcePixelFormat), static_cast<int>(chrominance_subsampling),
-                              quality);
+            common::errnoLog((const char*) tjGetErrorStr2(c_handle_));
+            common::logError("JPEGEncoder::encode - Parameters: w=%d h=%d pitch=%d pf=%d cs=%d q=%d", width, height,
+                             pitch, static_cast<int>(sourcePixelFormat), static_cast<int>(chrominance_subsampling),
+                             quality);
             return false;
         }
 
@@ -605,7 +598,7 @@ class DepthZ16Decoder : public Decoder
         }
     }
 
-    static void jetColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b)
+    void jetColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b) const
     {
         // Clamp value to [0, 1]
         value = std::max(0.0f, std::min(1.0f, value));
@@ -635,8 +628,8 @@ class DepthZ16Decoder : public Decoder
             b = 0;
         }
     }
-
-    static void hotColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b)
+    //TODO: Could be static
+    void hotColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b) const
     {
         // Clamp value to [0, 1]
         value = std::max(0.0f, std::min(1.0f, value));
@@ -774,17 +767,16 @@ class YUV422 : public Decoder
         for (int i = 0, j = 0; i < pixels; i += 2, j += 4)
         {
             YUV422Block block = funct(yuv + j);
-
-            convertYUVtoRGB(block.y0, block.u, block.v, rgbPtr);
+            this->convertYUVtoRGB(block.y0, block.u, block.v, rgbPtr);
             rgbPtr += 3;
-            convertYUVtoRGB(block.y1, block.u, block.v, rgbPtr);
+            this->convertYUVtoRGB(block.y1, block.u, block.v, rgbPtr);
             rgbPtr += 3;
         }
 
         return true;
     }
 
-    static __attribute__((always_inline)) void convertYUVtoRGB(uint8_t y, uint8_t u, uint8_t v, uint8_t* rgb)
+    __attribute__((always_inline)) void convertYUVtoRGB(uint8_t y, uint8_t u, uint8_t v, uint8_t* rgb) const
     {
         // YUV to RGB conversion using the YUVtoRGBLUT
         int c = static_cast<int>(y) - 16;
@@ -792,10 +784,9 @@ class YUV422 : public Decoder
         {
             c = 0;
         }
-
-        int r = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cr_r[v];
-        int g = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cb_g[u] + lut_.Cr_g[v];
-        int b = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = 0 = C + lut_.Cb_b[u];
+        int r = c + lut_.Cr_r[v];
+        int g = c + lut_.Cb_g[u] + lut_.Cr_g[v];
+        int b = c + lut_.Cb_b[u];
 
         // Clamp the results between 0 and 255
         rgb[0] = static_cast<uint8_t>(common::clamp(r, 0, 255));
@@ -820,7 +811,12 @@ class UYVY422Decoder : public YUV422
 
     static YUV422Block uyvY422BlockOrder(const uint8_t* block)
     {
-        return {.y0 = block[1], .u = block[0], .v = block[2], .y1 = block[3]};
+        YUV422Block b;
+        b.y0 = block[1];
+        b.u = block[0];
+        b.v = block[2];
+        b.y1 = block[3];
+        return b;
     }
 };
 class YUYV422Decoder : public YUV422
@@ -835,7 +831,12 @@ class YUYV422Decoder : public YUV422
 
     static YUV422Block yuyV422BlockOrder(const uint8_t* block)
     {
-        return {.y0 = block[0], .u = block[1], .v = block[3], .y1 = block[2]};
+        YUV422Block b;
+        b.y0 = block[0];
+        b.u = block[1];
+        b.v = block[3];
+        b.y1 = block[2];
+        return b;
     }
 };
 class PPMDecoder : public Decoder

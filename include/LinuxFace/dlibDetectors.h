@@ -1,3 +1,4 @@
+
 #ifndef DLIBDETECTORS_H
 #define DLIBDETECTORS_H
 
@@ -13,11 +14,13 @@
 // Tested and it works. The detection is not very good,
 // but it works. Good lighting is required. and release compilation.
 
+#include <memory>
+
 namespace linuxface
 {
+
 struct DlibImageWrapper
 {
-  public:
     explicit DlibImageWrapper(const std::unique_ptr<Image>& image) : image_(image) {}
 
     long nr() const { return image_->info.height; }
@@ -37,41 +40,6 @@ struct DlibImageWrapper
     const std::unique_ptr<Image>& image_;
 };
 
-inline long numRows(const DlibImageWrapper& img)
-{
-    return img.numRows();
-}
-
-inline long numColumns(const DlibImageWrapper& img)
-{
-    return img.numColumns();
-}
-
-inline long widthStep(const DlibImageWrapper& img)
-{
-    return img.widthStep();
-}
-
-inline const void* imageData(const DlibImageWrapper& img)
-{
-    return static_cast<const void*>(img.image_->data());
-}
-
-inline void* imageData(DlibImageWrapper& img)
-{
-    return static_cast<void*>(img.image_->data());
-}
-
-inline void setImageSize(DlibImageWrapper& /*img*/, long /*rows*/, long /*cols*/)
-{
-    common::logError("DlibImageWrapper::set_image_size is not implemented!!");
-}
-
-inline void swap(DlibImageWrapper& /*a*/, DlibImageWrapper& /*b*/) noexcept
-{
-    common::logError("DlibImageWrapper::swap is not implemented!!");
-}
-
 class DlibFaceDetector : public FaceDetector
 {
   public:
@@ -83,21 +51,40 @@ class DlibFaceDetector : public FaceDetector
     dlib::frontal_face_detector detector_;
 };
 
-
 // DlibShapeDetector: detects facial landmarks using dlib's shape_predictor
 class DlibShapeDetector : public ShapeDetector
 {
   public:
-    explicit DlibShapeDetector(const std::string& modelPath = "../models/shape_predictor_68_face_landmarks.dat");
+    explicit DlibShapeDetector(std::string modelPath = "../models/shape_predictor_68_face_landmarks.dat");
     ~DlibShapeDetector();
     // Given an image and bounding boxes, returns Face objects with landmarks
     std::vector<Face>
-    detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& facesRect) override;
+    detect(const std::unique_ptr<Image>& image, std::vector<math_utils::Rect<float>>& facesRect) override;
 
   private:
     std::unique_ptr<dlib::shape_predictor> predictor_;
     std::string model_path_;
 };
-
 } // namespace linuxface
+
+// Dlib generic image API support for DlibImageWrapper
+namespace dlib
+{
+inline long num_rows(const DlibImageWrapper& img)
+{
+    return img.numRows();
+}
+inline long num_columns(const DlibImageWrapper& img)
+{
+    return img.numColumns();
+}
+inline long width_step(const DlibImageWrapper& img)
+{
+    return img.widthStep();
+}
+inline const void* image_data(const DlibImageWrapper& img)
+{
+    return static_cast<const void*>(img.image_->data());
+}
+} // namespace dlib
 #endif // DLIBDETECTORS_H

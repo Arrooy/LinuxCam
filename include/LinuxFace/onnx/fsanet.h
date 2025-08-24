@@ -10,7 +10,7 @@ namespace linuxface
 class FsanetDetector : public OnnxDetector
 {
   public:
-    explicit FsanetDetector(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath){};
+    explicit FsanetDetector(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath) {};
     ~FsanetDetector() = default;
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
     void detect(const std::unique_ptr<Image>& image, Face& face);

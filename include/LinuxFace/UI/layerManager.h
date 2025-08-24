@@ -70,11 +70,11 @@ struct Layer
     // Helper: get layer number (delegates to image/gif if present)
     int getLayerNumber() const
     {
-        if (type == LayerType::Image && img)
+        if (type == LayerType::IMAGE && img)
         {
             return img->info.layer;
         }
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             return gif->frames()[0]->info.layer;
         }
@@ -86,11 +86,11 @@ struct Layer
     // Helper: set layer number (delegates to image/gif if present)
     void setLayerNumber(int n)
     {
-        if (type == LayerType::Image && img)
+        if (type == LayerType::IMAGE && img)
         {
             img->info.layer = n;
         }
-        else if (type == LayerType::Gif && gif && !gif->frames().empty())
+        else if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             gif->frames()[0]->info.layer = n;
         }
@@ -103,20 +103,20 @@ struct Layer
     // Helper: get layer name
     std::string getLayerName() const
     {
-        if (type == LayerType::Image && img)
+        if (type == LayerType::IMAGE && img)
         {
             return img->info.filename;
         }
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             return gif->frames()[0]->info.filename;
         }
-        if (type == LayerType::Gif && gif && gif->frames().empty())
+        if (type == LayerType::GIF && gif && gif->frames().empty())
         {
             // If GIF failed to decode frames, fall back to the original filename stored in the Gif wrapper
             return gif->getFilename();
         }
-        if (type == LayerType::Text)
+        if (type == LayerType::TEXT)
         {
             // When text content is empty, return a simple default name used by tests/UI
             return textContent.empty() ? std::string("Text Layer") : textContent;
@@ -127,7 +127,7 @@ struct Layer
     // Update layer animation (for GIF layers)
     void updateAnimation()
     {
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             gifFrameIndex = (gifFrameIndex + 1) % gif->frames().size();
             dirty = true;
@@ -153,7 +153,7 @@ struct Layer
 
     void invalidateTextOverlay() { textOverlay.needsRefresh = true; }
 
-    static void setTextOverlayEnabled(bool enabled)
+    void setTextOverlayEnabled(bool enabled)
     {
         if (textOverlay.enabled != enabled)
         {
@@ -172,43 +172,43 @@ struct Layer
     }
 
     // Helper: get textureId (delegates to image/gif if present)
-    static unsigned int getTextureId()
+    unsigned int getTextureId() const
     {
-        if ((type == LayerType::Image || type == ImGui::Text) && img)
+        if ((type == LayerType::IMAGE || type == LayerType::TEXT) && img)
         {
             return img->info.textureId;
         }
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             return gif->frames()[gifFrameIndex % gif->frames().size()]->info.textureId;
         }
         return 0;
     }
 
-    static size_t getSize()
+    size_t getSize() const
     {
-        if ((type == LayerType::Image || type == LayerType::Text) && img)
+        if ((type == LayerType::IMAGE || type == LayerType::TEXT) && img)
         {
             return img->size();
         }
-        if (type == LayerType::Gif && gif)
+        if (type == LayerType::GIF && gif)
         {
             return gif->getSize();
         }
         return 0;
     }
 
-    static unsigned long getWidth()
+    unsigned long getWidth() const
     {
-        if (type == LayerType::Image && img)
+        if (type == LayerType::IMAGE && img)
         {
             return img->info.width;
         }
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             return gif->frames()[0]->info.width;
         }
-        if (type == LayerType::Text && img)
+        if (type == LayerType::TEXT && img)
         {
             // Text layers store their rendered image in img
             return img->info.width;
@@ -216,34 +216,34 @@ struct Layer
         return 0;
     }
 
-    static unsigned long getHeight()
+    unsigned long getHeight() const
     {
-        if (type == LayerType::Image && img)
+        if (type == LayerType::IMAGE && img)
         {
             return img->info.height;
         }
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             return gif->frames()[0]->info.height;
         }
-        if (type == LayerType::Text && img)
+        if (type == LayerType::TEXT && img)
         {
             // Text layers store their rendered image in img
             return img->info.height;
         }
         return 0;
     }
-    static ImageFormat getFormat()
+    ImageFormat getFormat() const
     {
-        if (type == LayerType::Image && img)
+        if (type == LayerType::IMAGE && img)
         {
             return img->info.format;
         }
-        if (type == LayerType::Gif && gif && !gif->frames().empty())
+        if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             return gif->frames()[0]->info.format;
         }
-        if (type == LayerType::Text && img)
+        if (type == LayerType::TEXT && img)
         {
             // Text layers store their rendered image in img
             return img->info.format;
@@ -259,8 +259,8 @@ struct Layer
                     int textHAlignment = 1, // 0=LEFT, 1=CENTER, 2=RIGHT
                     int textVAlignment = 1, // 0=TOP, 1=MIDDLE, 2=BOTTOM
                     int textPadding = 2,
-                    int boundingWidth = 0, // 0 = auto-size
-                    int boundingHeight = 0 // 0 = auto-size
+                    int boundingWidth = 0, // auto-size
+                    int boundingHeight = 0 // auto-size
     );
 };
 // Initialize static member
@@ -270,7 +270,7 @@ class LayerManager
 {
   public:
     LayerManager();
-    ~LayerManager();
+    ~LayerManager() = default;
 
     // Layer management
     void addLayer(const Layer& layer);
@@ -291,7 +291,7 @@ class LayerManager
     // Invalidate all textures
     void invalidateTextures();
   private:
-    std::vector<Layer> layers_;
+    std::vector<Layer> layers_{};
 };
 
 } // namespace linuxface

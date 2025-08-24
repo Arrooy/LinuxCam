@@ -39,14 +39,14 @@ class V4L2LoopbackWriter : public Webcam
     TJSAMP getChrominanceSubsampling() const { return chrominance_subsampling_; }
     int getQuality() const { return quality_; }
   private:
-    std::vector<Buffer> buffers_;
+    std::vector<Buffer> buffers_{};
     bool streaming_{false};
 
     TJSAMP chrominance_subsampling_;
     int quality_{100};
 
     // Encoder of output image
-    std::unique_ptr<Encoder> encoder_;
+    std::unique_ptr<Encoder> encoder_{};
 };
 } // namespace linuxface
 

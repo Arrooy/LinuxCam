@@ -21,26 +21,26 @@ class MediaManager
     std::vector<std::string> getImageNames();
     std::vector<std::string> getGifNames();
 
-    static std::shared_ptr<Image> getImage(const std::string& imageName);
-    static std::shared_ptr<Gif> getGif(const std::string& gifName);
+    std::shared_ptr<Image> getImage(const std::string& imageName);
+    std::shared_ptr<Gif> getGif(const std::string& gifName);
 
     // Reload image from disk
-    static bool reloadImage(const std::string& imageName);
+    bool reloadImage(const std::string& imageName);
 
     void shutdown();
 
   private:
-   static size_t loadMediaFromFolder(const std::string& folderPath);
-   std::unordered_map<std::string, std::shared_ptr<Image>> images{};
-   std::unordered_map<std::string, std::shared_ptr<Gif>> gifs{};
+    size_t loadMediaFromFolder(const std::string& folderPath);
+    std::unordered_map<std::string, std::shared_ptr<Image>> images{};
+    std::unordered_map<std::string, std::shared_ptr<Gif>> gifs{};
 
-   std::shared_ptr<ImageRenderGL> imageRenderGl_;
+    std::shared_ptr<ImageRenderGL> imageRenderGl_;
 
-   std::recursive_mutex loadMutex_;
-   std::mutex imageMutex_;
-   std::mutex gifMutex_;
-   std::thread loadThread_;
-   std::atomic<bool> stopLoading_{false};
+    std::recursive_mutex loadMutex_;
+    std::mutex imageMutex_;
+    std::mutex gifMutex_;
+    std::thread loadThread_;
+    std::atomic<bool> stopLoading_{false};
 };
 } // namespace linuxface
 #endif // MEDIAMANAGER_H

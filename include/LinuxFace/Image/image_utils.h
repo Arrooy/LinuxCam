@@ -288,7 +288,7 @@ inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& 
     // Early return if no blur needed
     if (blur_amount <= 0)
     {
-        common::log_warn("Blur amount is zero, returning unblurred box mask.");
+        common::logWarn("Blur amount is zero, returning unblurred box mask.");
         return box_mask;
     }
     std::unique_ptr<Image> blurred = box_mask->deepCopy();
@@ -605,8 +605,8 @@ struct Normalizer<T, NormalizationType::MINMAX>
         else
         {
             return static_cast<T>(normalized
-                                      * (NormalizationTraits<T>::max_value() - NormalizationTraits<T>::min_value())
-                                  + NormalizationTraits<T>::min_value());
+                                      * (NormalizationTraits<T>::maxValue() - NormalizationTraits<T>::minValue())
+                                  + NormalizationTraits<T>::minValue());
         }
     }
 };
@@ -625,10 +625,10 @@ struct Normalizer<T, NormalizationType::ZERO_CENTER>
         else
         {
             // For integer types, clamp to valid range
-            double range = static_cast<double>(NormalizationTraits<T>::max_value())
-                           - static_cast<double>(NormalizationTraits<T>::min_value());
+            double range = static_cast<double>(NormalizationTraits<T>::maxValue())
+                           - static_cast<double>(NormalizationTraits<T>::minValue());
             centered = std::clamp(centered, -range / 2.0, range / 2.0);
-            return static_cast<T>(centered + (range / 2.0 + NormalizationTraits<T>::min_value()));
+            return static_cast<T>(centered + (range / 2.0 + NormalizationTraits<T>::minValue()));
         }
     }
 };
@@ -723,8 +723,8 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                         else
                         {
                             // Use traits for proper clamping range
-                            const auto minVal = static_cast<double>(NormalizationTraits<K>::min_value());
-                            const auto maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                            const auto minVal = static_cast<double>(NormalizationTraits<K>::minValue());
+                            const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
                             scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                         }
                         // Calculate destination index based on output layout
@@ -842,8 +842,8 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
                 else
                 {
                     // Use traits for proper clamping range
-                    const auto minVal = static_cast<double>(NormalizationTraits<K>::min_value());
-                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    const auto minVal = static_cast<double>(NormalizationTraits<K>::minValue());
+                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
                     scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                 }
                 // Calculate destination index based on output layout
@@ -1187,13 +1187,13 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 }
 
 // Bicubic kernel helper
-inline float cubicHermite(float a, float b, float c, float d, float t)
+inline float cubicHermite(float A, float B, float C, float D, float t)
 {
-    const float a = -a / 2.0f + (3.0f * b) / 2.0f - (3.0f * c) / 2.0f + d / 2.0f;
-    const float b = a - (5.0f * b) / 2.0f + 2.0f * c - d / 2.0f;
-    const float c = -a / 2.0f + c / 2.0f;
-    const float d = b;
-    return a * t * t * t + b * t * t + c * t + d;
+    const float a3 = -A / 2.0f + (3.0f * B) / 2.0f - (3.0f * C) / 2.0f + D / 2.0f;
+    const float b2 = A - (5.0f * B) / 2.0f + 2.0f * C - D / 2.0f;
+    const float c1 = -A / 2.0f + C / 2.0f;
+    const float d0 = B;
+    return a3 * t * t * t + b2 * t * t + c1 * t + d0;
 }
 
 // Bicubic scaling for RGB/Grayscale images
@@ -1250,8 +1250,8 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
                 }
                 else
                 {
-                    const auto minVal = static_cast<double>(NormalizationTraits<K>::min_value());
-                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::max_value());
+                    const auto minVal = static_cast<double>(NormalizationTraits<K>::minValue());
+                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
                     scaledValue = static_cast<K>(std::clamp(value + 0.5, minVal, maxVal));
                 }
                 // Calculate destination index based on output layout
@@ -1393,7 +1393,7 @@ std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsign
     }
 
     // Convert CHW (channels, height, width) to HWC (height, width, channels)
-    size_t dataSize = width * height * 3; // Assuming RGB format
+    const size_t dataSize = width * height * 3; // Assuming RGB format
     std::vector<float> hwcData(dataSize);
     chwToHwc(src, hwcData.data(), width, height, 3);
 

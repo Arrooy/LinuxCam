@@ -21,7 +21,7 @@ class PFLDDetector : public OnnxDetector
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
     TensorPadding pfld_padding_;
 
-    math_utils::Point<double>
+    static math_utils::Point<double>
     alignedToOriginalCoords(double xAligned, double yAligned, double cropLeft, double cropTop, double minX, double minY,
                             double angleRad, const math_utils::Point<double>& eyeCenter, double scale);
 };

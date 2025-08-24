@@ -17,7 +17,7 @@ class PaintWebcam
   public:
     PaintWebcam() = default;
     ~PaintWebcam() = default;
-    
+
     // Rule of five compliance
     PaintWebcam(const PaintWebcam&) = delete;
     PaintWebcam& operator=(const PaintWebcam&) = delete;
@@ -32,7 +32,7 @@ class PaintWebcam
     void paintDevice();
     /**
      * Paint the modal for adding a new device. This is a modal that is displayed when the user clicks on the "+" tab.
-     * @param temp_webcams A vector of webcams that are available to the user.
+     * @param tempWebcams A vector of webcams that are available to the user.
      * This is used to populate the dropdown menu for selecting the webcam.
      * @return True if the modal should continue to display, false otherwise
      */
@@ -49,7 +49,7 @@ class PaintWebcam
     std::shared_ptr<Webcam> webcam_new_device_;
 
     // State tracking for UI selections per camera
-    std::map<std::string, int> selected_subsampling_;
+    std::map<std::string, int> selected_subsampling_{};
     int selected_quality_value_{100};
 };
 

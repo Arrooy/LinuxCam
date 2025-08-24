@@ -42,17 +42,17 @@ class InputWebcam : public Webcam
     bool configureBuffers();
     unsigned int buffer_count_{0u};
     Buffer* buffers_{nullptr};
-    struct v4l2_requestbuffers bufrequest_;
+    struct v4l2_requestbuffers bufrequest_{};
 
     // Threading
     std::thread recordThread_;
     std::atomic<bool> isRecording_{false};
 
     // Decoder of input image
-    std::unique_ptr<Decoder> decoder_;
+    std::unique_ptr<Decoder> decoder_{};
 
     mutable std::mutex imageMutex_;
-    std::unique_ptr<Image> latestImage_;
+    std::unique_ptr<Image> latestImage_{};
 };
 } // namespace linuxface
 

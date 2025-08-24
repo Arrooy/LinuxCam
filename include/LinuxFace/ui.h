@@ -32,51 +32,49 @@ struct Resolution
 };
 
 static constexpr Resolution CommonResolutions[] = {
-    {640, 480, "640x480 (VGA) [4:3]"},
-    {800, 600, "800x600 (SVGA) [4:3]"},
-    {1024, 768, "1024x768 (XGA) [4:3]"},
-    {1280, 720, "1280x720 (HD) [16:9]"},
-    {1280, 800, "1280x800 (WXGA) [16:10]"},
-    {1280, 1024, "1280x1024 (SXGA) [5:4]"},
-    {1366, 768, "1366x768 [16:9]"},
-    {1440, 900, "1440x900 [16:10]"},
-    {1600, 900, "1600x900 [16:9]"},
-    {1600, 1200, "1600x1200 (UXGA) [4:3]"},
+    {640,  480,  "640x480 (VGA) [4:3]"       },
+    {800,  600,  "800x600 (SVGA) [4:3]"      },
+    {1024, 768,  "1024x768 (XGA) [4:3]"      },
+    {1280, 720,  "1280x720 (HD) [16:9]"      },
+    {1280, 800,  "1280x800 (WXGA) [16:10]"   },
+    {1280, 1024, "1280x1024 (SXGA) [5:4]"    },
+    {1366, 768,  "1366x768 [16:9]"           },
+    {1440, 900,  "1440x900 [16:10]"          },
+    {1600, 900,  "1600x900 [16:9]"           },
+    {1600, 1200, "1600x1200 (UXGA) [4:3]"    },
     {1920, 1080, "1920x1080 (Full HD) [16:9]"},
-    {1920, 1200, "1920x1200 [16:10]"},
-    {2560, 1440, "2560x1440 (QHD) [16:9]"},
-    {3840, 2160, "3840x2160 (4K UHD) [16:9]"}};
+    {1920, 1200, "1920x1200 [16:10]"         },
+    {2560, 1440, "2560x1440 (QHD) [16:9]"    },
+    {3840, 2160, "3840x2160 (4K UHD) [16:9]" }
+};
 
 class UI
 {
   public:
-   explicit UI(std::shared_ptr<LayerManager> layerManager);
-   ~UI();
+    explicit UI(std::shared_ptr<LayerManager> layerManager);
+    ~UI();
 
-   // Initialize the UI system
-   bool initialize(GLFWwindow* window,
-                   const char* glslVersion = "#version 130");
+    // Initialize the UI system
+    bool initialize(GLFWwindow* window, const char* glslVersion = "#version 130");
 
-   void connect(std::shared_ptr<CameraManager> newCameraManager) {
-       cameraManager_ = newCameraManager;
-   }
-   void connect(std::shared_ptr<MediaManager> newMediaManager) {
-       mediaManager_ = newMediaManager;
-       mediaBrowserUI_ =
-           std::make_unique<MediaBrowserUI>(mediaManager_, layerManager_);
-   }
+    void connect(std::shared_ptr<CameraManager> newCameraManager) { cameraManager_ = newCameraManager; }
+    void connect(std::shared_ptr<MediaManager> newMediaManager)
+    {
+        mediaManager_ = newMediaManager;
+        mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_, layerManager_);
+    }
 
     // Cleanup the UI system
-    void shutdown();
+    void shutdown() const;
 
     // Start a new frame (call this at the beginning of your render loop)
-    void newFrame();
+    static void newFrame();
 
     // Paint/render all UI elements (call this to draw your UI)
     void paint();
 
     // Render the final UI (call this after paint(), before swapping buffers)
-    void render();
+    static void render();
 
     void handleKeyboard();
 
@@ -84,7 +82,7 @@ class UI
 
     // Handle dragging of selected layer (image or text)
     void handleLayerDragging();
-    
+
     // Helper function to find the topmost layer under mouse position
     Layer* findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& mousePos);
 
@@ -96,7 +94,7 @@ class UI
     bool was_plus_tab_active_ = false;
     bool go_back_to_last_device_ = false;
     unsigned int last_device_tab_index_ = 0;
-    std::vector<std::shared_ptr<Webcam>> temp_modal_webcams_;
+    std::vector<std::shared_ptr<Webcam>> temp_modal_webcams_{};
 
     bool oneshot_add_device_popup_{false};
 
@@ -126,7 +124,7 @@ class UI
     bool mediaBrowserVisible_{false};
 
     // Tracked camera state On/Off
-    std::unordered_map<std::string, bool> cameraDesiredStates;
+    std::unordered_map<std::string, bool> cameraDesiredStates{};
 
     // UI drawing functions
     void paintMainWindow();

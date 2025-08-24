@@ -15,12 +15,12 @@ namespace linuxface
 class ConfigBuilder
 {
   public:
-    static ConfigBuilder& quality(int q) { return set("quality", q); }
-    static ConfigBuilder& width(unsigned int w) { return set("width", static_cast<int>(w)); }
-    static ConfigBuilder& height(unsigned int h) { return set("height", static_cast<int>(h)); }
-    static ConfigBuilder& chrominanceSubsampling(TJSAMP c) { return set("chrominance_subsampling", c); }
-    static ConfigBuilder& pixelFormat(TJPF p) { return set("pixelFormat", p); }
-    static ConfigBuilder& imageFormat(ImageFormat i) { return set("imageFormat", i); }
+  ConfigBuilder& quality(int q) { return set("quality", q); }
+  ConfigBuilder& width(unsigned int w) { return set("width", static_cast<int>(w)); }
+  ConfigBuilder& height(unsigned int h) { return set("height", static_cast<int>(h)); }
+  ConfigBuilder& chrominanceSubsampling(TJSAMP c) { return set("chrominance_subsampling", c); }
+  ConfigBuilder& pixelFormat(TJPF p) { return set("pixelFormat", p); }
+  ConfigBuilder& imageFormat(ImageFormat i) { return set("imageFormat", i); }
 
     // Generic property setter
     template <typename T>
@@ -54,7 +54,7 @@ class ConfigBuilder
     bool has(const std::string& key) const { return props_.find(key) != props_.end(); }
 
   private:
-   std::unordered_map<std::string, std::any> props_;
+    std::unordered_map<std::string, std::any> props_{};
 };
 
 class Encoder

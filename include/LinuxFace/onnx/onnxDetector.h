@@ -18,10 +18,10 @@ class OnnxDetector
 
     virtual Ort::Value transform(const std::unique_ptr<Image>& image) = 0;
 
-    int batch_size_;
-    int channels_;
-    int width_;
-    int height_;
+    int batch_size_{};
+    int channels_{};
+    int width_{};
+    int height_{};
 
     bool readModelInputSize();
     std::vector<int64_t> input_node_dims;
@@ -42,7 +42,7 @@ class OnnxDetector
     bool has_cuda_{false};
 
   private:
-    bool checkCudaAvailability();
+    static bool checkCudaAvailability();
 };
 } // namespace linuxface
 

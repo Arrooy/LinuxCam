@@ -313,9 +313,9 @@ class Image
                                 size_t canvasWidth, size_t canvasHeight);
     Image& pasteImpl(const Image& other, long x, long y, bool expandCanvas);
 
-    void scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
-                          unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth,
-                          unsigned long dstHeight, ScalingAlgorithm algorithm) const;
+    static void scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidth, unsigned long srcHeight,
+                                 unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth,
+                                 unsigned long dstHeight, ScalingAlgorithm algorithm);
 
     // Internal helper for affine warp (supports RGB and single-channel mask)
     std::unique_ptr<Image>

@@ -291,7 +291,7 @@ inline bool longWrite(int fd, const void* buf, size_t size)
         const ssize_t result = write(fd, ptr + written, size - written);
         if (result <= 0)
         {
-            logError("common::long_write - Write buf data failed. Written %zd bytes", written);
+            logError("common::longWrite - Write buf data failed. Written %zd bytes", written);
             return false;
         }
         written += static_cast<size_t>(result);

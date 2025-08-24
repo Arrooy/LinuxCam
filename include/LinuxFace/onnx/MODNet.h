@@ -13,7 +13,7 @@ namespace linuxface
 class MODNetDetector : public OnnxDetector
 {
   public:
-    explicit MODNetDetector(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath){};
+    explicit MODNetDetector(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath) {};
     ~MODNetDetector() = default;
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
     void detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& matte);

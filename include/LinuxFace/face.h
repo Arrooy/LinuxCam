@@ -78,7 +78,7 @@ class Face
     void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const;
 
     FaceBoundingBox getBoundingBox() const { return boundingBox_; }
-    static std::vector<FaceLandmark> getLandmarks()
+    std::vector<FaceLandmark> getLandmarks() const
     {
         std::vector<FaceLandmark> allLandmarks;
         for (const auto& facepart : landmarks_)

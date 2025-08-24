@@ -241,7 +241,7 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n, double
         m[5] = 0;
         return false;
     }
-    // Build A (2n x 6) and b (2n)
+    // Build a (2n x 6) and b (2n)
     std::vector<double> a(2 * n * 6, 0.0);
     std::vector<double> b(2 * n, 0.0);
     for (int i = 0; i < n; ++i)
@@ -269,19 +269,19 @@ inline bool estimateAffine2d(const double* src, const double* dst, int n, double
     }
     // Compute AtA (6x6) and Atb (6)
     double atA[6][6] = {0};
-    const double atb[6] = {0};
+    double atb[6] = {0};
     for (int i = 0; i < 6; ++i)
     {
         for (int j = 0; j < 6; ++j)
         {
             for (int k = 0; k < 2 * n; ++k)
             {
-                atA[i][j] += A[k * 6 + i] * A[k * 6 + j];
+                atA[i][j] += a[k * 6 + i] * a[k * 6 + j];
             }
         }
         for (int k = 0; k < 2 * n; ++k)
         {
-            atb[i] += A[k * 6 + i] * b[k];
+            atb[i] += a[k * 6 + i] * b[k];
         }
     }
     // Regularization (Tikhonov): add small value to diagonal

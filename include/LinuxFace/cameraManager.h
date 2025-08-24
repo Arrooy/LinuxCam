@@ -44,12 +44,12 @@ class CameraManager
 
     std::vector<std::string> discoverAvailableVideoDevices();
   private:
-    bool isDeviceUsable(const std::string& devicePath);
+    static bool isDeviceUsable(const std::string& devicePath);
     void updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::unique_ptr<Image> newFrame);
     void createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera);
     void updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera, const Image& compositeImage);
-    std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
-    std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
+    std::vector<std::shared_ptr<InputWebcam>> inWebcam_{};
+    std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_{};
     std::shared_ptr<LayerManager> layerManager_;
     // std::unordered_map<int, int> connections_;
 };
@@ -104,13 +104,13 @@ bool updateCameraImpl(std::vector<std::shared_ptr<T>>& container, std::shared_pt
 
         // if (!camera->setupDevice())
         // {
-        //     common::log_error("Failed to setup camera device: %s", devicePath.c_str());
+        //     common::logError("Failed to setup camera device: %s", devicePath.c_str());
         //     return false;
         // }
 
         // if (!camera->start())
         // {
-        //     common::log_error("Failed to start camera device: %s", devicePath.c_str());
+        //     common::logError("Failed to start camera device: %s", devicePath.c_str());
         //     return false;
         // }
 
