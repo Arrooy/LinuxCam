@@ -6,7 +6,6 @@ namespace linuxface
 {
 
 LayerManager::LayerManager() = default;
-LayerManager::~LayerManager() = default;
 
 void LayerManager::addLayer(const Layer& layer)
 {
@@ -100,7 +99,7 @@ void LayerManager::invalidateTextures()
     for (auto& l : layers_)
     {
         l.dirty = true;
-        l.invalidateTextOverlay();  // Also invalidate text overlays on window resize
+        l.invalidateTextOverlay(); // Also invalidate text overlays on window resize
     }
 }
 
@@ -117,44 +116,38 @@ void LayerManager::setLayerDirty(int layerNumber, bool dirty)
 }
 
 // Static method implementation for creating text images
-std::shared_ptr<Image> Layer::createTextImage(
-    const std::string& text,
-    ImU32 textColor,
-    int textScale,
-    bool useBackground,
-    ImU32 backgroundColor,
-    bool centerText,
-    bool multilineText,
-    int textHAlignment,
-    int textVAlignment,
-    int textPadding,
-    int boundingWidth,
-    int boundingHeight)
+std::shared_ptr<Image>
+Layer::createTextImage(const std::string& text, ImU32 textColor, int textScale, bool useBackground,
+                       ImU32 backgroundColor, bool centerText, bool multilineText, int textHAlignment,
+                       int textVAlignment, int textPadding, int boundingWidth, int boundingHeight)
 {
-    if (text.empty()) {
+    if (text.empty())
+    {
         return nullptr;
     }
-    
+
     // Helper to convert ImU32 to Pixel
-    auto toPixel = [](ImU32 color) -> Pixel {
-        Pixel pixel;
-        pixel.r = static_cast<unsigned char>((color >> 0) & 0xFF);   // Red
-        pixel.g = static_cast<unsigned char>((color >> 8) & 0xFF);   // Green  
-        pixel.b = static_cast<unsigned char>((color >> 16) & 0xFF);  // Blue
-        pixel.a = static_cast<unsigned char>((color >> 24) & 0xFF);  // Alpha
+    auto toPixel = [](ImU32 color) -> Pixel
+    {
+        Pixel pixel{};
+        pixel.r = static_cast<unsigned char>((color >> 0) & 0xFF);  // Red
+        pixel.g = static_cast<unsigned char>((color >> 8) & 0xFF);  // Green
+        pixel.b = static_cast<unsigned char>((color >> 16) & 0xFF); // Blue
+        pixel.a = static_cast<unsigned char>((color >> 24) & 0xFF); // Alpha
         return pixel;
     };
-    
+
     // Create TextRenderConfig from legacy parameters
     TextRenderConfig config(text, toPixel(textColor), textScale);
-    
+
     // Set background options
     config.useBackground = useBackground;
     config.backgroundColor = toPixel(backgroundColor);
     config.padding = textPadding;
-    
+
     // Set wrap mode and dimensions
-    if (boundingWidth > 0 && boundingHeight > 0) {
+    if (boundingWidth > 0 && boundingHeight > 0)
+    {
         // Use bounding box with specific alignment
         config.wrapMode = TextWrapMode::AUTO_WIDTH;
         config.maxWidth = boundingWidth;
@@ -162,18 +155,23 @@ std::shared_ptr<Image> Layer::createTextImage(
         config.canvasHeight = boundingHeight;
         config.horizontalAlign = static_cast<TextAlignment>(textHAlignment);
         config.verticalAlign = static_cast<TextAlignment>(textVAlignment + 3); // Offset for vertical alignment
-    } else if (multilineText) {
+    }
+    else if (multilineText)
+    {
         // Legacy multiline mode - use manual line breaks
         config.wrapMode = TextWrapMode::AUTO_CANVAS;
-    } else {
+    }
+    else
+    {
         // Single line mode
         config.wrapMode = centerText ? TextWrapMode::AUTO_CANVAS : TextWrapMode::NONE;
-        if (centerText) {
+        if (centerText)
+        {
             config.horizontalAlign = TextAlignment::CENTER;
             config.verticalAlign = TextAlignment::MIDDLE;
         }
     }
-    
+
     // Use the new comprehensive text renderer
     return TextRenderer::renderText(config);
 }

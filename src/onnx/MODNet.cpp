@@ -13,18 +13,18 @@ Ort::Value MODNetDetector::transform(const std::unique_ptr<Image>& image)
         // [batch, channels, height, width]
         input_node_dims[0] = 1;
         input_node_dims[1] = 3;
-        input_node_dims[2] = input_height_;
-        input_node_dims[3] = input_width_;
+        input_node_dims[2] = InputHeight;
+        input_node_dims[3] = InputWidth;
     }
-    Ort::Value input_tensor =
+    Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
-    padding_ = TensorPadding::no_padding();
+    padding_ = TensorPadding::noPadding();
 
     // Get pointer to tensor data.
-    float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    image->toTensor(tensor_data, padding_, input_width_, input_height_, NormalizationType::ZERO_CENTER);
+    float* tensorData = inputTensor.GetTensorMutableData<float>();
+    image->toTensor(tensorData, padding_, InputWidth, InputHeight, NormalizationType::ZERO_CENTER);
 
-    return input_tensor;
+    return inputTensor;
 }
 
 void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& matte)
@@ -32,27 +32,27 @@ void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr
     Profiler::getInstance().start("MODNetDetector", "Matting detection");
 
     // Convert from image to tensor.
-    Ort::Value input_tensor = this->transform(image);
+    Ort::Value inputTensor = this->transform(image);
     try
     {
-        auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,
-                                                     1, output_node_names_.data(), 1);
-        auto& output_tensor = output_tensors.front();
-        const float* mate = output_tensor.GetTensorMutableData<float>();
+        auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
+                                                    output_node_names_.data(), 1);
+        auto& outputTensor = outputTensors.front();
+        const float* mate = outputTensor.GetTensorMutableData<float>();
 
-        if (mate)
+        if (mate != nullptr)
         {
-            std::vector<int64_t> matte_shape = output_tensor.GetTensorTypeAndShapeInfo().GetShape();
-            matte->fromTensor(mate, matte_shape, input_width_, input_height_, padding_, NormalizationType::MINMAX);
+            std::vector<int64_t> matteShape = outputTensor.GetTensorTypeAndShapeInfo().GetShape();
+            matte->fromTensor(mate, matteShape, InputWidth, InputHeight, padding_, NormalizationType::MINMAX);
         }
         else
         {
-            common::log_error("MODNetDetector: Failed to get output tensor");
+            common::logError("MODNetDetector: Failed to get output tensor");
         }
     }
     catch (const Ort::Exception& e)
     {
-        common::log_error("MODNetDetector: %s", e.what());
+        common::logError("MODNetDetector: %s", e.what());
         exit(-1);
     }
 

@@ -592,7 +592,7 @@ struct Normalizer<T, NormalizationType::MINMAX>
     {
         if (stats.max_val == stats.min_val)
         {
-            return NormalizationTraits<T>::zero_value();
+            return NormalizationTraits<T>::zeroValue();
         }
 
         double normalized =

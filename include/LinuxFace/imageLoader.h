@@ -70,7 +70,7 @@ class ImageLoader
   private:
     bool loadFileData(const std::string& filePath);
     bool extractMetadata();
-    bool createDecoder() const;
+  bool createDecoder();
 
     LoadStrategy strategy_;
     ImageMetadata metadata_;

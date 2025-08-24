@@ -8,41 +8,41 @@
 
 using namespace linuxface;
 
-ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path)
+ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath)
 {
 }
 
 std::unique_ptr<Image>
-ArcfaceRecognizer::preprocess(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5)
+ArcfaceRecognizer::preprocess(const Image& inputImg, const std::vector<math_utils::Point<>>& faceLandmark5)
 {
-    const int target_size = 112;
+    const int targetSize = 112;
     auto [aligned, affine] =
-        image_utils::affine_face_transform(input_img, face_landmark_5, image_utils::template_112, target_size);
+        image_utils::affineFaceTransform(inputImg, faceLandmark5, image_utils::TEMPLATE_112, targetSize);
     if (aligned)
     {
         return std::move(aligned);
     }
-    common::log_warn("ArcfaceRecognizer: Failed to align face, using fallback scaling.");
+    common::logWarn("ArcfaceRecognizer: Failed to align face, using fallback scaling.");
     // Fallback: just scale the whole image
-    return input_img.scale(target_size, target_size);
+    return inputImg.scale(targetSize, targetSize);
 }
 
-Ort::Value ArcfaceRecognizer::transform(const std::unique_ptr<Image>& img_rs)
+Ort::Value ArcfaceRecognizer::transform(const std::unique_ptr<Image>& imgRs)
 {
     input_node_dims[0] = 1;
-    input_node_dims[1] = img_rs->isColorImage() ? 3 : 1;
-    input_node_dims[2] = img_rs->info.height;
-    input_node_dims[3] = img_rs->info.width;
-    Ort::Value input_tensor =
+    input_node_dims[1] = imgRs->isColorImage() ? 3 : 1;
+    input_node_dims[2] = imgRs->info.height;
+    input_node_dims[3] = imgRs->info.width;
+    Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
-    float* tensor_data = input_tensor.GetTensorMutableData<float>();
+    float* tensorData = inputTensor.GetTensorMutableData<float>();
     // Use MINMAX normalization as a common default for ArcFace
-    TensorPadding padding = TensorPadding::no_padding();
-    img_rs->toTensor(tensor_data, padding, img_rs->info.width, img_rs->info.height, NormalizationType::MINMAX);
-    return input_tensor;
+    TensorPadding padding = TensorPadding::noPadding();
+    imgRs->toTensor(tensorData, padding, imgRs->info.width, imgRs->info.height, NormalizationType::MINMAX);
+    return inputTensor;
 }
 
-bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math_utils::Point<>>& face_landmark_5,
+bool ArcfaceRecognizer::recognize(const Image& inputImg, const std::vector<math_utils::Point<>>& faceLandmark5,
                                   std::vector<float>& embedding)
 {
     Profiler::getInstance().start("ArcfaceRecognizer", "recognize");
@@ -50,12 +50,12 @@ bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math
     {
         return false;
     }
-    std::unique_ptr<Image> crop_image = preprocess(input_img, face_landmark_5);
-    Ort::Value input_tensor = transform(crop_image);
-    Ort::RunOptions runOptions;
-    auto output_tensors = detector_session_->Run(runOptions, input_node_names_.data(), &input_tensor, 1,
-                                                 output_node_names_.data(), output_node_names_str_.size());
-    float* pdata = output_tensors[0].GetTensorMutableData<float>();
+    std::unique_ptr<Image> cropImage = preprocess(inputImg, faceLandmark5);
+    Ort::Value inputTensor = transform(cropImage);
+    const Ort::RunOptions runOptions;
+    auto outputTensors = detector_session_->Run(runOptions, input_node_names_.data(), &inputTensor, 1,
+                                                output_node_names_.data(), output_node_names_str_.size());
+    float* pdata = outputTensors[0].GetTensorMutableData<float>();
     embedding.clear();
     embedding.assign(pdata, pdata + 512);
     float norm = 0.0f;
@@ -71,17 +71,17 @@ bool ArcfaceRecognizer::recognize(const Image& input_img, const std::vector<math
     // print embedding for debugging
     {
         // Print embedding in numpy array format for easy copy-paste to Python
-        std::string np_array = "np.array([";
+        std::string npArray = "np.array([";
         for (size_t i = 0; i < embedding.size(); ++i)
         {
-            np_array += std::to_string(embedding[i]);
+            npArray += std::to_string(embedding[i]);
             if (i != embedding.size() - 1)
             {
-                np_array += ", ";
+                npArray += ", ";
             }
         }
-        np_array += "])";
-        common::log_info("%s", np_array.c_str());
+        npArray += "])";
+        common::logInfo("%s", npArray.c_str());
     }
     Profiler::getInstance().stop("ArcfaceRecognizer", "recognize");
     return true;

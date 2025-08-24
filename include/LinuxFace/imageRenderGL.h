@@ -89,7 +89,7 @@ class ImageRenderGL
     static void finalizeRenderingContext();
 
     // Internal OpenGL helpers (unified interface)
-    static GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
+    GLuint getOrCreateTexture(Image& image, size_t layerId, bool force = false);
     static bool
     setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, int windowWidth, int windowHeight);
     bool executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId) const;

@@ -16,60 +16,55 @@ MediaManager::MediaManager(std::shared_ptr<ImageRenderGL> imageRenderGl) : image
     loadThread_ = std::thread(&MediaManager::loadMediaFromFolder, this, folderPath);
 }
 
-static std::vector<std::string> MediaManager::getImageNames()
+std::vector<std::string> MediaManager::getImageNames()
 {
-    const std::lock_guard<std::mutex> lock(imageMutex_);
-    return linuxface::common::getKeysFromMap(images);
+    const std::lock_guard<std::mutex> lock(this->imageMutex_);
+    return linuxface::common::getKeysFromMap(this->images);
 }
 
-static std::vector<std::string> MediaManager::getGifNames()
+std::vector<std::string> MediaManager::getGifNames()
 {
-    const std::lock_guard<std::mutex> lock(gifMutex_);
-    return linuxface::common::getKeysFromMap(gifs);
+    const std::lock_guard<std::mutex> lock(this->gifMutex_);
+    return linuxface::common::getKeysFromMap(this->gifs);
 }
 
 std::shared_ptr<Image> MediaManager::getImage(const std::string& imageName)
 
 {
-    const std::lock_guard<std::mutex> lock(imageMutex_);
-    auto it = images.find(imageName);
-    if (it != images.end())
-    {
+    const std::lock_guard<std::mutex> lock(this->imageMutex_);
+    auto it = this->images.find(imageName);
+    if (it != this->images.end())
         return it->second;
-    }
-
     return nullptr;
 }
 
 std::shared_ptr<Gif> MediaManager::getGif(const std::string& gifName)
 {
-    const std::lock_guard<std::mutex> lock(gifMutex_);
-    auto it = gifs.find(gifName);
-    if (it != gifs.end())
-    {
+    const std::lock_guard<std::mutex> lock(this->gifMutex_);
+    auto it = this->gifs.find(gifName);
+    if (it != this->gifs.end())
         return it->second;
-    }
-
     return nullptr;
 }
 
 size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
 {
-    const std::lock_guard<std::recursive_mutex> lock(loadMutex_);
-    const size_t mediaCount{0u};
+    const std::lock_guard<std::recursive_mutex> lock(this->loadMutex_);
+    size_t mediaCount{0u};
 
+    namespace fs = std::filesystem;
     for (const auto& entry : fs::directory_iterator(folderPath))
     {
-        if (stopLoading_)
+    if (this->stopLoading_)
         {
-            linuxface::common::log_warn("Media loading stopped by user.");
+            linuxface::common::logWarn("Media loading stopped by user.");
             break;
         }
 
         if (entry.is_directory())
         {
             // Recursively load media from subdirectories
-            mediaCount += loadMediaFromFolder(entry.path().string());
+            mediaCount += this->loadMediaFromFolder(entry.path().string());
             continue;
         }
 
@@ -100,17 +95,17 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
                 }
                 else
                 {
-                    linuxface::common::log_error("Failed to decode GIF: %s", fullPath.c_str());
+                    linuxface::common::logError("Failed to decode GIF: %s", fullPath.c_str());
                 }
             }
             else
             {
-                linuxface::common::log_error("Unsupported file format %s in path %s", extension.c_str(),
+                linuxface::common::logError("Unsupported file format %s in path %s", extension.c_str(),
                                              fullPath.c_str());
             }
             if (!processingOk)
             {
-                linuxface::common::log_error("Failed to load image %s", filename.c_str());
+                linuxface::common::logError("Failed to load image %s", filename.c_str());
             }
             else
             {
@@ -118,7 +113,7 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
             }
         }
     }
-    linuxface::common::log_info("Loaded %zu media items from folder: %s", mediaCount, folderPath.c_str());
+    linuxface::common::logInfo("Loaded %zu media items from folder: %s", mediaCount, folderPath.c_str());
     return mediaCount;
 }
 
@@ -132,14 +127,14 @@ bool MediaManager::reloadImage(const std::string& imageName)
         ImageLoader loader(ImageLoader::LoadStrategy::LAZY);
         if (!loader.loadFromFile(image->info.filename))
         {
-            linuxface::common::log_error("Failed to reload image: %s", imageName.c_str());
+            linuxface::common::logError("Failed to reload image: %s", imageName.c_str());
             return false;
         }
 
         std::unique_ptr<Image> reloadedImage;
         if (!loader.getImage(reloadedImage))
         {
-            linuxface::common::log_error("Failed to decode reloaded image: %s", imageName.c_str());
+            linuxface::common::logError("Failed to decode reloaded image: %s", imageName.c_str());
             return false;
         }
 
@@ -150,7 +145,7 @@ bool MediaManager::reloadImage(const std::string& imageName)
         return true;
     }
 
-    linuxface::common::log_error("Image not found: %s", imageName.c_str());
+    linuxface::common::logError("Image not found: %s", imageName.c_str());
     return false;
 }
 

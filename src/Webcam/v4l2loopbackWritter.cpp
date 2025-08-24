@@ -6,7 +6,7 @@ using namespace linuxface;
 
 V4L2LoopbackWriter::V4L2LoopbackWriter(const std::string& name, const std::string& devicePath, const unsigned int width,
                                        const unsigned int height, const TJSAMP subsample)
-    : Webcam(name, devicePath, WebcamType::VirtualOutput, width, height), chrominance_subsampling_(subsample)
+    : Webcam(name, devicePath, WebcamType::VIRTUAL_OUTPUT, width, height), chrominance_subsampling_(subsample)
 
 {
 }
@@ -96,7 +96,7 @@ bool V4L2LoopbackWriter::setupDevice()
     // Create encoder
     auto pixelFormat = TJPF_RGB;
 
-    const ConfigBuilder configBuilder;
+    ConfigBuilder configBuilder;
     configBuilder.imageFormat(selectedFormat_->format)
         .pixelFormat(pixelFormat)
         .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
@@ -115,7 +115,7 @@ bool V4L2LoopbackWriter::start()
         enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
         if (ioctl(fd_, VIDIOC_STREAMON, &type) < 0)
         {
-            common::errno_log("V4L2LoopbackWriter::start - VIDIOC_STREAMON");
+            common::errnoLog("V4L2LoopbackWriter::start - VIDIOC_STREAMON");
             cleanup();
             return false;
         }
@@ -131,14 +131,14 @@ bool V4L2LoopbackWriter::stop()
         enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
         if (ioctl(fd_, VIDIOC_STREAMOFF, &type) < 0)
         {
-            common::errno_log("V4L2LoopbackWriter::stop - VIDIOC_STREAMOFF");
+            common::errnoLog("V4L2LoopbackWriter::stop - VIDIOC_STREAMOFF");
             cleanup();
             return false;
         }
 
         if (!queueAllBuffersAgain(buffers_.size(), type))
         {
-            common::log_error("V4L2LoopbackWriter::stop - Failed to queue all buffers again");
+            common::logError("V4L2LoopbackWriter::stop - Failed to queue all buffers again");
             return false;
         }
     }
@@ -150,7 +150,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
 {
     if (!streaming_)
     {
-        common::log_error("Device not initialized for streaming_");
+        common::logError("Device not initialized for streaming_");
         return false;
     }
 
@@ -165,7 +165,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         scaledImage = image.scale(desiredWidth, desiredHeight);
         if (!scaledImage)
         {
-            common::log_error("V4L2LoopbackWriter::writeFrame - Failed to scale image");
+            common::logError("V4L2LoopbackWriter::writeFrame - Failed to scale image");
             Profiler::getInstance().stop(name_.c_str(), "Encode and write output image");
             return false;
         }
@@ -181,7 +181,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
 
     if (ioctl(fd_, VIDIOC_DQBUF, &buf) < 0)
     {
-        common::errno_log("V4L2LoopbackWriter::writeFrame - VIDIOC_DQBUF");
+        common::errnoLog("V4L2LoopbackWriter::writeFrame - VIDIOC_DQBUF");
         return false;
     }
 
@@ -194,11 +194,11 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
     unsigned long actualCompressedSize{0u};
     if (!encoder_->encode(imageToEncode, v4l2Image, actualCompressedSize))
     {
-        common::log_error("Failed to encode image");
+        common::logError("Failed to encode image");
         // Re-queue buffer
         if (ioctl(fd_, VIDIOC_QBUF, &buf) < 0)
         {
-            common::errno_log("V4L2LoopbackWriter::writeFrame - VIDIOC_QBUF");
+            common::errnoLog("V4L2LoopbackWriter::writeFrame - VIDIOC_QBUF");
             return false;
         }
         return false;
@@ -206,11 +206,11 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
 
     if (actualCompressedSize > bufLen)
     {
-        common::log_error("Compressed image too large: %lu > %lu", actualCompressedSize, buf_len);
+        common::logError("Compressed image too large: %lu > %lu", actualCompressedSize, bufLen);
         // Queue the buffer back (send it to the device)
         if (ioctl(fd_, VIDIOC_QBUF, &buf) < 0)
         {
-            common::errno_log("V4L2LoopbackWriter::writeFrame - VIDIOC_QBUF");
+            common::errnoLog("V4L2LoopbackWriter::writeFrame - VIDIOC_QBUF");
             return false;
         }
         return false;
@@ -221,7 +221,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
     // Queue the buffer back (send it to the device)
     if (ioctl(fd_, VIDIOC_QBUF, &buf) < 0)
     {
-        common::errno_log("V4L2LoopbackWriter::writeFrame - VIDIOC_QBUF");
+        common::errnoLog("V4L2LoopbackWriter::writeFrame - VIDIOC_QBUF");
         return false;
     }
 
@@ -276,7 +276,7 @@ void V4L2LoopbackWriter::cleanup()
         encoder_.reset();
     }
 
-    common::log_info("v4l2LoopbackWritter - Cleanup finished!");
+    common::logInfo("v4l2LoopbackWritter - Cleanup finished!");
 }
 
 bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
@@ -287,7 +287,7 @@ bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
     {
         if (!stop())
         {
-            common::log_error("V4L2LoopbackWriter::reconfigure - Failed to stop streaming");
+            common::logError("V4L2LoopbackWriter::reconfigure - Failed to stop streaming");
             return false;
         }
     }
@@ -302,18 +302,18 @@ bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
         encoder_.reset();
     }
 
-    const ConfigBuilder configBuilder;
+    ConfigBuilder configBuilder;
     configBuilder.imageFormat(selectedFormat_->format)
         .pixelFormat(TJPF_RGB)
         .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
         .height(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height)
         .quality(quality)
-        .chrominance_subsampling(chrominance_subsampling_);
+    .chrominanceSubsampling(chrominance_subsampling_);
 
     encoder_ = CodecFactory::create<Encoder>(configBuilder);
     if (encoder_ == nullptr)
     {
-        common::log_error("V4L2LoopbackWriter::reconfigure - Failed to create encoder");
+        common::logError("V4L2LoopbackWriter::reconfigure - Failed to create encoder");
         return false;
     }
 
@@ -322,11 +322,11 @@ bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
     {
         if (!start())
         {
-            common::log_error("V4L2LoopbackWriter::reconfigure - Failed to restart streaming");
+            common::logError("V4L2LoopbackWriter::reconfigure - Failed to restart streaming");
             return false;
         }
     }
 
-    common::log_info("V4L2LoopbackWriter::reconfigure - Successfully reconfigured subsampling");
+    common::logInfo("V4L2LoopbackWriter::reconfigure - Successfully reconfigured subsampling");
     return true;
 }

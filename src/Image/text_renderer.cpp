@@ -159,8 +159,8 @@ void TextRenderer::drawText(Image& img, int x, int y, const std::string& text, c
     int cursorX = drawX;
     for (const char c : text)
     {
-        drawChar(img, cursorX, drawY, c, color, scale);
-        cursorX += CHAR_WIDTH * scale;
+    drawChar(img, cursorX, drawY, c, color, scale);
+    cursorX += TextRenderer::CharWidth * scale;
     }
 }
 
@@ -224,7 +224,7 @@ void TextRenderer::drawMultilineText(Image& img, int x, int y, const std::string
     }
 
     int currentY = y;
-    int lineHeight = CHAR_HEIGHT * scale + lineSpacing;
+    int lineHeight = TextRenderer::CharHeight * scale + lineSpacing;
 
     for (const auto& textLine : lines)
     {
@@ -284,7 +284,7 @@ void TextRenderer::drawTextAligned(Image& img, int rectX, int rectY, int rectWid
 // Utility methods
 TextSize TextRenderer::getTextSize(const std::string& text, int scale)
 {
-    return {static_cast<int>(text.size()) * CHAR_WIDTH * scale, CHAR_HEIGHT * scale};
+    return {static_cast<int>(text.size()) * TextRenderer::CharWidth * scale, TextRenderer::CharHeight * scale};
 }
 
 TextSize TextRenderer::getMultilineTextSize(const std::string& text, int scale, int lineSpacing)
@@ -309,14 +309,14 @@ TextSize TextRenderer::getMultilineTextSize(const std::string& text, int scale, 
     }
 
     size_t maxLineLength = 0;
-    for (const auto& textLine : lines)
-    {
-        maxLineLength = std::max(maxLineLength, textLine.length());
-    }
+        for (const auto& textLine : lines)
+        {
+            if (textLine.length() > maxLineLength) maxLineLength = textLine.length();
+        }
 
-    int lineHeight = CHAR_HEIGHT * scale + lineSpacing;
-    int width = static_cast<int>(maxLineLength) * CHAR_WIDTH * scale;
-    const int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing;
+    int lineHeight = TextRenderer::CharHeight * scale + lineSpacing;
+    int width = static_cast<int>(maxLineLength) * TextRenderer::CharWidth * scale;
+    int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing;
 
     return {width, height};
 }
@@ -364,7 +364,7 @@ size_t TextRenderer::countRenderableCharacters(const std::string& text)
             count++;
         }
     }
-    return count;
+        return count;
 }
 
 // New comprehensive text rendering method
@@ -525,7 +525,7 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
 
     // Render each line of text
     int currentY = textStartY;
-    int lineHeight = CHAR_HEIGHT * config.scale + config.lineSpacing;
+    int lineHeight = TextRenderer::CharHeight * config.scale + config.lineSpacing;
 
     for (const auto& line : lines)
     {
@@ -555,11 +555,15 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
     image->info.format = ImageFormat::RGBA;
     // Tests expect filename in the form "text_layer_<text>" for easier identification.
     std::string safeText = config.text;
-    if (safeText.empty()) {
+    if (safeText.empty())
+    {
         safeText = "layer";
     }
     // Keep spaces as-is so tests that expect the original text in the filename pass
-    if (safeText.length() > 30) safeText = safeText.substr(0, 30);
+    if (safeText.length() > 30)
+    {
+        safeText = safeText.substr(0, 30);
+    }
     image->info.filename = std::string("text_layer_") + safeText;
 
     return image;
@@ -641,12 +645,12 @@ TextSize TextRenderer::calculateWrappedTextSize(const std::string& text, int max
     for (const auto& line : lines)
     {
         const TextSize lineSize = getTextSize(line, scale);
-        totalWidth = std::max(totalWidth, lineSize.width);
-        totalHeight += CHAR_HEIGHT * scale;
-        if (totalHeight > CHAR_HEIGHT * scale)
-        { // Add spacing between lines
-            totalHeight += lineSpacing;
-        }
+            if (lineSize.width > totalWidth) totalWidth = lineSize.width;
+            totalHeight += TextRenderer::CharHeight * scale;
+            if (totalHeight > TextRenderer::CharHeight * scale)
+            {
+                totalHeight += lineSpacing;
+            }
     }
 
     return {totalWidth, totalHeight};
@@ -664,10 +668,10 @@ const unsigned char* TextRenderer::getFontGlyph(char c)
 
 void TextRenderer::renderGlyph(Image& img, int x, int y, const unsigned char* glyph, const Pixel& color, int scale)
 {
-    for (int row = 0; row < CHAR_HEIGHT; row++)
+    for (int row = 0; row < TextRenderer::CharHeight; row++)
     {
         const uint8_t bits = glyph[row];
-        for (int col = 0; col < CHAR_WIDTH; col++)
+        for (int col = 0; col < TextRenderer::CharWidth; col++)
         {
             if ((bits & (1 << col)) != 0)
             {
