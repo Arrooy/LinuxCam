@@ -1,322 +1,332 @@
 name: CI Workflow
 
 on:
-    push:
-        branches: [develop, main]
-    pull_request:
-        branches: [develop, main]
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
 
 env:
-    # Use ccache to speed up builds
-    CCACHE_COMPRESS: "true"
-    CCACHE_COMPRESSLEVEL: "6"
-    CCACHE_MAXSIZE: "400M"
-    # Limit WFLW dataset samples for CI to prevent timeouts
-    WFLW_MAX_SAMPLES: "2"
-    # Limit faces processed per image to control test execution time
-    WFLW_MAX_FACES_PER_IMAGE: "3"
+  # Use ccache to speed up builds
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPRESSLEVEL: "6"
+  CCACHE_MAXSIZE: "400M"
+  # Limit WFLW dataset samples for CI to prevent timeouts
+  WFLW_MAX_SAMPLES: "2"
+  # Limit faces processed per image to control test execution time
+  WFLW_MAX_FACES_PER_IMAGE: "3"
 
 jobs:
-    build-test:
-        name: Build and Test
-        runs-on: ubuntu-latest
-        timeout-minutes: 90
-        strategy:
-            fail-fast: false
-            matrix:
-                build_type: [Debug, Release]
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
 
-        steps:
-            - name: Checkout source with submodules
-              uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+    steps:
+      - name: Checkout source with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-            - name: Get CPU info
-              if: runner.debug == '1' || github.event_name == 'workflow_dispatch'
-              run: |
-                  echo "CPU info:"
-                  lscpu
-                  echo "Memory info:"
-                  free -h
+      - name: Download ONNX Models
+        run: |
+          echo "$GDRIVE_CREDENTIALS" > service_account.json
+          pip install gdown
+          gdown --folder https://drive.google.com/drive/folders/18OdNkL0qTq7JhtLYLF8-IoBZtT70w9BW \
+                -O models/ \
+                --service-account service_account.json
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
 
-            - name: Install System Dependencies
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y \
-                    cmake \
-                    ninja-build \
-                    g++-12 \
-                    gcc-12 \
-                    nasm \
-                    gcovr \
-                    lcov \
-                    ccache \
-                    libgl1-mesa-dev \
-                    libglu1-mesa-dev \
-                    libxinerama-dev \
-                    libxcursor-dev \
-                    libxi-dev \
-                    libxrandr-dev \
-                    libopenblas-dev \
-                    liblapack-dev \
-                    libavdevice-dev \
-                    libavfilter-dev \
-                    libavformat-dev \
-                    libavcodec-dev \
-                    libswresample-dev \
-                    libswscale-dev \
-                    libavutil-dev \
-                    libjxl-dev \
-                    libopencv-dev \
-                    unzip
+      - name: Get CPU info
+        if: runner.debug == '1' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "CPU info:"
+          lscpu
+          echo "Memory info:"
+          free -h
 
-            - name: Setup ccache
-              uses: hendrikmuhs/ccache-action@v1.2
-              with:
-                  key: ${{ matrix.build_type }}-${{ runner.os }}
-                  max-size: 400M
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            g++-12 \
+            gcc-12 \
+            nasm \
+            gcovr \
+            lcov \
+            ccache \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxrandr-dev \
+            libopenblas-dev \
+            liblapack-dev \
+            libavdevice-dev \
+            libavfilter-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            libswresample-dev \
+            libswscale-dev \
+            libavutil-dev \
+            libjxl-dev \
+            libopencv-dev \
+            unzip
 
-            - name: Set GCC version
-              run: |
-                  sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
-                  sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
-                  sudo update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-12 100
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.build_type }}-${{ runner.os }}
+          max-size: 400M
 
-                  # Verify versions
-                  echo "Compiler versions:"
-                  gcc --version | head -1
-                  g++ --version | head -1
-                  gcov --version | head -1
+      - name: Set GCC version
+        run: |
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+          sudo update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-12 100
 
-            - name: Cache CMake dependencies
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/.cache/cmake
-                      build-${{ matrix.build_type }}/_deps
-                  key: ${{ runner.os }}-cmake-${{ matrix.build_type }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
-                  restore-keys: |
-                      ${{ runner.os }}-cmake-${{ matrix.build_type }}-
-                      ${{ runner.os }}-cmake-
+          # Verify versions
+          echo "Compiler versions:"
+          gcc --version | head -1
+          g++ --version | head -1
+          gcov --version | head -1
 
-            - name: Configure CMake (${{ matrix.build_type }})
-              run: |
-                  # Set coverage flag for Debug builds
-                  COVERAGE_FLAG="-DENABLE_COVERAGE=OFF"
-                  if [ "${{ matrix.build_type }}" = "Debug" ]; then
-                    COVERAGE_FLAG="-DENABLE_COVERAGE=ON"
-                    echo "🔧 Coverage enabled - will apply to user targets only (not external libraries)"
-                  fi
+      - name: Cache CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/cmake
+            build-${{ matrix.build_type }}/_deps
+          key: ${{ runner.os }}-cmake-${{ matrix.build_type }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-${{ matrix.build_type }}-
+            ${{ runner.os }}-cmake-
 
-                  cmake -S . -B build-${{ matrix.build_type }} \
-                    -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-                    -DBUILD_TESTING=ON \
-                    $COVERAGE_FLAG \
-                    -DUSE_AVX_INSTRUCTIONS=OFF \
-                    -DDLIB_NO_GUI_SUPPORT=ON \
-                    -DDLIB_USE_CUDA=OFF \
-                    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-                    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-                    -G Ninja
+      - name: Configure CMake (${{ matrix.build_type }})
+        run: |
+          # Set coverage flag for Debug builds
+          COVERAGE_FLAG="-DENABLE_COVERAGE=OFF"
+          if [ "${{ matrix.build_type }}" = "Debug" ]; then
+            COVERAGE_FLAG="-DENABLE_COVERAGE=ON"
+            echo "🔧 Coverage enabled - will apply to user targets only (not external libraries)"
+          fi
 
-                  # For Debug builds with coverage, verify our improved configuration
-                  if [ "${{ matrix.build_type }}" = "Debug" ]; then
-                    echo "📋 Verifying improved coverage configuration..."
-                    echo "✅ Coverage will be applied only to user targets: linuxface, LinuxFace, linuxface_tests"
-                    echo "❌ Coverage will NOT be applied to external libraries: yaml-cpp, dlib, googletest, etc."
-                  fi
+          cmake -S . -B build-${{ matrix.build_type }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_TESTING=ON \
+            $COVERAGE_FLAG \
+            -DUSE_AVX_INSTRUCTIONS=OFF \
+            -DDLIB_NO_GUI_SUPPORT=ON \
+            -DDLIB_USE_CUDA=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -G Ninja
 
-            - name: Build External Dependencies (${{ matrix.build_type }})
-              run: |
-                  echo "Building external dependencies..."
-                  # Build external dependencies first (non-parallel to ensure proper order)
-                  if ! cmake --build build-${{ matrix.build_type }} --target libjpeg-turbo; then
-                    echo "ERROR: Failed to build libjpeg-turbo"
-                    exit 1
-                  fi
-                  
-                  if ! cmake --build build-${{ matrix.build_type }} --target libjpeg_include_dir; then
-                    echo "ERROR: Failed to build libjpeg_include_dir"
-                    exit 1
-                  fi
+          # For Debug builds with coverage, verify our improved configuration
+          if [ "${{ matrix.build_type }}" = "Debug" ]; then
+            echo "📋 Verifying improved coverage configuration..."
+            echo "✅ Coverage will be applied only to user targets: linuxface, LinuxFace, linuxface_tests"
+            echo "❌ Coverage will NOT be applied to external libraries: yaml-cpp, dlib, googletest, etc."
+          fi
 
-            - name: Build Project (${{ matrix.build_type }})
-              run: |
-                  echo "Building main project..."
-                  # Then build the main project in parallel
-                  if ! cmake --build build-${{ matrix.build_type }} --parallel $(nproc); then
-                    echo "ERROR: Main project build failed"
-                    exit 1
-                  fi
+      - name: Build External Dependencies (${{ matrix.build_type }})
+        run: |
+          echo "Building external dependencies..."
+          # Build external dependencies first (non-parallel to ensure proper order)
+          if ! cmake --build build-${{ matrix.build_type }} --target libjpeg-turbo; then
+            echo "ERROR: Failed to build libjpeg-turbo"
+            exit 1
+          fi
 
-            - name: List Build Artifacts (${{ matrix.build_type }})
-              run: |
-                  echo "Build artifacts:"
-                  find build-${{ matrix.build_type }} -name "*.a" -o -name "linuxface*" -type f | head -20
+          if ! cmake --build build-${{ matrix.build_type }} --target libjpeg_include_dir; then
+            echo "ERROR: Failed to build libjpeg_include_dir"
+            exit 1
+          fi
 
-            - name: Download WFLW Dataset for Integration Tests
-              run: |
-                  echo "Setting up WFLW dataset for integration tests..."
-                  # Install gdown for Google Drive downloads
-                  pip install gdown
-                  
-                  # Run the dataset download script
-                  if ! ./scripts/download_wflw_dataset.sh; then
-                    echo "⚠️  Warning: WFLW dataset download failed"
-                    echo "Integration tests will be skipped"
-                    echo "WFLW_AVAILABLE=false" >> $GITHUB_ENV
-                  else
-                    echo "✅ WFLW dataset ready for testing"
-                    echo "WFLW_AVAILABLE=true" >> $GITHUB_ENV
-                  fi
+      - name: Build Project (${{ matrix.build_type }})
+        run: |
+          echo "Building main project..."
+          # Then build the main project in parallel
+          if ! cmake --build build-${{ matrix.build_type }} --parallel $(nproc); then
+            echo "ERROR: Main project build failed"
+            exit 1
+          fi
 
-            - name: Run Tests (${{ matrix.build_type }})
-              working-directory: build-${{ matrix.build_type }}
-              run: |
-                  echo "Available tests:"
-                  if command -v jq &> /dev/null; then
-                    ctest --show-only=json-v1 2>/dev/null | jq '.tests[].name' || ctest --show-only
-                  else
-                    ctest --show-only
-                  fi
+      - name: List Build Artifacts (${{ matrix.build_type }})
+        run: |
+          echo "Build artifacts:"
+          find build-${{ matrix.build_type }} -name "*.a" -o -name "linuxface*" -type f | head -20
 
-                  echo "Running tests..."
-                  echo "WFLW_MAX_SAMPLES set to: ${WFLW_MAX_SAMPLES:-default}"
-                  echo "WFLW_MAX_FACES_PER_IMAGE set to: ${WFLW_MAX_FACES_PER_IMAGE:-default}"
-                  
-                  # Run different test suites based on dataset availability
-                  if [ "${WFLW_AVAILABLE:-false}" = "true" ]; then
-                    echo "🧪 Running full test suite including WFLW integration tests..."
-                    echo "📊 WFLW tests will use max ${WFLW_MAX_SAMPLES:-500} samples and ${WFLW_MAX_FACES_PER_IMAGE:-5} faces per image to prevent CI timeouts"
-                    # Run all tests
-                    if ! ctest --output-on-failure --parallel $(nproc) --verbose; then
-                      echo "ERROR: Tests failed"
-                      exit 1
-                    fi
-                  else
-                    echo "🧪 Running standard test suite (excluding WFLW integration tests)..."
-                    # Run tests excluding WFLW integration tests
-                    if ! ctest --output-on-failure --parallel $(nproc) --verbose --exclude-regex ".*WFLW.*"; then
-                      echo "ERROR: Tests failed"
-                      exit 1
-                    fi
-                    echo "⚠️  Note: WFLW integration tests were skipped due to dataset unavailability"
-                  fi
+      - name: Download WFLW Dataset for Integration Tests
+        run: |
+          echo "Setting up WFLW dataset for integration tests..."
+          # Install gdown for Google Drive downloads
+          pip install gdown
 
-                  # For Debug builds, verify coverage data was generated  
-                  if [ "${{ matrix.build_type }}" = "Debug" ]; then
-                    echo "Checking for coverage data files..."
-                    GCDA_COUNT=$(find . -name "*.gcda" | wc -l)
-                    GCNO_COUNT=$(find . -name "*.gcno" | wc -l)
-                    echo "Found $GCDA_COUNT .gcda files and $GCNO_COUNT .gcno files"
+          # Run the dataset download script
+          if ! ./scripts/download_wflw_dataset.sh; then
+            echo "⚠️  Warning: WFLW dataset download failed"
+            echo "Integration tests will be skipped"
+            echo "WFLW_AVAILABLE=false" >> $GITHUB_ENV
+          else
+            echo "✅ WFLW dataset ready for testing"
+            echo "WFLW_AVAILABLE=true" >> $GITHUB_ENV
+          fi
 
-                    if [ $GCDA_COUNT -eq 0 ]; then
-                      echo "WARNING: No .gcda files found - coverage data may not be generated properly"
-                      echo "Listing some object files:"
-                      find . -name "*.o" | head -10
-                    else
-                      echo "Coverage data files found - ready for coverage analysis"
-                      echo "Sample .gcda files from user code:"
-                      find . -name "*.gcda" | grep -E "(linuxface|LinuxFace)" | head -5 || find . -name "*.gcda" | head -5
-                      echo "External library .gcda files (should be minimal with improved CMake):"
-                      find . -name "*.gcda" | grep -E "(yaml-cpp|dlib|googletest)" | head -3 || echo "✅ No external library coverage files found"
-                    fi
-                  fi
+      - name: Run Tests (${{ matrix.build_type }})
+        working-directory: build-${{ matrix.build_type }}
+        run: |
+          echo "Available tests:"
+          if command -v jq &> /dev/null; then
+            ctest --show-only=json-v1 2>/dev/null | jq '.tests[].name' || ctest --show-only
+          else
+            ctest --show-only
+          fi
 
-            - name: Generate Coverage Report (Debug only)
-              if: matrix.build_type == 'Debug'
-              working-directory: build-Debug
-              run: |
-                  echo "🧪 Generating clean coverage report (user code only)..."
+          echo "Running tests..."
+          echo "WFLW_MAX_SAMPLES set to: ${WFLW_MAX_SAMPLES:-default}"
+          echo "WFLW_MAX_FACES_PER_IMAGE set to: ${WFLW_MAX_FACES_PER_IMAGE:-default}"
 
-                  # Clean up any stale gcov files
-                  find . -name "*.gcov" -delete
+          # Run different test suites based on dataset availability
+          if [ "${WFLW_AVAILABLE:-false}" = "true" ]; then
+            echo "🧪 Running full test suite including WFLW integration tests..."
+            echo "📊 WFLW tests will use max ${WFLW_MAX_SAMPLES:-500} samples and ${WFLW_MAX_FACES_PER_IMAGE:-5} faces per image to prevent CI timeouts"
+            # Run all tests
+            if ! ctest --output-on-failure --parallel $(nproc) --verbose; then
+              echo "ERROR: Tests failed"
+              exit 1
+            fi
+          else
+            echo "🧪 Running standard test suite (excluding WFLW integration tests)..."
+            # Run tests excluding WFLW integration tests
+            if ! ctest --output-on-failure --parallel $(nproc) --verbose --exclude-regex ".*WFLW.*"; then
+              echo "ERROR: Tests failed"
+              exit 1
+            fi
+            echo "⚠️  Note: WFLW integration tests were skipped due to dataset unavailability"
+          fi
 
-                  # Verify we have the necessary files
-                  echo "📊 Coverage data verification:"
-                  GCDA_COUNT=$(find . -name "*.gcda" | wc -l)
-                  GCNO_COUNT=$(find . -name "*.gcno" | wc -l)
-                  echo "GCDA files: $GCDA_COUNT"
-                  echo "GCNO files: $GCNO_COUNT"
+          # For Debug builds, verify coverage data was generated  
+          if [ "${{ matrix.build_type }}" = "Debug" ]; then
+            echo "Checking for coverage data files..."
+            GCDA_COUNT=$(find . -name "*.gcda" | wc -l)
+            GCNO_COUNT=$(find . -name "*.gcno" | wc -l)
+            echo "Found $GCDA_COUNT .gcda files and $GCNO_COUNT .gcno files"
 
-                  if [ $GCDA_COUNT -eq 0 ] || [ $GCNO_COUNT -eq 0 ]; then
-                    echo "❌ ERROR: Insufficient coverage data files found"
-                    echo "GCDA files: $GCDA_COUNT, GCNO files: $GCNO_COUNT"
-                    exit 1
-                  fi
+            if [ $GCDA_COUNT -eq 0 ]; then
+              echo "WARNING: No .gcda files found - coverage data may not be generated properly"
+              echo "Listing some object files:"
+              find . -name "*.o" | head -10
+            else
+              echo "Coverage data files found - ready for coverage analysis"
+              echo "Sample .gcda files from user code:"
+              find . -name "*.gcda" | grep -E "(linuxface|LinuxFace)" | head -5 || find . -name "*.gcda" | head -5
+              echo "External library .gcda files (should be minimal with improved CMake):"
+              find . -name "*.gcda" | grep -E "(yaml-cpp|dlib|googletest)" | head -3 || echo "✅ No external library coverage files found"
+            fi
+          fi
 
-                  # Show coverage data distribution
-                  echo "📋 Sample .gcda files from your code:"
-                  find . -name "*.gcda" | grep -E "(linuxface|LinuxFace)" | head -5 || find . -name "*.gcda" | head -5
-                  echo "📋 External library .gcda files (should be minimal):"
-                  find . -name "*.gcda" | grep -E "(yaml-cpp|dlib|googletest)" | head -3 || echo "✅ No external library coverage found"
+      - name: Generate Coverage Report (Debug only)
+        if: matrix.build_type == 'Debug'
+        working-directory: build-Debug
+        run: |
+          echo "🧪 Generating clean coverage report (user code only)..."
 
-                  # Generate clean coverage report using improved settings
-                  echo "🔍 Using gcov executable: $(which gcov-12)"
-                  if ! gcovr -r ../ \
-                    --filter '../src/.*' \
-                    --exclude '../tests/.*' \
-                    --exclude '../external/.*' \
-                    --exclude '../build-Debug/_deps/.*' \
-                    --exclude-directories '../external' \
-                    --exclude-directories '../build-Debug/_deps' \
-                    --xml-pretty \
-                    -o coverage.xml \
-                    --print-summary \
-                    --gcov-executable gcov-12; then
-                    echo "❌ ERROR: Coverage report generation failed"
-                    exit 1
-                  fi
+          # Clean up any stale gcov files
+          find . -name "*.gcov" -delete
 
-                  # Verify coverage file was created and has content
-                  if [ -f coverage.xml ] && [ -s coverage.xml ]; then
-                    echo "✅ Coverage file generated successfully"
-                    echo "Coverage file size: $(wc -c < coverage.xml) bytes"
-                    
-                    # Extract and display coverage percentage if available
-                    COVERAGE_PERCENT=$(grep -o 'line-rate="[0-9.]*"' coverage.xml | head -1 | grep -o '[0-9.]*' || echo "unknown")
-                    if [ "$COVERAGE_PERCENT" != "unknown" ]; then
-                      COVERAGE_PERCENT_DISPLAY=$(echo "scale=1; $COVERAGE_PERCENT * 100" | bc -l 2>/dev/null || echo "$COVERAGE_PERCENT")
-                      echo "📊 Overall line coverage: ${COVERAGE_PERCENT_DISPLAY}% (user code only)"
-                    fi
-                    
-                    echo "📄 Coverage file preview:"
-                    head -20 coverage.xml
-                  else
-                    echo "❌ ERROR: Coverage file not generated or empty"
-                    ls -la coverage.* 2>/dev/null || echo "No coverage files found"
-                    exit 1
-                  fi
+          # Verify we have the necessary files
+          echo "📊 Coverage data verification:"
+          GCDA_COUNT=$(find . -name "*.gcda" | wc -l)
+          GCNO_COUNT=$(find . -name "*.gcno" | wc -l)
+          echo "GCDA files: $GCDA_COUNT"
+          echo "GCNO files: $GCNO_COUNT"
 
-            - name: Upload Coverage to Codecov
-              if: matrix.build_type == 'Debug'
-              uses: codecov/codecov-action@v5
-              with:
-                  files: build-Debug/coverage.xml
-                  token: ${{ secrets.CODECOV_TOKEN }}
-                  flags: unittests
-                  name: codecov-coverage
-                  fail_ci_if_error: true
-                  verbose: true
+          if [ $GCDA_COUNT -eq 0 ] || [ $GCNO_COUNT -eq 0 ]; then
+            echo "❌ ERROR: Insufficient coverage data files found"
+            echo "GCDA files: $GCDA_COUNT, GCNO files: $GCNO_COUNT"
+            exit 1
+          fi
 
-            - name: Upload Test Results (${{ matrix.build_type }})
-              uses: actions/upload-artifact@v4
-              if: always()
-              with:
-                  name: test-results-${{ matrix.build_type }}
-                  path: |
-                      build-${{ matrix.build_type }}/Testing/
-                      build-${{ matrix.build_type }}/*.xml
-                      build-${{ matrix.build_type }}/*.html
-                      build-${{ matrix.build_type }}/*.log
-                  retention-days: 30
+          # Show coverage data distribution
+          echo "📋 Sample .gcda files from your code:"
+          find . -name "*.gcda" | grep -E "(linuxface|LinuxFace)" | head -5 || find . -name "*.gcda" | head -5
+          echo "📋 External library .gcda files (should be minimal):"
+          find . -name "*.gcda" | grep -E "(yaml-cpp|dlib|googletest)" | head -3 || echo "✅ No external library coverage found"
 
-            - name: Upload Coverage Files (Debug only)
-              uses: actions/upload-artifact@v4
-              if: matrix.build_type == 'Debug'
-              with:
-                  name: coverage-files
-                  path: |
-                      build-Debug/coverage.xml
-                  retention-days: 30
+          # Generate clean coverage report using improved settings
+          echo "🔍 Using gcov executable: $(which gcov-12)"
+          if ! gcovr -r ../ \
+            --filter '../src/.*' \
+            --exclude '../tests/.*' \
+            --exclude '../external/.*' \
+            --exclude '../build-Debug/_deps/.*' \
+            --exclude-directories '../external' \
+            --exclude-directories '../build-Debug/_deps' \
+            --xml-pretty \
+            -o coverage.xml \
+            --print-summary \
+            --gcov-executable gcov-12; then
+            echo "❌ ERROR: Coverage report generation failed"
+            exit 1
+          fi
+
+          # Verify coverage file was created and has content
+          if [ -f coverage.xml ] && [ -s coverage.xml ]; then
+            echo "✅ Coverage file generated successfully"
+            echo "Coverage file size: $(wc -c < coverage.xml) bytes"
+            
+            # Extract and display coverage percentage if available
+            COVERAGE_PERCENT=$(grep -o 'line-rate="[0-9.]*"' coverage.xml | head -1 | grep -o '[0-9.]*' || echo "unknown")
+            if [ "$COVERAGE_PERCENT" != "unknown" ]; then
+              COVERAGE_PERCENT_DISPLAY=$(echo "scale=1; $COVERAGE_PERCENT * 100" | bc -l 2>/dev/null || echo "$COVERAGE_PERCENT")
+              echo "📊 Overall line coverage: ${COVERAGE_PERCENT_DISPLAY}% (user code only)"
+            fi
+            
+            echo "📄 Coverage file preview:"
+            head -20 coverage.xml
+          else
+            echo "❌ ERROR: Coverage file not generated or empty"
+            ls -la coverage.* 2>/dev/null || echo "No coverage files found"
+            exit 1
+          fi
+
+      - name: Upload Coverage to Codecov
+        if: matrix.build_type == 'Debug'
+        uses: codecov/codecov-action@v5
+        with:
+          files: build-Debug/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unittests
+          name: codecov-coverage
+          fail_ci_if_error: true
+          verbose: true
+
+      - name: Upload Test Results (${{ matrix.build_type }})
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.build_type }}
+          path: |
+            build-${{ matrix.build_type }}/Testing/
+            build-${{ matrix.build_type }}/*.xml
+            build-${{ matrix.build_type }}/*.html
+            build-${{ matrix.build_type }}/*.log
+          retention-days: 30
+
+      - name: Upload Coverage Files (Debug only)
+        uses: actions/upload-artifact@v4
+        if: matrix.build_type == 'Debug'
+        with:
+          name: coverage-files
+          path: |
+            build-Debug/coverage.xml
+          retention-days: 30
