@@ -74,9 +74,9 @@ class ImageLoader
 
     LoadStrategy strategy_;
     ImageMetadata metadata_;
-    std::vector<unsigned char> raw_data_{};
-    std::unique_ptr<Decoder> decoder_{};
-    std::unique_ptr<Image> decoded_image_{};
+    std::vector<unsigned char> raw_data_;
+    std::unique_ptr<Decoder> decoder_;
+    std::unique_ptr<Image> decoded_image_;
     bool is_decoded_{false};
 };
 

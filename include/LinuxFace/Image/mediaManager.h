@@ -31,8 +31,8 @@ class MediaManager
 
   private:
     size_t loadMediaFromFolder(const std::string& folderPath);
-    std::unordered_map<std::string, std::shared_ptr<Image>> images{};
-    std::unordered_map<std::string, std::shared_ptr<Gif>> gifs{};
+    std::unordered_map<std::string, std::shared_ptr<Image>> images;
+    std::unordered_map<std::string, std::shared_ptr<Gif>> gifs;
 
     std::shared_ptr<ImageRenderGL> imageRenderGl_;
 

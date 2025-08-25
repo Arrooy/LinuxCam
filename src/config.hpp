@@ -133,7 +133,8 @@ class Config
         outputCamera.device_path = output["path"].as<std::string>();
         outputCamera.width = output["width"].as<unsigned int>();
         outputCamera.height = output["height"].as<unsigned int>();
-        bool result = this->parseSubsamplingValue(output["subsampling"].as<std::string>(), outputCamera.subsampling);
+        const bool result =
+            this->parseSubsamplingValue(output["subsampling"].as<std::string>(), outputCamera.subsampling);
         if (result)
         {
             this->cameras_.push_back(outputCamera);
@@ -310,7 +311,7 @@ class Config
 
   private:
     YAML::Node config_;
-    std::vector<WebcamDevice> cameras_{};
+    std::vector<WebcamDevice> cameras_;
     ExternalData external_data_;
 
     bool enableGPU_{true};

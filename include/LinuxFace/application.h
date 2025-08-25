@@ -44,7 +44,7 @@ class Application
   private:
     void connectWindowResize();
     Window window_;
-    std::unique_ptr<UI> ui_{};
+    std::unique_ptr<UI> ui_;
 
     std::shared_ptr<CameraManager> cameraManager_;
     std::shared_ptr<ImageRenderGL> imageRender_;
@@ -52,24 +52,24 @@ class Application
 
     Profiler& profiler_;
 
-    std::unique_ptr<FaceDetector> faceDetector_{};
-    std::unique_ptr<ShapeDetector> dlibShapeDetector_{};
-    std::unique_ptr<FsanetDetector> fsanetDetectorVar_{};
-    std::unique_ptr<FsanetDetector> fsanetDetectorConv_{};
+    std::unique_ptr<FaceDetector> faceDetector_;
+    std::unique_ptr<ShapeDetector> dlibShapeDetector_;
+    std::unique_ptr<FsanetDetector> fsanetDetectorVar_;
+    std::unique_ptr<FsanetDetector> fsanetDetectorConv_;
     std::shared_ptr<SCRFDetector> scrfdDetector_;
-    std::unique_ptr<MODNetDetector> modnetDetector_{};
-    std::unique_ptr<RobustVideoMatting> rvmDetector_{};
+    std::unique_ptr<MODNetDetector> modnetDetector_;
+    std::unique_ptr<RobustVideoMatting> rvmDetector_;
     std::shared_ptr<ArcfaceRecognizer> arcfaceRecognizer_;
     std::shared_ptr<InSwapper> inswapper_;
-    std::unique_ptr<SwapPipeline> swapPipeline_{};
+    std::unique_ptr<SwapPipeline> swapPipeline_;
 
     std::shared_ptr<MediaPipeFaceLandmarks> mediaPipeLandmarks_;
     std::shared_ptr<PFLDDetector> pfldDetector_;
 
     std::shared_ptr<MediaManager> mediaManager_;
 
-    std::unique_ptr<Image> adria_img_{};
-    std::unique_ptr<Image> target_img_{};
+    std::unique_ptr<Image> adria_img_;
+    std::unique_ptr<Image> target_img_;
 
     // Main loop methods
     bool update();

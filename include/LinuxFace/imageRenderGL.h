@@ -104,7 +104,7 @@ class ImageRenderGL
     GLuint shaderProgram_{0};
 
     // Texture cache: maps layer id (as string) to OpenGL texture ID and VAO/VBO/EBO
-    std::unordered_map<std::string, TextureCacheEntry> textureCache_{};
+    std::unordered_map<std::string, TextureCacheEntry> textureCache_;
 };
 
 } // namespace linuxface

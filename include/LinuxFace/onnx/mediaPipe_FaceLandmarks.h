@@ -20,7 +20,7 @@ class MediaPipeFaceLandmarks : public OnnxDetector
     struct Result
     {
         float score{};
-        std::vector<std::vector<float>> landmarks{}; // [468][3]
+        std::vector<std::vector<float>> landmarks; // [468][3]
     };
     // Detect landmarks from a face image (expects cropped face, 192x192)
     Result detect(const std::unique_ptr<Image>& image);
