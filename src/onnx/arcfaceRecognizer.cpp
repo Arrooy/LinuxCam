@@ -35,7 +35,7 @@ Ort::Value ArcfaceRecognizer::transform(const std::unique_ptr<Image>& imgRs)
     input_node_dims[3] = imgRs->info.width;
     Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
-    float* tensorData = inputTensor.GetTensorMutableData<float>();
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
     // Use MINMAX normalization as a common default for ArcFace
     TensorPadding padding = TensorPadding::noPadding();
     imgRs->toTensor(tensorData, padding, imgRs->info.width, imgRs->info.height, NormalizationType::MINMAX);
@@ -50,12 +50,12 @@ bool ArcfaceRecognizer::recognize(const Image& inputImg, const std::vector<math_
     {
         return false;
     }
-    std::unique_ptr<Image> cropImage = preprocess(inputImg, faceLandmark5);
-    Ort::Value inputTensor = transform(cropImage);
+    const std::unique_ptr<Image> cropImage = preprocess(inputImg, faceLandmark5);
+    const Ort::Value inputTensor = transform(cropImage);
     const Ort::RunOptions runOptions;
     auto outputTensors = detector_session_->Run(runOptions, input_node_names_.data(), &inputTensor, 1,
                                                 output_node_names_.data(), output_node_names_str_.size());
-    float* pdata = outputTensors[0].GetTensorMutableData<float>();
+    auto* pdata = outputTensors[0].GetTensorMutableData<float>();
     embedding.clear();
     embedding.assign(pdata, pdata + 512);
     float norm = 0.0f;

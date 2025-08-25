@@ -24,7 +24,7 @@ void FsanetDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     // Crop image to face bounding box
     const std::unique_ptr<Image> cropImage = image->crop(face.getBoundingBox().rect);
     // Convert from image to tensor.
-    Ort::Value inputTensor = this->transform(cropImage);
+    const Ort::Value inputTensor = this->transform(cropImage);
     try
     {
         auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,

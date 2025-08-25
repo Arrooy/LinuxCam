@@ -159,8 +159,8 @@ void TextRenderer::drawText(Image& img, int x, int y, const std::string& text, c
     int cursorX = drawX;
     for (const char c : text)
     {
-    drawChar(img, cursorX, drawY, c, color, scale);
-    cursorX += TextRenderer::CharWidth * scale;
+        drawChar(img, cursorX, drawY, c, color, scale);
+        cursorX += TextRenderer::CharWidth * scale;
     }
 }
 
@@ -224,7 +224,7 @@ void TextRenderer::drawMultilineText(Image& img, int x, int y, const std::string
     }
 
     int currentY = y;
-    int lineHeight = TextRenderer::CharHeight * scale + lineSpacing;
+    const int lineHeight = TextRenderer::CharHeight * scale + lineSpacing;
 
     for (const auto& textLine : lines)
     {
@@ -309,14 +309,17 @@ TextSize TextRenderer::getMultilineTextSize(const std::string& text, int scale, 
     }
 
     size_t maxLineLength = 0;
-        for (const auto& textLine : lines)
+    for (const auto& textLine : lines)
+    {
+        if (textLine.length() > maxLineLength)
         {
-            if (textLine.length() > maxLineLength) maxLineLength = textLine.length();
+            maxLineLength = textLine.length();
         }
+    }
 
-    int lineHeight = TextRenderer::CharHeight * scale + lineSpacing;
-    int width = static_cast<int>(maxLineLength) * TextRenderer::CharWidth * scale;
-    int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing;
+    const int lineHeight = TextRenderer::CharHeight * scale + lineSpacing;
+    const int width = static_cast<int>(maxLineLength) * TextRenderer::CharWidth * scale;
+    const int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing;
 
     return {width, height};
 }
@@ -364,7 +367,7 @@ size_t TextRenderer::countRenderableCharacters(const std::string& text)
             count++;
         }
     }
-        return count;
+    return count;
 }
 
 // New comprehensive text rendering method
@@ -525,7 +528,7 @@ std::shared_ptr<Image> TextRenderer::renderText(const TextRenderConfig& config)
 
     // Render each line of text
     int currentY = textStartY;
-    int lineHeight = TextRenderer::CharHeight * config.scale + config.lineSpacing;
+    const int lineHeight = TextRenderer::CharHeight * config.scale + config.lineSpacing;
 
     for (const auto& line : lines)
     {
@@ -645,12 +648,15 @@ TextSize TextRenderer::calculateWrappedTextSize(const std::string& text, int max
     for (const auto& line : lines)
     {
         const TextSize lineSize = getTextSize(line, scale);
-            if (lineSize.width > totalWidth) totalWidth = lineSize.width;
-            totalHeight += TextRenderer::CharHeight * scale;
-            if (totalHeight > TextRenderer::CharHeight * scale)
-            {
-                totalHeight += lineSpacing;
-            }
+        if (lineSize.width > totalWidth)
+        {
+            totalWidth = lineSize.width;
+        }
+        totalHeight += TextRenderer::CharHeight * scale;
+        if (totalHeight > TextRenderer::CharHeight * scale)
+        {
+            totalHeight += lineSpacing;
+        }
     }
 
     return {totalWidth, totalHeight};

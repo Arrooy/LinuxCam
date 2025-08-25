@@ -31,7 +31,7 @@ Ort::Value Metric3D::transform(const std::unique_ptr<Image>& image)
     Ort::Value inputTensor = Ort::Value::CreateTensor<float>(allocator_, inputShape.data(), inputShape.size());
 
     // Get pointer to tensor data.
-    float* tensorData = inputTensor.GetTensorMutableData<float>();
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
 
     // Store the padding for later use in fromTensor
     padding_ = TensorPadding::metric3d();
@@ -45,7 +45,7 @@ Ort::Value Metric3D::transform(const std::unique_ptr<Image>& image)
 std::unique_ptr<DepthImage> Metric3D::detectDepth(const std::unique_ptr<Image>& image)
 {
     Profiler::getInstance().start("Metric3D", "Depth detection");
-    Ort::Value inputTensor = this->transform(image);
+    const Ort::Value inputTensor = this->transform(image);
 
     try
     {
@@ -60,8 +60,8 @@ std::unique_ptr<DepthImage> Metric3D::detectDepth(const std::unique_ptr<Image>& 
 
         // Extract all three outputs
         Ort::Value& depthOutput = outputTensors.at(0);      // predicted_depth
-        Ort::Value& normalOutput = outputTensors.at(1);     // predicted_normal
-        Ort::Value& confidenceOutput = outputTensors.at(2); // normal_confidence
+        const Ort::Value& normalOutput = outputTensors.at(1);     // predicted_normal
+        const Ort::Value& confidenceOutput = outputTensors.at(2); // normal_confidence
 
         // Get shape information for all outputs
         auto depthTypeInfo = depthOutput.GetTensorTypeAndShapeInfo();
@@ -110,7 +110,7 @@ std::unique_ptr<DepthImage> Metric3D::detectDepth(const std::unique_ptr<Image>& 
         common::logInfo("Metric3D using tensor dimensions: %dx%d", tensorWidth, tensorHeight);
 
         // Get tensor data pointers
-        auto depthData = depthOutput.GetTensorMutableData<float>();
+        auto* depthData = depthOutput.GetTensorMutableData<float>();
         // auto normalData = normalOutput.GetTensorMutableData<float>();
         // auto confidenceData = confidenceOutput.GetTensorMutableData<float>();
 
@@ -118,9 +118,10 @@ std::unique_ptr<DepthImage> Metric3D::detectDepth(const std::unique_ptr<Image>& 
         // Calculate the scaled image dimensions that were used during padding
         const int origW = image->info.width;
         const int origH = image->info.height;
-        float scale = std::min(static_cast<float>(target_width_) / origW, static_cast<float>(target_height_) / origH);
-        int scaledW = static_cast<int>(origW * scale);
-        int scaledH = static_cast<int>(origH * scale);
+        const float scale =
+            std::min(static_cast<float>(target_width_) / origW, static_cast<float>(target_height_) / origH);
+        const int scaledW = static_cast<int>(origW * scale);
+        const int scaledH = static_cast<int>(origH * scale);
 
         // Calculate padding that was added (same logic as Python pad_info)
         const int padH = target_height_ - scaledH;

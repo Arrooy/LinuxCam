@@ -36,6 +36,7 @@ std::vector<Face> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
     const std::vector<dlib::rectangle> rectsDetected = detector_(dlibImage);
 
     std::vector<Face> faces;
+    faces.reserve(rectsDetected.size());
     for (const auto& rect : rectsDetected)
     {
         faces.emplace_back(FaceBoundingBox(static_cast<float>(rect.left()), static_cast<float>(rect.top()),

@@ -34,7 +34,9 @@ std::shared_ptr<Image> MediaManager::getImage(const std::string& imageName)
     const std::lock_guard<std::mutex> lock(this->imageMutex_);
     auto it = this->images.find(imageName);
     if (it != this->images.end())
+    {
         return it->second;
+    }
     return nullptr;
 }
 
@@ -43,7 +45,9 @@ std::shared_ptr<Gif> MediaManager::getGif(const std::string& gifName)
     const std::lock_guard<std::mutex> lock(this->gifMutex_);
     auto it = this->gifs.find(gifName);
     if (it != this->gifs.end())
+    {
         return it->second;
+    }
     return nullptr;
 }
 
@@ -119,7 +123,7 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
 
 bool MediaManager::reloadImage(const std::string& imageName)
 {
-    std::lock_guard<std::mutex> lock(imageMutex_);
+    const std::lock_guard<std::mutex> lock(imageMutex_);
     auto it = images.find(imageName);
     if (it != images.end())
     {

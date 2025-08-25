@@ -36,7 +36,7 @@ Ort::Value SCRFDetector::transform(const std::unique_ptr<Image>& image)
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
 
     // Get pointer to tensor data.
-    float* tensorData = inputTensor.GetTensorMutableData<float>();
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
     auto tensorPadding = TensorPadding::scrfd();
     image->toTensor(tensorData, tensorPadding, targetWidth, targetHeight, NormalizationType::MINMAX);
     return inputTensor;
@@ -57,7 +57,7 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
     std::vector<Face> faces;
     faces.reserve(3000); // Reserve once for all strides (rough estimate)
     // Convert from image to tensor.
-    Ort::Value inputTensor = this->transform(image);
+    const Ort::Value inputTensor = this->transform(image);
 
     // Check if transform succeeded
     if (!inputTensor.IsTensor())
@@ -150,7 +150,7 @@ void SCRFDetector::applyNMS(std::vector<Face>& faces) const
         // Keep this face by moving it to the write position
         if (writeIdx != i)
         {
-            faces[writeIdx] = std::move(faces[i]);
+            faces[writeIdx] = faces[i];
         }
 
     const auto& currentRect = faces[writeIdx].getBoundingBox().rect;
@@ -171,7 +171,7 @@ void SCRFDetector::applyNMS(std::vector<Face>& faces) const
             }
 
             const auto& otherRect = faces[j].getBoundingBox().rect;
-            float iou = math_utils::calculateIoU(currentRect, otherRect);
+            const float iou = math_utils::calculateIoU(currentRect, otherRect);
 
             if (iou > NmsThreshold)
             {
@@ -192,18 +192,19 @@ void SCRFDetector::generatePoints()
     // 8, 16, 32
     for (auto stride : feat_stride_fpn_)
     {
-    unsigned int num_grid_w = targetWidth / stride;
-    unsigned int num_grid_h = targetHeight / stride;
+        const unsigned int numGridW = targetWidth / stride;
+        const unsigned int numGridH = targetHeight / stride;
         // y
-        for (unsigned int i = 0; i < num_grid_h; ++i)
+        for (unsigned int i = 0; i < numGridH; ++i)
         {
             // x
-            for (unsigned int j = 0; j < num_grid_w; ++j)
+            for (unsigned int j = 0; j < numGridW; ++j)
             {
                 // num_anchors, col major
                 for (unsigned int k = 0; k < NumAnchors; ++k)
                 {
-                    center_points_[stride].push_back(math_utils::StridePoint((float) j, (float) i, (float) stride));
+                    center_points_[stride].emplace_back(static_cast<float>(j), static_cast<float>(i),
+                                                        static_cast<float>(stride));
                 }
             }
         }
@@ -218,7 +219,7 @@ void SCRFDetector::generateBboxesKpsSingleStride(Ort::Value& scorePred, Ort::Val
     const auto newHeight = static_cast<float>(input_node_dims.at(2)); // e.g 640
     const auto newWidth = static_cast<float>(input_node_dims.at(3));  // e.g 640
 
-    float ratio = std::min(static_cast<float>(newWidth) / imgWidth, static_cast<float>(newHeight) / imgHeight);
+    const float ratio = std::min(static_cast<float>(newWidth) / imgWidth, static_cast<float>(newHeight) / imgHeight);
 
     const int resizedW = static_cast<int>(imgWidth * ratio);
     const int resizedH = static_cast<int>(imgHeight * ratio);

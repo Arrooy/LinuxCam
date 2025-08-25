@@ -71,7 +71,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
     }
     Profiler::getInstance().start("SwapPipeline", "detect image faces");
     // 2. Get landmarks for webcam (target)
-    std::vector<Face> scrfdFaces = scrfd_->detect(image);
+    const std::vector<Face> scrfdFaces = scrfd_->detect(image);
     if (scrfdFaces.empty())
     {
         common::logWarn("SwapPipeline: No faces detected in the webcam image.");
@@ -86,23 +86,23 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         common::logInfo("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", i,
                          face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
                          face.getBoundingBox().rect.width(), face.getBoundingBox().rect.height());
-        std::vector<math_utils::Point<>> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder2D();
-        if (webcam_landmarks.size() != 5)
+        std::vector<math_utils::Point<>> webcamLandmarks = face.getFivePointLandmarksArcFaceOrder2D();
+        if (webcamLandmarks.size() != 5)
         {
             common::logError("SwapPipeline: Detected face does not have 5 landmarks. It has %d landmarks.",
-                              static_cast<int>(webcam_landmarks.size()));
+                             static_cast<int>(webcamLandmarks.size()));
             return false;
         }
             common::logInfo("Source image landmarks %zu", i++);
-        for (const auto& landmark : webcam_landmarks)
-        {
-            common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
+            for (const auto& landmark : webcamLandmarks)
+            {
+                common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
         }
         Profiler::getInstance().stop("SwapPipeline", "detect image faces");
         Profiler::getInstance().start("SwapPipeline", "swap face");
         // Reuse swappedFace buffer for all faces
-        bool swap_ok = inswapper_->swap(target_img_embedding_, webcam_landmarks, *image, swappedFace);
-        if (!swap_ok)
+        const bool swapOk = inswapper_->swap(target_img_embedding_, webcamLandmarks, *image, swappedFace);
+        if (!swapOk)
         {
             common::logError("SwapPipeline: Face swap failed.");
             return false;
@@ -110,20 +110,21 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         Profiler::getInstance().stop("SwapPipeline", "swap face");
         Profiler::getInstance().start("SwapPipeline", "Affine Warp and Crop face"); // 10ms in 1080px!
         // 3. Estimate affine transformation from template to webcam landmarks
-        double src_points[10], dst_points[10];
+        double srcPoints[10];
+        double dstPoints[10];
         for (int i = 0; i < 5; ++i)
         {
-            src_points[2 * i] = image_utils::TEMPLATE_128[i][0] * swappedFace.info.width;
-            src_points[2 * i + 1] = image_utils::TEMPLATE_128[i][1] * swappedFace.info.height;
-            dst_points[2 * i] = webcam_landmarks[i].x;
-            dst_points[2 * i + 1] = webcam_landmarks[i].y;
+            srcPoints[2 * i] = image_utils::TEMPLATE_128[i][0] * swappedFace.info.width;
+            srcPoints[2 * i + 1] = image_utils::TEMPLATE_128[i][1] * swappedFace.info.height;
+            dstPoints[2 * i] = webcamLandmarks[i].x;
+            dstPoints[2 * i + 1] = webcamLandmarks[i].y;
         }
 
         double affineM[6];
-    math_utils::estimateAffine2d(src_points, dst_points, 5, affineM);
-        std::unique_ptr<Image> warped_swapped_face =
+        math_utils::estimateAffine2d(srcPoints, dstPoints, 5, affineM);
+        std::unique_ptr<Image> warpedSwappedFace =
             swappedFace.affineWarpBilinear(affineM, image->info.width, image->info.height);
-        if (!warped_swapped_face)
+        if (!warpedSwappedFace)
         {
             common::logError("SwapPipeline: Affine warp failed.");
             return false;
@@ -134,25 +135,25 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         // 4. Create a crop_mask for the swapped face
         // Use the bounding box of the detected face to create a crop_mask
         const auto& bbox = face.getBoundingBox();
-        double out_width = bbox.rect.width();
-        double out_height = bbox.rect.height();
-        double min_x = bbox.rect.x();
-        double min_y = bbox.rect.y();
-        std::vector<double> crop_size = {out_width, out_height};
-    std::unique_ptr<Image> crop_mask = image_utils::createStaticBoxMask(crop_size);
-        if (!crop_mask)
+        const double outWidth = bbox.rect.width();
+        const double outHeight = bbox.rect.height();
+        const double minX = bbox.rect.x();
+        const double minY = bbox.rect.y();
+        const std::vector<double> cropSize = {outWidth, outHeight};
+        std::unique_ptr<Image> cropMask = image_utils::createStaticBoxMask(cropSize);
+        if (!cropMask)
         {
             common::logError("SwapPipeline: Failed to create crop mask.");
             return false;
         }
 
-        std::unique_ptr<Image> warped_mask = std::make_unique<Image>(image->size());
-        warped_mask->info = image->info;                   // Copy metadata from the original image
-        warped_mask->info.pixelSizeBytes = 1;              // Single channel for mask
-        warped_mask->info.format = ImageFormat::GRAYSCALE; // Mask is grayscale
-        warped_mask->black();                              // Initialize the mask to black
-        warped_mask->pasteAt(*crop_mask, min_x, min_y, true);
-        if (!warped_mask)
+        std::unique_ptr<Image> warpedMask = std::make_unique<Image>(image->size());
+        warpedMask->info = image->info;                   // Copy metadata from the original image
+        warpedMask->info.pixelSizeBytes = 1;              // Single channel for mask
+        warpedMask->info.format = ImageFormat::GRAYSCALE; // Mask is grayscale
+        warpedMask->black();                              // Initialize the mask to black
+        warpedMask->pasteAt(*cropMask, minX, minY, true);
+        if (!warpedMask)
         {
             common::logError("SwapPipeline: Failed to warp crop mask.");
             return false;
@@ -165,8 +166,8 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         if (debug_)
         {
             auto output = image->deepCopy();
-            output->alphaBlend(*warped_swapped_face, *warped_mask);
-            for (auto& face : scrfdFaces)
+            output->alphaBlend(*warpedSwappedFace, *warpedMask);
+            for (const auto& face : scrfdFaces)
             {
                 face.paintBoundingBox(image, Pixel(0, 255, 0));
                 face.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 2.0f);
@@ -176,33 +177,33 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             {
                 image->scaleInPlace(scale);
                 output->scaleInPlace(scale);
-                warped_swapped_face->scaleInPlace(scale);
-                warped_mask->scaleInPlace(scale);
+                warpedSwappedFace->scaleInPlace(scale);
+                warpedMask->scaleInPlace(scale);
             }
-            warped_mask->convertToRGBInplace();
-            crop_mask->convertToRGBInplace();
+            warpedMask->convertToRGBInplace();
+            cropMask->convertToRGBInplace();
 
             image->drawBorder(Pixel(255, 0, 0), 2);
             output->drawBorder(Pixel(0, 255, 0), 2);
-            warped_swapped_face->drawBorder(Pixel(0, 0, 255), 2);
-            warped_mask->drawBorder(Pixel(255, 255, 0), 2);
-            crop_mask->drawBorder(Pixel(255, 0, 255), 2);
+            warpedSwappedFace->drawBorder(Pixel(0, 0, 255), 2);
+            warpedMask->drawBorder(Pixel(255, 255, 0), 2);
+            cropMask->drawBorder(Pixel(255, 0, 255), 2);
 
             auto width = image->info.width;
             auto height = image->info.height;
             image->pasteAt(*output, image->info.width, image->info.y, true);
             image->pasteAt(*debug_target_image_, image->info.width, 0, true);
             image->pasteAt(*debug_target_image_aligned_, image->info.width, 0, true);
-            image->pasteAt(*warped_swapped_face, 0, height, true);
-            image->pasteAt(*warped_mask, width, height, true);
-            image->pasteAt(*crop_mask, width * 2, height, true);
+            image->pasteAt(*warpedSwappedFace, 0, height, true);
+            image->pasteAt(*warpedMask, width, height, true);
+            image->pasteAt(*cropMask, width * 2, height, true);
         }
         else
         {
             Profiler::getInstance().start("SwapPipeline", "Alpha blending");
             // Alpha blend crop_mask onto temp_img using warped_mask
 
-            image->alphaBlend(*warped_swapped_face, *warped_mask);
+            image->alphaBlend(*warpedSwappedFace, *warpedMask);
             Profiler::getInstance().stop("SwapPipeline", "Alpha blending");
         }
         Profiler::getInstance().stop("SwapPipeline", "run");

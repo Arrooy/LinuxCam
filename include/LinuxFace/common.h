@@ -303,6 +303,7 @@ template <typename T>
 std::vector<std::string> getKeysFromMap(const std::unordered_map<std::string, std::shared_ptr<T>>& map)
 {
     std::vector<std::string> keys;
+    keys.reserve(map.size());
     for (const auto& pair : map)
     {
         keys.push_back(pair.first);

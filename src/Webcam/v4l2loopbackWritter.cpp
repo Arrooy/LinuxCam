@@ -154,7 +154,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         return false;
     }
 
-    Profiler::getInstance().start(name_.c_str(), "Encode and write output image");
+    Profiler::getInstance().start(name_, "Encode and write output image");
 
     // Check if we need to scale the image
     std::unique_ptr<Image> scaledImage = nullptr;
@@ -166,13 +166,13 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         if (!scaledImage)
         {
             common::logError("V4L2LoopbackWriter::writeFrame - Failed to scale image");
-            Profiler::getInstance().stop(name_.c_str(), "Encode and write output image");
+            Profiler::getInstance().stop(name_, "Encode and write output image");
             return false;
         }
     }
 
     // Use scaled image if available, otherwise use original
-    Image& imageToEncode = scaledImage ? *scaledImage : image;
+    const Image& imageToEncode = scaledImage ? *scaledImage : image;
 
     // 1. Dequeue a buffer (get an available buffer)
     struct v4l2_buffer buf = {0};
@@ -225,7 +225,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         return false;
     }
 
-    Profiler::getInstance().stop(name_.c_str(), "Encode and write output image");
+    Profiler::getInstance().stop(name_, "Encode and write output image");
 
     return true;
 }

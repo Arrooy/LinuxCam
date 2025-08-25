@@ -595,7 +595,7 @@ struct Normalizer<T, NormalizationType::MINMAX>
             return NormalizationTraits<T>::zeroValue();
         }
 
-        double normalized =
+        const double normalized =
             static_cast<double>(value - stats.min_val) / static_cast<double>(stats.max_val - stats.min_val);
 
         if constexpr (std::is_floating_point_v<T>)
@@ -1187,12 +1187,12 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 }
 
 // Bicubic kernel helper
-inline float cubicHermite(float A, float B, float C, float D, float t)
+inline float cubicHermite(float a, float b, float c, float d, float t)
 {
-    const float a3 = -A / 2.0f + (3.0f * B) / 2.0f - (3.0f * C) / 2.0f + D / 2.0f;
-    const float b2 = A - (5.0f * B) / 2.0f + 2.0f * C - D / 2.0f;
-    const float c1 = -A / 2.0f + C / 2.0f;
-    const float d0 = B;
+    const float a3 = -a / 2.0f + (3.0f * b) / 2.0f - (3.0f * c) / 2.0f + d / 2.0f;
+    const float b2 = a - (5.0f * b) / 2.0f + 2.0f * c - d / 2.0f;
+    const float c1 = -a / 2.0f + c / 2.0f;
+    const float d0 = b;
     return a3 * t * t * t + b2 * t * t + c1 * t + d0;
 }
 
@@ -1235,8 +1235,8 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
                     double row[4];
                     for (int n = -1; n <= 2; ++n)
                     {
-                        int px = std::clamp(xInt + n, 0, static_cast<int>(src.width) - 1);
-                        int py = std::clamp(yInt + m, 0, static_cast<int>(src.height) - 1);
+                        const int px = std::clamp(xInt + n, 0, static_cast<int>(src.width) - 1);
+                        const int py = std::clamp(yInt + m, 0, static_cast<int>(src.height) - 1);
                         row[n + 1] = static_cast<double>(src.data[(py * src.width + px) * src.pixelBytes + ch]);
                     }
                     col[m + 1] = cubicHermite(row[0], row[1], row[2], row[3], fracX);
@@ -1270,7 +1270,7 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
     if constexpr (normalizationType != NormalizationType::NONE)
     {
         stats.finalize();
-        Normalizer<K, normalizationType> normalizer;
+        const Normalizer<K, normalizationType> normalizer;
         const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
         {

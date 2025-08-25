@@ -2,11 +2,12 @@
 
 #include <GL/gl.h>
 #include <algorithm>
+#include <utility>
 
 namespace linuxface
 {
 MediaBrowserUI::MediaBrowserUI(std::shared_ptr<MediaManager> manager, std::shared_ptr<LayerManager> layerManager)
-    : mediaManager(manager), layerManager_(layerManager)
+    : mediaManager(std::move(manager)), layerManager_(std::move(layerManager))
 {
     if (!mediaManager)
     {
@@ -128,7 +129,7 @@ void MediaBrowserUI::renderImageDataContent()
 void MediaBrowserUI::renderImageOperationsContent()
 {
     Layer* selected = getSelectedLayer();
-    if (selected && selected->type == LayerType::IMAGE && selected->img)
+    if ((selected != nullptr) && selected->type == LayerType::IMAGE && selected->img)
     {
         // Only show scale slider for webcam/streaming layers
         if (!selected->cameraDevicePath.empty())
@@ -293,14 +294,14 @@ void MediaBrowserUI::renderSceneCompositor()
     auto& layers = layerManager_->getLayers();
 
     int removeIndex = -1;
-    for (int i = 0; i < (int) layers.size(); ++i)
+    for (int i = 0; i < static_cast<int>(layers.size()); ++i)
     {
         Layer& layer = layers[i];
-        std::string label = layer.name + " #" + std::to_string(layer.getLayerNumber());
+        const std::string label = layer.name + " #" + std::to_string(layer.getLayerNumber());
         ImGui::AlignTextToFramePadding();
         ImGui::PushID(i);
         ImGui::BeginGroup();
-        bool isSelected = layer.selected;
+        const bool isSelected = layer.selected;
         if (ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(120, 0)))
         {
             // Deselect all, select this one
@@ -346,7 +347,7 @@ void MediaBrowserUI::renderSceneCompositor()
         }
         if (ImGui::Button("Down"))
         {
-            if (i < (int) layers.size() - 1)
+            if (i < static_cast<int>(layers.size()) - 1)
             {
                 std::swap(layers[i], layers[i + 1]);
                 // Keep selection on the moved layer
@@ -373,9 +374,9 @@ void MediaBrowserUI::renderSceneCompositor()
         ImGui::EndGroup();
         ImGui::PopID();
     }
-    if (removeIndex >= 0 && removeIndex < (int) layers.size())
+    if (removeIndex >= 0 && removeIndex < static_cast<int>(layers.size()))
     {
-        bool wasSelected = layers[removeIndex].selected;
+        const bool wasSelected = layers[removeIndex].selected;
         layers.erase(layers.begin() + removeIndex);
         // Select first layer if none selected
         bool anySelected = false;
@@ -399,7 +400,7 @@ void MediaBrowserUI::renderSceneCompositor()
             layerManager_->markDirty();
         }
     }
-    for (int i = 0; i < (int) layers.size(); ++i)
+    for (int i = 0; i < static_cast<int>(layers.size()); ++i)
     {
         if (layers[i].type == LayerType::IMAGE && layers[i].img)
         {

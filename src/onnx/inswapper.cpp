@@ -25,7 +25,7 @@ Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
     padding_ = TensorPadding::noPadding();
 
-    float* tensorData = inputTensor.GetTensorMutableData<float>();
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
     image->toTensor(tensorData, padding_, InputWidth, InputHeight, NormalizationType::MINMAX);
 
     return inputTensor;
@@ -56,19 +56,19 @@ bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<m
     inputTensors.push_back(std::move(dstTensor));
     inputTensors.push_back(std::move(srcTensor));
     // 3. Run ONNX inference
-    Ort::RunOptions runOptions;
+    const Ort::RunOptions runOptions;
     std::vector<const char*> inputNames = {"target", "source"};
     std::vector<const char*> outputNames = {"output"};
     auto outputTensors =
         detector_session_->Run(runOptions, inputNames.data(), inputTensors.data(), 2, outputNames.data(), 1);
-    float* outData = outputTensors[0].GetTensorMutableData<float>();
+    auto* outData = outputTensors[0].GetTensorMutableData<float>();
     // 4. Convert output tensor to Image
     outImage.resize(InputWidth * InputHeight * 3, false);
     outImage.info.width = InputWidth;
     outImage.info.height = InputHeight;
     outImage.info.format = ImageFormat::RGB;
     outImage.info.pixelSizeBytes = 3;
-    TensorPadding pad = TensorPadding::noPadding();
+    const TensorPadding pad = TensorPadding::noPadding();
     outImage.fromTensor(outData, {1, 3, InputHeight, InputWidth}, InputWidth, InputHeight, pad,
                          NormalizationType::MINMAX);
     outImage.saveToDisk("swapped_face_raw.ppm");

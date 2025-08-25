@@ -161,12 +161,12 @@ bool OnnxDetector::readModelInputSize()
     {
         const Ort::TypeInfo ouputTypeInfo = detector_session_->GetOutputTypeInfo(i);
         auto outputTensorInfo = ouputTypeInfo.GetTensorTypeAndShapeInfo();
-    std::vector<int64_t> outputDims = outputTensorInfo.GetShape();
+        const std::vector<int64_t> outputDims = outputTensorInfo.GetShape();
         output_node_names_str_.push_back(names[i]);
         common::logInfo("OnnxDetector::readModelInputSize - Output name: %s", names[i].c_str());
-        for (size_t i = 0; i < outputDims.size(); ++i)
+        for (const long& outputDim : outputDims)
         {
-            common::logInfo("OnnxDetector::readModelInputSize - Detected shape: %d", outputDims[i]);
+            common::logInfo("OnnxDetector::readModelInputSize - Detected shape: %d", outputDim);
         }
     }
     input_node_names_.reserve(input_node_names_str_.size());

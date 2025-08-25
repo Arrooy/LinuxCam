@@ -148,7 +148,7 @@ bool Application::initialize()
             continue;
         }
         webcam->setCurrentlySelected(true);
-        if (!cameraManager_->addCamera(std::move(webcam)))
+        if (!cameraManager_->addCamera(webcam))
         {
             linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
             continue;
@@ -156,17 +156,17 @@ bool Application::initialize()
     }
 
     auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
-    for (const auto& device_path : availableDevicePaths)
+    for (const auto& devicePath : availableDevicePaths)
     {
-        std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", device_path, 0, 0, 2);
+        std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
         if (!webcam->setupDevice())
         {
-            linuxface::common::logError("Failed to setup webcam: %s", device_path.c_str());
+            linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
             continue;
         }
         if (!cameraManager_->addCamera(std::move(webcam)))
         {
-            linuxface::common::logError("Failed to add webcam: %s", device_path.c_str());
+            linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
             return false;
         }
     }
@@ -176,38 +176,38 @@ bool Application::initialize()
     const std::string modelsFolder = Config::getInstance().getModelFolderPath();
 
     // DlibShapeDetector initialization (landmarks)
-    std::string dlibShapeModel = modelsFolder + "shape_predictor_68_face_landmarks.dat";
+    const std::string dlibShapeModel = modelsFolder + "shape_predictor_68_face_landmarks.dat";
     // dlibShapeDetector_ = std::make_unique<DlibShapeDetector>(dlib_shape_model);
 
-    std::string varOnnxPath = modelsFolder + "fsanet-var.onnx";
+    const std::string varOnnxPath = modelsFolder + "fsanet-var.onnx";
     // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
-    std::string convOnnxPath = modelsFolder + "fsanet-1x1.onnx";
+    const std::string convOnnxPath = modelsFolder + "fsanet-1x1.onnx";
     // fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
 
-    std::string scrfd10gBnkpsPath = modelsFolder + "scrfd_10g_bnkps_shape640x640.onnx";
+    const std::string scrfd10gBnkpsPath = modelsFolder + "scrfd_10g_bnkps_shape640x640.onnx";
 
     // 1ms time inference
-    std::string scrfd500mBnkpsPath = modelsFolder + "scrfd_500m_bnkps_shape640x640.onnx";
+    const std::string scrfd500mBnkpsPath = modelsFolder + "scrfd_500m_bnkps_shape640x640.onnx";
     scrfdDetector_ = std::make_shared<SCRFDetector>(scrfd500mBnkpsPath);
 
-    std::string modnetOnnxPath = modelsFolder + "modnet.onnx";
+    const std::string modnetOnnxPath = modelsFolder + "modnet.onnx";
     // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
-    std::string rvmModel = modelsFolder + "rvm_mobilenetv3_fp32.onnx";
+    const std::string rvmModel = modelsFolder + "rvm_mobilenetv3_fp32.onnx";
     rvmDetector_ = std::make_unique<RobustVideoMatting>(rvmModel);
 
 
     // ArcFace recognizer initialization
-    std::string arcfaceModel = modelsFolder + "arcface_w600k_r50.onnx";
+    const std::string arcfaceModel = modelsFolder + "arcface_w600k_r50.onnx";
     arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcfaceModel);
 
     // InSwapper initialization
-    std::string inswapperModel = modelsFolder + "inswapper_128.onnx";
+    const std::string inswapperModel = modelsFolder + "inswapper_128.onnx";
     inswapper_ = std::make_shared<InSwapper>(inswapperModel);
 
     // MediaPipe Face Landmarks initialization
-    std::string mediapipeLandmarksModel = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
+    const std::string mediapipeLandmarksModel = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
     // std::string mediapipe_landmarks_model = models_folder + "face_landmark_barracuda.onnx";
     // mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipe_landmarks_model);
 
@@ -230,7 +230,7 @@ bool Application::initialize()
     ui_->connect(mediaManager_);
 
     // Load target faceswap image once
-    std::string targetPath = Config::getInstance().getMediaFolderPath() + "../testing.jpeg";
+    const std::string targetPath = Config::getInstance().getMediaFolderPath() + "../testing.jpeg";
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
@@ -238,7 +238,7 @@ bool Application::initialize()
     }
 
     // PFLD Landmarks initialization
-    std::string pfldModel = modelsFolder + "pfld-106-v3.onnx";
+    const std::string pfldModel = modelsFolder + "pfld-106-v3.onnx";
     pfldDetector_ = std::make_shared<PFLDDetector>(pfldModel);
 
     linuxface::common::logInfo("Application initialized successfully");
@@ -325,7 +325,7 @@ bool Application::update()
 
 void Application::render()
 {
-    // TODO: Implement render logic here
+    // TODO(arroyo): Implement render logic here
 }
 
     // Render body is handled by the non-static member function below
@@ -363,7 +363,7 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
     //     }
     {
-        // TODO: Implement render logic here
+        // TODO(arroyo): Implement render logic here
     }
 
     //     // 1. Draw five-point landmarks used for alignment on the original image
@@ -648,8 +648,8 @@ alignedToOriginalCoords(double xAligned, double yAligned, double cropLeft, doubl
     const double cosA = std::cos(-angleRad);
     const double sinA = std::sin(-angleRad);
 
-    double xOrig = cosA * xRel - sinA * yRel + eyeCenter.x;
-    double yOrig = sinA * xRel + cosA * yRel + eyeCenter.y;
+    const double xOrig = cosA * xRel - sinA * yRel + eyeCenter.x;
+    const double yOrig = sinA * xRel + cosA * yRel + eyeCenter.y;
 
     return {xOrig, yOrig};
 }

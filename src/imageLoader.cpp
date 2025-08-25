@@ -49,7 +49,7 @@ ImageFormat ImageFormatDetector::detectFormatFromPath(const std::string& path)
     }
 
     // Extract file extension
-    std::filesystem::path filePath(path);
+    const std::filesystem::path filePath(path);
     std::string extension = filePath.extension().string();
 
     // Convert to lowercase for comparison
@@ -244,7 +244,7 @@ bool ImageLoader::loadFileData(const std::string& filePath)
     }
 
     // Get file size
-    std::streamsize fileSize = file.tellg();
+    const std::streamsize fileSize = file.tellg();
     if (fileSize <= 0)
     {
         return false;

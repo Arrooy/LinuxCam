@@ -43,7 +43,7 @@ class DepthImage : public Image
     // Get depth value at specific coordinates
     float getDepth(unsigned long x, unsigned long y) const
     {
-        if (x >= info.width || y >= info.height || !data())
+        if (x >= info.width || y >= info.height || (data() == nullptr))
         {
             return 0.0f;
         }
@@ -54,7 +54,7 @@ class DepthImage : public Image
     // Set depth value at specific coordinates
     void setDepth(unsigned long x, unsigned long y, float depth)
     {
-        if (x >= info.width || y >= info.height || !data())
+        if (x >= info.width || y >= info.height || (data() == nullptr))
         {
             return;
         }
@@ -70,7 +70,7 @@ class DepthImage : public Image
     std::unique_ptr<DepthImage> deepCopyDepth() const
     {
         auto copy = std::make_unique<DepthImage>(info.width, info.height);
-        if (data() && copy->data() && size() > 0)
+        if ((data() != nullptr) && (copy->data() != nullptr) && size() != 0)
         {
             std::memcpy(copy->data(), data(), size());
         }
@@ -89,19 +89,19 @@ class DepthImage : public Image
         }
 
         // Calculate expected size in bytes
-        size_t expectedBytes = info.width * info.height * 3 * sizeof(float);
+        const size_t expectedBytes = info.width * info.height * 3 * sizeof(float);
 
         if (normalDataSize != expectedBytes)
         {
-            common::logWarn("DepthImage::setNormals - Expected: %zu bytes, Got: %zu bytes",
-                             static_cast<size_t>(expectedBytes), static_cast<size_t>(normalDataSize));
+            common::logWarn("DepthImage::setNormals - Expected: %zu bytes, Got: %zu bytes", expectedBytes,
+                            normalDataSize);
         }
 
         const size_t elementCount = normalDataSize / sizeof(float);
-        size_t expectedElements = info.width * info.height * 3;
+        const size_t expectedElements = info.width * info.height * 3;
 
         common::logWarn("DepthImage::setNormals - Size mismatch. Expected %zu elements, got %zu elements",
-                         expectedElements, elementCount);
+                        expectedElements, elementCount);
 
         // If we have the right number of elements, proceed anyway
         if (elementCount == expectedElements)
@@ -114,9 +114,9 @@ class DepthImage : public Image
             return;
         }
 
-    size_t elementsToCopy = info.width * info.height * 3;
-    normals_ = std::make_unique<float[]>(elementsToCopy);
-    std::memcpy(normals_.get(), normalData, elementsToCopy * sizeof(float));
+        const size_t elementsToCopy = info.width * info.height * 3;
+        normals_ = std::make_unique<float[]>(elementsToCopy);
+        std::memcpy(normals_.get(), normalData, elementsToCopy * sizeof(float));
         hasNormals_ = true;
     }
 
@@ -130,18 +130,18 @@ class DepthImage : public Image
         }
 
         // Calculate expected size in bytes
-        size_t expectedBytes = info.width * info.height * sizeof(float);
+        const size_t expectedBytes = info.width * info.height * sizeof(float);
 
         if (confidenceDataSize != expectedBytes)
         {
             // Try to determine actual element count from byte size
             const size_t elementCount = confidenceDataSize / sizeof(float);
-            size_t expectedElements = info.width * info.height;
+            const size_t expectedElements = info.width * info.height;
             common::logWarn("DepthImage::setConfidence - Expected: %zu bytes, Got: %zu bytes", expectedBytes,
-                             confidenceDataSize);
+                            confidenceDataSize);
 
             common::logWarn("DepthImage::setConfidence - Size mismatch. Expected %zu elements, got %zu elements",
-                             expectedElements, elementCount);
+                            expectedElements, elementCount);
 
             // If we have the right number of elements, proceed anyway
             if (elementCount == expectedElements)
@@ -155,7 +155,7 @@ class DepthImage : public Image
             }
         }
 
-        size_t elementsToCopy = info.width * info.height;
+        const size_t elementsToCopy = info.width * info.height;
         confidence_ = std::make_unique<float[]>(elementsToCopy);
         std::memcpy(confidence_.get(), confidenceData, elementsToCopy * sizeof(float));
         hasConfidence_ = true;
@@ -223,7 +223,7 @@ class DepthImage : public Image
     DepthStats getDepthStats() const
     {
         DepthStats stats = {0.0f, 0.0f, 0.0f, 0};
-        if (!data())
+        if (data() == nullptr)
         {
             return stats;
         }
@@ -295,10 +295,8 @@ class DepthImage : public Image
             return scaledImage;
         }
 
-        const double xRatio =   
-            (info.width > 1) ? static_cast<double>(info.width - 1) / (newWidth - 1) : 0.0;
-        const double yRatio =   
-            (info.height > 1) ? static_cast<double>(info.height - 1) / (newHeight - 1) : 0.0;
+        const double xRatio = (info.width > 1) ? static_cast<double>(info.width - 1) / (newWidth - 1) : 0.0;
+        const double yRatio = (info.height > 1) ? static_cast<double>(info.height - 1) / (newHeight - 1) : 0.0;
 
         for (unsigned long y = 0; y < newHeight; y++)
         {
@@ -312,8 +310,8 @@ class DepthImage : public Image
                 const auto x1 = static_cast<unsigned long>(srcX);
                 const auto y1 = static_cast<unsigned long>(srcY);
                 // Ensure we don't go out of bounds
-                unsigned long x2 = std::min(x1 + 1, info.width - 1);
-                unsigned long y2 = std::min(y1 + 1, info.height - 1);
+                const unsigned long x2 = std::min(x1 + 1, info.width - 1);
+                const unsigned long y2 = std::min(y1 + 1, info.height - 1);
 
                 const double fracX = srcX - x1;
                 const double fracY = srcY - y1;
@@ -322,13 +320,13 @@ class DepthImage : public Image
                 const unsigned long dstIdx = y * newWidth + x;
 
                 // Get source depth values with bounds checking
-                unsigned long idx1 = y1 * info.width + x1;
-                unsigned long idx2 = y1 * info.width + x2;
-                unsigned long idx3 = y2 * info.width + x1;
-                unsigned long idx4 = y2 * info.width + x2;
+                const unsigned long idx1 = y1 * info.width + x1;
+                const unsigned long idx2 = y1 * info.width + x2;
+                const unsigned long idx3 = y2 * info.width + x1;
+                const unsigned long idx4 = y2 * info.width + x2;
 
                 // Additional safety check
-                unsigned long totalPixels = info.width * info.height;
+                const unsigned long totalPixels = info.width * info.height;
                 if (idx1 >= totalPixels || idx2 >= totalPixels || idx3 >= totalPixels || idx4 >= totalPixels)
                 {
                     common::logError("DepthImage::scale - Source index out of bounds");
@@ -370,7 +368,7 @@ class DepthImage : public Image
                     srcXInt = std::min(srcXInt, info.width - 1);
                     srcYInt = std::min(srcYInt, info.height - 1);
 
-                    unsigned long srcIdx = (srcYInt * info.width + srcXInt) * 3;
+                    const unsigned long srcIdx = (srcYInt * info.width + srcXInt) * 3;
                     const unsigned long dstIdx = (y * newWidth + x) * 3;
 
                     // Copy normal vector (simple nearest neighbor for normals)
@@ -402,7 +400,7 @@ class DepthImage : public Image
                     srcXInt = std::min(srcXInt, info.width - 1);
                     srcYInt = std::min(srcYInt, info.height - 1);
 
-                    unsigned long srcIdx = srcYInt * info.width + srcXInt;
+                    const unsigned long srcIdx = srcYInt * info.width + srcXInt;
                     const unsigned long dstIdx = y * newWidth + x;
 
                     // Copy confidence value (simple nearest neighbor)
@@ -417,8 +415,8 @@ class DepthImage : public Image
     }
 
   private:
-    std::unique_ptr<float[]> normals_{};
-    std::unique_ptr<float[]> confidence_{};
+    std::unique_ptr<float[]> normals_;
+    std::unique_ptr<float[]> confidence_;
     bool hasNormals_ = false;
     bool hasConfidence_ = false;
 };

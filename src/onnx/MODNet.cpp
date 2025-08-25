@@ -21,7 +21,7 @@ Ort::Value MODNetDetector::transform(const std::unique_ptr<Image>& image)
     padding_ = TensorPadding::noPadding();
 
     // Get pointer to tensor data.
-    float* tensorData = inputTensor.GetTensorMutableData<float>();
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
     image->toTensor(tensorData, padding_, InputWidth, InputHeight, NormalizationType::ZERO_CENTER);
 
     return inputTensor;
@@ -32,7 +32,7 @@ void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr
     Profiler::getInstance().start("MODNetDetector", "Matting detection");
 
     // Convert from image to tensor.
-    Ort::Value inputTensor = this->transform(image);
+    const Ort::Value inputTensor = this->transform(image);
     try
     {
         auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
@@ -42,7 +42,7 @@ void MODNetDetector::detect(const std::unique_ptr<Image>& image, std::unique_ptr
 
         if (mate != nullptr)
         {
-            std::vector<int64_t> matteShape = outputTensor.GetTensorTypeAndShapeInfo().GetShape();
+            const std::vector<int64_t> matteShape = outputTensor.GetTensorTypeAndShapeInfo().GetShape();
             matte->fromTensor(mate, matteShape, InputWidth, InputHeight, padding_, NormalizationType::MINMAX);
         }
         else

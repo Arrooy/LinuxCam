@@ -17,7 +17,7 @@ Webcam::Webcam(std::string name, std::string devicePath, WebcamType type, unsign
 {
     std::vector<FrameSize> frameSizes;
     frameSizes.push_back(FrameSize{width, height, 0, {0u}});
-    Format fmt{"Constructor", ImageFormat::UNKNOWN, 0, 0, frameSizes};
+    const Format fmt{"Constructor", ImageFormat::UNKNOWN, 0, 0, frameSizes};
     selectedFormat_ = std::make_unique<Format>(fmt);
 }
 
@@ -292,8 +292,8 @@ std::tuple<unsigned int, unsigned int, double> Webcam::findBestFrameSize(const F
         const auto& size = fmt.sizes[i];
 
         const auto& selectedSize = selectedFormat_->sizes[selectedFormat_->selectedFrameSize];
-        unsigned int desiredWidth = selectedSize.width;
-        unsigned int desiredHeight = selectedSize.height;
+        const unsigned int desiredWidth = selectedSize.width;
+        const unsigned int desiredHeight = selectedSize.height;
         unsigned int desiredFPS = 0;
 
         // Check that the desired FPS appears in the format (ignore for 0fps)
@@ -306,7 +306,7 @@ std::tuple<unsigned int, unsigned int, double> Webcam::findBestFrameSize(const F
                 continue;
             }
         }
-        double distance = calculateDistance(size.width, size.height, desiredWidth, desiredHeight);
+        const double distance = calculateDistance(size.width, size.height, desiredWidth, desiredHeight);
 
         if (distance <= bestDistance)
         {
@@ -329,7 +329,7 @@ std::tuple<unsigned int, unsigned int, double> Webcam::findBestFrameSize(const F
 
     return {bestIndex, bestFpsIndex, bestDistance};
 }
-// TODO: This should be in math utils.
+// TODO(arroyo): This should be in math utils.
 double Webcam::calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2)
 {
     const double dx = static_cast<double>(width1) - static_cast<double>(width2);
@@ -349,7 +349,7 @@ bool Webcam::configureDeviceFormat() const
         CLEAR(format);
         format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         format.fmt.pix.pixelformat = selectedFormat_->pixelformat;
-        FrameSize frameSize = selectedFormat_->sizes[selectedFormat_->selectedFrameSize];
+        const FrameSize frameSize = selectedFormat_->sizes[selectedFormat_->selectedFrameSize];
         format.fmt.pix.width = frameSize.width;
         format.fmt.pix.height = frameSize.height;
         format.fmt.pix.field = V4L2_FIELD_NONE;

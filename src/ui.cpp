@@ -3,7 +3,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include <math.h>
+#include <cmath>
 
 #include "LinuxFace/Image/text_renderer.h"
 #include "LinuxFace/UI/paintWebcam.h"
@@ -72,7 +72,7 @@ void UI::loadingScreen()
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar
                      | ImGuiWindowFlags_NoBackground);
     // Show placeholder when nothing is selected
-    std::string msg = "Loading content, please wait...";
+    const std::string msg = "Loading content, please wait...";
     const ImVec2 contentSize = ImGui::GetContentRegionAvail();
     const ImVec2 textSize = ImGui::CalcTextSize(msg.c_str());
     ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
@@ -344,7 +344,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
         {
             ImGui::AlignTextToFramePadding();
             ImGui::PushID(item.c_str());
-            float buttonWidth = ImGui::CalcTextSize("+").x + ImGui::GetStyle().FramePadding.x * 4.0f;
+            const float buttonWidth = ImGui::CalcTextSize("+").x + ImGui::GetStyle().FramePadding.x * 4.0f;
 
             ImGui::BeginGroup();
             ImGui::Text("%s", item.c_str());
@@ -433,7 +433,7 @@ void UI::paintDeviceConfigurationTabs()
         // Render tabs for existing devices
         for (auto& webcam : managedWebcams)
         {
-            std::string tab_name = webcam->getName();
+            std::string tabName = webcam->getName();
             ImGuiTabItemFlags flags = 0;
 
             // Check if we need to programmatically select this tab
@@ -445,11 +445,11 @@ void UI::paintDeviceConfigurationTabs()
             }
 
             // Add webcam type indicator
-            tab_name += webcam->getType() == WebcamType::PHYSICAL_INPUT ? " (IN)" : " (OUT)";
+            tabName += webcam->getType() == WebcamType::PHYSICAL_INPUT ? " (IN)" : " (OUT)";
 
             // Add close button to tab
-            bool tab_open = true;
-            if (ImGui::BeginTabItem((tab_name + "###tab" + std::to_string(tabIndex++)).c_str(), &tab_open, flags))
+            bool tabOpen = true;
+            if (ImGui::BeginTabItem((tabName + "###tab" + std::to_string(tabIndex++)).c_str(), &tabOpen, flags))
             {
                 paintWebcam_->setWebcam(webcam);
                 paintWebcam_->paintDevice();
@@ -459,9 +459,9 @@ void UI::paintDeviceConfigurationTabs()
 
             // Handle tab closing
             // TODO(arroyo): not working.
-            if (!tab_open)
+            if (!tabOpen)
             {
-                common::logError("Closing device tab: %s", tab_name.c_str());
+                common::logError("Closing device tab: %s", tabName.c_str());
                 if (active_device_tab_ >= 1)
                 {
                     active_device_tab_--;
@@ -481,15 +481,15 @@ void UI::paintDeviceConfigurationTabs()
                 temp_modal_webcams_.clear();
 
                 // Use CameraManager to discover devices
-                std::vector<std::string> devicePaths = cameraManager_->discoverAvailableVideoDevices();
+                const std::vector<std::string> devicePaths = cameraManager_->discoverAvailableVideoDevices();
                 temp_modal_webcams_.reserve(devicePaths.size());
 
                 // Create a temp webcam for each device.
-                for (const auto& device_path : devicePaths)
+                for (const auto& devicePath : devicePaths)
                 {
-                    auto temp_webcam = std::make_shared<InputWebcam>("temp_" + device_path, device_path, 640, 480, 1);
-                    temp_modal_webcams_.push_back(temp_webcam);
-                    common::logInfo("Created temporary webcam for %s", device_path.c_str());
+                    auto tempWebcam = std::make_shared<InputWebcam>("temp_" + devicePath, devicePath, 640, 480, 1);
+                    temp_modal_webcams_.push_back(tempWebcam);
+                    common::logInfo("Created temporary webcam for %s", devicePath.c_str());
                 }
 
                 // Reset selected webcam
@@ -523,7 +523,7 @@ void UI::handleKeyboard()
     if (!ImGui::IsAnyItemActive())
     {
         const auto& managedWebcams = cameraManager_->getWebcams();
-        int size = managedWebcams.size();
+        const int size = managedWebcams.size();
 
         // Ctrl+1-9: Switch to specific tab
         for (int i = 0; i < 9 && i < size; ++i)
@@ -545,8 +545,8 @@ void UI::handleKeyboard()
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Backspace) || ImGui::IsKeyPressed(ImGuiKey_Delete))
         {
-            auto selectedLayer = mediaBrowserUI_->getSelectedLayer();
-            if (selectedLayer)
+            auto* selectedLayer = mediaBrowserUI_->getSelectedLayer();
+            if (selectedLayer != nullptr)
             {
                 // Remove the selected layer
                 layerManager_->removeLayer(selectedLayer->id);
@@ -577,8 +577,8 @@ ImVec4 getProfileColorFromDuration(int64_t duration)
     }
 
     // Interpolate green to red
-    float r = common::lerp(0.0f, 1.0f, t);
-    float g = common::lerp(1.0f, 0.0f, t);
+    const float r = common::lerp(0.0f, 1.0f, t);
+    const float g = common::lerp(1.0f, 0.0f, t);
     const float b = 0.2f;
     const float a = 1.0f;
 
@@ -592,8 +592,8 @@ Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& m
     for (int i = static_cast<int>(layers.size()) - 1; i >= 0; --i)
     {
         const Layer& layer = layers[i];
-        float lx = layer.x;
-        float ly = layer.y;
+        const float lx = layer.x;
+        const float ly = layer.y;
         float lw = 0;
         float lh = 0;
 

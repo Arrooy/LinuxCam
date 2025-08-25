@@ -87,7 +87,7 @@ bool InputWebcam::stop()
     }
 
     stopRecording();
-    return static_cast<bool>(queueAllBuffersAgain(bufrequest_.count, bufrequest_.type));
+    return queueAllBuffersAgain(bufrequest_.count, bufrequest_.type);
 }
 
 bool InputWebcam::configureBuffers()
@@ -277,7 +277,7 @@ void InputWebcam::imageAcquisitionLoop()
 
         tv.tv_sec = 2;
         tv.tv_usec = 0;
-        Profiler::getInstance().start(name_.c_str(), "Waiting for OS camera frame");
+        Profiler::getInstance().start(name_, "Waiting for OS camera frame");
         r = select(fd_ + 1, &fds, nullptr, nullptr, &tv);
 
         if (r == -1)
@@ -370,9 +370,9 @@ void InputWebcam::imageAcquisitionLoop()
             continue;
         }
 
-        Profiler::getInstance().stop(name_.c_str(), "Waiting for OS camera frame");
+        Profiler::getInstance().stop(name_, "Waiting for OS camera frame");
 
-        Profiler::getInstance().start(name_.c_str(), "Input image decoding");
+        Profiler::getInstance().start(name_, "Input image decoding");
 
         Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
         srcImage.info.TJPixelFormat = TJPF_RGB;
@@ -381,7 +381,7 @@ void InputWebcam::imageAcquisitionLoop()
         if (readImageHeader)
         {
             unsigned long rawNeededSize = 0;
-            bool validImage = decoder_->decodeHeader(srcImage, rawNeededSize);
+            const bool validImage = decoder_->decodeHeader(srcImage, rawNeededSize);
             if (!validImage)
             {
                 common::logInfo(
@@ -429,7 +429,7 @@ void InputWebcam::imageAcquisitionLoop()
         imageTmp.info = cameraInputInfo; // TODO(arroyo): FIXME: Here we are resetting the
                                          // decoder state. We should use the decoder state
         {
-            std::lock_guard<std::mutex> lock(imageMutex_);
+            const std::lock_guard<std::mutex> lock(imageMutex_);
             if (!latestImage_ || latestImage_->size() != imageTmp.size())
             {
                 latestImage_ = std::make_unique<Image>(imageTmp.size());
@@ -438,7 +438,7 @@ void InputWebcam::imageAcquisitionLoop()
             latestImage_->copyFrom(imageTmp);
         }
 
-        Profiler::getInstance().stop(name_.c_str(), "Input image decoding");
+        Profiler::getInstance().stop(name_, "Input image decoding");
 
         // Others can process the image
 
@@ -454,10 +454,9 @@ void InputWebcam::imageAcquisitionLoop()
 bool InputWebcam::getImage(std::unique_ptr<Image>& outImage)
 {
     // Get the most recent frame from queue, discarding older ones
-    std::unique_ptr<Image> latestFrame;
     if (latestImage_)
     {
-        std::lock_guard<std::mutex> lock(imageMutex_);
+        const std::lock_guard<std::mutex> lock(imageMutex_);
         outImage = latestImage_->deepCopy();
         return true;
     }
@@ -542,7 +541,7 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex
         return false;
     }
 
-    Format selectedFormat = capabilities_.formats[formatIndex];
+    const Format selectedFormat = capabilities_.formats[formatIndex];
 
     // Cleanup current setup
     cleanup();

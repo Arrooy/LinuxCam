@@ -413,7 +413,7 @@ bool CameraManager::addCamera(const std::shared_ptr<Webcam>& camera)
     }
     if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
     {
-        bool result = addCameraImpl(outWebcam_, output);
+        const bool result = addCameraImpl(outWebcam_, output);
         if (result && layerManager_)
         {
             createOutputCameraOverlay(output);

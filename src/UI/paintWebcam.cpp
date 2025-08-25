@@ -55,8 +55,8 @@ void PaintWebcam::paintDevice()
     if (ImGui::CollapsingHeader("Current Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
         const Format usedFormat = webcam_->getSelectedFormat();
-        FrameSize selectedFrameSize = usedFormat.sizes[usedFormat.selectedFrameSize];
-    ImGui::Text("FPS: %u", selectedFrameSize.getFps(selectedFrameSize.selectedFPS));
+        const FrameSize selectedFrameSize = usedFormat.sizes[usedFormat.selectedFrameSize];
+        ImGui::Text("FPS: %u", selectedFrameSize.getFps(selectedFrameSize.selectedFPS));
         ImGui::Text("Resolution: %ux%u", selectedFrameSize.width, selectedFrameSize.height);
         ImGui::Text("System format description: %s", usedFormat.description.c_str());
         ImGui::Text("Pixel format %u", usedFormat.pixelformat);
@@ -133,7 +133,7 @@ void PaintWebcam::paintPhysicalInput()
         }
 
         const int currentSizeIdx = currentFormat.selectedFrameSize;
-        int currentFpsIdx = currentFormat.sizes[currentFormat.selectedFrameSize].selectedFPS;
+        const int currentFpsIdx = currentFormat.sizes[currentFormat.selectedFrameSize].selectedFPS;
 
         for (std::size_t fmtIdx = 0; fmtIdx < capabilities.formats.size(); fmtIdx++)
         {
@@ -155,7 +155,7 @@ void PaintWebcam::paintPhysicalInput()
                         flags |= ImGuiTreeNodeFlags_DefaultOpen;
                     }
                     const auto& size = format.sizes[sizeIdx];
-                    std::string sizeText = std::to_string(size.width) + "x" + std::to_string(size.height);
+                    const std::string sizeText = std::to_string(size.width) + "x" + std::to_string(size.height);
                     if (ImGui::TreeNodeEx(sizeText.c_str(), flags))
                     {
                         for (std::size_t fpsIdx = 0; fpsIdx < size.fps.size(); fpsIdx++)
@@ -167,7 +167,7 @@ void PaintWebcam::paintPhysicalInput()
                                                     && currentFpsIdx == static_cast<int>(fpsIdx));
 
                             ImGui::PushID(fmtIdx * 5000 + sizeIdx * 500 + fpsIdx);
-                            std::string fpsText = std::to_string(fps) + "fps";
+                            const std::string fpsText = std::to_string(fps) + "fps";
                             if (ImGui::Selectable(fpsText.c_str(), isCurrent))
                             {
                                 if (!isCurrent) // Only apply if it's a
@@ -243,7 +243,7 @@ void PaintWebcam::paintVirtualOutput()
 
         ImGui::SliderInt("Image Quality", &selected_quality_value_, 0, 100, "%d", flagsForSliders);
 
-        bool applyChangesDisabled = selected_subsampling_.find(cameraKey) == selected_subsampling_.end();
+        const bool applyChangesDisabled = selected_subsampling_.find(cameraKey) == selected_subsampling_.end();
 
         if (applyChangesDisabled)
         {
@@ -271,7 +271,7 @@ void PaintWebcam::paintVirtualOutput()
     }
 }
 
-bool PaintWebcam::paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> tempWebcams)
+bool PaintWebcam::paintAddDeviceModal(const std::vector<std::shared_ptr<Webcam>>& tempWebcams)
 {
     if (tempWebcams.empty())
     {
@@ -291,16 +291,16 @@ bool PaintWebcam::paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> tempW
         const std::string comboText = webcam_new_device_ ? webcam_new_device_->getDevicePath() : "Select device...";
         if (ImGui::BeginCombo("Video Device", comboText.c_str()))
         {
-            for (auto& temp_webcam : tempWebcams)
+            for (const auto& tempWebcam : tempWebcams)
             {
-                bool is_selected =
-                    !webcam_new_device_ ? false : (temp_webcam->getDevicePath() == webcam_new_device_->getDevicePath());
+                const bool isSelected =
+                    !webcam_new_device_ ? false : (tempWebcam->getDevicePath() == webcam_new_device_->getDevicePath());
 
-                if (ImGui::Selectable(temp_webcam->getDevicePath().c_str(), is_selected))
+                if (ImGui::Selectable(tempWebcam->getDevicePath().c_str(), isSelected))
                 {
-                    webcam_new_device_ = temp_webcam;
+                    webcam_new_device_ = tempWebcam;
                 }
-                if (is_selected)
+                if (isSelected)
                 {
                     ImGui::SetItemDefaultFocus();
                 }

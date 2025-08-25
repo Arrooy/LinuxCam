@@ -57,14 +57,14 @@ void Face::loadNewFaceLandmarks(const std::vector<FaceLandmark>& landmarks)
     // Fill the landmarks map with the new landmarks.
     for (const FaceLandmark& landmark : landmarks)
     {
-        unsigned int id = landmark.i;
-        Face::FaceIndex index = Face::getFacepartFromLandmarkId(id);
+        const unsigned int id = landmark.i;
+        const Face::FaceIndex index = Face::getFacepartFromLandmarkId(id);
         auto it = landmarks_.find(index);
         if (it == landmarks_.end())
         {
-            std::vector<FaceLandmark> new_landmark;
-            new_landmark.push_back(landmark);
-            landmarks_.insert(std::pair<Face::FaceIndex, std::vector<FaceLandmark>>(index, new_landmark));
+            std::vector<FaceLandmark> newLandmark;
+            newLandmark.push_back(landmark);
+            landmarks_.insert(std::pair<Face::FaceIndex, std::vector<FaceLandmark>>(index, newLandmark));
         }
         else
         {
@@ -128,13 +128,13 @@ void Face::paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints,
         return; // No landmarks to paint
     }
 
-    for (const auto& face_part : landmarks_)
+    for (const auto& facePart : landmarks_)
     {
-        if (face_part.first == FaceIndex::SILHOUETTE)
+        if (facePart.first == FaceIndex::SILHOUETTE)
         {
             c = Pixel(0, 255, 0);
         }
-        paintFaceIndex(image, face_part.first, joinPoints, c, radius);
+        paintFaceIndex(image, facePart.first, joinPoints, c, radius);
     }
 }
 
@@ -143,13 +143,13 @@ void Face::paintBoundingBox(std::unique_ptr<Image>& image, Pixel color) const
     std::vector<math_utils::Point<>> points;
 
     // Clamp bounding box coordinates to image bounds
-    int imageWidth = static_cast<int>(image->info.width);
-    int imageHeight = static_cast<int>(image->info.height);
+    const int imageWidth = static_cast<int>(image->info.width);
+    const int imageHeight = static_cast<int>(image->info.height);
 
-    int left = std::max(0, std::min(static_cast<int>(boundingBox_.rect.l), imageWidth - 1));
-    int right = std::max(0, std::min(static_cast<int>(boundingBox_.rect.r), imageWidth - 1));
-    int top = std::max(0, std::min(static_cast<int>(boundingBox_.rect.t), imageHeight - 1));
-    int bottom = std::max(0, std::min(static_cast<int>(boundingBox_.rect.b), imageHeight - 1));
+    const int left = std::max(0, std::min(static_cast<int>(boundingBox_.rect.l), imageWidth - 1));
+    const int right = std::max(0, std::min(static_cast<int>(boundingBox_.rect.r), imageWidth - 1));
+    const int top = std::max(0, std::min(static_cast<int>(boundingBox_.rect.t), imageHeight - 1));
+    const int bottom = std::max(0, std::min(static_cast<int>(boundingBox_.rect.b), imageHeight - 1));
 
     // Only draw if we have a valid rectangle
     if (left < right && top < bottom)
@@ -176,21 +176,21 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
     int inside = 0;
     long startIndex = 0;
 
-    long startPixel =
+    const long startPixel =
         static_cast<long>((boundingBox_.rect.l + boundingBox_.rect.t * static_cast<float>(image->info.width))
                           * static_cast<float>(image->info.pixelSizeBytes));
 
     // El 25 es per corregir el bottom massa curt. Aixi no talla la cara,
-    long endPixel = static_cast<long>(boundingBox_.rect.r + boundingBox_.rect.b + 25.0f)
-                    * static_cast<long>(image->info.width) * static_cast<long>(image->info.pixelSizeBytes);
+    const long endPixel = static_cast<long>(boundingBox_.rect.r + boundingBox_.rect.b + 25.0f)
+                          * static_cast<long>(image->info.width) * static_cast<long>(image->info.pixelSizeBytes);
 
     for (long i = startPixel; i < endPixel; i += image->info.pixelSizeBytes)
     {
         for (const FaceLandmark& landmark : landmarks_.at(facepart))
         {
             const math_utils::Point3D& p = landmark.p;
-            long index = static_cast<long>(p.x + p.y * static_cast<double>(image->info.width))
-                         * static_cast<long>(image->info.pixelSizeBytes);
+            const long index = static_cast<long>(p.x + p.y * static_cast<double>(image->info.width))
+                               * static_cast<long>(image->info.pixelSizeBytes);
             if (index == i)
             {
                 if (inside == 0)
@@ -233,7 +233,7 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
 
 void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color, float radius) const
 {
-    std::vector<FaceLandmark> points = landmarks_.at(facepart);
+    const std::vector<FaceLandmark> points = landmarks_.at(facepart);
     math_utils::Point3D lastPoint(-1, -1, -1);
     for (const FaceLandmark& l : points)
     {
@@ -242,7 +242,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
             if (lastPoint.x != -1 && lastPoint.y != -1)
             {
                 // We know a last point. Proceed with DDA and paint it
-                std::vector<math_utils::Point<>> points =
+                const std::vector<math_utils::Point<>> points =
                     math_utils::DDA(static_cast<double>(lastPoint.x), static_cast<double>(lastPoint.y), l.p.x, l.p.y);
                 image->paintPoints(points, color);
             }
@@ -262,7 +262,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
         }
     }
 }
-// TODO: use thickness
+// TODO(arroyo): use thickness
 void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float /*thickness*/) const
 {
     // Convert to radians
@@ -335,8 +335,8 @@ std::vector<linuxface::math_utils::Point<>> Face::getFivePointLandmarksArcFaceOr
 
     for (const auto& pt : pts3d)
     {
-        long rx = static_cast<long>(std::lround(pt.x));
-        long ry = static_cast<long>(std::lround(pt.y));
+        const long rx = std::lround(pt.x);
+        const long ry = std::lround(pt.y);
         result.emplace_back(rx, ry);
     }
     return result;
@@ -344,9 +344,9 @@ std::vector<linuxface::math_utils::Point<>> Face::getFivePointLandmarksArcFaceOr
 
 linuxface::math_utils::Point3D Face::getLandmarkByIndex(unsigned int id) const
 {
-    for (const auto& face_part : landmarks_)
+    for (const auto& facePart : landmarks_)
     {
-        for (const auto& landmark : face_part.second)
+        for (const auto& landmark : facePart.second)
         {
             if (landmark.i == id)
             {
@@ -378,12 +378,12 @@ Face::findBestMatchingFace(std::vector<Face>& detectedFaces, const math_utils::R
         auto detectedBboxRect = detectedFaces[i].getBoundingBox().rect;
 
         // Convert to double precision for IoU calculation
-        math_utils::Rect<double> detectedBboxDouble(
+        const math_utils::Rect<double> detectedBboxDouble(
             static_cast<double>(detectedBboxRect.l), static_cast<double>(detectedBboxRect.t),
             static_cast<double>(detectedBboxRect.r), static_cast<double>(detectedBboxRect.b));
 
         // Calculate IoU between ground truth and detected face
-        double iou = math_utils::calculateIoU(groundTruthBbox, detectedBboxDouble);
+        const double iou = math_utils::calculateIoU(groundTruthBbox, detectedBboxDouble);
 
         // Track the best match
         if (iou > bestIou)

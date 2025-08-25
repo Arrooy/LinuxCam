@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstring>
 #include <fcntl.h>
-#include <math.h>
 #include <unistd.h>
 #include <vector>
 
@@ -97,7 +96,7 @@ Image::Image(Pixel color, size_t width, size_t height)
     info.format = hasAlpha ? ImageFormat::RGBA : ImageFormat::RGB;
     info.width = width;
     info.height = height;
-    
+
     // Calculate size after setting pixelSizeBytes
     size_ = width * height * info.pixelSizeBytes;
 
@@ -205,7 +204,7 @@ Pixel Image::operator()(size_t col, size_t row) const
         return {data[idx], data[idx + 1], data[idx + 2], data[idx + 3]};
     }
 
-    return Pixel(data[idx], data[idx + 1], data[idx + 2], DefaultAlpha);
+    return {data[idx], data[idx + 1], data[idx + 2], DefaultAlpha};
 }
 
 void Image::ppx(size_t col, size_t row, const Pixel& c)
@@ -246,7 +245,7 @@ bool Image::isColorImage() const noexcept
 unsigned char Image::getExpectedPixelSize() const noexcept
 {
     // Use compile-time lookup for cleaner and more maintainable code
-    static constexpr std::pair<ImageFormat, unsigned char> formatSizes[] = {
+    static constexpr std::pair<ImageFormat, unsigned char> FormatSizes[] = {
         {ImageFormat::RGB,         3            },
         {ImageFormat::RGBA,        4            },
         {ImageFormat::GRAYSCALE,   1            },
@@ -254,7 +253,7 @@ unsigned char Image::getExpectedPixelSize() const noexcept
         {ImageFormat::DEPTH_Z16,   2            },
     };
 
-    for (const auto& [format, size] : formatSizes)
+    for (const auto& [format, size] : FormatSizes)
     {
         if (info.format == format)
         {
@@ -298,7 +297,7 @@ void Image::copyFrom(const Image& other)
 std::unique_ptr<Image> Image::deepCopy() const
 {
     auto copy = std::make_unique<Image>(size_);
-    if (data_ && copy->data() && size_ > 0)
+    if (data_ && (copy->data() != nullptr) && size_ > 0)
     {
         std::memcpy(copy->data(), data_.get(), size_);
     }
@@ -311,7 +310,8 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
                              unsigned long dstHeight, ScalingAlgorithm algorithm)
 {
     // Use non-const T for both src and dst to match template requirements
-    image_utils::ImageView<unsigned char> srcView{const_cast<unsigned char*>(srcData), srcWidth, srcHeight, pixelSize};
+    const image_utils::ImageView<unsigned char> srcView{const_cast<unsigned char*>(srcData), srcWidth, srcHeight,
+                                                        pixelSize};
     image_utils::ImageView<unsigned char> dstView{dstData, dstWidth, dstHeight, pixelSize};
     switch (algorithm)
     {
@@ -467,7 +467,7 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int newWidth, in
     if (!isColorImage() || info.pixelSizeBytes != 3)
     {
         common::logError("Image::toTensor - Expected RGB format, got format: %s with pixel size: %d",
-                          fromImageFormatToString(info.format).c_str(), info.pixelSizeBytes);
+                         fromImageFormatToString(info.format).c_str(), info.pixelSizeBytes);
         return;
     }
 
@@ -481,7 +481,7 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int newWidth, in
     const int origH = info.height;
 
     // Step 1: Compute scale ratio (preserve aspect ratio)
-    float r = std::min(static_cast<float>(newWidth) / origW, static_cast<float>(newHeight) / origH);
+    const float r = std::min(static_cast<float>(newWidth) / origW, static_cast<float>(newHeight) / origH);
     const int resizedW = static_cast<int>(origW * r);
     const int resizedH = static_cast<int>(origH * r);
     const int offsetX = (newWidth - resizedW) / 2;
@@ -609,10 +609,10 @@ void Image::fromTensor(const float* tensorData, std::vector<int64_t> tensorShape
     }
 
     // Use stored transform metadata if available, otherwise calculate it
-    int offsetX;
-    int offsetY;
-    int resizedW;
-    int resizedH;
+    int offsetX = 0;
+    int offsetY = 0;
+    int resizedW = 0;
+    int resizedH = 0;
     float r = NAN;
 
     // common::logInfo("Image::fromTensor - Using tensor dimensions: %dx%d", tensor_width, tensor_height);
@@ -750,10 +750,10 @@ void Image::fillRect(int x, int y, int width, int height, const Pixel& color)
     }
 
     // Clip rectangle to image bounds
-    int x1 = std::max(0, x);
-    int y1 = std::max(0, y);
-    int x2 = std::min(static_cast<int>(info.width), x + width);
-    int y2 = std::min(static_cast<int>(info.height), y + height);
+    const int x1 = std::max(0, x);
+    const int y1 = std::max(0, y);
+    const int x2 = std::min(static_cast<int>(info.width), x + width);
+    const int y2 = std::min(static_cast<int>(info.height), y + height);
 
     const int clippedWidth = x2 - x1;
     const int clippedHeight = y2 - y1;
@@ -906,7 +906,7 @@ std::unique_ptr<Image> Image::crop(const math_utils::Rect<float>& rect) const
         return nullptr;
     }
 
-    size_t resultSize = cropWidth * cropHeight * info.pixelSizeBytes;
+    const size_t resultSize = cropWidth * cropHeight * info.pixelSizeBytes;
     std::unique_ptr<Image> result = std::make_unique<Image>(resultSize);
 
     const unsigned char* srcImg = data_.get();
@@ -953,7 +953,7 @@ bool Image::saveToDisk(const std::string& destPath) const
         return false;
     }
     common::logInfo("Image::saveToDisk - Saving image to %s with size %lux%lu", destPath.c_str(), info.width,
-                     info.height);
+                    info.height);
     // Handle PPM (RGB, RGBA, Grayscale)
     if (info.format == ImageFormat::PPM || info.format == ImageFormat::RGB || info.format == ImageFormat::RGBA
         || info.format == ImageFormat::GRAYSCALE)
@@ -1034,7 +1034,7 @@ bool Image::saveToDisk(const std::string& destPath) const
 
     // If we reach here, format is not supported for saving
     common::logError("Image::saveToDisk - Unsupported format for saving: %s",
-                      fromImageFormatToString(info.format).c_str());
+                     fromImageFormatToString(info.format).c_str());
     close(file);
     return false;
 }
@@ -1095,11 +1095,11 @@ bool Image::convertToRGBInplace()
 {
     if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
     {
-        std::vector<unsigned char> rgbData = convertToRGB();
+        const std::vector<unsigned char> rgbData = convertToRGB();
         size_t i = 0;
         const size_t pixelCount = info.width * info.height * 3;
         resize(pixelCount, true);
-        for (unsigned char pixel : rgbData)
+        for (const unsigned char pixel : rgbData)
         {
             data_.get()[i] = pixel;
             i += 1;
@@ -1247,7 +1247,7 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
     const double sinA = std::sin(angleRad);
 
     // Compute corners relative to center
-    double corners[4][2] = {
+    const double corners[4][2] = {
         {-center.x,                 -center.y                 },
         {info.width - 1 - center.x, -center.y                 },
         {-center.x,                 info.height - 1 - center.y},
@@ -1258,10 +1258,10 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
     double minY = 1e9;
     double maxX = -1e9;
     double maxY = -1e9;
-    for (int i = 0; i < 4; ++i)
+    for (const auto& corner : corners)
     {
-        const double x = corners[i][0] * cosA - corners[i][1] * sinA;
-        const double y = corners[i][0] * sinA + corners[i][1] * cosA;
+        const double x = corner[0] * cosA - corner[1] * sinA;
+        const double y = corner[0] * sinA + corner[1] * cosA;
         minX = std::min(minX, x);
         minY = std::min(minY, y);
         maxX = std::max(maxX, x);
@@ -1281,22 +1281,22 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
             const double dx = x + minX;
             const double dy = y + minY;
 
-            double srcX = cosA * dx + sinA * dy + center.x;
-            double srcY = -sinA * dx + cosA * dy + center.y;
+            const double srcX = cosA * dx + sinA * dy + center.x;
+            const double srcY = -sinA * dx + cosA * dy + center.y;
 
-            int x0 = static_cast<int>(std::floor(srcX));
-            int y0 = static_cast<int>(std::floor(srcY));
-            int x1 = x0 + 1;
-            int y1 = y0 + 1;
-            double wx =  srcX - x0;
-            double wy = srcY - y0;
+            const int x0 = static_cast<int>(std::floor(srcX));
+            const int y0 = static_cast<int>(std::floor(srcY));
+            const int x1 = x0 + 1;
+            const int y1 = y0 + 1;
+            const double wx = srcX - x0;
+            const double wy = srcY - y0;
 
             for (unsigned char c = 0; c < info.pixelSizeBytes; ++c)
             {
                 float val = 0.0f;
                 for (int j = 0; j <= 1; ++j)
                 {
-                    int sy = (j == 0) ? y0 : y1;
+                    const int sy = (j == 0) ? y0 : y1;
                     if (sy < 0 || sy >= static_cast<int>(info.height))
                     {
                         continue;
@@ -1305,7 +1305,7 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
 
                     for (int i = 0; i <= 1; ++i)
                     {
-                        int sx = (i == 0) ? x0 : x1;
+                        const int sx = (i == 0) ? x0 : x1;
                         if (sx < 0 || sx >= static_cast<int>(info.width))
                         {
                             continue;
@@ -1428,10 +1428,10 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
     const long canvasRight = canvasLeft + static_cast<long>(canvasWidth);
     const long canvasBottom = canvasTop + static_cast<long>(canvasHeight);
 
-    long clipLeft = std::max(srcLeft, canvasLeft);
-    long clipTop = std::max(srcTop, canvasTop);
-    long clipRight = std::min(srcRight, canvasRight);
-    long clipBottom = std::min(srcBottom, canvasBottom);
+    const long clipLeft = std::max(srcLeft, canvasLeft);
+    const long clipTop = std::max(srcTop, canvasTop);
+    const long clipRight = std::min(srcRight, canvasRight);
+    const long clipBottom = std::min(srcBottom, canvasBottom);
 
     // Skip if no intersection
     if (clipLeft >= clipRight || clipTop >= clipBottom)
@@ -1581,10 +1581,10 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     const long otherBottom = otherTop + static_cast<long>(other.info.height);
 
     // Calculate new dimensions
-    long minX = std::min(baseLeft, otherLeft);
-    long minY = std::min(baseTop, otherTop);
-    long maxX = std::max(baseRight, otherRight);
-    long maxY = std::max(baseBottom, otherBottom);
+    const long minX = std::min(baseLeft, otherLeft);
+    const long minY = std::min(baseTop, otherTop);
+    const long maxX = std::max(baseRight, otherRight);
+    const long maxY = std::max(baseBottom, otherBottom);
 
     const auto newWidth = static_cast<unsigned long>(maxX - minX);
     const auto newHeight = static_cast<unsigned long>(maxY - minY);
@@ -1685,19 +1685,19 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, 
             const double srcX = useInvM[0] * x + useInvM[1] * y + useInvM[2];
             const double srcY = useInvM[3] * x + useInvM[4] * y + useInvM[5];
             unsigned char* pdst = dst + (y * outWidth + x) * 3;
-            int x0 = static_cast<int>(std::floor(srcX));
-            int y0 = static_cast<int>(std::floor(srcY));
-            int x1 = x0 + 1;
-            int y1 = y0 + 1;
+            const int x0 = static_cast<int>(std::floor(srcX));
+            const int y0 = static_cast<int>(std::floor(srcY));
+            const int x1 = x0 + 1;
+            const int y1 = y0 + 1;
 
             if (x0 >= 0 && x1 < inWidth && y0 >= 0 && y1 < inHeight)
             {
-                double wx =  srcX - x0;
-                double wy = srcY - y0;
+                const double wx = srcX - x0;
+                const double wy = srcY - y0;
 
                 for (int c = 0; c < 3; ++c)
                 {
-                    double v =  (1 - wx) * (1 - wy) * src[(y0 * inWidth + x0) * 3 + c]
+                    const double v = (1 - wx) * (1 - wy) * src[(y0 * inWidth + x0) * 3 + c]
                                      + wx * (1 - wy) * src[(y0 * inWidth + x1) * 3 + c]
                                      + (1 - wx) * wy * src[(y1 * inWidth + x0) * 3 + c]
                                      + wx * wy * src[(y1 * inWidth + x1) * 3 + c];

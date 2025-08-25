@@ -102,10 +102,10 @@ std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLa
         auto it = mapping.find(wflwIdx);
         if (it != mapping.end())
         {
-            int pfldIdx = it->second;
+            const int pfldIdx = it->second;
             if (pfldIdx < 106)
             {
-                pfldLandmarks[pfldIdx] = FaceLandmark{pfldIdx, wflwLandmarks[wflwIdx].p};
+                pfldLandmarks[pfldIdx] = FaceLandmark{static_cast<unsigned int>(pfldIdx), wflwLandmarks[wflwIdx].p};
             }
         }
     }
@@ -478,36 +478,37 @@ std::vector<FaceLandmark> LandmarkConverter::interpolateLandmarks(const std::vec
     std::vector<FaceLandmark> interpolated;
     interpolated.reserve(missingIndices.size());
 
-    for (int missing_idx : missingIndices)
+    for (const int missingIdx : missingIndices)
     {
         // Simple interpolation: find nearest valid landmarks and average their positions
         // This is a simplified approach - production code would use more sophisticated interpolation
 
-        double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+        double sumX = 0.0;
+        double sumY = 0.0;
+        double sumZ = 0.0;
         int count = 0;
 
         // Find nearby landmarks for interpolation
-        for (int i = std::max(0, missing_idx - 5); i < std::min(static_cast<int>(landmarks.size()), missing_idx + 5);
-             ++i)
+        for (int i = std::max(0, missingIdx - 5); i < std::min(static_cast<int>(landmarks.size()), missingIdx + 5); ++i)
         {
-            if (i != missing_idx && !(landmarks[i].p.x == 0 && landmarks[i].p.y == 0 && landmarks[i].p.z == 0))
+            if (i != missingIdx && (landmarks[i].p.x != 0 || landmarks[i].p.y != 0 || landmarks[i].p.z != 0))
             {
-                sum_x += landmarks[i].p.x;
-                sum_y += landmarks[i].p.y;
-                sum_z += landmarks[i].p.z;
+                sumX += landmarks[i].p.x;
+                sumY += landmarks[i].p.y;
+                sumZ += landmarks[i].p.z;
                 count++;
             }
         }
 
         if (count > 0)
         {
-            interpolated.emplace_back(
-                FaceLandmark{missing_idx, math_utils::Point3D(sum_x / count, sum_y / count, sum_z / count)});
+            interpolated.emplace_back(FaceLandmark{static_cast<unsigned int>(missingIdx),
+                                                   math_utils::Point3D(sumX / count, sumY / count, sumZ / count)});
         }
         else
         {
             // Fallback: use center point or zero
-            interpolated.emplace_back(FaceLandmark{missing_idx, math_utils::Point3D(0, 0, 0)});
+            interpolated.emplace_back(FaceLandmark{static_cast<unsigned int>(missingIdx), math_utils::Point3D(0, 0, 0)});
         }
     }
 
@@ -522,18 +523,18 @@ LandmarkConverter::computeGeometricInterpolation(const std::vector<FaceLandmark>
     // Find nearest neighbors with curve-aware distance weighting
     std::vector<std::pair<double, int>> weightedNeighbors;
 
-    for (int idx : availableIndices)
+    for (const int idx : availableIndices)
     {
         if (idx >= 0 && idx < static_cast<int>(landmarks.size()))
         {
             // Consider both spatial distance and index proximity for facial geometry
-            double spatial_weight = 1.0;
-            double index_weight = 1.0 / (1.0 + std::abs(targetIndex - idx));
+            const double spatialWeight = 1.0;
+            const double indexWeight = 1.0 / (1.0 + std::abs(targetIndex - idx));
 
             // Apply facial region weighting - landmarks in same facial region are more relevant
-            double region_weight = getFacialRegionWeight(targetIndex, idx);
+            const double regionWeight = getFacialRegionWeight(targetIndex, idx);
 
-            double combinedWeight = spatial_weight * index_weight * region_weight;
+            const double combinedWeight = spatialWeight * indexWeight * regionWeight;
             weightedNeighbors.emplace_back(combinedWeight, idx);
         }
     }
@@ -551,12 +552,12 @@ LandmarkConverter::computeGeometricInterpolation(const std::vector<FaceLandmark>
     double totalWeight = 0.0;
     math_utils::Point3D weightedSum(0, 0, 0);
 
-    size_t maxNeighbors = std::min(static_cast<size_t>(4),
-                                   weightedNeighbors.size()); // Use up to 4 neighbors
+    const size_t maxNeighbors = std::min(static_cast<size_t>(4),
+                                         weightedNeighbors.size()); // Use up to 4 neighbors
     for (size_t i = 0; i < maxNeighbors; ++i)
     {
-        double weight = weightedNeighbors[i].first;
-        int neighborIdx = weightedNeighbors[i].second;
+        const double weight = weightedNeighbors[i].first;
+        const int neighborIdx = weightedNeighbors[i].second;
 
         const auto& neighborPoint = landmarks[neighborIdx].p;
 
@@ -642,31 +643,31 @@ std::vector<FaceLandmark> LandmarkConverter::applyCurveSmoothing(const std::vect
 
     for (const auto& segment : curveSegments)
     {
-        int start_idx = segment.first;
-        int end_idx = segment.second;
+        const int startIdx = segment.first;
+        const int endIdx = segment.second;
 
-        if (start_idx >= static_cast<int>(smoothed.size()) || end_idx >= static_cast<int>(smoothed.size())
-            || start_idx >= end_idx)
+        if (startIdx >= static_cast<int>(smoothed.size()) || endIdx >= static_cast<int>(smoothed.size())
+            || startIdx >= endIdx)
         {
             continue;
         }
 
         // Apply simple smoothing within the curve segment
-        for (int i = start_idx + 1; i < end_idx; ++i)
+        for (int i = startIdx + 1; i < endIdx; ++i)
         {
             const auto& prev = smoothed[i - 1].p;
             const auto& curr = smoothed[i].p;
             const auto& next = smoothed[i + 1].p;
 
             // Weighted average smoothing
-            double weight = 0.7; // Current point weight
-            double neighbor_weight = (1.0 - weight) / 2.0;
+            const double weight = 0.7; // Current point weight
+            const double neighborWeight = (1.0 - weight) / 2.0;
 
-            math_utils::Point3D smoothed_point(curr.x * weight + (prev.x + next.x) * neighbor_weight,
-                                               curr.y * weight + (prev.y + next.y) * neighbor_weight,
-                                               curr.z * weight + (prev.z + next.z) * neighbor_weight);
+            const math_utils::Point3D smoothedPoint(curr.x * weight + (prev.x + next.x) * neighborWeight,
+                                                    curr.y * weight + (prev.y + next.y) * neighborWeight,
+                                                    curr.z * weight + (prev.z + next.z) * neighborWeight);
 
-            smoothed[i].p = smoothed_point;
+            smoothed[i].p = smoothedPoint;
         }
     }
 

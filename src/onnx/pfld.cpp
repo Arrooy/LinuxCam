@@ -28,15 +28,15 @@ Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
     const int targetWidth = static_cast<int>(input_node_dims.at(3));
     Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
-    float* tensorData = inputTensor.GetTensorMutableData<float>();
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
 
     // // Use a member TensorPadding to store the transform for landmark mapping
     // pfld_padding_ = TensorPadding::scrfd();
     // image->toTensor(tensor_data, pfld_padding_, target_width, target_height, NormalizationType::MINMAX);
 
     // Convert image to tensor
-    image_utils::ImageView<unsigned char> srcView{image->data(), image->info.width, image->info.height,
-                                                  image->info.pixelSizeBytes};
+    const image_utils::ImageView<unsigned char> srcView{image->data(), image->info.width, image->info.height,
+                                                        image->info.pixelSizeBytes};
     image_utils::ImageView<float> dstView{tensorData, static_cast<size_t>(targetWidth),
                                           static_cast<size_t>(targetHeight), 3};
     image_utils::bicubicScaling<unsigned char, float, NormalizationType::MINMAX, ImageLayout::CHW>(srcView, dstView);
@@ -51,24 +51,24 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     auto leftEye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::LEYE);
     auto rightEye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::REYE);
 
-    math_utils::Point<double> eyeCenter = {(leftEye.x + rightEye.x) / 2.0, (leftEye.y + rightEye.y) / 2.0};
+    const math_utils::Point<double> eyeCenter = {(leftEye.x + rightEye.x) / 2.0, (leftEye.y + rightEye.y) / 2.0};
 
     const double dx = rightEye.x - leftEye.x;
     const double dy = rightEye.y - leftEye.y;
-    double angleRad = -std::atan2(dy, dx); // rotate to horizontal
+    const double angleRad = -std::atan2(dy, dx); // rotate to horizontal
     const double eyeDist = std::sqrt(dx * dx + dy * dy);
 
     // Use bounding box from SCRFD
     auto bbox = face.getBoundingBox().rect;
-    double bboxScaleFactor = 1.2; // 20% expansion
+    const double bboxScaleFactor = 1.2; // 20% expansion
     const double baseBoxSize = eyeDist * 3.5;
-    double bboxBoxSize = std::max(bbox.width(), bbox.height()) * bboxScaleFactor;
+    const double bboxBoxSize = std::max(bbox.width(), bbox.height()) * bboxScaleFactor;
     double boxSize = std::max(bboxBoxSize, baseBoxSize);
 
     // Store original image dimensions
-    unsigned long origWidth = image->info.width;
-    unsigned long origHeight = image->info.height;
-    double maxBoxSize = std::min(origWidth, origHeight) * 0.9;
+    const unsigned long origWidth = image->info.width;
+    const unsigned long origHeight = image->info.height;
+    const double maxBoxSize = std::min(origWidth, origHeight) * 0.9;
     boxSize = std::min(boxSize, maxBoxSize);
 
     auto alignedFace = image->deepCopy();
@@ -82,7 +82,7 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     const double sinA = std::sin(angleRad);
 
     // Calculate the corners of the original image relative to the eye center
-    double corners[4][2] = {
+    const double corners[4][2] = {
         {-eyeCenter.x,                -eyeCenter.y                }, // top-left
         {origWidth - 1 - eyeCenter.x, -eyeCenter.y                }, // top-right
         {-eyeCenter.x,                origHeight - 1 - eyeCenter.y}, // bottom-left
@@ -94,10 +94,10 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     double minY = 1e9;
     double maxX = -1e9;
     double maxY = -1e9;
-    for (int i = 0; i < 4; ++i)
+    for (const auto& corner : corners)
     {
-        const double x = corners[i][0] * cosA - corners[i][1] * sinA;
-        const double y = corners[i][0] * sinA + corners[i][1] * cosA;
+        const double x = corner[0] * cosA - corner[1] * sinA;
+        const double y = corner[0] * sinA + corner[1] * cosA;
         minX = std::min(minX, x);
         minY = std::min(minY, y);
         maxX = std::max(maxX, x);
@@ -106,17 +106,17 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
 
 
     // 4. Compute crop center
-    math_utils::Point<double> faceCenterOriginal = {bbox.l + bbox.width() / 2.0, bbox.t + bbox.height() / 2.0};
-    double faceDx = faceCenterOriginal.x - eyeCenter.x;
-    double faceDy = faceCenterOriginal.y - eyeCenter.y;
-    math_utils::Point<double> finalFaceCenter = {cosA * faceDx - sinA * faceDy - minX,
-                                                 sinA * faceDx + cosA * faceDy - minY};
+    const math_utils::Point<double> faceCenterOriginal = {bbox.l + bbox.width() / 2.0, bbox.t + bbox.height() / 2.0};
+    const double faceDx = faceCenterOriginal.x - eyeCenter.x;
+    const double faceDy = faceCenterOriginal.y - eyeCenter.y;
+    const math_utils::Point<double> finalFaceCenter = {cosA * faceDx - sinA * faceDy - minX,
+                                                       sinA * faceDx + cosA * faceDy - minY};
 
     // 5. Crop (reverted to original logic)
-    double halfBox = boxSize / 2.0;
-    double cropLeft = finalFaceCenter.x - halfBox;
-    double cropTop = finalFaceCenter.y - halfBox;
-    math_utils::Rect<float> cropRect = {
+    const double halfBox = boxSize / 2.0;
+    const double cropLeft = finalFaceCenter.x - halfBox;
+    const double cropTop = finalFaceCenter.y - halfBox;
+    const math_utils::Rect<float> cropRect = {
         {static_cast<float>(cropLeft), static_cast<float>(cropTop)},
         static_cast<float>(boxSize),
         static_cast<float>(boxSize)
@@ -128,7 +128,7 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
         return;
     }
     // 4. Run PFLD on aligned face
-    Ort::Value inputTensor = this->transform(alignedFace);
+    const Ort::Value inputTensor = this->transform(alignedFace);
 
     auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
                                                 output_node_names_.data(), output_node_names_str_.size());
@@ -147,9 +147,9 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
             break;
         }
     }
-    Ort::Value& landmarksTensor = outputTensors.at(outputIndex); // (1, 212)
-    const float* data = landmarksTensor.GetTensorData<float>();
-    unsigned int numLandmarks = 106;
+    const Ort::Value& landmarksTensor = outputTensors.at(outputIndex); // (1, 212)
+    const auto* data = landmarksTensor.GetTensorData<float>();
+    const unsigned int numLandmarks = 106;
     face.loadNewFaceLandmarks({});
 
     const double scale = 112.0 / boxSize;
@@ -171,7 +171,7 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
         // Convert Point to Point3D (z=0)
         pfldLandmarks.push_back(FaceLandmark{i, math_utils::Point3D(alignedPts[i].x, alignedPts[i].y, 0.0)});
     }
-    face.loadNewFaceLandmarks(std::move(pfldLandmarks));
+    face.loadNewFaceLandmarks(pfldLandmarks);
     Profiler::getInstance().stop("PFLDDetector", "detect landmarks");
 }
 
@@ -180,7 +180,7 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
 {
     Profiler::getInstance().start("PFLDDetector", "detect landmarks");
     // 1. Get 5-point landmarks in ArcFace order (left eye, right eye, nose, left mouth, right mouth)
-    std::vector<math_utils::Point<>> fivePts2d = face.getFivePointLandmarksArcFaceOrder2D();
+    const std::vector<math_utils::Point<>> fivePts2d = face.getFivePointLandmarksArcFaceOrder2D();
     if (fivePts2d.size() != 5)
     {
         common::logError("PFLDDetector: Need 5-point landmarks for alignment");
@@ -196,7 +196,7 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
     }
     alignedFace->saveToDisk("aligned_face_similar.ppm");
     // 4. Run PFLD on aligned face
-    Ort::Value inputTensor = this->transform(alignedFace);
+    const Ort::Value inputTensor = this->transform(alignedFace);
 
     auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
                                                 output_node_names_.data(), output_node_names_str_.size());
@@ -215,9 +215,9 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
             break;
         }
     }
-    Ort::Value& landmarksTensor = outputTensors.at(outputIndex); // (1, 212)
-    const float* data = landmarksTensor.GetTensorData<float>();
-    unsigned int numLandmarks = 106;
+    const Ort::Value& landmarksTensor = outputTensors.at(outputIndex); // (1, 212)
+    const auto* data = landmarksTensor.GetTensorData<float>();
+    const unsigned int numLandmarks = 106;
     face.loadNewFaceLandmarks({});
 
     // // 5. Map landmarks from aligned face back to original image using inverse affine
@@ -228,15 +228,15 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
         return;
     }
 
-    double w = alignedFace->info.width;
-    double h = alignedFace->info.height;
+    const double w = alignedFace->info.width;
+    const double h = alignedFace->info.height;
 
     common::logInfo("PFLDDetector: Aligned face size: %fx%f", w, h);
     std::vector<std::pair<double, double>> alignedPts(numLandmarks);
     for (unsigned int i = 0; i < numLandmarks; ++i)
     {
-        double x = std::min(std::max(0.f, data[2 * i]), 1.0f);
-        double y = std::min(std::max(0.f, data[2 * i + 1]), 1.0f);
+        const double x = std::min(std::max(0.f, data[2 * i]), 1.0f);
+        const double y = std::min(std::max(0.f, data[2 * i + 1]), 1.0f);
         alignedPts[i].first = x * w;
         alignedPts[i].second = y * h;
     }
@@ -249,7 +249,7 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
         // Convert Point to Point3D (z=0)
         pfldLandmarks.push_back(FaceLandmark{i, math_utils::Point3D(unalignedPts[i].first, unalignedPts[i].second, 0.0)});
     }
-    face.loadNewFaceLandmarks(std::move(pfldLandmarks));
+    face.loadNewFaceLandmarks(pfldLandmarks);
     Profiler::getInstance().stop("PFLDDetector", "detect landmarks");
 }
 
@@ -258,7 +258,7 @@ void PFLDDetector::detectOpenCv(const std::unique_ptr<Image>& image, Face& face)
 {
     Profiler::getInstance().start("PFLDDetector", "Opencv landmarks");
     // 1. Get 5-point landmarks in ArcFace order (left eye, right eye, nose, left mouth, right mouth)
-    std::vector<math_utils::Point<>> fivePts2d = face.getFivePointLandmarksArcFaceOrder2D();
+    const std::vector<math_utils::Point<>> fivePts2d = face.getFivePointLandmarksArcFaceOrder2D();
     if (fivePts2d.size() != 5)
     {
         common::logError("PFLDDetector: Need 5-point landmarks for alignment");
@@ -266,6 +266,7 @@ void PFLDDetector::detectOpenCv(const std::unique_ptr<Image>& image, Face& face)
     }
 
     std::vector<cv::Point2f> fivePtsCv;
+    fivePtsCv.reserve(fivePts2d.size());
     for (const auto& pt : fivePts2d)
     {
         fivePtsCv.emplace_back(static_cast<float>(pt.x), static_cast<float>(pt.y));
@@ -277,13 +278,13 @@ void PFLDDetector::detectOpenCv(const std::unique_ptr<Image>& image, Face& face)
     }
 
     // 4. Estimate affine transform using eyes + nose (most stable)
-    std::vector<cv::Point2f> srcStable = {fivePtsCv[0], fivePtsCv[1], fivePtsCv[2]};
-    std::vector<cv::Point2f> dstStable = {templateCv[0], templateCv[1], templateCv[2]};
+    const std::vector<cv::Point2f> srcStable = {fivePtsCv[0], fivePtsCv[1], fivePtsCv[2]};
+    const std::vector<cv::Point2f> dstStable = {templateCv[0], templateCv[1], templateCv[2]};
 
-    cv::Mat affine = cv::getAffineTransform(srcStable, dstStable);
+    const cv::Mat affine = cv::getAffineTransform(srcStable, dstStable);
 
     // 1. Create a new, empty OpenCV Mat with the desired dimensions and type.
-    cv::Mat inputImage(static_cast<int>(image->info.height), static_cast<int>(image->info.width), CV_8UC3);
+    const cv::Mat inputImage(static_cast<int>(image->info.height), static_cast<int>(image->info.width), CV_8UC3);
 
     // 2. Calculate the total size of the image data in bytes.
     //    (Assuming pixelSizeBytes is 3 for a 3-channel image).
@@ -316,7 +317,7 @@ void PFLDDetector::detectOpenCv(const std::unique_ptr<Image>& image, Face& face)
     alignedFace->info.format = ImageFormat::RGB;
 
     // 4. Run PFLD on aligned face
-    Ort::Value inputTensor = this->transform(alignedFace);
+    const Ort::Value inputTensor = this->transform(alignedFace);
 
     auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
                                                 output_node_names_.data(), output_node_names_str_.size());
@@ -335,9 +336,9 @@ void PFLDDetector::detectOpenCv(const std::unique_ptr<Image>& image, Face& face)
             break;
         }
     }
-    Ort::Value& landmarksTensor = outputTensors.at(outputIndex); // (1, 212)
-    const float* data = landmarksTensor.GetTensorData<float>();
-    unsigned int numLandmarks = 106;
+    const Ort::Value& landmarksTensor = outputTensors.at(outputIndex); // (1, 212)
+    const auto* data = landmarksTensor.GetTensorData<float>();
+    const unsigned int numLandmarks = 106;
     face.loadNewFaceLandmarks({});
 
     cv::Mat affine64f;
@@ -366,7 +367,7 @@ void PFLDDetector::detectOpenCv(const std::unique_ptr<Image>& image, Face& face)
         pfldLandmarks.emplace_back(
             FaceLandmark{i, math_utils::Point3D(originalLandmarksCv[i].x, originalLandmarksCv[i].y, 0.0)});
     }
-    face.loadNewFaceLandmarks(std::move(pfldLandmarks));
+    face.loadNewFaceLandmarks(pfldLandmarks);
 
     Profiler::getInstance().stop("PFLDDetector", "Opencv landmarks");
 }
@@ -392,8 +393,8 @@ PFLDDetector::alignedToOriginalCoords(double xAligned, double yAligned, double c
     const double cosA = std::cos(-angleRad);
     const double sinA = std::sin(-angleRad);
 
-    double xOrig = cosA * xRel - sinA * yRel + eyeCenter.x;
-    double yOrig = sinA * xRel + cosA * yRel + eyeCenter.y;
+    const double xOrig = cosA * xRel - sinA * yRel + eyeCenter.x;
+    const double yOrig = sinA * xRel + cosA * yRel + eyeCenter.y;
 
     return {xOrig, yOrig};
 }

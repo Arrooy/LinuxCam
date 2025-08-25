@@ -133,8 +133,8 @@ std::vector<Point<long>> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
         return result;
     }
 
-    double xInc = static_cast<double>(dx) / static_cast<double>(steps);
-    double yInc = static_cast<double>(dy) / static_cast<double>(steps);
+    const double xInc = static_cast<double>(dx) / static_cast<double>(steps);
+    const double yInc = static_cast<double>(dy) / static_cast<double>(steps);
     auto x = static_cast<double>(x1);
     auto y = static_cast<double>(y1);
 
@@ -179,7 +179,7 @@ inline float calculateIoU(const Rect<T>& rect1, const Rect<T>& rect2)
     T area2 = (rect2.r - rect2.l) * (rect2.b - rect2.t);
 
     // Area-based pre-filter: if areas are vastly different, skip expensive intersection calculation
-    float areaRatio = static_cast<float>(std::min(area1, area2)) / static_cast<float>(std::max(area1, area2));
+    const float areaRatio = static_cast<float>(std::min(area1, area2)) / static_cast<float>(std::max(area1, area2));
     if (areaRatio < 0.1f)
     {
         return 0.0f;

@@ -17,9 +17,7 @@ using namespace linuxface;
 // | `#version 400+` | 4.0+   | Geometry shaders, tessellation, more precision   |
 // | `#version 450`  | 4.5    | Modern, powerful (ubiquitous with newer drivers) |
 
-Window::Window()
-{
-}
+Window::Window() = default;
 
 Window::~Window()
 {
@@ -204,7 +202,7 @@ void Window::errorCallback(int error, const char* description)
 // Allow setting a callback for resize events
 void Window::setResizeCallback(const std::function<void(int, int)>& cb)
 {
-    resizeCallback_ = std::move(cb);
+    resizeCallback_ = cb;
 }
 
 bool Window::isKeyPressed(int key) const

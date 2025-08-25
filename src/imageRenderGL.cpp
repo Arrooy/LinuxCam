@@ -2,7 +2,7 @@
 
 #include "imgui.h"
 
-#include <math.h>
+#include <cmath>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -43,9 +43,7 @@ void main() {
 
 using namespace linuxface;
 
-ImageRenderGL::ImageRenderGL()
-{
-}
+ImageRenderGL::ImageRenderGL() = default;
 
 ImageRenderGL::~ImageRenderGL()
 {
@@ -308,7 +306,7 @@ void ImageRenderGL::renderLayerNameOverlay(const Layer& layer, const LayerRender
                                      static_cast<float>(overlay.cachedImage->info.width),
                                      static_cast<float>(overlay.cachedImage->info.height));
 
-    std::string nameKey = "name_" + std::to_string(layer.id);
+    const std::string nameKey = "name_" + std::to_string(layer.id);
     // Use a stable hashed key for both texture creation and cache lookup
     const size_t nameKeyHash = std::hash<std::string>{}(nameKey);
     const GLuint nameTexId = getOrCreateTexture(*overlay.cachedImage, nameKeyHash,
@@ -476,15 +474,15 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool forc
         auto it = textureCache_.find(key);
         if (it != textureCache_.end())
         {
-            if (it->second.vao)
+            if (it->second.vao != 0u)
             {
                 glDeleteVertexArrays(1, &it->second.vao);
             }
-            if (it->second.vbo)
+            if (it->second.vbo != 0u)
             {
                 glDeleteBuffers(1, &it->second.vbo);
             }
-            if (it->second.ebo)
+            if (it->second.ebo != 0u)
             {
                 glDeleteBuffers(1, &it->second.ebo);
             }
@@ -528,15 +526,15 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool forc
         }
 
         // Also delete VAO/VBO/EBO if present
-        if (it->second.vao)
+        if (it->second.vao != 0u)
         {
             glDeleteVertexArrays(1, &it->second.vao);
         }
-        if (it->second.vbo)
+        if (it->second.vbo != 0u)
         {
             glDeleteBuffers(1, &it->second.vbo);
         }
-        if (it->second.ebo)
+        if (it->second.ebo != 0u)
         {
             glDeleteBuffers(1, &it->second.ebo);
         }
@@ -591,15 +589,15 @@ void ImageRenderGL::cleanupTextures()
 {
     for (auto& pair : textureCache_)
     {
-        if (pair.second.vao)
+        if (pair.second.vao != 0u)
         {
             glDeleteVertexArrays(1, &pair.second.vao);
         }
-        if (pair.second.vbo)
+        if (pair.second.vbo != 0u)
         {
             glDeleteBuffers(1, &pair.second.vbo);
         }
-        if (pair.second.ebo)
+        if (pair.second.ebo != 0u)
         {
             glDeleteBuffers(1, &pair.second.ebo);
         }
