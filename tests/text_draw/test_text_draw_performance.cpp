@@ -430,7 +430,11 @@ TEST_F(TextDrawPerformanceTest, ComparativePerformanceAnalysis)
     // Basic sanity checks on relative performance
     EXPECT_LT(metrics[0].time, metrics[1].time) << "Single character should be faster than full text";
     // All metrics should be within a reasonable range
-    double max_time = std::max_element(metrics.begin(), metrics.end())->time;
+    auto max_metric = std::max_element(metrics.begin(), metrics.end(), 
+                                       [](const PerformanceMetric& a, const PerformanceMetric& b) {
+                                           return a.time < b.time;
+                                       });
+    double max_time = max_metric->time;
     EXPECT_LT(max_time, 10 * 1000) << "All operations should complete within reasonable time";
 
     std::cout << "===========================================\n" << std::endl;
