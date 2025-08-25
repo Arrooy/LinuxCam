@@ -158,7 +158,7 @@ void Window::updateResizeEvents()
             now = testTime;
         }
         // If enough time has passed since the last callback, fire the callback (debounce)
-        if (now - lastResizeCallbackTime_ > RESIZE_DEBOUNCE_DELAY)
+        if (now - lastResizeCallbackTime_ > ResizeDebounceDelay)
         {
             resizeCallback_(lastResizeWidth_, lastResizeHeight_);
             lastResizeCallbackTime_ = now;

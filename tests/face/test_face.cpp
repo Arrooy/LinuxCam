@@ -60,15 +60,15 @@ TEST(FaceTest, GetFacePartFromLandmarkId)
 {
     FaceBoundingBox bbox(0, 0, 10, 10);
     Face face(bbox);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(0), Face::JAW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(17), Face::LBROW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(22), Face::RBROW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(27), Face::NOSE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(36), Face::LEYE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(42), Face::REYE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(48), Face::OUTERMOUTH);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(60), Face::INNERMOUTH);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(100), Face::UNKNOWN);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(0), Face::JAW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(17), Face::LBROW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(22), Face::RBROW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(27), Face::NOSE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(36), Face::LEYE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(42), Face::REYE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(48), Face::OUTERMOUTH);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(60), Face::INNERMOUTH);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(100), Face::UNKNOWN);
 }
 
 TEST(FaceTest, GetFivePointLandmarksArcFaceOrder)
@@ -250,21 +250,21 @@ TEST(FaceTest, GetFacePartFromLandmarkIdBoundaries)
 {
     FaceBoundingBox bbox(0, 0, 10, 10);
     Face face(bbox);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(16), Face::JAW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(17), Face::LBROW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(21), Face::LBROW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(22), Face::RBROW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(26), Face::RBROW);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(27), Face::NOSE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(35), Face::NOSE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(36), Face::LEYE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(41), Face::LEYE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(42), Face::REYE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(47), Face::REYE);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(48), Face::OUTERMOUTH);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(59), Face::OUTERMOUTH);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(60), Face::INNERMOUTH);
-    EXPECT_EQ(face.get_facepart_from_landmark_id(67), Face::INNERMOUTH);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(16), Face::JAW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(17), Face::LBROW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(21), Face::LBROW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(22), Face::RBROW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(26), Face::RBROW);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(27), Face::NOSE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(35), Face::NOSE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(36), Face::LEYE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(41), Face::LEYE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(42), Face::REYE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(47), Face::REYE);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(48), Face::OUTERMOUTH);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(59), Face::OUTERMOUTH);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(60), Face::INNERMOUTH);
+    EXPECT_EQ(face.getFacepartFromLandmarkId(67), Face::INNERMOUTH);
 }
 
 TEST(FaceTest, DestructorNoCrash)

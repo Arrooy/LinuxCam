@@ -249,8 +249,8 @@ void UI::paintMainWindow()
                     if (textImage)
                     {
                         Layer newText;
-                        newText.id = Layer::next_id++;
-                        newText.type = LayerType::Text;
+                        newText.id = Layer::nextId++;
+                        newText.type = LayerType::TEXT;
                         newText.img = textImage;                      // Store the generated text image
                         newText.textContent = add_text_layer_buffer_; // Keep text for reference
                         newText.name = add_text_layer_buffer_;
@@ -288,7 +288,7 @@ void UI::paintMainWindow()
         for (const auto& pair : durations)
         {
             ImGui::TextColored(getProfileColorFromDuration(pair.second.count()), "%s - %s", pair.first.c_str(),
-                               Profiler::format_duration(pair.second).c_str());
+                            Profiler::formatDuration(pair.second).c_str());
         }
 
         if (ImGui::Button("Close"))
@@ -364,7 +364,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                         {
                             newImage->info.textureId = 0;
                             Layer newLayer;
-                            newLayer.id = Layer::next_id++;
+                            newLayer.id = Layer::nextId++;
                             newLayer.type = LayerType::IMAGE;
                             newLayer.name = item;
                             newLayer.img = std::move(newImage);
@@ -388,8 +388,8 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                     if (origGif && !origGif->frames().empty() && layerManager_)
                     {
                         Layer newLayer;
-                        newLayer.id = Layer::next_id++;
-                        newLayer.type = LayerType::Gif;
+                        newLayer.id = Layer::nextId++;
+                        newLayer.type = LayerType::GIF;
                         newLayer.name = item;
                         newLayer.gif = origGif;
                         newLayer.setPosition(100, 100);
@@ -429,31 +429,31 @@ void UI::paintDeviceConfigurationTabs()
     if (ImGui::BeginTabBar("DeviceTabs", ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_Reorderable))
     {
         auto managedWebcams = cameraManager_->getWebcams();
-        const unsigned int tabIndex{0u};
+            unsigned int tabIndex{0u};
         // Render tabs for existing devices
-        for (auto& webcam : managed_webcams)
+        for (auto& webcam : managedWebcams)
         {
             std::string tab_name = webcam->getName();
             ImGuiTabItemFlags flags = 0;
 
             // Check if we need to programmatically select this tab
-            if (requestedTab_ == static_cast<int>(tab_index))
+            if (requestedTab_ == static_cast<int>(tabIndex))
             {
                 flags |= ImGuiTabItemFlags_SetSelected;
                 requestedTab_ = -1; // Clear the request
-                active_device_tab_ = tab_index;
+                active_device_tab_ = tabIndex;
             }
 
             // Add webcam type indicator
-            tab_name += webcam->getType() == WebcamType::PhysicalInput ? " (IN)" : " (OUT)";
+            tab_name += webcam->getType() == WebcamType::PHYSICAL_INPUT ? " (IN)" : " (OUT)";
 
             // Add close button to tab
             bool tab_open = true;
-            if (ImGui::BeginTabItem((tab_name + "###tab" + std::to_string(tab_index++)).c_str(), &tab_open, flags))
+            if (ImGui::BeginTabItem((tab_name + "###tab" + std::to_string(tabIndex++)).c_str(), &tab_open, flags))
             {
                 paintWebcam_->setWebcam(webcam);
                 paintWebcam_->paintDevice();
-                last_device_tab_index_ = tab_index; // Save last active tab
+                last_device_tab_index_ = tabIndex; // Save last active tab
                 ImGui::EndTabItem();
             }
 
@@ -482,10 +482,10 @@ void UI::paintDeviceConfigurationTabs()
 
                 // Use CameraManager to discover devices
                 std::vector<std::string> devicePaths = cameraManager_->discoverAvailableVideoDevices();
-                temp_modal_webcams_.reserve(device_paths.size());
+                temp_modal_webcams_.reserve(devicePaths.size());
 
                 // Create a temp webcam for each device.
-                for (const auto& device_path : device_paths)
+                for (const auto& device_path : devicePaths)
                 {
                     auto temp_webcam = std::make_shared<InputWebcam>("temp_" + device_path, device_path, 640, 480, 1);
                     temp_modal_webcams_.push_back(temp_webcam);
@@ -523,7 +523,7 @@ void UI::handleKeyboard()
     if (!ImGui::IsAnyItemActive())
     {
         const auto& managedWebcams = cameraManager_->getWebcams();
-        int size = managed_webcams.size();
+        int size = managedWebcams.size();
 
         // Ctrl+1-9: Switch to specific tab
         for (int i = 0; i < 9 && i < size; ++i)
@@ -533,9 +533,9 @@ void UI::handleKeyboard()
             {
                 requestedTab_ = i;
                 managedWebcams[i]->setCurrentlySelected(true);
-                for (const auto& webcam : managed_webcams)
+                for (const auto& webcam : managedWebcams)
                 {
-                    if (webcam->getDevicePath() != managed_webcams[i]->getDevicePath())
+                    if (webcam->getDevicePath() != managedWebcams[i]->getDevicePath())
                     {
                         webcam->setCurrentlySelected(false);
                     }
@@ -549,7 +549,7 @@ void UI::handleKeyboard()
             if (selectedLayer)
             {
                 // Remove the selected layer
-                layerManager_->removeLayer(selected_layer->id);
+                layerManager_->removeLayer(selectedLayer->id);
             }
         }
     }
@@ -602,7 +602,7 @@ Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& m
             lw = static_cast<float>(layer.img->info.width);
             lh = static_cast<float>(layer.img->info.height);
         }
-        else if (layer.type == LayerType::Gif && layer.gif)
+        else if (layer.type == LayerType::GIF && layer.gif)
         {
             // Use the first frame's dimensions for GIFs
             if (layer.gif->frames().empty())
@@ -612,7 +612,7 @@ Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& m
             lw = static_cast<float>(layer.gif->frames()[0]->info.width);
             lh = static_cast<float>(layer.gif->frames()[0]->info.height);
         }
-        else if (layer.type == LayerType::Text)
+        else if (layer.type == LayerType::TEXT)
         {
             if (layer.img)
             {

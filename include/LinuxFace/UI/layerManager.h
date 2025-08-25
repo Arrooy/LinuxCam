@@ -34,7 +34,8 @@ struct Layer
 
     // Unique identifier for this layer instance
     size_t id = 0;
-    static size_t next_id_;
+    // TODO: this is not thead safe.
+    static size_t nextId;
 
     // Camera-specific fields
     std::string cameraDevicePath; // Empty for non-camera layers
@@ -264,7 +265,7 @@ struct Layer
     );
 };
 // Initialize static member
-inline size_t Layer::next_id_ = 0;
+inline size_t Layer::nextId = 0;
 
 class LayerManager
 {

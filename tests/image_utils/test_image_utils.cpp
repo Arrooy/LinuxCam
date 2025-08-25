@@ -24,7 +24,7 @@ TEST(ImageUtilsAffineTransformTest, TransformPointsAffine)
         {5, 6}
     };
     double M[6] = {1, 0, 1, 0, 1, 2}; // x' = x+1, y' = y+2
-    auto out = transform_points_affine(pts, M);
+    auto out = transformPointsAffine(pts, M);
     EXPECT_EQ(out.size(), 3);
     EXPECT_DOUBLE_EQ(out[0].x, 2);
     EXPECT_DOUBLE_EQ(out[0].y, 4);
@@ -39,7 +39,7 @@ TEST(ImageUtilsAffineTransformTest, TransformPairsAffine)
         {3, 4}
     };
     double M[6] = {2, 0, 0, 0, 2, 0}; // x' = 2x, y' = 2y
-    auto out = transform_points_affine(pts, M);
+    auto out = transformPointsAffine(pts, M);
     EXPECT_EQ(out.size(), 2);
     EXPECT_DOUBLE_EQ(out[1].first, 6);
     EXPECT_DOUBLE_EQ(out[1].second, 8);
@@ -48,7 +48,7 @@ TEST(ImageUtilsAffineTransformTest, TransformPairsAffine)
 TEST(ImageUtilsMaskTest, CreateStaticBoxMaskBasic)
 {
     std::vector<double> crop_size = {10, 10};
-    auto mask = create_static_box_mask(crop_size);
+    auto mask = createStaticBoxMask(crop_size);
     ASSERT_NE(mask, nullptr);
     EXPECT_EQ(mask->info.width, 10);
     EXPECT_EQ(mask->info.height, 10);
@@ -65,7 +65,7 @@ TEST(ImageUtilsMaskTest, CreateStaticBoxMaskBasic)
 TEST(ImageUtilsMaskTest, CreateStaticBoxMaskEdgeCases)
 {
     std::vector<double> crop_size = {0, 0};
-    auto mask = create_static_box_mask(crop_size);
+    auto mask = createStaticBoxMask(crop_size);
     EXPECT_EQ(mask->info.width, 0);
     EXPECT_EQ(mask->info.height, 0);
 }
@@ -74,7 +74,7 @@ TEST(ImageUtilsBlurTest, FastBoxBlurNoop)
 {
     unsigned char src[4] = {255, 0, 255, 0};
     unsigned char dst[4] = {0, 0, 0, 0};
-    fast_box_blur(src, dst, 2, 2, 0); // radius 0
+    fastBoxBlur(src, dst, 2, 2, 0); // radius 0
     EXPECT_EQ(dst[0], 255);
     EXPECT_EQ(dst[1], 0);
     EXPECT_EQ(dst[2], 255);
@@ -114,7 +114,7 @@ TEST(ImageUtilsEdgeCaseTest, TransformPointsAffineEmpty)
 {
     std::vector<Point<>> pts;
     double M[6] = {1, 0, 0, 0, 1, 0};
-    auto out = transform_points_affine(pts, M);
+    auto out = transformPointsAffine(pts, M);
     EXPECT_TRUE(out.empty());
 }
 

@@ -47,7 +47,7 @@ TEST_F(CameraManagerTest, AddInputWebcam)
     EXPECT_EQ(webcams.size(), 1);
     EXPECT_EQ(webcams[0]->getDevicePath(), "/dev/video999");
     EXPECT_EQ(webcams[0]->getName(), "Test Input");
-    EXPECT_EQ(webcams[0]->getType(), WebcamType::PhysicalInput);
+    EXPECT_EQ(webcams[0]->getType(), WebcamType::PHYSICAL_INPUT);
 }
 
 TEST_F(CameraManagerTest, AddDuplicateInputWebcam)

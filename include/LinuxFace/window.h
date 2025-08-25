@@ -59,7 +59,6 @@ class Window
     double lastResizeCallbackTime_ = 0.0;
     double lastResizeEventTime_ = 0.0;
     bool resizePending_ = false;
-    static constexpr double ResizeThrottleInterval = 0.1; // seconds
     static constexpr double ResizeDebounceDelay = 0.35;   // seconds
 
     // GLFW error callback

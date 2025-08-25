@@ -53,7 +53,7 @@ class LayerManagerTest : public ::testing::Test
 TEST_F(LayerManagerTest, AddLayer)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "test_layer";
     imageLayer.img = testImage;
     imageLayer.x = 10.0f;
@@ -65,7 +65,7 @@ TEST_F(LayerManagerTest, AddLayer)
 
     EXPECT_EQ(layerManager->getLayers().size(), 1);
     EXPECT_EQ(layerManager->getLayers()[0].name, "test_layer");
-    EXPECT_EQ(layerManager->getLayers()[0].type, LayerType::Image);
+    EXPECT_EQ(layerManager->getLayers()[0].type, LayerType::IMAGE);
     EXPECT_EQ(layerManager->getLayers()[0].x, 10.0f);
     EXPECT_EQ(layerManager->getLayers()[0].y, 20.0f);
 }
@@ -73,17 +73,17 @@ TEST_F(LayerManagerTest, AddLayer)
 TEST_F(LayerManagerTest, AddMultipleLayers)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "image_layer";
     imageLayer.img = testImage;
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "gif_layer";
     gifLayer.gif = testGif;
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.name = "text_layer";
     textLayer.textContent = "Hello World";
     // Text layers now use createTextImage to generate their image representation
@@ -94,9 +94,9 @@ TEST_F(LayerManagerTest, AddMultipleLayers)
     layerManager->addLayer(textLayer);
 
     EXPECT_EQ(layerManager->getLayers().size(), 3);
-    EXPECT_EQ(layerManager->getLayers()[0].type, LayerType::Image);
-    EXPECT_EQ(layerManager->getLayers()[1].type, LayerType::Gif);
-    EXPECT_EQ(layerManager->getLayers()[2].type, LayerType::Text);
+    EXPECT_EQ(layerManager->getLayers()[0].type, LayerType::IMAGE);
+    EXPECT_EQ(layerManager->getLayers()[1].type, LayerType::GIF);
+    EXPECT_EQ(layerManager->getLayers()[2].type, LayerType::TEXT);
 }
 
 TEST_F(LayerManagerTest, RemoveLayer)
@@ -104,12 +104,12 @@ TEST_F(LayerManagerTest, RemoveLayer)
     Layer layer1;
     layer1.id = 1;
     layer1.name = "layer1";
-    layer1.type = LayerType::Image;
+    layer1.type = LayerType::IMAGE;
 
     Layer layer2;
     layer2.id = 2;
     layer2.name = "layer2";
-    layer2.type = LayerType::Text;
+    layer2.type = LayerType::TEXT;
 
     layerManager->addLayer(layer1);
     layerManager->addLayer(layer2);
@@ -164,12 +164,12 @@ TEST_F(LayerManagerTest, ClearLayers)
 TEST_F(LayerManagerTest, GetLayerByNumber)
 {
     Layer layer1;
-    layer1.type = LayerType::Image;
+    layer1.type = LayerType::IMAGE;
     layer1.img = testImage;
     layer1.img->info.layer = 5;
 
     Layer layer2;
-    layer2.type = LayerType::Text;
+    layer2.type = LayerType::TEXT;
     layer2.textContent = "test";
 
     layerManager->addLayer(layer1);
@@ -177,7 +177,7 @@ TEST_F(LayerManagerTest, GetLayerByNumber)
 
     Layer* found = layerManager->getLayerByNumber(5);
     ASSERT_NE(found, nullptr);
-    EXPECT_EQ(found->type, LayerType::Image);
+    EXPECT_EQ(found->type, LayerType::IMAGE);
 
     Layer* notFound = layerManager->getLayerByNumber(999);
     EXPECT_EQ(notFound, nullptr);
@@ -186,11 +186,11 @@ TEST_F(LayerManagerTest, GetLayerByNumber)
 TEST_F(LayerManagerTest, GetLayerByName)
 {
     Layer layer1;
-    layer1.type = LayerType::Image;
+    layer1.type = LayerType::IMAGE;
     layer1.img = testImage;
 
     Layer layer2;
-    layer2.type = LayerType::Text;
+    layer2.type = LayerType::TEXT;
     layer2.textContent = "Hello World";
 
     layerManager->addLayer(layer1);
@@ -198,11 +198,11 @@ TEST_F(LayerManagerTest, GetLayerByName)
 
     Layer* found = layerManager->getLayerByName("test_image.jpg");
     ASSERT_NE(found, nullptr);
-    EXPECT_EQ(found->type, LayerType::Image);
+    EXPECT_EQ(found->type, LayerType::IMAGE);
 
     Layer* found2 = layerManager->getLayerByName("Hello World");
     ASSERT_NE(found2, nullptr);
-    EXPECT_EQ(found2->type, LayerType::Text);
+    EXPECT_EQ(found2->type, LayerType::TEXT);
 
     Layer* notFound = layerManager->getLayerByName("nonexistent");
     EXPECT_EQ(notFound, nullptr);
@@ -252,17 +252,17 @@ TEST_F(LayerManagerTest, GetLayerByCameraDevicePathWhenNoneExists)
 TEST_F(LayerManagerTest, SortLayers)
 {
     Layer layer1;
-    layer1.type = LayerType::Image;
+    layer1.type = LayerType::IMAGE;
     layer1.img = std::make_shared<Image>(100);
     layer1.img->info.layer = 3;
 
     Layer layer2;
-    layer2.type = LayerType::Image;
+    layer2.type = LayerType::IMAGE;
     layer2.img = std::make_shared<Image>(100);
     layer2.img->info.layer = 1;
 
     Layer layer3;
-    layer3.type = LayerType::Image;
+    layer3.type = LayerType::IMAGE;
     layer3.img = std::make_shared<Image>(100);
     layer3.img->info.layer = 2;
 
@@ -333,13 +333,13 @@ TEST_F(LayerManagerTest, IsDirty)
 TEST_F(LayerManagerTest, SetLayerDirty)
 {
     Layer layer1;
-    layer1.type = LayerType::Image;
+    layer1.type = LayerType::IMAGE;
     layer1.img = std::make_shared<Image>(100);
     layer1.img->info.layer = 1;
     layer1.dirty = false;
 
     Layer layer2;
-    layer2.type = LayerType::Image;
+    layer2.type = LayerType::IMAGE;
     layer2.img = std::make_shared<Image>(100);
     layer2.img->info.layer = 2;
     layer2.dirty = false;
@@ -387,20 +387,20 @@ TEST_F(LayerManagerTest, InvalidateTextures)
 TEST_F(LayerManagerTest, LayerGetLayerNumber)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.img = testImage;
 
     EXPECT_EQ(imageLayer.getLayerNumber(), 1); // testImage layer is set to 1
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.gif = testGif;
 
     // Since testGif failed to open (dummy path), it has no frames, so returns default 0
     EXPECT_EQ(gifLayer.getLayerNumber(), 0); // Default when no frames
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "test";
 
     EXPECT_EQ(textLayer.getLayerNumber(), 0); // Default for text
@@ -409,7 +409,7 @@ TEST_F(LayerManagerTest, LayerGetLayerNumber)
 TEST_F(LayerManagerTest, LayerSetLayerNumber)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.img = testImage;
 
     imageLayer.setLayerNumber(5);
@@ -420,26 +420,26 @@ TEST_F(LayerManagerTest, LayerSetLayerNumber)
 TEST_F(LayerManagerTest, LayerGetLayerName)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.img = testImage;
 
     EXPECT_EQ(imageLayer.getLayerName(), "test_image.jpg");
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.gif = testGif;
 
     // Since testGif failed to open (dummy path), getFilename() returns the original path
     EXPECT_EQ(gifLayer.getLayerName(), "dummy_path.gif");
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "Hello World";
 
     EXPECT_EQ(textLayer.getLayerName(), "Hello World");
 
     Layer emptyTextLayer;
-    emptyTextLayer.type = LayerType::Text;
+    emptyTextLayer.type = LayerType::TEXT;
     emptyTextLayer.textContent = "";
 
     EXPECT_EQ(emptyTextLayer.getLayerName(), "Text Layer");
@@ -448,14 +448,14 @@ TEST_F(LayerManagerTest, LayerGetLayerName)
 TEST_F(LayerManagerTest, LayerGetTextureId)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.img = testImage;
     imageLayer.img->info.textureId = 123;
 
     EXPECT_EQ(imageLayer.getTextureId(), 123);
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.gif = testGif;
     if (!gifLayer.gif->frames().empty())
     {
@@ -464,7 +464,7 @@ TEST_F(LayerManagerTest, LayerGetTextureId)
     }
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "Test";
     textLayer.img = Layer::createTextImage("Test");
     
@@ -479,20 +479,20 @@ TEST_F(LayerManagerTest, LayerGetTextureId)
 TEST_F(LayerManagerTest, LayerGetSize)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.img = testImage;
 
     EXPECT_EQ(imageLayer.getSize(), testImageSize);
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.gif = testGif;
 
     // Since testGif failed to open (dummy path), it has no size
     EXPECT_EQ(gifLayer.getSize(), 0);
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "Test";
     textLayer.img = Layer::createTextImage("Test");
 
@@ -503,14 +503,14 @@ TEST_F(LayerManagerTest, LayerGetSize)
 TEST_F(LayerManagerTest, LayerGetDimensions)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.img = testImage;
 
     EXPECT_EQ(imageLayer.getWidth(), 640);
     EXPECT_EQ(imageLayer.getHeight(), 480);
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.gif = testGif;
 
     // Since testGif failed to open (dummy path), it has no frames, so dimensions are 0
@@ -518,7 +518,7 @@ TEST_F(LayerManagerTest, LayerGetDimensions)
     EXPECT_EQ(gifLayer.getHeight(), 0);
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "Test";
     textLayer.img = Layer::createTextImage("Test");
 
@@ -530,20 +530,20 @@ TEST_F(LayerManagerTest, LayerGetDimensions)
 TEST_F(LayerManagerTest, LayerGetFormat)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.img = testImage;
 
     EXPECT_EQ(imageLayer.getFormat(), ImageFormat::RGB);
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.gif = testGif;
 
     // Since testGif failed to open (dummy path), it has no frames, so format is UNKNOWN
     EXPECT_EQ(gifLayer.getFormat(), ImageFormat::UNKNOWN);
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "Test";
     textLayer.img = Layer::createTextImage("Test");
 
@@ -555,13 +555,13 @@ TEST_F(LayerManagerTest, LayerGetFormat)
 TEST_F(LayerManagerTest, LayerUniqueIds)
 {
     Layer layer1;
-    layer1.id = Layer::next_id++;
+    layer1.id = Layer::nextId++;
 
     Layer layer2;
-    layer2.id = Layer::next_id++;
+    layer2.id = Layer::nextId++;
 
     Layer layer3;
-    layer3.id = Layer::next_id++;
+    layer3.id = Layer::nextId++;
 
     EXPECT_NE(layer1.id, layer2.id);
     EXPECT_NE(layer2.id, layer3.id);
@@ -684,7 +684,7 @@ TEST_F(LayerManagerTest, TextLayerLifecycle)
 {
     // Test complete text layer lifecycle
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.name = "test_text";
     textLayer.textContent = "Hello LinuxCam";
     textLayer.x = 50.0f;
@@ -699,7 +699,7 @@ TEST_F(LayerManagerTest, TextLayerLifecycle)
     layerManager->addLayer(textLayer);
     
     EXPECT_EQ(layerManager->getLayers().size(), 1);
-    EXPECT_EQ(layerManager->getLayers()[0].type, LayerType::Text);
+    EXPECT_EQ(layerManager->getLayers()[0].type, LayerType::TEXT);
     EXPECT_EQ(layerManager->getLayers()[0].textContent, "Hello LinuxCam");
     EXPECT_EQ(layerManager->getLayers()[0].x, 50.0f);
     EXPECT_EQ(layerManager->getLayers()[0].y, 100.0f);
@@ -713,7 +713,7 @@ TEST_F(LayerManagerTest, TextLayerLifecycle)
 TEST_F(LayerManagerTest, TextLayerGetters)
 {
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "Test Text";
     textLayer.img = Layer::createTextImage("Test Text", IM_COL32_WHITE, 1);
     
@@ -743,19 +743,19 @@ TEST_F(LayerManagerTest, TextLayerSorting)
 {
     // Test text layers in sorting
     Layer textLayer1;
-    textLayer1.type = LayerType::Text;
+    textLayer1.type = LayerType::TEXT;
     textLayer1.textContent = "Layer 1";
     textLayer1.layerNumber = 3;
     textLayer1.img = Layer::createTextImage("Layer 1");
     
     Layer textLayer2;
-    textLayer2.type = LayerType::Text;
+    textLayer2.type = LayerType::TEXT;
     textLayer2.textContent = "Layer 2";
     textLayer2.layerNumber = 1;
     textLayer2.img = Layer::createTextImage("Layer 2");
     
     Layer textLayer3;
-    textLayer3.type = LayerType::Text;
+    textLayer3.type = LayerType::TEXT;
     textLayer3.textContent = "Layer 3";
     textLayer3.layerNumber = 2;
     textLayer3.img = Layer::createTextImage("Layer 3");
@@ -785,17 +785,17 @@ TEST_F(LayerManagerTest, MixedLayerTypes)
 {
     // Test managing mixed layer types (Image, Gif, Text)
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "image";
     imageLayer.img = testImage;
     
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "gif";
     gifLayer.gif = testGif;
     
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.name = "text";
     textLayer.textContent = "Mixed Layer Test";
     textLayer.img = Layer::createTextImage("Mixed Layer Test");
@@ -813,14 +813,14 @@ TEST_F(LayerManagerTest, MixedLayerTypes)
     ASSERT_NE(foundImage, nullptr);
     ASSERT_NE(foundText, nullptr);
     
-    EXPECT_EQ(foundImage->type, LayerType::Image);
-    EXPECT_EQ(foundText->type, LayerType::Text);
+    EXPECT_EQ(foundImage->type, LayerType::IMAGE);
+    EXPECT_EQ(foundText->type, LayerType::TEXT);
 }
 
 TEST_F(LayerManagerTest, TextLayerDirtyState)
 {
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.textContent = "Dirty Test";
     textLayer.img = Layer::createTextImage("Dirty Test");
     textLayer.dirty = false;

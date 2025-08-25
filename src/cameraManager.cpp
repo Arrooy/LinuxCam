@@ -114,7 +114,7 @@ void CameraManager::updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::
     {
         // Create new layer for this camera
         Layer newLayer;
-    newLayer.id = Layer::next_id_++;
+    newLayer.id = Layer::nextId++;
         newLayer.type = LayerType::IMAGE;
         newLayer.name = camera->getName();
         newLayer.cameraDevicePath = camera->getDevicePath();
@@ -191,7 +191,7 @@ void CameraManager::createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter
 
     // Create overlay layer
     Layer overlayLayer;
-    overlayLayer.id = Layer::next_id_++;
+    overlayLayer.id = Layer::nextId++;
     overlayLayer.type = LayerType::IMAGE;
     overlayLayer.name = overlayName;
     overlayLayer.cameraDevicePath = "output:" + camera->getDevicePath(); // Mark as output camera

@@ -18,7 +18,7 @@ class ConfigBuilder
   ConfigBuilder& quality(int q) { return set("quality", q); }
   ConfigBuilder& width(unsigned int w) { return set("width", static_cast<int>(w)); }
   ConfigBuilder& height(unsigned int h) { return set("height", static_cast<int>(h)); }
-  ConfigBuilder& chrominanceSubsampling(TJSAMP c) { return set("chrominance_subsampling", c); }
+  ConfigBuilder& chrominanceSubsampling(TJSAMP c) { return set("chrominanceSubsampling", c); }
   ConfigBuilder& pixelFormat(TJPF p) { return set("pixelFormat", p); }
   ConfigBuilder& imageFormat(ImageFormat i) { return set("imageFormat", i); }
 

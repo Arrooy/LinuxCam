@@ -154,10 +154,10 @@ class JPEGEncoder : public Encoder
             common::logError("JPEGEncoder - Unable to load parameter pixelFormat");
         }
 
-        if (!config.get("chrominance_subsampling", chrominance_subsampling))
+        if (!config.get("chrominanceSubsampling", chrominance_subsampling))
         {
             common::logError("JPEGEncoder - Unable to load parameter "
-                             "chrominance_subsampling");
+                             "chrominanceSubsampling");
         }
     }
 

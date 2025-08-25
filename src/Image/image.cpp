@@ -89,7 +89,7 @@ Image::Image(unsigned char* buffer, size_t size, bool takeOwnership) : size_(siz
     }
 }
 
-Image::Image(Pixel color, size_t width, size_t height) : size_(width * height * info.pixelSizeBytes)
+Image::Image(Pixel color, size_t width, size_t height)
 {
     // Determine format based on alpha value
     const bool hasAlpha = (color.a != 255);
@@ -97,6 +97,9 @@ Image::Image(Pixel color, size_t width, size_t height) : size_(width * height * 
     info.format = hasAlpha ? ImageFormat::RGBA : ImageFormat::RGB;
     info.width = width;
     info.height = height;
+    
+    // Calculate size after setting pixelSizeBytes
+    size_ = width * height * info.pixelSizeBytes;
 
     data_ = std::shared_ptr<unsigned char>(new unsigned char[size_], std::default_delete<unsigned char[]>());
 

@@ -608,7 +608,7 @@ TEST_F(LandmarkMappingTest, WFLWGroundTruthComparison)
         const double kMinIoU = 0.25; // conservative: require some overlap with GT
         if (scrfd_degenerate || chosen_iou < kMinIoU)
         {
-            common::log_info("WFLW Test: skipping example=%s due to scrfd_degenerate=%d chosen_iou=%f",
+            common::logInfo("WFLW Test: skipping example=%s due to scrfd_degenerate=%d chosen_iou=%f",
                              example.image_name.c_str(), static_cast<int>(scrfd_degenerate), chosen_iou);
             continue;
         }
