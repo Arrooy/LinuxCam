@@ -34,11 +34,23 @@ jobs:
 
       - name: Download ONNX Models
         run: |
-          echo "$GDRIVE_CREDENTIALS" > service_account.json
-          pip install gdown
-          gdown --folder https://drive.google.com/drive/folders/18OdNkL0qTq7JhtLYLF8-IoBZtT70w9BW \
-                -O models/ \
-                --service-account service_account.json
+          echo "Installing Google API client dependencies..."
+          pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
+          
+          echo "Running custom model download script..."
+          if ! python3 scripts/download_models.py; then
+            echo "ERROR: Model download failed"
+            exit 1
+          fi
+          
+          echo "Verifying downloaded models..."
+          if [ -d "models" ] && [ "$(ls -A models)" ]; then
+            echo "SUCCESS: Models downloaded successfully"
+            ls -la models/
+          else
+            echo "ERROR: No models found after download"
+            exit 1
+          fi
         env:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
 
@@ -330,3 +342,16 @@ jobs:
           path: |
             build-Debug/coverage.xml
           retention-days: 30
+
+      - name: Cleanup Downloaded Models
+        if: always()
+        run: |
+          echo "Cleaning up downloaded model files..."
+          if [ -d "models" ]; then
+            echo "Removing models directory and contents:"
+            ls -la models/ || echo "Models directory is empty"
+            rm -rf models/
+            echo "Models directory cleaned up successfully"
+          else
+            echo "No models directory found to clean up"
+          fi
