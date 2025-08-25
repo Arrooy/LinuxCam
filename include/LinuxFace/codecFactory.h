@@ -54,7 +54,7 @@ class ConfigBuilder
     bool has(const std::string& key) const { return props_.find(key) != props_.end(); }
 
   private:
-    std::unordered_map<std::string, std::any> props_{};
+    std::unordered_map<std::string, std::any> props_;
 };
 
 class Encoder

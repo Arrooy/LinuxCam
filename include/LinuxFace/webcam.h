@@ -64,7 +64,7 @@ struct Format
     ImageFormat format{ImageFormat::UNKNOWN};
     unsigned int pixelformat{};
     unsigned int selectedFrameSize{0u};
-    std::vector<FrameSize> sizes{};
+    std::vector<FrameSize> sizes;
 
     void print() const
     {
@@ -165,7 +165,7 @@ class Webcam
     WebcamType type_{WebcamType::UNKNOWN};
 
     CameraCapabilities capabilities_;
-    std::unique_ptr<Format> selectedFormat_{};
+    std::unique_ptr<Format> selectedFormat_;
 
     bool currentlySelected_{false}; // True if the user has selected this webcam in the UI
 };

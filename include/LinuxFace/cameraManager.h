@@ -27,14 +27,14 @@ namespace linuxface
 class CameraManager
 {
   public:
-    CameraManager();
+    CameraManager() = default;
     ~CameraManager();
 
     void setLayerManager(std::shared_ptr<LayerManager> layerManager);
 
-    bool addCamera(std::shared_ptr<Webcam> camera);
-    bool removeCamera(std::shared_ptr<Webcam> camera);
-    bool updateCamera(std::shared_ptr<Webcam> camera);
+    bool addCamera(const std::shared_ptr<Webcam>& camera);
+    bool removeCamera(const std::shared_ptr<Webcam>& camera);
+    bool updateCamera(const std::shared_ptr<Webcam>& camera);
 
     bool updateInput();
     bool updateOutput(std::unique_ptr<Image>& outputImage);
@@ -45,12 +45,12 @@ class CameraManager
     std::vector<std::string> discoverAvailableVideoDevices();
   private:
     static bool isDeviceUsable(const std::string& devicePath);
-    void updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::unique_ptr<Image> newFrame);
-    void createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera);
-    void updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera, const Image& compositeImage);
-    std::vector<std::shared_ptr<InputWebcam>> inWebcam_{};
-    std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_{};
-    std::shared_ptr<LayerManager> layerManager_;
+    void updateCameraLayer(const std::shared_ptr<InputWebcam>& camera, std::unique_ptr<Image> newFrame);
+    void createOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera);
+    void updateOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera, const Image& compositeImage);
+    std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
+    std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
+    std::shared_ptr<LayerManager> layerManager_{nullptr};
     // std::unordered_map<int, int> connections_;
 };
 

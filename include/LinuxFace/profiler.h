@@ -52,8 +52,8 @@ class Profiler
 
     static std::string makeKey(const std::string& sourceName, const std::string& name);
 
-    std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> timers_{};
-    std::unordered_map<std::string, std::chrono::microseconds> durations_{};
+    std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> timers_;
+    std::unordered_map<std::string, std::chrono::microseconds> durations_;
     mutable std::mutex mutex_;
 };
 

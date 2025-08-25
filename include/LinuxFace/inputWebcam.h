@@ -49,10 +49,10 @@ class InputWebcam : public Webcam
     std::atomic<bool> isRecording_{false};
 
     // Decoder of input image
-    std::unique_ptr<Decoder> decoder_{};
+    std::unique_ptr<Decoder> decoder_;
 
     mutable std::mutex imageMutex_;
-    std::unique_ptr<Image> latestImage_{};
+    std::unique_ptr<Image> latestImage_;
 };
 } // namespace linuxface
 

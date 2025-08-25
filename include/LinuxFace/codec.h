@@ -91,7 +91,7 @@ class JPEGDecoder : public Decoder
         int width = -1;
         int height = -1;
 
-        int tjStat =
+        const int tjStat =
             tjDecompressHeader3(d_handle_, image.data(), image.size(), &width, &height, &sampleFormat, &colorSpace);
 
         if (tjStat != 0 || sampleFormat == -1 || colorSpace == -1)
@@ -217,8 +217,9 @@ class JPEGEncoder : public Encoder
         // Ensure the pitch is properly calculated (width * pixel_size)
         const int pitch = width * tjPixelSize[sourcePixelFormat];
 
-        int tjStat = tjCompress2(c_handle_, srcImage.data(), width, pitch, height, sourcePixelFormat, &outImageData,
-                                 &outImageSize, chrominance_subsampling, quality, TJFLAG_NOREALLOC);
+        const int tjStat =
+            tjCompress2(c_handle_, srcImage.data(), width, pitch, height, sourcePixelFormat, &outImageData,
+                        &outImageSize, chrominance_subsampling, quality, TJFLAG_NOREALLOC);
 
         if (tjStat != 0)
         {
@@ -628,7 +629,7 @@ class DepthZ16Decoder : public Decoder
             b = 0;
         }
     }
-    //TODO: Could be static
+    // TODO(arroyo): Could be static
     void hotColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b) const
     {
         // Clamp value to [0, 1]
@@ -735,8 +736,7 @@ class YUV422 : public Decoder
         outImage.info.pixelSizeBytes = 3;
         outImage.info.TJPixelFormat = TJPF_RGB;
 
-        bool result = decodeYUV(srcImage, outImage, pxConvert);
-        return result;
+        return decodeYUV(srcImage, outImage, pxConvert);
     }
 
     bool decodeHeader(Image& srcImage, unsigned long& rawNeededSize) override
@@ -751,7 +751,7 @@ class YUV422 : public Decoder
     }
 
   private:
-    bool decodeYUV(const Image& yuvImage, Image& rgbImage, ConversionFunct funct) const
+    bool decodeYUV(const Image& yuvImage, Image& rgbImage, const ConversionFunct& funct) const
     {
         const uint8_t* yuv = yuvImage.data();
         uint8_t* rgb = rgbImage.data();
@@ -766,7 +766,7 @@ class YUV422 : public Decoder
         uint8_t* rgbPtr = rgb;
         for (int i = 0, j = 0; i < pixels; i += 2, j += 4)
         {
-            YUV422Block block = funct(yuv + j);
+            const YUV422Block block = funct(yuv + j);
             this->convertYUVtoRGB(block.y0, block.u, block.v, rgbPtr);
             rgbPtr += 3;
             this->convertYUVtoRGB(block.y1, block.u, block.v, rgbPtr);
@@ -784,9 +784,9 @@ class YUV422 : public Decoder
         {
             c = 0;
         }
-        int r = c + lut_.Cr_r[v];
-        int g = c + lut_.Cb_g[u] + lut_.Cr_g[v];
-        int b = c + lut_.Cb_b[u];
+        const int r = c + lut_.Cr_r[v];
+        const int g = c + lut_.Cb_g[u] + lut_.Cr_g[v];
+        const int b = c + lut_.Cb_b[u];
 
         // Clamp the results between 0 and 255
         rgb[0] = static_cast<uint8_t>(common::clamp(r, 0, 255));

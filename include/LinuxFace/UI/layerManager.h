@@ -34,7 +34,7 @@ struct Layer
 
     // Unique identifier for this layer instance
     size_t id = 0;
-    // TODO: this is not thead safe.
+    // TODO(arroyo): this is not thead safe.
     static size_t nextId;
 
     // Camera-specific fields
@@ -292,7 +292,7 @@ class LayerManager
     // Invalidate all textures
     void invalidateTextures();
   private:
-    std::vector<Layer> layers_{};
+    std::vector<Layer> layers_;
 };
 
 } // namespace linuxface

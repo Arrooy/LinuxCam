@@ -6,6 +6,7 @@
 #include <set>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <utility>
 
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
@@ -15,8 +16,6 @@ using linuxface::CameraManager;
 using linuxface::Image;
 using linuxface::Webcam;
 
-CameraManager::CameraManager() : inWebcam_(), outWebcam_(), layerManager_(nullptr) {}
-
 CameraManager::~CameraManager()
 {
     shutdown();
@@ -24,7 +23,7 @@ CameraManager::~CameraManager()
 
 void CameraManager::setLayerManager(std::shared_ptr<LayerManager> layerManager)
 {
-    layerManager_ = layerManager;
+    layerManager_ = std::move(layerManager);
 }
 
 void CameraManager::shutdown()
@@ -67,15 +66,17 @@ bool CameraManager::updateInput()
             {
                 continue;
             }
-            else if (newFrame == nullptr)
+
+            if (newFrame == nullptr)
             {
                 common::logError("CameraManager::updateInput - Input image is null");
                 continue;
             }
-            else if (newFrame->info.width == 0 || newFrame->info.height == 0)
+
+            if (newFrame->info.width == 0 || newFrame->info.height == 0)
             {
-                common::logError("CameraManager::updateInput - Input image invalid size: %d x %d",
-                                  newFrame->info.width, newFrame->info.height);
+                common::logError("CameraManager::updateInput - Input image invalid size: %d x %d", newFrame->info.width,
+                                 newFrame->info.height);
                 continue;
             }
 
@@ -86,7 +87,7 @@ bool CameraManager::updateInput()
     return true;
 }
 
-void CameraManager::updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::unique_ptr<Image> newFrame)
+void CameraManager::updateCameraLayer(const std::shared_ptr<InputWebcam>& camera, std::unique_ptr<Image> newFrame)
 {
     // Find or create layer for this camera
     Layer* existingLayer = layerManager_->getLayerByCameraDevicePath(camera->getDevicePath());
@@ -97,8 +98,8 @@ void CameraManager::updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::
         if (existingLayer->resizeScale != 1.0f)
         {
             // Apply resize if scale is set
-            int targetWidth = static_cast<int>(newFrame->info.width * existingLayer->resizeScale);
-            int targetHeight = static_cast<int>(newFrame->info.height * existingLayer->resizeScale);
+            const int targetWidth = static_cast<int>(newFrame->info.width * existingLayer->resizeScale);
+            const int targetHeight = static_cast<int>(newFrame->info.height * existingLayer->resizeScale);
 
             if (targetWidth > 0 && targetHeight > 0)
             {
@@ -114,7 +115,7 @@ void CameraManager::updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::
     {
         // Create new layer for this camera
         Layer newLayer;
-    newLayer.id = Layer::nextId++;
+        newLayer.id = Layer::nextId++;
         newLayer.type = LayerType::IMAGE;
         newLayer.name = camera->getName();
         newLayer.cameraDevicePath = camera->getDevicePath();
@@ -123,7 +124,7 @@ void CameraManager::updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::
 
         // Debug: Log camera layer creation
         common::logInfo("CameraManager::updateCameraLayer - Created layer with name: '%s' for device: %s",
-                         newLayer.name.c_str(), newLayer.cameraDevicePath.c_str());
+                        newLayer.name.c_str(), newLayer.cameraDevicePath.c_str());
         newLayer.img = std::shared_ptr<Image>(newFrame.release());
         newLayer.dirty = true;
         newLayer.setPosition(100.0f, 100.0f); // Start at reasonable position like other layers
@@ -143,7 +144,7 @@ void CameraManager::updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::
     }
 }
 
-void CameraManager::createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera)
+void CameraManager::createOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera)
 {
     if (!layerManager_)
     {
@@ -151,7 +152,7 @@ void CameraManager::createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter
     }
 
     // Check if overlay already exists
-    std::string overlayName = "Output: " + camera->getName();
+    const std::string overlayName = "Output: " + camera->getName();
     if (layerManager_->getLayerByName(overlayName) != nullptr)
     {
         return; // Already exists
@@ -162,20 +163,20 @@ void CameraManager::createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter
     if (format.sizes.empty())
     {
         common::logWarn("CameraManager::createOutputCameraOverlay - No format available for camera %s",
-                         camera->getName().c_str());
+                        camera->getName().c_str());
         return;
     }
 
     auto& selectedSize = format.sizes[format.selectedFrameSize];
-    unsigned int width = selectedSize.width;
-    unsigned int height = selectedSize.height;
+    const unsigned int width = selectedSize.width;
+    const unsigned int height = selectedSize.height;
 
     // Create a semi-transparent colored rectangle overlay
-    Pixel overlayColor{255, 0, 0, 76}; // Red with ~30% alpha
+    const Pixel overlayColor{255, 0, 0, 76}; // Red with ~30% alpha
     auto overlayImage = std::make_shared<Image>(overlayColor, width, height);
 
     // Create border effect - fill border pixels with more opaque color
-    Pixel borderColor{255, 0, 0, 128}; // Red with ~50% alpha
+    const Pixel borderColor{255, 0, 0, 128}; // Red with ~50% alpha
     const int borderWidth = 3;
 
     for (unsigned int y = 0; y < height; ++y)
@@ -216,10 +217,10 @@ void CameraManager::createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter
 
     layerManager_->addLayer(overlayLayer);
     common::logInfo("CameraManager::createOutputCameraOverlay - Created overlay for output camera %s (%dx%d)",
-                     camera->getName().c_str(), width, height);
+                    camera->getName().c_str(), width, height);
 }
 
-void CameraManager::updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera,
+void CameraManager::updateOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera,
                                               const Image& /*compositeImage*/)
 {
     if (!layerManager_)
@@ -228,7 +229,7 @@ void CameraManager::updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter
     }
 
     // Find the overlay layer for this output camera
-    std::string overlayName = "Output: " + camera->getName();
+    const std::string overlayName = "Output: " + camera->getName();
     Layer* overlayLayer = layerManager_->getLayerByName(overlayName);
 
     if ((overlayLayer == nullptr) || !overlayLayer->img)
@@ -244,11 +245,11 @@ void CameraManager::updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter
     }
 
     auto& selectedSize = format.sizes[format.selectedFrameSize];
-    unsigned int outputWidth = selectedSize.width;
-    unsigned int outputHeight = selectedSize.height;
+    const unsigned int outputWidth = selectedSize.width;
+    const unsigned int outputHeight = selectedSize.height;
 
     // Determine if we're actively recording (camera is running)
-    bool isRecording = camera->isRunning();
+    const bool isRecording = camera->isRunning();
 
     // Animate border to show recording status
     static int frameCounter = 0;
@@ -286,7 +287,7 @@ void CameraManager::updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter
     }
 
     // Add corner indicators for better visibility
-    Pixel cornerColor = isRecording ? Pixel{255, 255, 255, 200} : Pixel{255, 255, 0, 200};
+    const Pixel cornerColor = isRecording ? Pixel{255, 255, 255, 200} : Pixel{255, 255, 0, 200};
     const int cornerSize = 8;
 
     // Top-left corner
@@ -330,12 +331,12 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image /*image*/)
         if (output->isRunning())
         {
             // Get the output camera overlay to determine crop region
-            std::string overlayName = "Output: " + output->getName();
+            const std::string overlayName = "Output: " + output->getName();
             Layer* overlayLayer = layerManager_ ? layerManager_->getLayerByName(overlayName) : nullptr;
 
             std::unique_ptr<Image> outputImage;
 
-            if (overlayLayer && overlayLayer->img)
+            if ((overlayLayer != nullptr) && overlayLayer->img)
             {
                 // Crop the composite based on overlay position
                 int cropX = static_cast<int>(overlayLayer->x);
@@ -362,9 +363,9 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image /*image*/)
                 }
 
                 // Create crop rectangle
-                math_utils::Point<float> cropCorner{static_cast<float>(cropX), static_cast<float>(cropY)};
-                math_utils::Rect<float> cropRect{cropCorner, static_cast<float>(cropWidth),
-                                                 static_cast<float>(cropHeight)};
+                const math_utils::Point<float> cropCorner{static_cast<float>(cropX), static_cast<float>(cropY)};
+                const math_utils::Rect<float> cropRect{cropCorner, static_cast<float>(cropWidth),
+                                                       static_cast<float>(cropHeight)};
 
                 // Crop the composite image
                 outputImage = image->crop(cropRect);
@@ -377,8 +378,8 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image /*image*/)
                 else
                 {
                     common::logInfo("Cropped output for %s: region (%d,%d) %ux%u from composite %ux%u",
-                                     output->getName().c_str(), cropX, cropY, cropWidth, cropHeight, image->info.width,
-                                     image->info.height);
+                                    output->getName().c_str(), cropX, cropY, cropWidth, cropHeight, image->info.width,
+                                    image->info.height);
                 }
             }
             else
@@ -404,15 +405,15 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image /*image*/)
     return success;
 }
 
-bool CameraManager::addCamera(std::shared_ptr<Webcam> camera /*camera*/)
+bool CameraManager::addCamera(const std::shared_ptr<Webcam>& camera)
 {
     if (auto input = std::dynamic_pointer_cast<InputWebcam>(camera))
     {
         return addCameraImpl(inWebcam_, std::move(input));
     }
-    else if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
+    if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
     {
-    bool result = addCameraImpl(outWebcam_, output);
+        bool result = addCameraImpl(outWebcam_, output);
         if (result && layerManager_)
         {
             createOutputCameraOverlay(output);
@@ -425,7 +426,7 @@ bool CameraManager::addCamera(std::shared_ptr<Webcam> camera /*camera*/)
 }
 
 
-bool CameraManager::removeCamera(std::shared_ptr<Webcam> camera /*camera*/)
+bool CameraManager::removeCamera(const std::shared_ptr<Webcam>& camera)
 {
     const std::string& devicePath = camera->getDevicePath();
 
@@ -433,18 +434,19 @@ bool CameraManager::removeCamera(std::shared_ptr<Webcam> camera /*camera*/)
     {
         return removeCameraImpl(inWebcam_, devicePath);
     }
-    else if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
+
+    if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
     {
         // Remove the overlay layer for this output camera
         if (layerManager_)
         {
-            std::string overlayName = "Output: " + camera->getName();
+            const std::string overlayName = "Output: " + camera->getName();
             Layer* overlayLayer = layerManager_->getLayerByName(overlayName);
             if (overlayLayer != nullptr)
             {
                 layerManager_->removeLayer(overlayLayer->id);
                 common::logInfo("CameraManager::removeCamera - Removed overlay for output camera %s",
-                                 camera->getName().c_str());
+                                camera->getName().c_str());
             }
         }
 
@@ -455,13 +457,13 @@ bool CameraManager::removeCamera(std::shared_ptr<Webcam> camera /*camera*/)
     return false;
 }
 
-bool CameraManager::updateCamera(std::shared_ptr<Webcam> camera /*camera*/)
+bool CameraManager::updateCamera(const std::shared_ptr<Webcam>& camera)
 {
     if (auto input = std::dynamic_pointer_cast<InputWebcam>(camera))
     {
         return updateCameraImpl(inWebcam_, std::move(input));
     }
-    else if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
+    if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
     {
         return updateCameraImpl(outWebcam_, std::move(output));
     }
@@ -497,7 +499,7 @@ std::vector<std::string> CameraManager::discoverAvailableVideoDevices()
     // Scan /dev for video devices
     for (int i = 0; i < 64; ++i) // Check video0 through video63
     {
-        std::string devicePath = "/dev/video" + std::to_string(i);
+        const std::string devicePath = "/dev/video" + std::to_string(i);
 
         // Skip if device is already managed
         if (managedDevicePaths.find(devicePath) != managedDevicePaths.end())
@@ -505,11 +507,11 @@ std::vector<std::string> CameraManager::discoverAvailableVideoDevices()
             continue;
         }
 
-    if (common::fileExists(devicePath) && isDeviceUsable(devicePath))
+        if (common::fileExists(devicePath) && isDeviceUsable(devicePath))
         {
             availableDevices.push_back(devicePath);
             common::logInfo("CameraManager::discoverAvailableVideoDevices - Found unmanaged usable device: %s",
-                             devicePath.c_str());
+                            devicePath.c_str());
         }
     }
 
@@ -524,9 +526,7 @@ bool CameraManager::isDeviceUsable(const std::string& devicePath /*devicePath*/)
         return false;
     }
 
-    struct v4l2_capability cap
-    {
-    }; // initialize struct
+    struct v4l2_capability cap{}; // initialize struct
     bool isUsable = false;
 
     if (ioctl(fd, VIDIOC_QUERYCAP, &cap) == 0)
@@ -535,7 +535,7 @@ bool CameraManager::isDeviceUsable(const std::string& devicePath /*devicePath*/)
         if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) != 0u && (cap.capabilities & V4L2_CAP_STREAMING) != 0u)
         {
             // Make sure it's not a v4l2loopback output device
-            std::string driver = reinterpret_cast<char*>(cap.driver);
+            const std::string driver = reinterpret_cast<char*>(cap.driver);
             if (driver != "v4l2 loopback")
             {
                 isUsable = true;
