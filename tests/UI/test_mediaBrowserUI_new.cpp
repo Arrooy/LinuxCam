@@ -62,7 +62,7 @@ TEST_F(LayerIntegrationTest, LayerBasicFunctionality)
 {
     // Test adding a layer
     Layer layer;
-    layer.type = LayerType::Image;
+    layer.type = LayerType::IMAGE;
     layer.name = "test_layer";
     layer.img = testImage;
     layer.selected = true;
@@ -78,21 +78,21 @@ TEST_F(LayerIntegrationTest, LayerBasicFunctionality)
     const auto& layers = layerManager->getLayers();
     EXPECT_EQ(layers[0].name, "test_layer");
     EXPECT_TRUE(layers[0].selected);
-    EXPECT_EQ(layers[0].type, LayerType::Image);
+    EXPECT_EQ(layers[0].type, LayerType::IMAGE);
 }
 
 TEST_F(LayerIntegrationTest, LayerSelection)
 {
     // Add multiple layers
     Layer layer1;
-    layer1.type = LayerType::Image;
+    layer1.type = LayerType::IMAGE;
     layer1.name = "layer1";
     layer1.img = testImage;
     layer1.selected = false;
     layer1.id = 1;
 
     Layer layer2;
-    layer2.type = LayerType::Text;
+    layer2.type = LayerType::TEXT;
     layer2.name = "layer2";
     layer2.textContent = "Text";
     layer2.selected = true; // This one is selected
@@ -123,7 +123,7 @@ TEST_F(LayerIntegrationTest, LayerManipulation)
 {
     // Add a layer
     Layer layer;
-    layer.type = LayerType::Image;
+    layer.type = LayerType::IMAGE;
     layer.name = "test_layer";
     layer.img = testImage;
     layer.selected = true;
@@ -150,7 +150,7 @@ TEST_F(LayerIntegrationTest, LayerManipulation)
 TEST_F(LayerIntegrationTest, LayerProperties)
 {
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "test_image";
     imageLayer.img = testImage;
     imageLayer.selected = true;
@@ -178,7 +178,7 @@ TEST_F(LayerIntegrationTest, LayerProperties)
 TEST_F(LayerIntegrationTest, TextLayerHandling)
 {
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.name = "text_test";
     textLayer.textContent = "Hello, World!";
     // Create text image using the new implementation
@@ -193,7 +193,7 @@ TEST_F(LayerIntegrationTest, TextLayerHandling)
     auto& layers = layerManager->getLayers();
     const Layer& layer = layers[0];
 
-    EXPECT_EQ(layer.type, LayerType::Text);
+    EXPECT_EQ(layer.type, LayerType::TEXT);
     EXPECT_EQ(layer.textContent, "Hello, World!");
     EXPECT_NE(layer.img, nullptr); // Text image should be created
     EXPECT_GT(layer.getWidth(), 0); // Should have dimensions
@@ -205,7 +205,7 @@ TEST_F(LayerIntegrationTest, TextLayerHandling)
 TEST_F(LayerIntegrationTest, GifLayerHandling)
 {
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "test_gif";
     gifLayer.gif = testGif;
     gifLayer.selected = true;
@@ -216,7 +216,7 @@ TEST_F(LayerIntegrationTest, GifLayerHandling)
     auto& layers = layerManager->getLayers();
     const Layer& layer = layers[0];
 
-    EXPECT_EQ(layer.type, LayerType::Gif);
+    EXPECT_EQ(layer.type, LayerType::GIF);
     EXPECT_EQ(layer.gif, testGif);
     // Since testGif failed to open dummy file, dimensions should be 0
     EXPECT_EQ(layer.getWidth(), 0);
@@ -227,14 +227,14 @@ TEST_F(LayerIntegrationTest, MultipleLayerTypes)
 {
     // Add different layer types
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "image_layer";
     imageLayer.img = testImage;
     imageLayer.selected = false;
     imageLayer.id = 1;
 
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.name = "text_layer";
     textLayer.textContent = "Test Text";
     // Create text image using the new implementation
@@ -243,7 +243,7 @@ TEST_F(LayerIntegrationTest, MultipleLayerTypes)
     textLayer.id = 2;
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "gif_layer";
     gifLayer.gif = testGif;
     gifLayer.selected = true; // This one is selected
@@ -268,7 +268,7 @@ TEST_F(LayerIntegrationTest, MultipleLayerTypes)
     }
 
     ASSERT_NE(selectedLayer, nullptr);
-    EXPECT_EQ(selectedLayer->type, LayerType::Gif);
+    EXPECT_EQ(selectedLayer->type, LayerType::GIF);
     EXPECT_EQ(selectedLayer->name, "gif_layer");
 }
 
@@ -278,7 +278,7 @@ TEST_F(LayerIntegrationTest, LayerOrdering)
     for (int i = 0; i < 5; ++i)
     {
         Layer layer;
-        layer.type = LayerType::Text;
+    layer.type = LayerType::TEXT;
         layer.name = "layer_" + std::to_string(i);
         layer.textContent = "Content " + std::to_string(i);
         layer.selected = (i == 2); // Select middle layer
@@ -316,7 +316,7 @@ TEST_F(LayerIntegrationTest, LayerOrdering)
 TEST_F(LayerIntegrationTest, EmptyTextLayer)
 {
     Layer textLayer;
-    textLayer.type = LayerType::Text;
+    textLayer.type = LayerType::TEXT;
     textLayer.name = "empty_text";
     textLayer.textContent = ""; // Empty text
     // Empty text should result in null image
@@ -337,7 +337,7 @@ TEST_F(LayerIntegrationTest, NullDataHandling)
 {
     // Test with null image
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "null_image";
     imageLayer.img = nullptr;
     imageLayer.selected = true;
@@ -360,7 +360,7 @@ TEST_F(LayerIntegrationTest, LayerClearing)
     for (int i = 0; i < 3; ++i)
     {
         Layer layer;
-        layer.type = LayerType::Text;
+    layer.type = LayerType::TEXT;
         layer.name = "layer_" + std::to_string(i);
         layer.textContent = "Content " + std::to_string(i);
         layer.id = i + 1;

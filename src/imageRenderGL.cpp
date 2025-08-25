@@ -2,16 +2,17 @@
 
 #include "imgui.h"
 
+#include <math.h>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
 
+#include "LinuxFace/Image/text_renderer.h"
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-#include "LinuxFace/Image/text_renderer.h"
 
 // Vertex shader for full-screen quad
 const char* vertexShaderSource = R"(
@@ -42,7 +43,7 @@ void main() {
 
 using namespace linuxface;
 
-ImageRenderGL::ImageRenderGL() : vao_(0), vbo_(0), ebo_(0), shaderProgram_(0)
+ImageRenderGL::ImageRenderGL()
 {
 }
 
@@ -55,7 +56,7 @@ bool ImageRenderGL::initialize()
 {
     if (!createShaders())
     {
-        common::log_error("Failed to create shaders");
+        common::logError("Failed to create shaders");
         return false;
     }
     // Vertex data will be set per-image in renderLayers
@@ -63,65 +64,63 @@ bool ImageRenderGL::initialize()
     return true;
 }
 
-bool ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, 
-                                     int windowWidth, int windowHeight)
+bool ImageRenderGL::setupQuadBuffers(TextureCacheEntry& entry, const RenderBounds& bounds, int windowWidth,
+                                     int windowHeight)
 {
     // Check if buffers need recreation (size, position, OR window size change)
-    if (entry.vao != 0 && entry.vbo != 0 && entry.ebo != 0 &&
-        static_cast<float>(entry.width) == bounds.width &&
-        static_cast<float>(entry.height) == bounds.height &&
-        entry.lastX == bounds.x && entry.lastY == bounds.y &&
-        entry.lastWindowWidth == windowWidth && entry.lastWindowHeight == windowHeight)
+    if (entry.vao != 0 && entry.vbo != 0 && entry.ebo != 0 && static_cast<float>(entry.width) == bounds.width
+        && static_cast<float>(entry.height) == bounds.height && entry.lastX == bounds.x && entry.lastY == bounds.y
+        && entry.lastWindowWidth == windowWidth && entry.lastWindowHeight == windowHeight)
     {
         return true; // Buffers are already set up correctly
     }
 
     // Clean up previous buffers if they exist
-    if (entry.vao)
+    if (entry.vao != 0u)
     {
         glDeleteVertexArrays(1, &entry.vao);
     }
-    if (entry.vbo)
+    if (entry.vbo != 0u)
     {
         glDeleteBuffers(1, &entry.vbo);
     }
-    if (entry.ebo)
+    if (entry.ebo != 0u)
     {
         glDeleteBuffers(1, &entry.ebo);
     }
-    
+
     glGenVertexArrays(1, &entry.vao);
     glGenBuffers(1, &entry.vbo);
     glGenBuffers(1, &entry.ebo);
-    
-    float x0 = -1.0f + 2.0f * (bounds.x / windowWidth);
-    float y0 = 1.0f - 2.0f * (bounds.y / windowHeight);
-    float x1 = -1.0f + 2.0f * ((bounds.x + bounds.width) / windowWidth);
-    float y1 = 1.0f - 2.0f * ((bounds.y + bounds.height) / windowHeight);
-    
+
+    const float x0 = -1.0f + 2.0f * (bounds.x / windowWidth);
+    const float y0 = 1.0f - 2.0f * (bounds.y / windowHeight);
+    const float x1 = -1.0f + 2.0f * ((bounds.x + bounds.width) / windowWidth);
+    const float y1 = 1.0f - 2.0f * ((bounds.y + bounds.height) / windowHeight);
+
     float vertices[] = {x0, y1, 0.0f, 1.0f, x1, y1, 1.0f, 1.0f, x1, y0, 1.0f, 0.0f, x0, y0, 0.0f, 0.0f};
     unsigned int indices[] = {0, 1, 2, 2, 3, 0};
-    
+
     glBindVertexArray(entry.vao);
     glBindBuffer(GL_ARRAY_BUFFER, entry.vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry.ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) 0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) nullptr);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*) (2 * sizeof(float)));
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
-    
+
     entry.width = static_cast<int>(bounds.width);
     entry.height = static_cast<int>(bounds.height);
     entry.lastX = bounds.x;
     entry.lastY = bounds.y;
-    entry.lastWindowWidth = windowWidth;  
+    entry.lastWindowWidth = windowWidth;
     entry.lastWindowHeight = windowHeight;
     // Bump generation since we (re)created buffers
     entry.bufferGeneration++;
-    
+
     return true;
 }
 
@@ -137,7 +136,7 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
     {
         // Update animation for GIF layers (moved to layer responsibility)
         layer.updateAnimation();
-        
+
         LayerRenderInfo renderInfo;
         if (prepareLayerForRendering(layer, renderInfo))
         {
@@ -150,11 +149,11 @@ void ImageRenderGL::renderLayers(const std::vector<Layer>& layers, int windowWid
     finalizeRenderingContext();
 }
 
-bool ImageRenderGL::initializeRenderingContext(int windowWidth, int windowHeight)
+bool ImageRenderGL::initializeRenderingContext(int windowWidth, int windowHeight) const
 {
     if (shaderProgram_ == 0)
     {
-        common::log_error("No shader program available for rendering");
+        common::logError("No shader program available for rendering");
         return false;
     }
 
@@ -163,32 +162,26 @@ bool ImageRenderGL::initializeRenderingContext(int windowWidth, int windowHeight
     glDisable(GL_DEPTH_TEST);
     glUseProgram(shaderProgram_);
 
-    GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
+    const GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
     if (textureLocation >= 0)
     {
         glUniform1i(textureLocation, 0);
     }
 
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
-    {
-        common::log_error("OpenGL error after setting texture uniform: %d", err);
-        return false;
-    }
-
-    return true;
+    const GLenum err = glGetError();
+    return err == GL_NO_ERROR;
 }
 
 bool ImageRenderGL::prepareLayerForRendering(const Layer& layer, LayerRenderInfo& renderInfo)
 {
     renderInfo.image = getRenderableImage(layer);
-    if (!renderInfo.image)
+    if (renderInfo.image == nullptr)
     {
         return false;
     }
 
     renderInfo.textureId = getOrCreateTexture(*renderInfo.image, layer.id, layer.dirty);
-    if (!renderInfo.textureId)
+    if (renderInfo.textureId == 0u)
     {
         return false;
     }
@@ -197,9 +190,8 @@ bool ImageRenderGL::prepareLayerForRendering(const Layer& layer, LayerRenderInfo
     const_cast<Layer&>(layer).dirty = false;
 
     // Set render bounds
-    renderInfo.bounds = RenderBounds(layer.x, layer.y, 
-                                   static_cast<float>(renderInfo.image->info.width),
-                                   static_cast<float>(renderInfo.image->info.height));
+    renderInfo.bounds = RenderBounds(layer.x, layer.y, static_cast<float>(renderInfo.image->info.width),
+                                     static_cast<float>(renderInfo.image->info.height));
 
     return true;
 }
@@ -208,39 +200,39 @@ Image* ImageRenderGL::getRenderableImage(const Layer& layer)
 {
     switch (layer.type)
     {
-        case LayerType::Image:
+        case LayerType::IMAGE:
             return layer.img ? layer.img.get() : nullptr;
-            
-        case LayerType::Gif:
+
+        case LayerType::GIF:
             if (layer.gif && !layer.gif->frames().empty())
             {
                 auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
                 return frame ? frame.get() : nullptr;
             }
             return nullptr;
-            
-        case LayerType::Text:
+
+        case LayerType::TEXT:
             return layer.img ? layer.img.get() : nullptr;
-            
+
         default:
             return nullptr;
     }
 }
 
-bool ImageRenderGL::renderLayer(const Layer& layer, const LayerRenderInfo& renderInfo, 
-                               int windowWidth, int windowHeight)
+bool ImageRenderGL::renderLayer(const Layer& layer, const LayerRenderInfo& renderInfo, int windowWidth,
+                                int windowHeight)
 {
     if (!renderInfo.isValid())
     {
         return false;
     }
 
-    std::string key = std::to_string(layer.id);
+    const std::string key = std::to_string(layer.id);
     auto& entry = textureCache_[key];
-    
+
     if (entry.texId != renderInfo.textureId)
     {
-        common::log_error("Texture ID mismatch for layer %s", key.c_str());
+        common::logError("Texture ID mismatch for layer %s", key.c_str());
         return false;
     }
 
@@ -252,38 +244,32 @@ bool ImageRenderGL::renderLayer(const Layer& layer, const LayerRenderInfo& rende
     return executeOpenGLRender(entry, renderInfo.textureId);
 }
 
-bool ImageRenderGL::executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId)
+bool ImageRenderGL::executeOpenGLRender(const TextureCacheEntry& entry, GLuint texId) const
 {
     // Ensure shader program is active
     glUseProgram(shaderProgram_);
-    
-    GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
+
+    const GLint textureLocation = glGetUniformLocation(shaderProgram_, "ourTexture");
     if (textureLocation >= 0)
     {
         glUniform1i(textureLocation, 0);
     }
-    
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texId);
     glBindVertexArray(entry.vao);
-    
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
-    
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
-    {
-        common::log_error("OpenGL render error: %d", err);
-        return false;
-    }
-    
-    return true;
+
+    const GLenum err = glGetError();
+    return err == GL_NO_ERROR;
 }
 
-void ImageRenderGL::renderLayerNameOverlay(const Layer& layer, const LayerRenderInfo& renderInfo,
-                                         int windowWidth, int windowHeight)
+void ImageRenderGL::renderLayerNameOverlay(const Layer& layer, const LayerRenderInfo& /*renderInfo*/, int windowWidth,
+                                           int windowHeight)
 {
     if (layer.name.empty() || !layer.textOverlay.enabled)
     {
@@ -292,14 +278,14 @@ void ImageRenderGL::renderLayerNameOverlay(const Layer& layer, const LayerRender
 
     // Check if we need to regenerate the text overlay
     auto& overlay = const_cast<Layer&>(layer).textOverlay;
-    bool shouldRefreshTexture = overlay.needsRefresh;
-    
+    const bool shouldRefreshTexture = overlay.needsRefresh;
+
     if (overlay.needsRefresh || !overlay.cachedImage)
     {
         // Calculate opacity based on selection state
-        unsigned char textAlpha = layer.selected ? 255 : 128;
-        unsigned char bgAlpha = layer.selected ? 180 : 90;
-        
+        const unsigned char textAlpha = layer.selected ? 255 : 128;
+        const unsigned char bgAlpha = layer.selected ? 180 : 90;
+
         TextRenderConfig nameConfig(layer.name, {255, 255, 255, textAlpha}, 1);
         nameConfig.useBackground = true;
         nameConfig.backgroundColor = {0, 0, 0, bgAlpha};
@@ -307,35 +293,34 @@ void ImageRenderGL::renderLayerNameOverlay(const Layer& layer, const LayerRender
         nameConfig.wrapMode = TextWrapMode::NONE;
         nameConfig.horizontalAlign = TextAlignment::LEFT;
         nameConfig.verticalAlign = TextAlignment::TOP;
-        
+
         overlay.cachedImage = TextRenderer::renderText(nameConfig);
         overlay.needsRefresh = false;
     }
-    
+
     if (!overlay.cachedImage)
     {
         return;
     }
 
     // Position overlay using the layer's text overlay system
-    RenderBounds overlayBounds(overlay.getAbsoluteX(layer.x), overlay.getAbsoluteY(layer.y),
-                              static_cast<float>(overlay.cachedImage->info.width),
-                              static_cast<float>(overlay.cachedImage->info.height));
-    
+    const RenderBounds overlayBounds(overlay.getAbsoluteX(layer.x), overlay.getAbsoluteY(layer.y),
+                                     static_cast<float>(overlay.cachedImage->info.width),
+                                     static_cast<float>(overlay.cachedImage->info.height));
+
     std::string nameKey = "name_" + std::to_string(layer.id);
     // Use a stable hashed key for both texture creation and cache lookup
-    size_t nameKeyHash = std::hash<std::string>{}(nameKey);
-    GLuint nameTexId = getOrCreateTexture(*overlay.cachedImage,
-                                          nameKeyHash,
-                                          shouldRefreshTexture); // Use saved refresh flag
-    
-    if (!nameTexId)
+    const size_t nameKeyHash = std::hash<std::string>{}(nameKey);
+    const GLuint nameTexId = getOrCreateTexture(*overlay.cachedImage, nameKeyHash,
+                                                shouldRefreshTexture); // Use saved refresh flag
+
+    if (nameTexId == 0u)
     {
         return;
     }
 
     // getOrCreateTexture uses std::to_string(layerId) as the cache key
-    std::string textureCacheKey = std::to_string(nameKeyHash);
+    const std::string textureCacheKey = std::to_string(nameKeyHash);
     auto& nameEntry = textureCache_[textureCacheKey];
     if (setupQuadBuffers(nameEntry, overlayBounds, windowWidth, windowHeight))
     {
@@ -350,47 +335,46 @@ void ImageRenderGL::renderSelectionIndicator(const Layer& layer, const LayerRend
         return;
     }
 
-    ImVec2 p_min(renderInfo.bounds.x, renderInfo.bounds.y);
-    ImVec2 p_max(renderInfo.bounds.x + renderInfo.bounds.width, 
-                 renderInfo.bounds.y + renderInfo.bounds.height);
-    
-    ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-    draw_list->AddRect(p_min, p_max, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
+    const ImVec2 pMin(renderInfo.bounds.x, renderInfo.bounds.y);
+    const ImVec2 pMax(renderInfo.bounds.x + renderInfo.bounds.width, renderInfo.bounds.y + renderInfo.bounds.height);
+
+    ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+    drawList->AddRect(pMin, pMax, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
 }
 
 void ImageRenderGL::finalizeRenderingContext()
 {
     glUseProgram(0);
     glEnable(GL_DEPTH_TEST);
-    
-    GLenum err = glGetError();
+
+    const GLenum err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("OpenGL error during finalization: %d", err);
+        common::logError("OpenGL error during finalization: %d", err);
     }
 }
 
 void ImageRenderGL::shutdown()
 {
-    if (vao_)
+    if (vao_ != 0u)
     {
         glDeleteVertexArrays(1, &vao_);
         vao_ = 0;
     }
 
-    if (vbo_)
+    if (vbo_ != 0u)
     {
         glDeleteBuffers(1, &vbo_);
         vbo_ = 0;
     }
 
-    if (ebo_)
+    if (ebo_ != 0u)
     {
         glDeleteBuffers(1, &ebo_);
         ebo_ = 0;
     }
 
-    if (shaderProgram_)
+    if (shaderProgram_ != 0u)
     {
         glDeleteProgram(shaderProgram_);
         shaderProgram_ = 0;
@@ -408,18 +392,18 @@ bool ImageRenderGL::createShaders()
 
 GLuint ImageRenderGL::compileShader(const char* source, GLenum type)
 {
-    GLuint shader = glCreateShader(type);
+    const GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
 
     // Check compilation status
-    int success;
+    int success = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success)
+    if (success == 0)
     {
         char infoLog[512];
         glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        common::log_error("Shader compilation failed: %s", infoLog);
+        common::logError("Shader compilation failed: %s", infoLog);
         glDeleteShader(shader);
         return 0;
     }
@@ -429,16 +413,16 @@ GLuint ImageRenderGL::compileShader(const char* source, GLenum type)
 
 GLuint ImageRenderGL::createShaderProgram(const char* vertexSource, const char* fragmentSource)
 {
-    GLuint vertexShader = compileShader(vertexSource, GL_VERTEX_SHADER);
-    GLuint fragmentShader = compileShader(fragmentSource, GL_FRAGMENT_SHADER);
+    const GLuint vertexShader = compileShader(vertexSource, GL_VERTEX_SHADER);
+    const GLuint fragmentShader = compileShader(fragmentSource, GL_FRAGMENT_SHADER);
 
     if (vertexShader == 0 || fragmentShader == 0)
     {
-        if (vertexShader)
+        if (vertexShader != 0u)
         {
             glDeleteShader(vertexShader);
         }
-        if (fragmentShader)
+        if (fragmentShader != 0u)
         {
             glDeleteShader(fragmentShader);
         }
@@ -451,13 +435,13 @@ GLuint ImageRenderGL::createShaderProgram(const char* vertexSource, const char* 
     glLinkProgram(program);
 
     // Check linking status
-    int success;
+    int success = 0;
     glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success)
+    if (success == 0)
     {
         char infoLog[512];
         glGetProgramInfoLog(program, 512, nullptr, infoLog);
-        common::log_error("Shader program linking failed: %s", infoLog);
+        common::logError("Shader program linking failed: %s", infoLog);
         glDeleteProgram(program);
         program = 0;
     }
@@ -473,19 +457,19 @@ GLuint ImageRenderGL::createShaderProgram(const char* vertexSource, const char* 
 GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool force)
 {
     // Remove thread/context/image info logs
-    if (image.info.width == 0 || image.info.height == 0 || !image.data())
+    if (image.info.width == 0 || image.info.height == 0 || (image.data() == nullptr))
     {
-        common::log_error("ImageRenderGL::getOrCreateTexture - Invalid image dimensions or data");
+        common::logError("ImageRenderGL::getOrCreateTexture - Invalid image dimensions or data");
         return 0;
     }
     if (image.info.pixelSizeBytes != 3 && image.info.pixelSizeBytes != 4)
     {
-        common::log_warn("Image pixelSizeBytes is unusual: %d (should be 3 or 4)",
-                         static_cast<int>(image.info.pixelSizeBytes));
+        common::logWarn("Image pixelSizeBytes is unusual: %d (should be 3 or 4)",
+                        static_cast<int>(image.info.pixelSizeBytes));
     }
-    GLenum format = (image.info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
+    const GLenum format = (image.info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
     // Use the image filename as the cache key
-    std::string key = std::to_string(layerId); // Use layer id as key
+    const std::string key = std::to_string(layerId); // Use layer id as key
     if (force && image.info.textureId != 0)
     {
         // Also delete VAO/VBO/EBO if present
@@ -523,64 +507,62 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool forc
             GLenum err = glGetError();
             if (err != GL_NO_ERROR)
             {
-                common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glBindTexture: %d", err);
+                common::logError("ImageRenderGL::getOrCreateTexture - OpenGL error after glBindTexture: %d", err);
             }
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             err = glGetError();
             if (err != GL_NO_ERROR)
             {
-                common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glPixelStorei: %d", err);
+                common::logError("ImageRenderGL::getOrCreateTexture - OpenGL error after glPixelStorei: %d", err);
             }
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.info.width, image.info.height, format, GL_UNSIGNED_BYTE,
                             image.data());
             err = glGetError();
             if (err != GL_NO_ERROR)
             {
-                common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glTexSubImage2D: %d", err);
+                common::logError("ImageRenderGL::getOrCreateTexture - OpenGL error after glTexSubImage2D: %d", err);
             }
             glBindTexture(GL_TEXTURE_2D, 0);
             image.setTextureId(it->second.texId);
             return it->second.texId;
         }
-        else
+
+        // Also delete VAO/VBO/EBO if present
+        if (it->second.vao)
         {
-            // Also delete VAO/VBO/EBO if present
-            if (it->second.vao)
-            {
-                glDeleteVertexArrays(1, &it->second.vao);
-            }
-            if (it->second.vbo)
-            {
-                glDeleteBuffers(1, &it->second.vbo);
-            }
-            if (it->second.ebo)
-            {
-                glDeleteBuffers(1, &it->second.ebo);
-            }
-            glDeleteTextures(1, &it->second.texId);
-            textureCache_.erase(it);
+            glDeleteVertexArrays(1, &it->second.vao);
         }
+        if (it->second.vbo)
+        {
+            glDeleteBuffers(1, &it->second.vbo);
+        }
+        if (it->second.ebo)
+        {
+            glDeleteBuffers(1, &it->second.ebo);
+        }
+        glDeleteTextures(1, &it->second.texId);
+        textureCache_.erase(it);
     }
-    GLuint texId;
+    GLuint texId = 0;
     glGenTextures(1, &texId);
     glBindTexture(GL_TEXTURE_2D, texId);
     GLenum err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glBindTexture (new): %d", err);
+        common::logError("ImageRenderGL::getOrCreateTexture - OpenGL error after glBindTexture (new): %d", err);
     }
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glPixelStorei (new): %d", err);
+        common::logError("ImageRenderGL::getOrCreateTexture - OpenGL error after glPixelStorei (new): %d", err);
     }
     glTexImage2D(GL_TEXTURE_2D, 0, format, image.info.width, image.info.height, 0, format, GL_UNSIGNED_BYTE,
                  image.data());
     err = glGetError();
     if (err != GL_NO_ERROR)
     {
-        common::log_error("ImageRenderGL::getOrCreateTexture - OpenGL error after glTexImage2D (new): %d", err);
+        common::logError("ImageRenderGL::getOrCreateTexture - OpenGL error after glTexImage2D (new): %d", err);
     }
     // Set filtering to GL_NEAREST for pixel-perfect rendering
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -589,15 +571,18 @@ GLuint ImageRenderGL::getOrCreateTexture(Image& image, size_t layerId, bool forc
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    textureCache_[key] = TextureCacheEntry{
-        texId,
-        static_cast<int>(image.info.width),
-        static_cast<int>(image.info.height),
-        image.info.layer,
-        0, 0, 0,
-        0,
-        -999999.0f, -999999.0f,
-        0, 0};
+    textureCache_[key] = TextureCacheEntry{texId,
+                                           static_cast<int>(image.info.width),
+                                           static_cast<int>(image.info.height),
+                                           image.info.layer,
+                                           0,
+                                           0,
+                                           0,
+                                           0,
+                                           -999999.0f,
+                                           -999999.0f,
+                                           0,
+                                           0};
     image.setTextureId(texId);
     return texId;
 }
@@ -623,18 +608,24 @@ void ImageRenderGL::cleanupTextures()
     textureCache_.clear();
 }
 
-bool ImageRenderGL::getRenderInfoForLayer(size_t layerId, RenderInfo& out) const
+bool ImageRenderGL::getRenderInfoForLayer(size_t layerId, RenderInfo& out)
 {
     auto it = textureCache_.find(std::to_string(layerId));
-    if (it == textureCache_.end()) return false;
+    if (it == textureCache_.end())
+    {
+        return false;
+    }
     out = RenderInfo{it->second.bufferGeneration, it->second.lastWindowWidth, it->second.lastWindowHeight};
     return true;
 }
 
-bool ImageRenderGL::getRenderInfoForKey(const std::string& key, RenderInfo& out) const
+bool ImageRenderGL::getRenderInfoForKey(const std::string& key, RenderInfo& out)
 {
     auto it = textureCache_.find(key);
-    if (it == textureCache_.end()) return false;
+    if (it == textureCache_.end())
+    {
+        return false;
+    }
     out = RenderInfo{it->second.bufferGeneration, it->second.lastWindowWidth, it->second.lastWindowHeight};
     return true;
 }

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "LinuxFace/Image/image_utils.h"
@@ -13,95 +14,97 @@ namespace linuxface
 
 SwapPipeline::SwapPipeline(std::shared_ptr<InSwapper> inswapper, std::shared_ptr<ArcfaceRecognizer> arcface,
                            std::shared_ptr<SCRFDetector> scrfd)
-    : inswapper_(inswapper), arcface_(arcface), scrfd_(scrfd)
+    : inswapper_(std::move(std::move(inswapper)))
+    , arcface_(std::move(std::move(arcface)))
+    , scrfd_(std::move(std::move(scrfd)))
 {
 }
 
-bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& target_img)
+bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& targetImg)
 {
     Profiler::getInstance().start("SwapPipeline", "run");
-    if (!inswapper_ || !inswapper_->isReady() || !target_img || !arcface_ || !arcface_->isReady() || !scrfd_ || !image)
+    if (!inswapper_ || !inswapper_->isReady() || !targetImg || !arcface_ || !arcface_->isReady() || !scrfd_ || !image)
     {
         return false;
     }
 
-    // 1. Get landmarks for target_img (source) only once
+    // 1. Get landmarks for targetImg (source) only once
     if (!target_img_embedding_ready_)
     {
         Profiler::getInstance().start("SwapPipeline", "get target embedding");
-        std::vector<Face> target_faces = scrfd_->detect(target_img);
-        if (!target_faces.empty())
+        std::vector<Face> targetFaces = scrfd_->detect(targetImg);
+        if (!targetFaces.empty())
         {
-            common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", 99,
-                             target_faces[0].getBoundingBox().rect.x(), target_faces[0].getBoundingBox().rect.y(),
-                             target_faces[0].getBoundingBox().rect.width(),
-                             target_faces[0].getBoundingBox().rect.height());
-            target_img_landmarks_ = target_faces[0].getFivePointLandmarksArcFaceOrder2D();
+            common::logInfo("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", 99,
+                             targetFaces[0].getBoundingBox().rect.x(), targetFaces[0].getBoundingBox().rect.y(),
+                             targetFaces[0].getBoundingBox().rect.width(),
+                             targetFaces[0].getBoundingBox().rect.height());
+            target_img_landmarks_ = targetFaces[0].getFivePointLandmarksArcFaceOrder2D();
             if (target_img_landmarks_.size() == 5)
             {
                 // print keypoints
-                common::log_info("Target image landmarks: ");
+                common::logInfo("Target image landmarks: ");
                 for (const auto& landmark : target_img_landmarks_)
                 {
-                    common::log_info("  - (%ld, %ld)", landmark.x, landmark.y);
+                    common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
                 }
 
-                arcface_->recognize(*target_img, target_img_landmarks_, target_img_embedding_);
+                arcface_->recognize(*targetImg, target_img_landmarks_, target_img_embedding_);
                 target_img_embedding_ready_ = (target_img_embedding_.size() == 512);
             }
             if (debug_)
             {
-                debug_target_image_ = std::move(target_img->deepCopy());
-                target_faces[0].paintBoundingBox(debug_target_image_, Pixel(255, 0, 0));
-                target_faces[0].paintAllFaceLandmarks(debug_target_image_, false, Pixel(255, 0, 0), 5.0f);
-                debug_target_image_aligned_ = arcface_->preprocess(*target_img, target_img_landmarks_);
+                debug_target_image_ = std::move(targetImg->deepCopy());
+                targetFaces[0].paintBoundingBox(debug_target_image_, Pixel(255, 0, 0));
+                targetFaces[0].paintAllFaceLandmarks(debug_target_image_, false, Pixel(255, 0, 0), 5.0f);
+                debug_target_image_aligned_ = arcface_->preprocess(*targetImg, target_img_landmarks_);
                 debug_target_image_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
                 // debug_target_image_aligned_->scaleInPlace(0.3, ScalingAlgorithm::AREA_AVERAGING);
             }
         }
         if (!target_img_embedding_ready_)
         {
-            common::log_error("Target image embedding is not ready or landmarks are not valid.");
+            common::logError("Target image embedding is not ready or landmarks are not valid.");
             return false;
         }
         Profiler::getInstance().stop("SwapPipeline", "get target embedding");
     }
     Profiler::getInstance().start("SwapPipeline", "detect image faces");
     // 2. Get landmarks for webcam (target)
-    std::vector<Face> scrfd_faces = scrfd_->detect(image);
-    if (scrfd_faces.empty())
+    std::vector<Face> scrfdFaces = scrfd_->detect(image);
+    if (scrfdFaces.empty())
     {
-        common::log_warn("SwapPipeline: No faces detected in the webcam image.");
+        common::logWarn("SwapPipeline: No faces detected in the webcam image.");
         return false;
     }
-    bool worked = false;
+        bool worked = false;
     int i = 0;
-    Image swapped_face; // Reuse buffer for all faces
-    for (const auto& face : scrfd_faces)
+    Image swappedFace; // Reuse buffer for all faces
+    for (const auto& face : scrfdFaces)
     {
         // print bounding box coords
-        common::log_info("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", i,
+        common::logInfo("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", i,
                          face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
                          face.getBoundingBox().rect.width(), face.getBoundingBox().rect.height());
         std::vector<math_utils::Point<>> webcam_landmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (webcam_landmarks.size() != 5)
         {
-            common::log_error("SwapPipeline: Detected face does not have 5 landmarks. It has %d landmarks.",
+            common::logError("SwapPipeline: Detected face does not have 5 landmarks. It has %d landmarks.",
                               static_cast<int>(webcam_landmarks.size()));
             return false;
         }
-        common::log_info("Source image landmarks %d", i++);
+            common::logInfo("Source image landmarks %zu", i++);
         for (const auto& landmark : webcam_landmarks)
         {
-            common::log_info("  - (%ld, %ld)", landmark.x, landmark.y);
+            common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
         }
         Profiler::getInstance().stop("SwapPipeline", "detect image faces");
         Profiler::getInstance().start("SwapPipeline", "swap face");
-        // Reuse swapped_face buffer for all faces
-        bool swap_ok = inswapper_->swap(target_img_embedding_, webcam_landmarks, *image, swapped_face);
+        // Reuse swappedFace buffer for all faces
+        bool swap_ok = inswapper_->swap(target_img_embedding_, webcam_landmarks, *image, swappedFace);
         if (!swap_ok)
         {
-            common::log_error("SwapPipeline: Face swap failed.");
+            common::logError("SwapPipeline: Face swap failed.");
             return false;
         }
         Profiler::getInstance().stop("SwapPipeline", "swap face");
@@ -110,19 +113,19 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         double src_points[10], dst_points[10];
         for (int i = 0; i < 5; ++i)
         {
-            src_points[2 * i] = image_utils::template_128[i][0] * swapped_face.info.width;
-            src_points[2 * i + 1] = image_utils::template_128[i][1] * swapped_face.info.height;
+            src_points[2 * i] = image_utils::TEMPLATE_128[i][0] * swappedFace.info.width;
+            src_points[2 * i + 1] = image_utils::TEMPLATE_128[i][1] * swappedFace.info.height;
             dst_points[2 * i] = webcam_landmarks[i].x;
             dst_points[2 * i + 1] = webcam_landmarks[i].y;
         }
 
         double affineM[6];
-        math_utils::estimate_affine_2d(src_points, dst_points, 5, affineM);
+    math_utils::estimateAffine2d(src_points, dst_points, 5, affineM);
         std::unique_ptr<Image> warped_swapped_face =
-            swapped_face.affineWarpBilinear(affineM, image->info.width, image->info.height);
+            swappedFace.affineWarpBilinear(affineM, image->info.width, image->info.height);
         if (!warped_swapped_face)
         {
-            common::log_error("SwapPipeline: Affine warp failed.");
+            common::logError("SwapPipeline: Affine warp failed.");
             return false;
         }
 
@@ -136,10 +139,10 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         double min_x = bbox.rect.x();
         double min_y = bbox.rect.y();
         std::vector<double> crop_size = {out_width, out_height};
-        std::unique_ptr<Image> crop_mask = image_utils::create_static_box_mask(crop_size);
+    std::unique_ptr<Image> crop_mask = image_utils::createStaticBoxMask(crop_size);
         if (!crop_mask)
         {
-            common::log_error("SwapPipeline: Failed to create crop mask.");
+            common::logError("SwapPipeline: Failed to create crop mask.");
             return false;
         }
 
@@ -151,7 +154,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         warped_mask->pasteAt(*crop_mask, min_x, min_y, true);
         if (!warped_mask)
         {
-            common::log_error("SwapPipeline: Failed to warp crop mask.");
+            common::logError("SwapPipeline: Failed to warp crop mask.");
             return false;
         }
         Profiler::getInstance().stop("SwapPipeline", "Crop mask creation");
@@ -163,7 +166,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         {
             auto output = image->deepCopy();
             output->alphaBlend(*warped_swapped_face, *warped_mask);
-            for (auto& face : scrfd_faces)
+            for (auto& face : scrfdFaces)
             {
                 face.paintBoundingBox(image, Pixel(0, 255, 0));
                 face.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 2.0f);

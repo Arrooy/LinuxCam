@@ -54,7 +54,7 @@ TEST_F(CodecFactoryTest, ConfigBuilderBasicProperties)
         .quality(85)
         .imageFormat(ImageFormat::JPEG)
         .pixelFormat(TJPF_RGB)
-        .chrominance_subsampling(TJSAMP_420);
+    .chrominanceSubsampling(TJSAMP_420);
 
     // Test property retrieval (note: width/height are stored as int, not unsigned int)
     int width, height;
@@ -68,7 +68,7 @@ TEST_F(CodecFactoryTest, ConfigBuilderBasicProperties)
     EXPECT_TRUE(config.get("quality", quality));
     EXPECT_TRUE(config.get("imageFormat", format));
     EXPECT_TRUE(config.get("pixelFormat", pixelFormat));
-    EXPECT_TRUE(config.get("chrominance_subsampling", subsampling));
+    EXPECT_TRUE(config.get("chrominanceSubsampling", subsampling));
 
     EXPECT_EQ(width, static_cast<int>(testWidth));
     EXPECT_EQ(height, static_cast<int>(testHeight));
@@ -206,7 +206,7 @@ TEST_F(CodecFactoryTest, CreateJPEGEncoder)
         .height(testHeight)
         .quality(85)
         .pixelFormat(TJPF_RGB)
-        .chrominance_subsampling(TJSAMP_420);
+    .chrominanceSubsampling(TJSAMP_420);
 
     auto encoder = CodecFactory::create<Encoder>(config);
     EXPECT_NE(encoder, nullptr);
@@ -301,7 +301,7 @@ TEST_F(CodecFactoryTest, JPEGEncodeDecodeRoundTrip)
         .height(testHeight)
         .quality(90)
         .pixelFormat(TJPF_RGB)
-        .chrominance_subsampling(TJSAMP_420);
+    .chrominanceSubsampling(TJSAMP_420);
 
     auto encoder = CodecFactory::create<Encoder>(encoderConfig);
     ASSERT_NE(encoder, nullptr);
@@ -463,7 +463,7 @@ TEST_F(CodecFactoryTest, JPEGEncoderWithDifferentQualitySettings)
         .width(testWidth)
         .height(testHeight)
         .pixelFormat(TJPF_RGB)
-        .chrominance_subsampling(TJSAMP_420);
+    .chrominanceSubsampling(TJSAMP_420);
 
     // Test different quality settings
     std::vector<int> qualities = {1, 25, 50, 75, 95, 100};
@@ -490,7 +490,7 @@ TEST_F(CodecFactoryTest, JPEGEncoderWithDifferentSubsamplingModes)
 
     for (TJSAMP subsampling : subsamplings)
     {
-        config.chrominance_subsampling(subsampling);
+    config.chrominanceSubsampling(subsampling);
         auto encoder = CodecFactory::create<Encoder>(config);
         ASSERT_NE(encoder, nullptr) << "Failed to create encoder with subsampling " << subsampling;
     }
@@ -503,7 +503,7 @@ TEST_F(CodecFactoryTest, JPEGEncoderWithDifferentPixelFormats)
         .width(testWidth)
         .height(testHeight)
         .quality(85)
-        .chrominance_subsampling(TJSAMP_420);
+    .chrominanceSubsampling(TJSAMP_420);
 
     // Test different pixel formats
     std::vector<TJPF> pixelFormats = {TJPF_RGB, TJPF_BGR, TJPF_RGBX, TJPF_BGRX, TJPF_GRAY};

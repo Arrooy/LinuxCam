@@ -10,17 +10,18 @@ namespace linuxface
 class OnnxDetector
 {
   public:
-    const bool isReady() const { return ready_; };
+    bool isReady() const { return ready_; };
+
   protected:
-    OnnxDetector(const std::string& onnx_model_path);
+    explicit OnnxDetector(const std::string& onnxModelPath);
     ~OnnxDetector() = default;
 
     virtual Ort::Value transform(const std::unique_ptr<Image>& image) = 0;
 
-    int batch_size_;
-    int channels_;
-    int width_;
-    int height_;
+    int batch_size_{};
+    int channels_{};
+    int width_{};
+    int height_{};
 
     bool readModelInputSize();
     std::vector<int64_t> input_node_dims;
@@ -41,7 +42,7 @@ class OnnxDetector
     bool has_cuda_{false};
 
   private:
-    bool checkCudaAvailability();
+    static bool checkCudaAvailability();
 };
 } // namespace linuxface
 

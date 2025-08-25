@@ -1,6 +1,7 @@
 #include "LinuxFace/dlibDetectors.h"
 
 #include <dlib/image_processing/shape_predictor.h>
+#include <utility>
 
 #include "LinuxFace/profiler.h"
 using linuxface::DlibFaceDetector;
@@ -9,12 +10,13 @@ using linuxface::Face;
 using linuxface::Image;
 
 
-namespace dlib {
+namespace dlib
+{
 template <>
 struct image_traits<linuxface::DlibImageWrapper>
 {
-    typedef rgb_pixel pixel_type;
-    static const bool has_simd = false;
+    using pixel_type = rgb_pixel;
+    static const bool HAS_SIMD = false;
 };
 } // namespace dlib
 
@@ -28,15 +30,16 @@ DlibFaceDetector::DlibFaceDetector()
 std::vector<Face> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
 {
     Profiler::getInstance().start("DLIB", "Face Detector");
-    DlibImageWrapper dlib_image(image);
+    const DlibImageWrapper dlibImage(image);
 
     // Detect faces
-    std::vector<dlib::rectangle> rects_detected = detector_(dlib_image);
+    const std::vector<dlib::rectangle> rectsDetected = detector_(dlibImage);
 
     std::vector<Face> faces;
-    for (const auto& rect : rects_detected)
+    for (const auto& rect : rectsDetected)
     {
-    faces.emplace_back(Face(FaceBoundingBox(static_cast<float>(rect.left()), static_cast<float>(rect.top()), static_cast<float>(rect.right()), static_cast<float>(rect.bottom()))));
+        faces.emplace_back(FaceBoundingBox(static_cast<float>(rect.left()), static_cast<float>(rect.top()),
+                                           static_cast<float>(rect.right()), static_cast<float>(rect.bottom())));
     }
 
     Profiler::getInstance().stop("DLIB", "Face Detector");
@@ -61,20 +64,21 @@ DlibShapeDetector::DlibShapeDetector(const std::string& model_path) : model_path
 DlibShapeDetector::~DlibShapeDetector() = default;
 
 std::vector<Face>
-DlibShapeDetector::detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect)
+DlibShapeDetector::detect(const std::unique_ptr<Image>& image, std::vector<math_utils::Rect<float>>& facesRect)
 {
     std::vector<Face> faces;
-    if (faces_rect.empty())
+    if (facesRect.empty())
     {
         return faces;
     }
-    DlibImageWrapper dlib_image(image);
-    for (const auto& rect : faces_rect)
+    const DlibImageWrapper dlibImage(image);
+    for (const auto& rect : facesRect)
     {
         // Convert to dlib rectangle
-        dlib::rectangle dlib_rect(static_cast<long>(rect.l), static_cast<long>(rect.t), static_cast<long>(rect.r), static_cast<long>(rect.b));
+        const dlib::rectangle dlibRect(static_cast<long>(rect.l), static_cast<long>(rect.t), static_cast<long>(rect.r),
+                                       static_cast<long>(rect.b));
         // Predict landmarks
-        dlib::full_object_detection shape = (*predictor_)(dlib_image, dlib_rect);
+        dlib::full_object_detection shape = (*predictor_)(dlibImage, dlibRect);
         std::vector<FaceLandmark> landmarks;
         for (unsigned int i = 0; i < shape.num_parts(); ++i)
         {

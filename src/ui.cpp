@@ -3,10 +3,12 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+#include <math.h>
+
+#include "LinuxFace/Image/text_renderer.h"
 #include "LinuxFace/UI/paintWebcam.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
-#include "LinuxFace/Image/text_renderer.h"
 
 using namespace linuxface;
 
@@ -23,7 +25,7 @@ UI::~UI()
     shutdown();
 }
 
-bool UI::initialize(GLFWwindow* window, const char* glsl_version)
+bool UI::initialize(GLFWwindow* window, const char* glslVersion)
 {
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -42,20 +44,20 @@ bool UI::initialize(GLFWwindow* window, const char* glsl_version)
     // Setup Platform/Renderer backends
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true))
     {
-        common::log_error("Failed to initialize ImGui GLFW backend");
+        common::logError("Failed to initialize ImGui GLFW backend");
         return false;
     }
 
-    if (!ImGui_ImplOpenGL3_Init(glsl_version))
+    if (!ImGui_ImplOpenGL3_Init(glslVersion))
     {
-        common::log_error("Failed to initialize ImGui OpenGL3 backend");
+        common::logError("Failed to initialize ImGui OpenGL3 backend");
         return false;
     }
 
     // glfwSetKeyCallback(window, KeyCallback);
     // glfwSetWindowUserPointer(window, this);
     // glfwSetCursorPosCallback(window, UI::mouseCallback);
-    common::log_info("UI initialized successfully");
+    common::logInfo("UI initialized successfully");
     ready_ = true;
     return true;
 }
@@ -71,8 +73,8 @@ void UI::loadingScreen()
                      | ImGuiWindowFlags_NoBackground);
     // Show placeholder when nothing is selected
     std::string msg = "Loading content, please wait...";
-    ImVec2 contentSize = ImGui::GetContentRegionAvail();
-    ImVec2 textSize = ImGui::CalcTextSize(msg.c_str());
+    const ImVec2 contentSize = ImGui::GetContentRegionAvail();
+    const ImVec2 textSize = ImGui::CalcTextSize(msg.c_str());
     ImGui::SetCursorPos(ImVec2((contentSize.x - textSize.x) * 0.5f, (contentSize.y - textSize.y) * 0.5f));
     ImGui::TextDisabled("%s", msg.c_str());
     ImGui::End();
@@ -80,11 +82,11 @@ void UI::loadingScreen()
     render();
 }
 
-void UI::shutdown()
+void UI::shutdown() const
 {
     if (!ready_)
     {
-        common::log_error("UI is not initialized, cannot shutdown.");
+        common::logError("UI is not initialized, cannot shutdown.");
         return;
     }
     ImGui_ImplOpenGL3_Shutdown();
@@ -123,9 +125,9 @@ void UI::paintMainWindow()
     {
         if (ImGui::BeginMenu("Options..."))
         {
-            ImGui::MenuItem("Toggle Profiler", NULL, &show_profiler_);
-            ImGui::MenuItem("Toggle Device Configuration", NULL, &show_device_config_);
-            ImGui::MenuItem("Toggle Media Browser", NULL, &mediaBrowserVisible_);
+            ImGui::MenuItem("Toggle Profiler", nullptr, &show_profiler_);
+            ImGui::MenuItem("Toggle Device Configuration", nullptr, &show_device_config_);
+            ImGui::MenuItem("Toggle Media Browser", nullptr, &mediaBrowserVisible_);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Load media..."))
@@ -141,113 +143,119 @@ void UI::paintMainWindow()
         // Add new menu for text layer
         if (ImGui::BeginMenu("Load text..."))
         {
-            static int text_scale = 1;
-            static ImVec4 text_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-            static ImVec4 bg_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-            static bool use_background = false;
-            static bool center_text = true;
-            static bool force_single_line = false;
-            static bool use_text_wrapping = false;
-            static int text_width_limit = 200;
-            static int text_alignment = 1; // 0=LEFT, 1=CENTER, 2=RIGHT
-            static int text_v_alignment = 1; // 0=TOP, 1=MIDDLE, 2=BOTTOM
+            static int textScale = 1;
+            static ImVec4 textColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            static ImVec4 bgColor = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+            static bool useBackground = false;
+            static bool centerText = true;
+            static bool forceSingleLine = false;
+            static bool useTextWrapping = false;
+            static int textWidthLimit = 200;
+            static int textAlignment = 1;  // 0=LEFT, 1=CENTER, 2=RIGHT
+            static int textVAlignment = 1; // 0=TOP, 1=MIDDLE, 2=BOTTOM
             static int padding = 2;
-            
+
             ImGui::InputText("Text", add_text_layer_buffer_, IM_ARRAYSIZE(add_text_layer_buffer_));
-            
+
             ImGui::Separator();
             ImGui::Text("Text Styling");
-            
-            ImGui::SliderInt("Font Scale", &text_scale, 0.05, 25, "%dx");
-            ImGui::ColorEdit4("Text Color", (float*) &text_color, ImGuiColorEditFlags_NoInputs);
-            
-            ImGui::Checkbox("Use Background", &use_background);
-            if (use_background)
+
+            ImGui::SliderInt("Font Scale", &textScale, 0.05, 25, "%dx");
+            ImGui::ColorEdit4("Text Color", reinterpret_cast<float*>(&textColor), ImGuiColorEditFlags_NoInputs);
+
+            ImGui::Checkbox("Use Background", &useBackground);
+            if (useBackground)
             {
                 ImGui::SameLine();
-                ImGui::ColorEdit4("BG Color", (float*) &bg_color, ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit4("BG Color", reinterpret_cast<float*>(&bgColor), ImGuiColorEditFlags_NoInputs);
                 ImGui::SliderInt("Padding", &padding, 0, 10);
             }
-            
+
             ImGui::Separator();
             ImGui::Text("Text Layout");
-            
-            ImGui::Checkbox("Force Single Line", &force_single_line);
-            if (!force_single_line)
+
+            ImGui::Checkbox("Force Single Line", &forceSingleLine);
+            if (!forceSingleLine)
             {
-                ImGui::Checkbox("Enable Text Wrapping", &use_text_wrapping);
-                if (use_text_wrapping)
+                ImGui::Checkbox("Enable Text Wrapping", &useTextWrapping);
+                if (useTextWrapping)
                 {
-                    ImGui::SliderInt("Wrap Width", &text_width_limit, 50, 800, "%d px");
+                    ImGui::SliderInt("Wrap Width", &textWidthLimit, 50, 800, "%d px");
                 }
             }
-            
-            ImGui::Checkbox("Center Text", &center_text);
-            if (!center_text)
+
+            ImGui::Checkbox("Center Text", &centerText);
+            if (!centerText)
             {
-                const char* h_align_items[] = { "Left", "Center", "Right" };
-                ImGui::Combo("H-Align", &text_alignment, h_align_items, IM_ARRAYSIZE(h_align_items));
-                
-                const char* v_align_items[] = { "Top", "Middle", "Bottom" };
-                ImGui::Combo("V-Align", &text_v_alignment, v_align_items, IM_ARRAYSIZE(v_align_items));
+                const char* hAlignItems[] = {"Left", "Center", "Right"};
+                ImGui::Combo("H-Align", &textAlignment, hAlignItems, IM_ARRAYSIZE(hAlignItems));
+
+                const char* vAlignItems[] = {"Top", "Middle", "Bottom"};
+                ImGui::Combo("V-Align", &textVAlignment, vAlignItems, IM_ARRAYSIZE(vAlignItems));
             }
-            
+
             if (ImGui::Button("Add Text Layer"))
             {
                 if (layerManager_)
                 {
                     // Create TextRenderConfig for the new approach
-                    auto toPixel = [](const ImVec4& color) -> Pixel {
-                        return {
-                            static_cast<unsigned char>(color.x * 255),
-                            static_cast<unsigned char>(color.y * 255),
-                            static_cast<unsigned char>(color.z * 255),
-                            static_cast<unsigned char>(color.w * 255)
-                        };
+                    auto toPixel = [](const ImVec4& color) -> Pixel
+                    {
+                        return {static_cast<unsigned char>(color.x * 255), static_cast<unsigned char>(color.y * 255),
+                                static_cast<unsigned char>(color.z * 255), static_cast<unsigned char>(color.w * 255)};
                     };
-                    
-                    TextRenderConfig config(add_text_layer_buffer_, toPixel(text_color), text_scale);
-                    
+
+                    TextRenderConfig config(add_text_layer_buffer_, toPixel(textColor), textScale);
+
                     // Set background
-                    config.useBackground = use_background;
-                    config.backgroundColor = toPixel(bg_color);
+                    config.useBackground = useBackground;
+                    config.backgroundColor = toPixel(bgColor);
                     config.padding = padding;
-                    
+
                     // Set wrap mode based on UI choices
-                    if (force_single_line) {
+                    if (forceSingleLine)
+                    {
                         config.wrapMode = TextWrapMode::NONE;
-                        if (use_text_wrapping) {
-                            config.maxWidth = text_width_limit;  // Truncate at this width
+                        if (useTextWrapping)
+                        {
+                            config.maxWidth = textWidthLimit; // Truncate at this width
                         }
-                    } else if (use_text_wrapping) {
-                        config.wrapMode = TextWrapMode::AUTO_WIDTH;
-                        config.maxWidth = text_width_limit;
-                    } else {
-                        config.wrapMode = TextWrapMode::AUTO_CANVAS;  // Natural line breaks or single line
                     }
-                    
+                    else if (useTextWrapping)
+                    {
+                        config.wrapMode = TextWrapMode::AUTO_WIDTH;
+                        config.maxWidth = textWidthLimit;
+                    }
+                    else
+                    {
+                        config.wrapMode = TextWrapMode::AUTO_CANVAS; // Natural line breaks or single line
+                    }
+
                     // Set alignment
-                    if (center_text) {
+                    if (centerText)
+                    {
                         config.horizontalAlign = TextAlignment::CENTER;
                         config.verticalAlign = TextAlignment::MIDDLE;
-                    } else {
-                        config.horizontalAlign = static_cast<TextAlignment>(text_alignment);
-                        config.verticalAlign = static_cast<TextAlignment>(text_v_alignment + 3);
                     }
-                    
+                    else
+                    {
+                        config.horizontalAlign = static_cast<TextAlignment>(textAlignment);
+                        config.verticalAlign = static_cast<TextAlignment>(textVAlignment + 3);
+                    }
+
                     // Render the text using the new system
                     auto textImage = TextRenderer::renderText(config);
-                    
+
                     if (textImage)
                     {
                         Layer newText;
-                        newText.id = Layer::next_id++;
-                        newText.type = LayerType::Text;
-                        newText.img = textImage;  // Store the generated text image
-                        newText.textContent = add_text_layer_buffer_;  // Keep text for reference
+                        newText.id = Layer::nextId++;
+                        newText.type = LayerType::TEXT;
+                        newText.img = textImage;                      // Store the generated text image
+                        newText.textContent = add_text_layer_buffer_; // Keep text for reference
                         newText.name = add_text_layer_buffer_;
                         newText.setPosition(100, 100);
-                        
+
                         layerManager_->addLayer(newText);
                     }
                 }
@@ -261,8 +269,8 @@ void UI::paintMainWindow()
     }
 
     // Calculate base position for window stacking
-    float menu_bar_height = ImGui::GetFrameHeight();
-    current_y_ = menu_bar_height;
+    const float menuBarHeight = ImGui::GetFrameHeight();
+    current_y_ = menuBarHeight;
 
     // Render profiler window
     if (show_profiler_)
@@ -270,7 +278,7 @@ void UI::paintMainWindow()
         ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_Always);
         ImGui::Begin("Profiler", &show_profiler_, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
-        ImGuiIO& io = ImGui::GetIO();
+        const ImGuiIO& io = ImGui::GetIO();
         const auto frameDuration = 1.0f / io.Framerate;
         ImGui::TextColored(getProfileColorFromDuration(frameDuration), "Application average %.3f ms/frame (%.1f FPS)",
                            frameDuration * 1000.0f, io.Framerate);
@@ -280,7 +288,7 @@ void UI::paintMainWindow()
         for (const auto& pair : durations)
         {
             ImGui::TextColored(getProfileColorFromDuration(pair.second.count()), "%s - %s", pair.first.c_str(),
-                               Profiler::format_duration(pair.second).c_str());
+                            Profiler::formatDuration(pair.second).c_str());
         }
 
         if (ImGui::Button("Close"))
@@ -288,8 +296,8 @@ void UI::paintMainWindow()
             show_profiler_ = false;
         }
 
-        ImVec2 window_size = ImGui::GetWindowSize();
-        current_y_ += window_size.y;
+        const ImVec2 windowSize = ImGui::GetWindowSize();
+        current_y_ += windowSize.y;
         ImGui::End();
     }
 
@@ -324,7 +332,7 @@ void UI::paintMainWindow()
     }
 }
 void UI::renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
-                                const std::string& type)
+                                       const std::string& type)
 {
     if (items.empty())
     {
@@ -356,8 +364,8 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                         {
                             newImage->info.textureId = 0;
                             Layer newLayer;
-                            newLayer.id = Layer::next_id++;
-                            newLayer.type = LayerType::Image;
+                            newLayer.id = Layer::nextId++;
+                            newLayer.type = LayerType::IMAGE;
                             newLayer.name = item;
                             newLayer.img = std::move(newImage);
                             newLayer.img->setTextureId(0);
@@ -380,8 +388,8 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                     if (origGif && !origGif->frames().empty() && layerManager_)
                     {
                         Layer newLayer;
-                        newLayer.id = Layer::next_id++;
-                        newLayer.type = LayerType::Gif;
+                        newLayer.id = Layer::nextId++;
+                        newLayer.type = LayerType::GIF;
                         newLayer.name = item;
                         newLayer.gif = origGif;
                         newLayer.setPosition(100, 100);
@@ -405,11 +413,12 @@ void UI::paintDeviceConfigurationTabs()
 {
     // Calculate available space
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    float available_height = viewport->WorkSize.y - current_y_ - 10; // 10px padding from bottom
+    const float availableHeight = viewport->WorkSize.y - current_y_ - 10; // 10px padding from bottom
 
     // Set window size constraints
-    ImGui::SetNextWindowSizeConstraints(ImVec2(-1, 200),             // Minimum size
-                                        ImVec2(-1, available_height) // Maximum size (limited by available space)
+    ImGui::SetNextWindowSizeConstraints(ImVec2(-1, 200), // Minimum size
+                                        ImVec2(-1,
+                                               availableHeight) // Maximum size (limited by available space)
     );
 
     ImGui::Begin("Device Configuration", &show_device_config_,
@@ -419,40 +428,40 @@ void UI::paintDeviceConfigurationTabs()
 
     if (ImGui::BeginTabBar("DeviceTabs", ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_Reorderable))
     {
-        auto managed_webcams = cameraManager_->getWebcams();
-        unsigned int tab_index{0u};
+        auto managedWebcams = cameraManager_->getWebcams();
+            unsigned int tabIndex{0u};
         // Render tabs for existing devices
-        for (auto& webcam : managed_webcams)
+        for (auto& webcam : managedWebcams)
         {
             std::string tab_name = webcam->getName();
             ImGuiTabItemFlags flags = 0;
 
             // Check if we need to programmatically select this tab
-            if (requestedTab_ == static_cast<int>(tab_index))
+            if (requestedTab_ == static_cast<int>(tabIndex))
             {
                 flags |= ImGuiTabItemFlags_SetSelected;
                 requestedTab_ = -1; // Clear the request
-                active_device_tab_ = tab_index;
+                active_device_tab_ = tabIndex;
             }
 
             // Add webcam type indicator
-            tab_name += webcam->getType() == WebcamType::PhysicalInput ? " (IN)" : " (OUT)";
+            tab_name += webcam->getType() == WebcamType::PHYSICAL_INPUT ? " (IN)" : " (OUT)";
 
             // Add close button to tab
             bool tab_open = true;
-            if (ImGui::BeginTabItem((tab_name + "###tab" + std::to_string(tab_index++)).c_str(), &tab_open, flags))
+            if (ImGui::BeginTabItem((tab_name + "###tab" + std::to_string(tabIndex++)).c_str(), &tab_open, flags))
             {
                 paintWebcam_->setWebcam(webcam);
                 paintWebcam_->paintDevice();
-                last_device_tab_index_ = tab_index; // Save last active tab
+                last_device_tab_index_ = tabIndex; // Save last active tab
                 ImGui::EndTabItem();
             }
 
             // Handle tab closing
-            // TODO: not working.
+            // TODO(arroyo): not working.
             if (!tab_open)
             {
-                common::log_error("Closing device tab: %s", tab_name.c_str());
+                common::logError("Closing device tab: %s", tab_name.c_str());
                 if (active_device_tab_ >= 1)
                 {
                     active_device_tab_--;
@@ -472,15 +481,15 @@ void UI::paintDeviceConfigurationTabs()
                 temp_modal_webcams_.clear();
 
                 // Use CameraManager to discover devices
-                std::vector<std::string> device_paths = cameraManager_->discoverAvailableVideoDevices();
-                temp_modal_webcams_.reserve(device_paths.size());
+                std::vector<std::string> devicePaths = cameraManager_->discoverAvailableVideoDevices();
+                temp_modal_webcams_.reserve(devicePaths.size());
 
                 // Create a temp webcam for each device.
-                for (const auto& device_path : device_paths)
+                for (const auto& device_path : devicePaths)
                 {
                     auto temp_webcam = std::make_shared<InputWebcam>("temp_" + device_path, device_path, 640, 480, 1);
                     temp_modal_webcams_.push_back(temp_webcam);
-                    common::log_info("Created temporary webcam for %s", device_path.c_str());
+                    common::logInfo("Created temporary webcam for %s", device_path.c_str());
                 }
 
                 // Reset selected webcam
@@ -489,7 +498,7 @@ void UI::paintDeviceConfigurationTabs()
                 oneshot_add_device_popup_ = true;
 
                 was_plus_tab_active_ = true;
-                common::log_info("UI::paintDeviceConfigurationTabs - Opening add device modal");
+                common::logInfo("UI::paintDeviceConfigurationTabs - Opening add device modal");
             }
         }
         else
@@ -513,20 +522,20 @@ void UI::handleKeyboard()
     // This is to prevent the user from accidentally switching tabs while typing in the camera settings
     if (!ImGui::IsAnyItemActive())
     {
-        const auto& managed_webcams = cameraManager_->getWebcams();
-        int size = managed_webcams.size();
+        const auto& managedWebcams = cameraManager_->getWebcams();
+        int size = managedWebcams.size();
 
         // Ctrl+1-9: Switch to specific tab
         for (int i = 0; i < 9 && i < size; ++i)
         {
-            ImGuiKey key = (ImGuiKey) (ImGuiKey_1 + i);
+            const auto key = static_cast<ImGuiKey>(ImGuiKey_1 + i);
             if (ImGui::IsKeyPressed(key) && active_device_tab_ != i)
             {
                 requestedTab_ = i;
-                managed_webcams[i]->setCurrentlySelected(true);
-                for (const auto& webcam : managed_webcams)
+                managedWebcams[i]->setCurrentlySelected(true);
+                for (const auto& webcam : managedWebcams)
                 {
-                    if (webcam->getDevicePath() != managed_webcams[i]->getDevicePath())
+                    if (webcam->getDevicePath() != managedWebcams[i]->getDevicePath())
                     {
                         webcam->setCurrentlySelected(false);
                     }
@@ -536,11 +545,11 @@ void UI::handleKeyboard()
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Backspace) || ImGui::IsKeyPressed(ImGuiKey_Delete))
         {
-            auto selected_layer = mediaBrowserUI_->getSelectedLayer();
-            if (selected_layer)
+            auto selectedLayer = mediaBrowserUI_->getSelectedLayer();
+            if (selectedLayer)
             {
                 // Remove the selected layer
-                layerManager_->removeLayer(selected_layer->id);
+                layerManager_->removeLayer(selectedLayer->id);
             }
         }
     }
@@ -549,31 +558,31 @@ void UI::handleKeyboard()
 // Converts an int64 duration (microSecs) to a color ranging from green to red
 ImVec4 getProfileColorFromDuration(int64_t duration)
 {
-    constexpr int64_t greenThreshold = 10000; // 10ms
-    constexpr int64_t redThreshold = 40000;   // 40ms
+    constexpr int64_t GreenThreshold = 10000; // 10ms
+    constexpr int64_t RedThreshold = 40000;   // 40ms
 
     // Clamp and normalize duration thresholds
-    float t;
-    if (duration <= greenThreshold)
+    float t = NAN;
+    if (duration <= GreenThreshold)
     {
         t = 0.0f;
     }
-    else if (duration >= redThreshold)
+    else if (duration >= RedThreshold)
     {
         t = 1.0f;
     }
     else
     {
-        t = static_cast<float>(duration - greenThreshold) / static_cast<float>(redThreshold - greenThreshold);
+        t = static_cast<float>(duration - GreenThreshold) / static_cast<float>(RedThreshold - GreenThreshold);
     }
 
     // Interpolate green to red
     float r = common::lerp(0.0f, 1.0f, t);
     float g = common::lerp(1.0f, 0.0f, t);
-    float b = 0.2f;
-    float a = 1.0f;
+    const float b = 0.2f;
+    const float a = 1.0f;
 
-    return ImVec4(r, g, b, a);
+    return {r, g, b, a};
 }
 
 // Helper function to find the topmost layer under mouse position
@@ -585,14 +594,15 @@ Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& m
         const Layer& layer = layers[i];
         float lx = layer.x;
         float ly = layer.y;
-        float lw = 0, lh = 0;
-        
-        if (layer.type == LayerType::Image && layer.img)
+        float lw = 0;
+        float lh = 0;
+
+        if (layer.type == LayerType::IMAGE && layer.img)
         {
             lw = static_cast<float>(layer.img->info.width);
             lh = static_cast<float>(layer.img->info.height);
         }
-        else if (layer.type == LayerType::Gif && layer.gif)
+        else if (layer.type == LayerType::GIF && layer.gif)
         {
             // Use the first frame's dimensions for GIFs
             if (layer.gif->frames().empty())
@@ -602,7 +612,7 @@ Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& m
             lw = static_cast<float>(layer.gif->frames()[0]->info.width);
             lh = static_cast<float>(layer.gif->frames()[0]->info.height);
         }
-        else if (layer.type == LayerType::Text)
+        else if (layer.type == LayerType::TEXT)
         {
             if (layer.img)
             {
@@ -631,13 +641,13 @@ void UI::handleLayerDragging()
         return;
     }
     auto& layers = layerManager_->getLayers();
-    ImVec2 mousePos = ImGui::GetIO().MousePos;
-    
+    const ImVec2 mousePos = ImGui::GetIO().MousePos;
+
     // On mouse click, select the topmost layer under the mouse
     if (ImGui::IsMouseClicked(0))
     {
         Layer* clickedLayer = findLayerUnderMouse(layers, mousePos);
-        if (clickedLayer)
+        if (clickedLayer != nullptr)
         {
             // Select this layer, deselect others
             for (auto& l : layers)
@@ -660,7 +670,7 @@ void UI::handleLayerDragging()
     if (ImGui::IsMouseDoubleClicked(0))
     {
         Layer* doubleClickedLayer = findLayerUnderMouse(layers, mousePos);
-        if (doubleClickedLayer)
+        if (doubleClickedLayer != nullptr)
         {
             // Double-click detected on a layer - open media browser if closed
             if (!mediaBrowserVisible_)
@@ -669,7 +679,7 @@ void UI::handleLayerDragging()
             }
         }
     }
-    
+
     if (!ImGui::IsMouseDown(0))
     {
         return;
@@ -681,7 +691,7 @@ void UI::handleLayerDragging()
         return;
     }
     Layer& selectedLayer = *it;
-    ImVec2 delta = ImGui::GetIO().MouseDelta;
+    const ImVec2 delta = ImGui::GetIO().MouseDelta;
     // Only allow dragging if mouse is dragging, layer is selected, and layer is not locked
     if (ImGui::IsMouseDragging(0) && !selectedLayer.locked)
     {

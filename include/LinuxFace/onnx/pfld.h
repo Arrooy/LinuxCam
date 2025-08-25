@@ -1,8 +1,8 @@
 #ifndef PFLD_H
 #define PFLD_H
 
-#include "LinuxFace/detectors.h"
 #include "LinuxFace/Image/tensor_padding.h"
+#include "LinuxFace/detectors.h"
 #include "LinuxFace/onnx/onnxDetector.h"
 
 namespace linuxface
@@ -10,7 +10,7 @@ namespace linuxface
 class PFLDDetector : public OnnxDetector
 {
   public:
-    explicit PFLDDetector(const std::string& onnx_model_path);
+    explicit PFLDDetector(const std::string& onnxModelPath);
     ~PFLDDetector() = default;
     // Receives the full image and a Face, fills landmarks in the Face
     void detect(const std::unique_ptr<Image>& image, Face& face);
@@ -21,10 +21,9 @@ class PFLDDetector : public OnnxDetector
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
     TensorPadding pfld_padding_;
 
-
-    math_utils::Point<double>
-    alignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double minX,
-                            double minY, double angleRad, const math_utils::Point<double>& eye_center, double scale);
+    static math_utils::Point<double>
+    alignedToOriginalCoords(double xAligned, double yAligned, double cropLeft, double cropTop, double minX, double minY,
+                            double angleRad, const math_utils::Point<double>& eyeCenter, double scale);
 };
 } // namespace linuxface
 
