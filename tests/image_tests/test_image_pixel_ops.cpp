@@ -42,7 +42,7 @@ TEST(PixelOps, AlphaBlending)
 {
     unsigned char dst[4] = {10, 20, 30, 255};
     unsigned char src[4] = {100, 110, 120, 128};
-    PixelOperations::blendPixels(dst, src, 4, 128, 4, 255);
+    pixel_operations::blendPixels(dst, src, 4, 128, 4, 255);
     EXPECT_NE(dst[0], 10);
 }
 

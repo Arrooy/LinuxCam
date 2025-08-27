@@ -7,7 +7,7 @@
 #include "LinuxFace/profiler.h"
 using namespace linuxface;
 
-MediaPipeFaceLandmarks::MediaPipeFaceLandmarks(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path)
+MediaPipeFaceLandmarks::MediaPipeFaceLandmarks(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath)
 {
     // Model expects input [1,3,192,192] named "image"
     // Output: "scores" [1], "landmarks" [1,468,3]
@@ -17,24 +17,24 @@ Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image
 {
     // Ensure input_node_dims is [1,3,192,192]
     input_node_dims = {1, 3, 192, 192};
-    Ort::Value input_tensor =
+    Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
-    float* tensor_data = input_tensor.GetTensorMutableData<float>();
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
     padding_ = TensorPadding::scrfd();
     // No padding, normalization as needed (MINMAX for now)
-    image->toTensor(tensor_data, padding_, 192, 192, NormalizationType::MINMAX);
+    image->toTensor(tensorData, padding_, 192, 192, NormalizationType::MINMAX);
     // auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, 192, 192);
     // if(test)
     // {
     //     if(!test->saveToDisk("media_pipe_input_tensor.ppm"))
     //     {
-    //         common::log_info("MediaPipeFaceLandmarks: Not Saved test image to disk.");
+    //         common::logInfo("MediaPipeFaceLandmarks: Not Saved test image to disk.");
     //     }
     // }
-    // common::log_info("MediaPipeFaceLandmarks: Input image dimensions: %ldx%ld", image->info.width,
-    // image->info.height); common::log_info("MediaPipeFaceLandmarks: Input tensor prepared with dimensions: %ldx%ld",
+    // common::logInfo("MediaPipeFaceLandmarks: Input image dimensions: %ldx%ld", image->info.width,
+    // image->info.height); common::logInfo("MediaPipeFaceLandmarks: Input tensor prepared with dimensions: %ldx%ld",
     // input_node_dims[3], input_node_dims[2]); image->saveToDisk("media_pipe_input_image.ppm");
-    return input_tensor;
+    return inputTensor;
 }
 
 MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_ptr<Image>& image)
@@ -45,37 +45,37 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
         return result;
     }
     Profiler::getInstance().start("MediaPipeFaceLandmarks", "detect landmarks");
-    Ort::Value input_tensor = transform(image);
-    std::vector<const char*> input_names = {"image"};
-    std::vector<const char*> output_names = {"scores", "landmarks"};
-    auto output_tensors =
-        detector_session_->Run(Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1, output_names.data(), 2);
+    const Ort::Value inputTensor = transform(image);
+    std::vector<const char*> inputNames = {"image"};
+    std::vector<const char*> outputNames = {"scores", "landmarks"};
+    auto outputTensors =
+        detector_session_->Run(Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor, 1, outputNames.data(), 2);
     // scores: float[1]
-    auto score_tensor = std::move(output_tensors[0]);
-    if (score_tensor.IsTensor() == false || score_tensor.GetTensorTypeAndShapeInfo().GetShape()[0] != 1)
+    auto scoreTensor = std::move(outputTensors[0]);
+    if (!scoreTensor.IsTensor() || scoreTensor.GetTensorTypeAndShapeInfo().GetShape()[0] != 1)
     {
-        common::log_error("MediaPipeFaceLandmarks: Score tensor is not valid.");
-        auto shape = score_tensor.GetTensorTypeAndShapeInfo().GetShape();
+        common::logError("MediaPipeFaceLandmarks: Score tensor is not valid.");
+        auto shape = scoreTensor.GetTensorTypeAndShapeInfo().GetShape();
         for (const auto& dim : shape)
         {
-            common::log_error("MediaPipeFaceLandmarks: Score tensor dimension: %ld", dim);
+            common::logError("MediaPipeFaceLandmarks: Score tensor dimension: %ld", dim);
         }
         return result; // Return empty result if score is not available
     }
-    float* score_ptr = score_tensor.GetTensorMutableData<float>();
-    if (score_ptr == nullptr)
+    auto* scorePtr = scoreTensor.GetTensorMutableData<float>();
+    if (scorePtr == nullptr)
     {
         result.score = 0.0f; // Handle case where score is not available
     }
     else
     {
-        result.score = score_ptr[0];
+        result.score = scorePtr[0];
     }
     // landmarks: float[1,468,3]
-    float* lmk_ptr = output_tensors[1].GetTensorMutableData<float>();
-    if (lmk_ptr == nullptr)
+    auto* lmkPtr = outputTensors[1].GetTensorMutableData<float>();
+    if (lmkPtr == nullptr)
     {
-        common::log_error("MediaPipeFaceLandmarks: Landmarks tensor is null.");
+        common::logError("MediaPipeFaceLandmarks: Landmarks tensor is null.");
         return result; // Return empty result if landmarks are not available
     }
     result.landmarks.resize(468, std::vector<float>(3, 0.0f));
@@ -84,7 +84,7 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     {
         for (int j = 0; j < 3; ++j)
         {
-            result.landmarks[i][j] = lmk_ptr[i * 3 + j];
+            result.landmarks[i][j] = lmkPtr[i * 3 + j];
         }
     }
     Profiler::getInstance().stop("MediaPipeFaceLandmarks", "detect landmarks");

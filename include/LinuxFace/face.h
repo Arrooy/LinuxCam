@@ -14,7 +14,7 @@ namespace linuxface
 struct FaceLandmark
 {
     // Index of the landmark
-    unsigned int i;
+    unsigned int i{};
     // 3D location of the landmark
     math_utils::Point3D p;
 };
@@ -59,14 +59,14 @@ class Face
         UNKNOWN
     };
 
-    Face(FaceBoundingBox boundingBox);
+    explicit Face(FaceBoundingBox boundingBox);
     Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox);
     Face() = default;
     ~Face();
 
     void loadNewFaceLandmarks(const std::vector<FaceLandmark>& landmarks);
 
-    static FaceIndex get_facepart_from_landmark_id(unsigned long id);
+    static FaceIndex getFacepartFromLandmarkId(unsigned long id);
 
     void paintAllFaceLandmarks(std::unique_ptr<Image>& image, bool joinPoints, Pixel c, float radius = 1) const;
     void paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color,
@@ -112,15 +112,15 @@ class Face
      * @return FaceMatchResult containing the best match and its details
      */
     static FaceMatchResult
-    findBestMatchingFace(std::vector<Face>& detected_faces, const math_utils::Rect<double>& ground_truth_bbox,
-                         double min_iou_threshold = 0.1);
+    findBestMatchingFace(std::vector<Face>& detectedFaces, const math_utils::Rect<double>& groundTruthBbox,
+                         double minIouThreshold = 0.1);
 
   private:
     void freeFaceLandmarks();
 
     FaceBoundingBox boundingBox_;
     std::map<FaceIndex, std::vector<FaceLandmark>> landmarks_;
-    FacePose pose_;
+    FacePose pose_{};
 };
 
 } // namespace linuxface

@@ -17,6 +17,7 @@ Checks: >
   -modernize-use-trailing-return-type,
   -readability-identifier-length,
   -misc-include-cleaner,
+  -misc-use-internal-linkage,
   -hicpp-uppercase-literal-suffix,
   -readability-uppercase-literal-suffix,
   -llvmlibc-callee-namespace,
@@ -33,6 +34,9 @@ Checks: >
   -cppcoreguidelines-avoid-c-arrays,
   -modernize-avoid-c-arrays,
   -modernize-use-nodiscard,
+  -readability-convert-member-functions-to-static,
+  -readability-function-cognitive-complexity,
+  -cppcoreguidelines-pro-type-member-init,
   modernize-use-override,
   -cppcoreguidelines-pro-type-vararg,
   cppcoreguidelines-pro-type-const-cast,
@@ -43,6 +47,14 @@ CheckOptions:
     value:           CamelCase
   - key:             readability-identifier-naming.ClassMemberCase
     value:           lower_case
+  - key:             readability-identifier-naming.ClassMemberSuffix
+    value:           _
+  - key:             readability-identifier-naming.StructCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.StructMemberCase
+    value:           lower_case
+  - key:             readability-identifier-naming.StructMemberSuffix
+    value:           ''
   - key:             readability-identifier-naming.ConstexprVariableCase
     value:           CamelCase
   - key:             readability-identifier-naming.EnumCase
@@ -51,6 +63,8 @@ CheckOptions:
     value:           UPPER_CASE
   - key:             readability-identifier-naming.FunctionCase
     value:           camelBack
+  - key:             readability-identifier-naming.FunctionIgnoredRegexp
+    value:           '^(DDA|IoU|PCA|SVD|FFT|DCT|DFT|LUT|NMS)$'
   - key:             readability-identifier-naming.GlobalConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.StaticConstantCase
@@ -61,12 +75,6 @@ CheckOptions:
     value:           UPPER_CASE
   - key:             readability-identifier-naming.MacroDefinitionIgnoredRegexp
     value:           '^[A-Z]+(_[A-Z]+)*_$'
-  - key:             readability-identifier-naming.MemberCase
-    value:           lower_case
-  - key:             readability-identifier-naming.PrivateMemberSuffix
-    value:           _
-  - key:             readability-identifier-naming.PublicMemberSuffix
-    value:           ''
   - key:             readability-identifier-naming.NamespaceCase
     value:           lower_case
   - key:             readability-identifier-naming.ParameterCase

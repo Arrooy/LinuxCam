@@ -46,11 +46,11 @@ class Window
     void onFramebufferResize(int width, int height);
 
     // Set a callback to be called on framebuffer resize
-    void setResizeCallback(std::function<void(int, int)> cb);
+    void setResizeCallback(const std::function<void(int, int)>& cb);
 
   private:
-    GLFWwindow* window_;
-    const char* glslVersion_;
+    GLFWwindow* window_{nullptr};
+    const char* glslVersion_{"#version 400"};
     std::function<void(int, int)> resizeCallback_;
 
     // For resize throttling/debouncing
@@ -59,8 +59,7 @@ class Window
     double lastResizeCallbackTime_ = 0.0;
     double lastResizeEventTime_ = 0.0;
     bool resizePending_ = false;
-    static constexpr double RESIZE_THROTTLE_INTERVAL = 0.1; // seconds
-    static constexpr double RESIZE_DEBOUNCE_DELAY = 0.35;   // seconds
+    static constexpr double ResizeDebounceDelay = 0.35;   // seconds
 
     // GLFW error callback
     static void errorCallback(int error, const char* description);

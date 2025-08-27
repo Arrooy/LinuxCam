@@ -49,8 +49,8 @@ ImageFormat ImageFormatDetector::detectFormatFromPath(const std::string& path)
     }
 
     // Extract file extension
-    std::filesystem::path file_path(path);
-    std::string extension = file_path.extension().string();
+    const std::filesystem::path filePath(path);
+    std::string extension = filePath.extension().string();
 
     // Convert to lowercase for comparison
     std::transform(extension.begin(), extension.end(), extension.begin(),
@@ -95,8 +95,8 @@ bool ImageFormatDetector::isPNG(const std::vector<unsigned char>& data)
     }
 
     // PNG signature: 89 50 4E 47 0D 0A 1A 0A
-    const unsigned char png_signature[] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
-    return std::equal(png_signature, png_signature + 8, data.begin());
+    const unsigned char pngSignature[] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    return std::equal(pngSignature, pngSignature + 8, data.begin());
 }
 
 bool ImageFormatDetector::isBMP(const std::vector<unsigned char>& data)
@@ -118,12 +118,12 @@ bool ImageFormatDetector::isPPM(const std::vector<unsigned char>& data)
 }
 
 // ImageLoader Implementation
-ImageLoader::ImageLoader(LoadStrategy strategy) : strategy_(strategy), is_decoded_(false)
+ImageLoader::ImageLoader(LoadStrategy strategy) : strategy_(strategy)
 {
     metadata_.is_valid = false;
 }
 
-bool ImageLoader::loadFromFile(const std::string& file_path)
+bool ImageLoader::loadFromFile(const std::string& filePath)
 {
     // Reset previous state
     raw_data_.clear();
@@ -131,36 +131,36 @@ bool ImageLoader::loadFromFile(const std::string& file_path)
     decoded_image_.reset();
     is_decoded_ = false;
     metadata_.is_valid = false;
-    metadata_.filename = file_path;
+    metadata_.filename = filePath;
 
     // Load file data
-    if (!loadFileData(file_path))
+    if (!loadFileData(filePath))
     {
-        common::log_error("Failed to load file data from: %s", file_path.c_str());
+        common::logError("Failed to load file data from: %s", filePath.c_str());
         return false;
     }
 
     // Extract metadata
     if (!extractMetadata())
     {
-        common::log_error("Failed to extract metadata from: %s", file_path.c_str());
+        common::logError("Failed to extract metadata from: %s", filePath.c_str());
         return false;
     }
 
     // Create decoder based on format
     if (!createDecoder())
     {
-        common::log_error("Failed to create decoder for format: %d", static_cast<int>(metadata_.format));
+        common::logError("Failed to create decoder for format: %d", static_cast<int>(metadata_.format));
         return false;
     }
 
     // Handle immediate loading strategy
     if (strategy_ == LoadStrategy::IMMEDIATE)
     {
-        std::unique_ptr<Image> temp_image;
-        if (!getImage(temp_image))
+        std::unique_ptr<Image> tempImage;
+        if (!getImage(tempImage))
         {
-            common::log_error("Failed to decode image immediately");
+            common::logError("Failed to decode image immediately");
             return false;
         }
     }
@@ -172,13 +172,13 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
 {
     if (!metadata_.is_valid)
     {
-        common::log_error("Cannot get image: metadata is invalid");
+        common::logError("Cannot get image: metadata is invalid");
         return false;
     }
 
     if (strategy_ == LoadStrategy::METADATA_ONLY)
     {
-        common::log_error("Cannot get image data with METADATA_ONLY strategy");
+        common::logError("Cannot get image data with METADATA_ONLY strategy");
         return false;
     }
 
@@ -192,7 +192,7 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
     // Decode the image
     if (!decoder_)
     {
-        common::log_error("No decoder available");
+        common::logError("No decoder available");
         return false;
     }
 
@@ -204,20 +204,20 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
     decoded_image_ = std::make_unique<Image>();
 
     // Step 1: Decode header to get image dimensions and required buffer size
-    unsigned long raw_needed_size = 0;
-    if (!decoder_->decodeHeader(srcImage, raw_needed_size))
+    unsigned long rawNeededSize = 0;
+    if (!decoder_->decodeHeader(srcImage, rawNeededSize))
     {
-        common::log_error("Failed to decode header");
+        common::logError("Failed to decode header");
         return false;
     }
 
     // Step 2: Resize decoded image to accommodate decoded data
-    decoded_image_->resize(raw_needed_size);
+    decoded_image_->resize(rawNeededSize);
 
     // Step 3: Perform actual decoding directly into cached image
     if (!decoder_->decode(srcImage, *decoded_image_))
     {
-        common::log_error("Failed to decode image data");
+        common::logError("Failed to decode image data");
         decoded_image_.reset(); // Clean up on failure
         return false;
     }
@@ -227,25 +227,25 @@ bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
     // Mark as decoded
     is_decoded_ = true;
 
-    common::log_info("ImageLoader::loadFileData: Decoded image data successfully");
-    common::log_info("Width height: %d x %d", decoded_image_->info.width, decoded_image_->info.height);
-    common::log_info("Size of decoded image: %d bytes", decoded_image_->size());
+    common::logInfo("ImageLoader::loadFileData: Decoded image data successfully");
+    common::logInfo("Width height: %d x %d", decoded_image_->info.width, decoded_image_->info.height);
+    common::logInfo("Size of decoded image: %d bytes", decoded_image_->size());
     // Return a deep copy of the cached decoded image
     outImage = decoded_image_->deepCopy();
     return true;
 }
 
-bool ImageLoader::loadFileData(const std::string& file_path)
+bool ImageLoader::loadFileData(const std::string& filePath)
 {
-    std::ifstream file(file_path, std::ios::binary | std::ios::ate);
+    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
     if (!file.is_open())
     {
         return false;
     }
 
     // Get file size
-    std::streamsize file_size = file.tellg();
-    if (file_size <= 0)
+    const std::streamsize fileSize = file.tellg();
+    if (fileSize <= 0)
     {
         return false;
     }
@@ -253,8 +253,8 @@ bool ImageLoader::loadFileData(const std::string& file_path)
     file.seekg(0, std::ios::beg);
 
     // Read file into vector
-    raw_data_.resize(static_cast<size_t>(file_size));
-    if (!file.read(reinterpret_cast<char*>(raw_data_.data()), file_size))
+    raw_data_.resize(static_cast<size_t>(fileSize));
+    if (!file.read(reinterpret_cast<char*>(raw_data_.data()), fileSize))
     {
         raw_data_.clear();
         return false;
@@ -267,7 +267,7 @@ bool ImageLoader::extractMetadata()
 {
     if (raw_data_.empty())
     {
-        common::log_info("ImageLoader::extractMetadata - Raw data is empty");
+        common::logInfo("ImageLoader::extractMetadata - Raw data is empty");
         return false;
     }
 
@@ -275,20 +275,20 @@ bool ImageLoader::extractMetadata()
     metadata_.format = ImageFormatDetector::detectFormat(raw_data_);
     if (metadata_.format == ImageFormat::UNKNOWN)
     {
-        common::log_info("ImageLoader::extractMetadata - Unknown image format");
+        common::logInfo("ImageLoader::extractMetadata - Unknown image format");
         return false;
     }
 
     // For METADATA_ONLY strategy, we need to extract dimensions
     // This requires creating a temporary decoder
-    std::unique_ptr<Decoder> temp_decoder;
+    std::unique_ptr<Decoder> tempDecoder;
     switch (metadata_.format)
     {
         case ImageFormat::JPEG:
-            temp_decoder = std::make_unique<JPEGDecoder>();
+            tempDecoder = std::make_unique<JPEGDecoder>();
             break;
         case ImageFormat::PPM:
-            temp_decoder = std::make_unique<PPMDecoder>();
+            tempDecoder = std::make_unique<PPMDecoder>();
             break;
         case ImageFormat::PNG:
             // temp_decoder = std::make_unique<PngDecoder>();
@@ -301,14 +301,14 @@ bool ImageLoader::extractMetadata()
     }
 
     // Create source image from raw data for header parsing
-    Image temp_image(const_cast<unsigned char*>(raw_data_.data()), raw_data_.size(), false);
-    temp_image.info = metadata_;
+    Image tempImage(const_cast<unsigned char*>(raw_data_.data()), raw_data_.size(), false);
+    tempImage.info = metadata_;
 
     // Try to get metadata without full decode
-    unsigned long raw_needed_size = 0;
-    if (temp_decoder->decodeHeader(temp_image, raw_needed_size))
+    unsigned long rawNeededSize = 0;
+    if (tempDecoder->decodeHeader(tempImage, rawNeededSize))
     {
-        metadata_ = temp_image.info; // Copy metadata from decoded header
+        metadata_ = tempImage.info; // Copy metadata from decoded header
 
         metadata_.is_valid = true;
         return true;
@@ -334,10 +334,9 @@ bool ImageLoader::createDecoder()
             // decoder_ = std::make_unique<BmpDecoder>();
             // break;
         default:
-            common::log_error("Unsupported image format: %d", static_cast<int>(metadata_.format));
+            common::logError("Unsupported image format: %d", static_cast<int>(metadata_.format));
             return false;
     }
 
     return decoder_ != nullptr;
 }
-

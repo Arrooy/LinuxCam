@@ -11,10 +11,10 @@ using namespace linuxface::common;
 TEST(CommonTest, FileExists)
 {
     // Test with a file that should exist (current directory)
-    EXPECT_TRUE(file_exists("."));
+    EXPECT_TRUE(fileExists("."));
 
     // Test with a file that shouldn't exist
-    EXPECT_FALSE(file_exists("/nonexistent/path/file.txt"));
+    EXPECT_FALSE(fileExists("/nonexistent/path/file.txt"));
 }
 
 TEST(CommonTest, Clamp)
@@ -31,19 +31,19 @@ TEST(CommonTest, Clamp)
 TEST(CommonTest, FormatSize)
 {
     // Test bytes
-    const char* result = format_size(512);
+    const char* result = formatSize(512);
     EXPECT_TRUE(strstr(result, "bytes") != nullptr);
 
     // Test KB
-    result = format_size(2048);
+    result = formatSize(2048);
     EXPECT_TRUE(strstr(result, "KB") != nullptr);
 
     // Test MB
-    result = format_size(2 * 1024 * 1024);
+    result = formatSize(2 * 1024 * 1024);
     EXPECT_TRUE(strstr(result, "MB") != nullptr);
 
     // Test GB
-    result = format_size(2UL * 1024 * 1024 * 1024);
+    result = formatSize(2UL * 1024 * 1024 * 1024);
     EXPECT_TRUE(strstr(result, "GB") != nullptr);
 }
 
@@ -54,7 +54,7 @@ TEST(CommonTest, LongWrite)
     ASSERT_NE(fd, -1);
 
     const char* test_data = "Hello, World!";
-    bool result = long_write(fd, test_data, strlen(test_data));
+    bool result = longWrite(fd, test_data, strlen(test_data));
     EXPECT_TRUE(result);
 
     close(fd);
@@ -88,16 +88,16 @@ TEST(CommonTest, Lerp)
 // These would require more setup/teardown and mocking
 TEST(CommonTest, LogLevelStr)
 {
-    EXPECT_STREQ(log_level_str(LogLevel::INFO), "INFO");
-    EXPECT_STREQ(log_level_str(LogLevel::WARN), "WARN");
-    EXPECT_STREQ(log_level_str(LogLevel::ERROR), "ERROR");
+    EXPECT_STREQ(logLevelStr(LogLevel::INFO), "INFO");
+    EXPECT_STREQ(logLevelStr(LogLevel::WARN), "WARN");
+    EXPECT_STREQ(logLevelStr(LogLevel::ERROR), "ERROR");
 }
 
 TEST(CommonTest, LogColor)
 {
     // Test that color functions return non-null strings
-    EXPECT_NE(log_color(LogLevel::INFO), nullptr);
-    EXPECT_NE(log_color(LogLevel::WARN), nullptr);
-    EXPECT_NE(log_color(LogLevel::ERROR), nullptr);
-    EXPECT_NE(log_color_reset(), nullptr);
+    EXPECT_NE(logColor(LogLevel::INFO), nullptr);
+    EXPECT_NE(logColor(LogLevel::WARN), nullptr);
+    EXPECT_NE(logColor(LogLevel::ERROR), nullptr);
+    EXPECT_NE(logColorReset(), nullptr);
 }

@@ -38,16 +38,16 @@ class ImageLoader
     explicit ImageLoader(LoadStrategy strategy = LoadStrategy::LAZY);
 
     // Load image from file
-    bool loadFromFile(const std::string& file_path);
+    bool loadFromFile(const std::string& filePath);
 
     // Get decoded RGB888 image
     bool getImage(std::unique_ptr<Image>& outImage);
 
     // Static factory method for convenient loading
-    static std::unique_ptr<Image> loadImageFromFile(const std::string& file_path)
+    static std::unique_ptr<Image> loadImageFromFile(const std::string& filePath)
     {
         ImageLoader loader(LoadStrategy::LAZY);
-        if (!loader.loadFromFile(file_path))
+        if (!loader.loadFromFile(filePath))
         {
             return nullptr;
         }
@@ -68,9 +68,9 @@ class ImageLoader
     bool isValid() const { return metadata_.is_valid; }
 
   private:
-    bool loadFileData(const std::string& file_path);
+    bool loadFileData(const std::string& filePath);
     bool extractMetadata();
-    bool createDecoder();
+  bool createDecoder();
 
     LoadStrategy strategy_;
     ImageMetadata metadata_;

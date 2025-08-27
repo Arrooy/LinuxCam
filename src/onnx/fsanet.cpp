@@ -7,39 +7,39 @@ using namespace linuxface;
 
 Ort::Value FsanetDetector::transform(const std::unique_ptr<Image>& image)
 {
-    Ort::Value input_tensor =
+    Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
 
     // Get pointer to tensor data.
-    float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    auto tensor_padding = TensorPadding::fsanet();
-    image->toTensor(tensor_data, tensor_padding, input_width_, input_height_, NormalizationType::MINMAX);
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
+    auto tensorPadding = TensorPadding::fsanet();
+    image->toTensor(tensorData, tensorPadding, InputWidth, InputHeight, NormalizationType::MINMAX);
 
-    return input_tensor;
+    return inputTensor;
 }
 
 void FsanetDetector::detect(const std::unique_ptr<Image>& image, Face& face)
 {
     Profiler::getInstance().start("FSANET", "Pose detection");
     // Crop image to face bounding box
-    const std::unique_ptr<Image> crop_image = image->crop(face.getBoundingBox().rect);
+    const std::unique_ptr<Image> cropImage = image->crop(face.getBoundingBox().rect);
     // Convert from image to tensor.
-    Ort::Value input_tensor = this->transform(crop_image);
+    const Ort::Value inputTensor = this->transform(cropImage);
     try
     {
-        auto output_tensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &input_tensor,
-                                                     1, output_node_names_.data(), 1);
+        auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
+                                                    output_node_names_.data(), 1);
 
-        const float* angles_ptr = output_tensors.front().GetTensorMutableData<float>();
-        // TODO: We could add an average here, to smooth the pose.
-        if (angles_ptr)
+    const float* anglesPtr = outputTensors.front().GetTensorMutableData<float>();
+        // TODO(arroyo): We could add an average here, to smooth the pose.
+        if (anglesPtr != nullptr)
         {
-            face.setFacePose(FacePose{angles_ptr[0], angles_ptr[1], angles_ptr[2]});
+            face.setFacePose(FacePose{anglesPtr[0], anglesPtr[1], anglesPtr[2]});
         }
     }
     catch (const Ort::Exception& e)
     {
-        common::log_error("FSANet: %s", e.what());
+        common::logError("FSANet: %s", e.what());
         exit(-1);
     }
 

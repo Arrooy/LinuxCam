@@ -25,6 +25,7 @@ class MediaBrowserUI
     bool render();
 
     Layer* getSelectedLayer();
+
   private:
     void renderLeftSidebar();
     void renderRightSidebar();

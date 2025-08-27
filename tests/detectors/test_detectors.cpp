@@ -49,7 +49,7 @@ class MockShapeDetector : public ShapeDetector
     MockShapeDetector(bool shouldSucceed = true) : shouldSucceed_(shouldSucceed), detectCallCount_(0) {}
 
     std::vector<Face> detect(const std::unique_ptr<Image>& image,
-                            const std::vector<math_utils::Rect<float>>& faces_rect) override
+                            std::vector<math_utils::Rect<float>>& faces_rect) override
     {
         detectCallCount_++;
         lastImageProcessed_ = image.get();

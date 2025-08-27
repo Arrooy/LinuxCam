@@ -42,7 +42,6 @@ class Application
     void shutdown();
 
   private:
-    // Connect window resize to layerManager texture invalidation
     void connectWindowResize();
     Window window_;
     std::unique_ptr<UI> ui_;

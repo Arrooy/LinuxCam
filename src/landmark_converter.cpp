@@ -2,64 +2,67 @@
  * @file landmark_converter.cpp
  * @brief Implementation of landmark conversion utilities
  */
-// TODO: This is not fully finished. Probably the conversion is wrong for some landmarks.
+// TODO(arroyo): This is not fully finished. Probably the conversion is wrong
+// for some landmarks.
 #include "LinuxFace/landmark_converter.h"
 
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
+#include "LinuxFace/common.h"
+
 namespace linuxface
 {
 
-std::vector<FaceLandmark> LandmarkConverter::pfldToWflw(const std::vector<FaceLandmark>& pfld_landmarks)
+std::vector<FaceLandmark> LandmarkConverter::pfldToWflw(const std::vector<FaceLandmark>& pfldLandmarks)
 {
-    if (pfld_landmarks.size() != 106)
+    if (pfldLandmarks.size() != 106)
     {
         throw std::invalid_argument("PFLD landmarks must have exactly 106 points, got "
-                                    + std::to_string(pfld_landmarks.size()));
+                                    + std::to_string(pfldLandmarks.size()));
     }
 
     const auto& mapping = getPfldToWflwMapping();
-    std::vector<FaceLandmark> wflw_landmarks;
-    wflw_landmarks.reserve(98);
+    std::vector<FaceLandmark> wflwLandmarks;
+    wflwLandmarks.reserve(98);
 
     // Convert landmarks using the correspondence mapping
-    for (int wflw_idx = 0; wflw_idx < 98; ++wflw_idx)
+    for (int wflwIdx = 0; wflwIdx < 98; ++wflwIdx)
     {
-        auto it = mapping.find(wflw_idx);
+        auto it = mapping.find(wflwIdx);
         if (it != mapping.end())
         {
-            int pfld_idx = it->second;
-            if (pfld_idx < static_cast<int>(pfld_landmarks.size()))
+            const int pfldIdx = it->second;
+            if (pfldIdx < static_cast<int>(pfldLandmarks.size()))
             {
                 // Direct mapping available
-                wflw_landmarks.emplace_back(FaceLandmark{wflw_idx, pfld_landmarks[pfld_idx].p});
+                wflwLandmarks.emplace_back(FaceLandmark{wflwIdx, pfldLandmarks[pfldIdx].p});
             }
             else
             {
                 // Should not happen with valid mapping, but add safeguard
-                wflw_landmarks.emplace_back(FaceLandmark{wflw_idx, math_utils::Point3D(0, 0, 0)});
+                wflwLandmarks.emplace_back(FaceLandmark{wflwIdx, math_utils::Point3D(0, 0, 0)});
             }
         }
         else
         {
             // No direct correspondence - use interpolation or approximation
             // For now, use first 98 landmarks as fallback (our current approach)
-            if (wflw_idx < static_cast<int>(pfld_landmarks.size()))
+            if (wflwIdx < static_cast<int>(pfldLandmarks.size()))
             {
-                wflw_landmarks.emplace_back(FaceLandmark{wflw_idx, pfld_landmarks[wflw_idx].p});
+                wflwLandmarks.emplace_back(FaceLandmark{wflwIdx, pfldLandmarks[wflwIdx].p});
             }
             else
             {
                 // Fallback to origin - should not happen
-                wflw_landmarks.emplace_back(FaceLandmark{wflw_idx, math_utils::Point3D(0, 0, 0)});
+                wflwLandmarks.emplace_back(FaceLandmark{wflwIdx, math_utils::Point3D(0, 0, 0)});
             }
         }
     }
 
     // Apply curve-aware smoothing for better accuracy
-    std::vector<std::pair<int, int>> wflw_curve_segments = {
+    std::vector<std::pair<int, int>> wflwCurveSegments = {
         {0,  16}, // Jawline left half
         {16, 32}, // Jawline right half
         {33, 41}, // Right eyebrow
@@ -71,64 +74,64 @@ std::vector<FaceLandmark> LandmarkConverter::pfldToWflw(const std::vector<FaceLa
         {88, 95}  // Inner lip
     };
 
-    auto smoothed_result = applyCurveSmoothing(wflw_landmarks, wflw_curve_segments);
+    auto smoothedResult = applyCurveSmoothing(wflwLandmarks, wflwCurveSegments);
 
-    return smoothed_result;
+    return smoothedResult;
 }
 
-std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLandmark>& wflw_landmarks)
+std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLandmark>& wflwLandmarks)
 {
-    if (wflw_landmarks.size() != 98)
+    if (wflwLandmarks.size() != 98)
     {
         throw std::invalid_argument("WFLW landmarks must have exactly 98 points, got "
-                                    + std::to_string(wflw_landmarks.size()));
+                                    + std::to_string(wflwLandmarks.size()));
     }
 
     const auto& mapping = getWflwToPfldMapping();
-    std::vector<FaceLandmark> pfld_landmarks(106);
+    std::vector<FaceLandmark> pfldLandmarks(106);
 
     // Initialize all landmarks to origin
     for (int i = 0; i < 106; ++i)
     {
-        pfld_landmarks[i] = FaceLandmark{i, math_utils::Point3D(0, 0, 0)};
+        pfldLandmarks[i] = FaceLandmark{i, math_utils::Point3D(0, 0, 0)};
     }
 
     // Map existing landmarks
-    for (int wflw_idx = 0; wflw_idx < 98; ++wflw_idx)
+    for (int wflwIdx = 0; wflwIdx < 98; ++wflwIdx)
     {
-        auto it = mapping.find(wflw_idx);
+        auto it = mapping.find(wflwIdx);
         if (it != mapping.end())
         {
-            int pfld_idx = it->second;
-            if (pfld_idx < 106)
+            const int pfldIdx = it->second;
+            if (pfldIdx < 106)
             {
-                pfld_landmarks[pfld_idx] = FaceLandmark{pfld_idx, wflw_landmarks[wflw_idx].p};
+                pfldLandmarks[pfldIdx] = FaceLandmark{static_cast<unsigned int>(pfldIdx), wflwLandmarks[wflwIdx].p};
             }
         }
     }
 
     // Interpolate missing landmarks (the extra 8 landmarks in PFLD)
     // This is a simplified interpolation - in practice, would need more sophisticated methods
-    std::vector<int> missing_indices;
+    std::vector<int> missingIndices;
     for (int i = 0; i < 106; ++i)
     {
-        if (pfld_landmarks[i].p.x == 0 && pfld_landmarks[i].p.y == 0 && pfld_landmarks[i].p.z == 0)
+        if (pfldLandmarks[i].p.x == 0 && pfldLandmarks[i].p.y == 0 && pfldLandmarks[i].p.z == 0)
         {
-            missing_indices.push_back(i);
+            missingIndices.push_back(i);
         }
     }
 
-    if (!missing_indices.empty())
+    if (!missingIndices.empty())
     {
-        auto interpolated = interpolateLandmarks(pfld_landmarks, missing_indices);
-        for (size_t i = 0; i < interpolated.size() && i < missing_indices.size(); ++i)
+        auto interpolated = interpolateLandmarks(pfldLandmarks, missingIndices);
+        for (size_t i = 0; i < interpolated.size() && i < missingIndices.size(); ++i)
         {
-            pfld_landmarks[missing_indices[i]] = interpolated[i];
+            pfldLandmarks[missingIndices[i]] = interpolated[i];
         }
     }
 
     // Apply curve-aware smoothing for PFLD format as well
-    std::vector<std::pair<int, int>> pfld_curve_segments = {
+    std::vector<std::pair<int, int>> pfldCurveSegments = {
         {0,  16}, // Jawline
         {17, 21}, // Right eyebrow
         {22, 26}, // Left eyebrow
@@ -139,16 +142,16 @@ std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLa
         {60, 67}  // Inner mouth (partial - PFLD has more inner lip points)
     };
 
-    auto smoothed_pfld = applyCurveSmoothing(pfld_landmarks, pfld_curve_segments);
+    auto smoothedPfld = applyCurveSmoothing(pfldLandmarks, pfldCurveSegments);
 
-    return smoothed_pfld;
+    return smoothedPfld;
 }
 
 std::vector<FaceLandmark>
 LandmarkConverter::extractKeyLandmarks(const std::vector<FaceLandmark>& landmarks, LandmarkFormat format)
 {
-    std::vector<FaceLandmark> key_landmarks;
-    key_landmarks.reserve(5);
+    std::vector<FaceLandmark> keyLandmarks;
+    keyLandmarks.reserve(5);
 
     switch (format)
     {
@@ -158,11 +161,11 @@ LandmarkConverter::extractKeyLandmarks(const std::vector<FaceLandmark>& landmark
             if (landmarks.size() >= 106)
             {
                 // These indices are approximations - would need exact PFLD format specification
-                key_landmarks.push_back({0, landmarks[36].p}); // Left eye (approximate)
-                key_landmarks.push_back({1, landmarks[45].p}); // Right eye (approximate)
-                key_landmarks.push_back({2, landmarks[33].p}); // Nose tip (approximate)
-                key_landmarks.push_back({3, landmarks[48].p}); // Left mouth corner (approximate)
-                key_landmarks.push_back({4, landmarks[54].p}); // Right mouth corner (approximate)
+                keyLandmarks.push_back({0, landmarks[36].p}); // Left eye (approximate)
+                keyLandmarks.push_back({1, landmarks[45].p}); // Right eye (approximate)
+                keyLandmarks.push_back({2, landmarks[33].p}); // Nose tip (approximate)
+                keyLandmarks.push_back({3, landmarks[48].p}); // Left mouth corner (approximate)
+                keyLandmarks.push_back({4, landmarks[54].p}); // Right mouth corner (approximate)
             }
             break;
         }
@@ -172,11 +175,11 @@ LandmarkConverter::extractKeyLandmarks(const std::vector<FaceLandmark>& landmark
             if (landmarks.size() >= 98)
             {
                 // Based on WFLW format: https://wywu.github.io/projects/LAB/WFLW.html
-                key_landmarks.push_back({0, landmarks[68].p}); // Left eye center (approximate)
-                key_landmarks.push_back({1, landmarks[60].p}); // Right eye center (approximate)
-                key_landmarks.push_back({2, landmarks[54].p}); // Nose tip
-                key_landmarks.push_back({3, landmarks[76].p}); // Left mouth corner
-                key_landmarks.push_back({4, landmarks[82].p}); // Right mouth corner
+                keyLandmarks.push_back({0, landmarks[68].p}); // Left eye center (approximate)
+                keyLandmarks.push_back({1, landmarks[60].p}); // Right eye center (approximate)
+                keyLandmarks.push_back({2, landmarks[54].p}); // Nose tip
+                keyLandmarks.push_back({3, landmarks[76].p}); // Left mouth corner
+                keyLandmarks.push_back({4, landmarks[82].p}); // Right mouth corner
             }
             break;
         }
@@ -187,14 +190,14 @@ LandmarkConverter::extractKeyLandmarks(const std::vector<FaceLandmark>& landmark
             {
                 for (int i = 0; i < 5; ++i)
                 {
-                    key_landmarks.push_back(landmarks[i]);
+                    keyLandmarks.push_back(landmarks[i]);
                 }
             }
             break;
         }
     }
 
-    return key_landmarks;
+    return keyLandmarks;
 }
 
 std::vector<int> LandmarkConverter::getRegionIndices(FacialRegion region, LandmarkFormat format)
@@ -320,10 +323,10 @@ std::vector<int> LandmarkConverter::getRegionIndices(FacialRegion region, Landma
 }
 
 bool LandmarkConverter::validateLandmarkFormat(const std::vector<FaceLandmark>& landmarks,
-                                               LandmarkFormat expected_format)
+                                               LandmarkFormat expectedFormat)
 {
-    int expected_count = getExpectedLandmarkCount(expected_format);
-    return landmarks.size() == static_cast<size_t>(expected_count);
+    const int expectedCount = getExpectedLandmarkCount(expectedFormat);
+    return landmarks.size() == static_cast<size_t>(expectedCount);
 }
 
 int LandmarkConverter::getExpectedLandmarkCount(LandmarkFormat format)
@@ -346,7 +349,7 @@ const std::map<int, int>& LandmarkConverter::getPfldToWflwMapping()
     // Empirically derived PFLD->WFLW mapping based on actual landmark correspondence analysis
     // Each WFLW landmark index maps to the best matching PFLD landmark index
     // Average mapping error: 8.05 pixels (compared to 70+ pixels with previous mapping)
-    static const std::map<int, int> mapping = {
+    static const std::map<int, int> MAPPING = {
         {0,  1 }, // WFLW[0] -> PFLD[1] - jawline
         {1,  1 }, // WFLW[1] -> PFLD[1] - jawline
         {2,  9 }, // WFLW[2] -> PFLD[9] - jawline
@@ -447,64 +450,65 @@ const std::map<int, int>& LandmarkConverter::getPfldToWflwMapping()
         {97, 87}  // WFLW[97] -> PFLD[87] - inner_mouth
     };
 
-    return mapping;
+    return MAPPING;
 }
 
 const std::map<int, int>& LandmarkConverter::getWflwToPfldMapping()
 {
     // Reverse mapping - this is computed once and cached
-    static std::map<int, int> reverse_mapping;
+    static std::map<int, int> reverseMapping;
     static bool initialized = false;
 
     if (!initialized)
     {
-        const auto& forward_mapping = getPfldToWflwMapping();
-        for (const auto& pair : forward_mapping)
+        const auto& forwardMapping = getPfldToWflwMapping();
+        for (const auto& pair : forwardMapping)
         {
-            reverse_mapping[pair.second] = pair.first;
+            reverseMapping[pair.second] = pair.first;
         }
         initialized = true;
     }
 
-    return reverse_mapping;
+    return reverseMapping;
 }
 
 std::vector<FaceLandmark> LandmarkConverter::interpolateLandmarks(const std::vector<FaceLandmark>& landmarks,
-                                                                  const std::vector<int>& missing_indices)
+                                                                  const std::vector<int>& missingIndices)
 {
     std::vector<FaceLandmark> interpolated;
-    interpolated.reserve(missing_indices.size());
+    interpolated.reserve(missingIndices.size());
 
-    for (int missing_idx : missing_indices)
+    for (const int missingIdx : missingIndices)
     {
         // Simple interpolation: find nearest valid landmarks and average their positions
         // This is a simplified approach - production code would use more sophisticated interpolation
 
-        double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+        double sumX = 0.0;
+        double sumY = 0.0;
+        double sumZ = 0.0;
         int count = 0;
 
         // Find nearby landmarks for interpolation
-        for (int i = std::max(0, missing_idx - 5); i < std::min(static_cast<int>(landmarks.size()), missing_idx + 5);
-             ++i)
+        for (int i = std::max(0, missingIdx - 5); i < std::min(static_cast<int>(landmarks.size()), missingIdx + 5); ++i)
         {
-            if (i != missing_idx && !(landmarks[i].p.x == 0 && landmarks[i].p.y == 0 && landmarks[i].p.z == 0))
+            if (i != missingIdx && (landmarks[i].p.x != 0 || landmarks[i].p.y != 0 || landmarks[i].p.z != 0))
             {
-                sum_x += landmarks[i].p.x;
-                sum_y += landmarks[i].p.y;
-                sum_z += landmarks[i].p.z;
+                sumX += landmarks[i].p.x;
+                sumY += landmarks[i].p.y;
+                sumZ += landmarks[i].p.z;
                 count++;
             }
         }
 
         if (count > 0)
         {
-            interpolated.emplace_back(
-                FaceLandmark{missing_idx, math_utils::Point3D(sum_x / count, sum_y / count, sum_z / count)});
+            interpolated.emplace_back(FaceLandmark{static_cast<unsigned int>(missingIdx),
+                                                   math_utils::Point3D(sumX / count, sumY / count, sumZ / count)});
         }
         else
         {
             // Fallback: use center point or zero
-            interpolated.emplace_back(FaceLandmark{missing_idx, math_utils::Point3D(0, 0, 0)});
+            interpolated.emplace_back(FaceLandmark{static_cast<unsigned int>(missingIdx), math_utils::Point3D(0, 0, 0)});
         }
     }
 
@@ -513,69 +517,69 @@ std::vector<FaceLandmark> LandmarkConverter::interpolateLandmarks(const std::vec
 
 // Enhanced geometric interpolation considering facial structure
 math_utils::Point3D
-LandmarkConverter::computeGeometricInterpolation(const std::vector<FaceLandmark>& landmarks, int target_index,
-                                                 const std::vector<int>& available_indices)
+LandmarkConverter::computeGeometricInterpolation(const std::vector<FaceLandmark>& landmarks, int targetIndex,
+                                                 const std::vector<int>& availableIndices)
 {
     // Find nearest neighbors with curve-aware distance weighting
-    std::vector<std::pair<double, int>> weighted_neighbors;
+    std::vector<std::pair<double, int>> weightedNeighbors;
 
-    for (int idx : available_indices)
+    for (const int idx : availableIndices)
     {
         if (idx >= 0 && idx < static_cast<int>(landmarks.size()))
         {
             // Consider both spatial distance and index proximity for facial geometry
-            double spatial_weight = 1.0;
-            double index_weight = 1.0 / (1.0 + std::abs(target_index - idx));
+            const double spatialWeight = 1.0;
+            const double indexWeight = 1.0 / (1.0 + std::abs(targetIndex - idx));
 
             // Apply facial region weighting - landmarks in same facial region are more relevant
-            double region_weight = getFacialRegionWeight(target_index, idx);
+            const double regionWeight = getFacialRegionWeight(targetIndex, idx);
 
-            double combined_weight = spatial_weight * index_weight * region_weight;
-            weighted_neighbors.emplace_back(combined_weight, idx);
+            const double combinedWeight = spatialWeight * indexWeight * regionWeight;
+            weightedNeighbors.emplace_back(combinedWeight, idx);
         }
     }
 
-    if (weighted_neighbors.empty())
+    if (weightedNeighbors.empty())
     {
-        return math_utils::Point3D(0, 0, 0);
+        return {0, 0, 0};
     }
 
     // Sort by weight (highest first)
-    std::sort(weighted_neighbors.begin(), weighted_neighbors.end(),
+    std::sort(weightedNeighbors.begin(), weightedNeighbors.end(),
               [](const std::pair<double, int>& a, const std::pair<double, int>& b) { return a.first > b.first; });
 
     // Use top weighted neighbors for interpolation
-    double total_weight = 0.0;
-    math_utils::Point3D weighted_sum(0, 0, 0);
+    double totalWeight = 0.0;
+    math_utils::Point3D weightedSum(0, 0, 0);
 
-    size_t max_neighbors = std::min(size_t(4), weighted_neighbors.size()); // Use up to 4 neighbors
-    for (size_t i = 0; i < max_neighbors; ++i)
+    const size_t maxNeighbors = std::min(static_cast<size_t>(4),
+                                         weightedNeighbors.size()); // Use up to 4 neighbors
+    for (size_t i = 0; i < maxNeighbors; ++i)
     {
-        double weight = weighted_neighbors[i].first;
-        int neighbor_idx = weighted_neighbors[i].second;
+        const double weight = weightedNeighbors[i].first;
+        const int neighborIdx = weightedNeighbors[i].second;
 
-        const auto& neighbor_point = landmarks[neighbor_idx].p;
+        const auto& neighborPoint = landmarks[neighborIdx].p;
 
-        weighted_sum.x += neighbor_point.x * weight;
-        weighted_sum.y += neighbor_point.y * weight;
-        weighted_sum.z += neighbor_point.z * weight;
-        total_weight += weight;
+        weightedSum.x += neighborPoint.x * weight;
+        weightedSum.y += neighborPoint.y * weight;
+        weightedSum.z += neighborPoint.z * weight;
+        totalWeight += weight;
     }
 
-    if (total_weight > 0.0)
+    if (totalWeight > 0.0)
     {
-        return math_utils::Point3D(weighted_sum.x / total_weight, weighted_sum.y / total_weight,
-                                   weighted_sum.z / total_weight);
+        return {weightedSum.x / totalWeight, weightedSum.y / totalWeight, weightedSum.z / totalWeight};
     }
 
-    return math_utils::Point3D(0, 0, 0);
+    return {0, 0, 0};
 }
 
 // Compute facial region weight for enhanced interpolation
-double LandmarkConverter::getFacialRegionWeight(int target_idx, int source_idx)
+double LandmarkConverter::getFacialRegionWeight(int targetIdx, int sourceIdx)
 {
     // Define facial regions based on landmark indices
-    auto get_region = [](int idx) -> int
+    auto getRegion = [](int idx) -> int
     {
         if (idx >= 0 && idx <= 16)
         {
@@ -612,17 +616,17 @@ double LandmarkConverter::getFacialRegionWeight(int target_idx, int source_idx)
         return 8; // Other/Unknown
     };
 
-    int target_region = get_region(target_idx);
-    int source_region = get_region(source_idx);
+    const int targetRegion = getRegion(targetIdx);
+    const int sourceRegion = getRegion(sourceIdx);
 
     // Same region gets highest weight
-    if (target_region == source_region)
+    if (targetRegion == sourceRegion)
     {
         return 2.0;
     }
 
     // Adjacent regions get medium weight
-    if (std::abs(target_region - source_region) <= 1)
+    if (std::abs(targetRegion - sourceRegion) <= 1)
     {
         return 1.5;
     }
@@ -633,37 +637,37 @@ double LandmarkConverter::getFacialRegionWeight(int target_idx, int source_idx)
 
 // Apply curve-aware smoothing to improve landmark conversion accuracy
 std::vector<FaceLandmark> LandmarkConverter::applyCurveSmoothing(const std::vector<FaceLandmark>& landmarks,
-                                                                 const std::vector<std::pair<int, int>>& curve_segments)
+                                                                 const std::vector<std::pair<int, int>>& curveSegments)
 {
     std::vector<FaceLandmark> smoothed = landmarks;
 
-    for (const auto& segment : curve_segments)
+    for (const auto& segment : curveSegments)
     {
-        int start_idx = segment.first;
-        int end_idx = segment.second;
+        const int startIdx = segment.first;
+        const int endIdx = segment.second;
 
-        if (start_idx >= static_cast<int>(smoothed.size()) || end_idx >= static_cast<int>(smoothed.size())
-            || start_idx >= end_idx)
+        if (startIdx >= static_cast<int>(smoothed.size()) || endIdx >= static_cast<int>(smoothed.size())
+            || startIdx >= endIdx)
         {
             continue;
         }
 
         // Apply simple smoothing within the curve segment
-        for (int i = start_idx + 1; i < end_idx; ++i)
+        for (int i = startIdx + 1; i < endIdx; ++i)
         {
             const auto& prev = smoothed[i - 1].p;
             const auto& curr = smoothed[i].p;
             const auto& next = smoothed[i + 1].p;
 
             // Weighted average smoothing
-            double weight = 0.7; // Current point weight
-            double neighbor_weight = (1.0 - weight) / 2.0;
+            const double weight = 0.7; // Current point weight
+            const double neighborWeight = (1.0 - weight) / 2.0;
 
-            math_utils::Point3D smoothed_point(curr.x * weight + (prev.x + next.x) * neighbor_weight,
-                                               curr.y * weight + (prev.y + next.y) * neighbor_weight,
-                                               curr.z * weight + (prev.z + next.z) * neighbor_weight);
+            const math_utils::Point3D smoothedPoint(curr.x * weight + (prev.x + next.x) * neighborWeight,
+                                                    curr.y * weight + (prev.y + next.y) * neighborWeight,
+                                                    curr.z * weight + (prev.z + next.z) * neighborWeight);
 
-            smoothed[i].p = smoothed_point;
+            smoothed[i].p = smoothedPoint;
         }
     }
 

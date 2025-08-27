@@ -200,7 +200,7 @@ TEST_F(ImageRenderGLTest, RenderSingleImageLayer)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "test_image";
     imageLayer.img = testImage;
     imageLayer.x = 50.0f;
@@ -220,7 +220,7 @@ TEST_F(ImageRenderGLTest, RenderSingleGifLayer)
     ASSERT_TRUE(renderer->initialize());
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "test_gif";
     gifLayer.gif = testGif;
     gifLayer.gifFrameIndex = 0;
@@ -242,7 +242,7 @@ TEST_F(ImageRenderGLTest, RenderMultipleLayers)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "image";
     imageLayer.img = testImage;
     imageLayer.x = 0.0f;
@@ -251,7 +251,7 @@ TEST_F(ImageRenderGLTest, RenderMultipleLayers)
     imageLayer.dirty = true;
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "gif";
     gifLayer.gif = testGif;
     gifLayer.x = 200.0f;
@@ -272,7 +272,7 @@ TEST_F(ImageRenderGLTest, LayerCaching)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "cached_image";
     imageLayer.img = testImage;
     imageLayer.x = 0.0f;
@@ -297,7 +297,7 @@ TEST_F(ImageRenderGLTest, LayerCacheInvalidation)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "invalidated_image";
     imageLayer.img = testImage;
     imageLayer.x = 0.0f;
@@ -324,7 +324,7 @@ TEST_F(ImageRenderGLTest, DifferentWindowSizes)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "test_image";
     imageLayer.img = testImage;
     imageLayer.x = 10.0f;
@@ -357,7 +357,7 @@ TEST_F(ImageRenderGLTest, NullImageLayer)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "null_image";
     imageLayer.img = nullptr; // Null image
     imageLayer.id = 1;
@@ -373,7 +373,7 @@ TEST_F(ImageRenderGLTest, NullGifLayer)
     ASSERT_TRUE(renderer->initialize());
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "null_gif";
     gifLayer.gif = nullptr; // Null gif
     gifLayer.id = 1;
@@ -392,7 +392,7 @@ TEST_F(ImageRenderGLTest, EmptyGifLayer)
     // Don't add any frames
 
     Layer gifLayer;
-    gifLayer.type = LayerType::Gif;
+    gifLayer.type = LayerType::GIF;
     gifLayer.name = "empty_gif";
     gifLayer.gif = emptyGif;
     gifLayer.id = 1;
@@ -415,7 +415,7 @@ TEST_F(ImageRenderGLTest, TextureCleanup)
     for (int i = 0; i < 5; ++i)
     {
         Layer layer;
-        layer.type = LayerType::Image;
+    layer.type = LayerType::IMAGE;
         layer.name = "image_" + std::to_string(i);
         layer.img = testImage; // Share the same test image
         layer.x = static_cast<float>(i * 50);
@@ -439,7 +439,7 @@ TEST_F(ImageRenderGLTest, RenderWithoutInitialization)
     auto uninitializedRenderer = std::make_unique<ImageRenderGL>();
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "test";
     imageLayer.img = testImage;
     imageLayer.id = 1;
@@ -455,7 +455,7 @@ TEST_F(ImageRenderGLTest, ZeroSizeWindow)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "test";
     imageLayer.img = testImage;
     imageLayer.id = 1;
@@ -474,7 +474,7 @@ TEST_F(ImageRenderGLTest, LayerPositioning)
     ASSERT_TRUE(renderer->initialize());
 
     Layer imageLayer;
-    imageLayer.type = LayerType::Image;
+    imageLayer.type = LayerType::IMAGE;
     imageLayer.name = "positioned_image";
     imageLayer.img = testImage;
     imageLayer.id = 1;
@@ -499,4 +499,68 @@ TEST_F(ImageRenderGLTest, LayerPositioning)
         EXPECT_NO_THROW(renderer->renderLayers(layers, 800, 600))
             << "Failed to render at position (" << pos.first << ", " << pos.second << ")";
     }
+}
+
+// Ensure buffers are refreshed on window resize (to avoid distorted overlays)
+TEST_F(ImageRenderGLTest, BuffersRefreshOnWindowResize)
+{
+    ASSERT_TRUE(renderer->initialize());
+
+    // Prepare an image layer with fixed bounds
+    Layer imageLayer;
+    imageLayer.type = LayerType::IMAGE;
+    imageLayer.name = "resize_test_image";
+    imageLayer.img = testImage;
+    imageLayer.x = 20.0f;
+    imageLayer.y = 30.0f;
+    imageLayer.id = 101;
+    imageLayer.dirty = true;
+    // Enable name overlay to exercise text overlay path as well
+    imageLayer.textOverlay.enabled = true;
+    imageLayer.name = "Layer 101";
+
+    std::vector<Layer> layers = {imageLayer};
+
+    // Initial render at baseline size
+    int w1 = 800, h1 = 600;
+    EXPECT_NO_THROW(renderer->renderLayers(layers, w1, h1));
+
+        // Query public render info instead of touching internals
+        ImageRenderGL::RenderInfo infoBefore{};
+        ASSERT_TRUE(renderer->getRenderInfoForLayer(layers[0].id, infoBefore));
+
+        std::string overlayNameKey = "name_" + std::to_string(layers[0].id);
+        size_t overlayHash = std::hash<std::string>{}(overlayNameKey);
+        std::string overlayCacheKey = std::to_string(overlayHash);
+        ImageRenderGL::RenderInfo overlayInfoBefore{};
+        ASSERT_TRUE(renderer->getRenderInfoForKey(overlayCacheKey, overlayInfoBefore));
+
+        // Render again with the same size: generation should not change
+        EXPECT_NO_THROW(renderer->renderLayers(layers, w1, h1));
+        ImageRenderGL::RenderInfo infoSame{};
+        ASSERT_TRUE(renderer->getRenderInfoForLayer(layers[0].id, infoSame));
+        EXPECT_EQ(infoBefore.bufferGeneration, infoSame.bufferGeneration);
+        EXPECT_EQ(infoSame.lastWindowWidth, w1);
+        EXPECT_EQ(infoSame.lastWindowHeight, h1);
+
+        ImageRenderGL::RenderInfo overlayInfoSame{};
+        ASSERT_TRUE(renderer->getRenderInfoForKey(overlayCacheKey, overlayInfoSame));
+        EXPECT_EQ(overlayInfoBefore.bufferGeneration, overlayInfoSame.bufferGeneration);
+        EXPECT_EQ(overlayInfoSame.lastWindowWidth, w1);
+        EXPECT_EQ(overlayInfoSame.lastWindowHeight, h1);
+
+        // Now resize the window; bounds and image are unchanged, but buffers must refresh
+        int w2 = 1024, h2 = 768;
+        EXPECT_NO_THROW(renderer->renderLayers(layers, w2, h2));
+        ImageRenderGL::RenderInfo infoAfter{};
+        ASSERT_TRUE(renderer->getRenderInfoForLayer(layers[0].id, infoAfter));
+        EXPECT_GT(infoAfter.bufferGeneration, infoBefore.bufferGeneration);
+        EXPECT_EQ(infoAfter.lastWindowWidth, w2);
+        EXPECT_EQ(infoAfter.lastWindowHeight, h2);
+
+        ImageRenderGL::RenderInfo overlayInfoAfter{};
+        ASSERT_TRUE(renderer->getRenderInfoForKey(overlayCacheKey, overlayInfoAfter));
+        EXPECT_GT(overlayInfoAfter.bufferGeneration, overlayInfoBefore.bufferGeneration);
+        EXPECT_EQ(overlayInfoAfter.lastWindowWidth, w2);
+        EXPECT_EQ(overlayInfoAfter.lastWindowHeight, h2);
 }

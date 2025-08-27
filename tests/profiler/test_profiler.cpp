@@ -125,41 +125,41 @@ TEST_F(ProfilerTest, GetDurationsSorted)
 
 TEST_F(ProfilerTest, FormatDurationMicroseconds)
 {
-    std::string result = Profiler::format_duration(static_cast<int64_t>(500));
+    std::string result = Profiler::formatDuration(static_cast<int64_t>(500));
     EXPECT_NE(result.find("µs"), std::string::npos);
 }
 
 TEST_F(ProfilerTest, FormatDurationMilliseconds)
 {
-    std::string result = Profiler::format_duration(static_cast<int64_t>(5000)); // 5ms
+    std::string result = Profiler::formatDuration(static_cast<int64_t>(5000)); // 5ms
     EXPECT_NE(result.find("ms"), std::string::npos);
     EXPECT_NE(result.find("Hz"), std::string::npos);
 }
 
 TEST_F(ProfilerTest, FormatDurationSeconds)
 {
-    std::string result = Profiler::format_duration(static_cast<int64_t>(2000000)); // 2s
+    std::string result = Profiler::formatDuration(static_cast<int64_t>(2000000)); // 2s
     EXPECT_NE(result.find("s"), std::string::npos);
     EXPECT_NE(result.find("Hz"), std::string::npos);
 }
 
 TEST_F(ProfilerTest, FormatDurationMinutes)
 {
-    std::string result = Profiler::format_duration(static_cast<int64_t>(120000000)); // 2 minutes
+    std::string result = Profiler::formatDuration(static_cast<int64_t>(120000000)); // 2 minutes
     EXPECT_NE(result.find("min"), std::string::npos);
     EXPECT_NE(result.find("Hz"), std::string::npos);
 }
 
 TEST_F(ProfilerTest, FormatDurationInvalid)
 {
-    std::string result = Profiler::format_duration(static_cast<int64_t>(-1));
+    std::string result = Profiler::formatDuration(static_cast<int64_t>(-1));
     EXPECT_NE(result.find("Invalid"), std::string::npos);
 }
 
 TEST_F(ProfilerTest, FormatDurationChrono)
 {
     auto duration = std::chrono::microseconds(1500);
-    std::string result = Profiler::format_duration(duration);
+    std::string result = Profiler::formatDuration(duration);
     EXPECT_NE(result.find("ms"), std::string::npos);
 }
 
@@ -169,7 +169,7 @@ TEST_F(ProfilerTest, FormatDurationTimePoints)
     std::this_thread::sleep_for(std::chrono::microseconds(100));
     auto end = std::chrono::high_resolution_clock::now();
 
-    std::string result = Profiler::format_duration(start, end);
+    std::string result = Profiler::formatDuration(start, end);
     EXPECT_FALSE(result.empty());
     // Should contain some time unit
     bool has_time_unit = (result.find("µs") != std::string::npos) || (result.find("ms") != std::string::npos)
