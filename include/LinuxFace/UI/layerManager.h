@@ -3,6 +3,7 @@
 
 #include "imgui.h"
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -34,8 +35,6 @@ struct Layer
 
     // Unique identifier for this layer instance
     size_t id = 0;
-    // TODO(arroyo): this is not thead safe.
-    static size_t nextId;
 
     // Camera-specific fields
     std::string cameraDevicePath; // Empty for non-camera layers
@@ -263,9 +262,14 @@ struct Layer
                     int boundingWidth = 0, // auto-size
                     int boundingHeight = 0 // auto-size
     );
+
+    // Thread-safe ID generator
+    static size_t getNextId()
+    {
+        static std::atomic<size_t> nextId{0};
+        return nextId.fetch_add(1, std::memory_order_relaxed);
+    }
 };
-// Initialize static member
-inline size_t Layer::nextId = 0;
 
 class LayerManager
 {

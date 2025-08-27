@@ -604,8 +604,7 @@ struct Normalizer<T, NormalizationType::MINMAX>
         }
         else
         {
-            return static_cast<T>(normalized
-                                      * (NormalizationTraits<T>::maxValue() - NormalizationTraits<T>::minValue())
+            return static_cast<T>(normalized * (NormalizationTraits<T>::maxValue() - NormalizationTraits<T>::minValue())
                                   + NormalizationTraits<T>::minValue());
         }
     }
@@ -691,8 +690,42 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                     const double fracY = srcY - y1;
 
                     // Bilinear interpolation for each channel
-                    for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
+                    for (unsigned char ch = 0; ch < dst.pixelBytes; ch++)
                     {
+                        // Determine source channel
+                        unsigned char srcCh = ch;
+                        if (srcCh >= src.pixelBytes)
+                        {
+                            if (ch == 3 && dst.pixelBytes == 4 && src.pixelBytes < 4)
+                            {
+                                // Alpha channel for RGBA output when source has no alpha
+                                const double alphaValue = 255.0;
+                                K scaledValue;
+                                if constexpr (std::is_floating_point_v<K>)
+                                {
+                                    scaledValue = static_cast<K>(alphaValue);
+                                }
+                                else
+                                {
+                                    const auto minVal = static_cast<double>(NormalizationTraits<K>::minValue());
+                                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
+                                    scaledValue = static_cast<K>(std::clamp(alphaValue + 0.5, minVal, maxVal));
+                                }
+                                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                                dst.data[dstIdx] = scaledValue;
+                                if (needsStats)
+                                {
+                                    stats.update(scaledValue);
+                                }
+                                continue;
+                            }
+                            else
+                            {
+                                // Duplicate last available channel (e.g., grayscale to RGB)
+                                srcCh = src.pixelBytes - 1;
+                            }
+                        }
+
                         // Handle boundary conditions with clamping
                         const int clampedX1 = std::clamp(x1, 0, static_cast<int>(src.width - 1));
                         const int clampedY1 = std::clamp(y1, 0, static_cast<int>(src.height - 1));
@@ -700,10 +733,10 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                         const int clampedY2 = std::clamp(y2, 0, static_cast<int>(src.height - 1));
 
                         // Get pixel values with proper boundary handling
-                        const unsigned long idx1 = (clampedY1 * src.width + clampedX1) * src.pixelBytes + ch;
-                        const unsigned long idx2 = (clampedY1 * src.width + clampedX2) * src.pixelBytes + ch;
-                        const unsigned long idx3 = (clampedY2 * src.width + clampedX1) * src.pixelBytes + ch;
-                        const unsigned long idx4 = (clampedY2 * src.width + clampedX2) * src.pixelBytes + ch;
+                        const unsigned long idx1 = (clampedY1 * src.width + clampedX1) * src.pixelBytes + srcCh;
+                        const unsigned long idx2 = (clampedY1 * src.width + clampedX2) * src.pixelBytes + srcCh;
+                        const unsigned long idx3 = (clampedY2 * src.width + clampedX1) * src.pixelBytes + srcCh;
+                        const unsigned long idx4 = (clampedY2 * src.width + clampedX2) * src.pixelBytes + srcCh;
 
                         const auto p1 = static_cast<double>(src.data[idx1]);
                         const auto p2 = static_cast<double>(src.data[idx2]);
@@ -729,7 +762,7 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                         }
                         // Calculate destination index based on output layout
                         const size_t dstIdx =
-                            calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                            calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
 
                         dst.data[dstIdx] = scaledValue;
 
@@ -750,7 +783,7 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
         stats.finalize();
         Normalizer<K, normalizationType> normalizer;
 
-        const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
+        const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
         {
             dst.data[i] = normalizer(dst.data[i], stats);
@@ -799,8 +832,42 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
             const int clampedMaxY = std::min(maxY, static_cast<int>(src.height));
 
             // Average pixels in the source region
-            for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
+            for (unsigned char ch = 0; ch < dst.pixelBytes; ch++)
             {
+                // Determine source channel
+                unsigned char srcCh = ch;
+                if (srcCh >= src.pixelBytes)
+                {
+                    if (ch == 3 && dst.pixelBytes == 4 && src.pixelBytes < 4)
+                    {
+                        // Alpha channel for RGBA output when source has no alpha
+                        const double alphaValue = 255.0;
+                        K scaledValue;
+                        if constexpr (std::is_floating_point_v<K>)
+                        {
+                            scaledValue = static_cast<K>(alphaValue);
+                        }
+                        else
+                        {
+                            const auto minVal = static_cast<double>(NormalizationTraits<K>::minValue());
+                            const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
+                            scaledValue = static_cast<K>(std::clamp(alphaValue + 0.5, minVal, maxVal));
+                        }
+                        const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                        dst.data[dstIdx] = scaledValue;
+                        if (needsStats)
+                        {
+                            stats.update(scaledValue);
+                        }
+                        continue;
+                    }
+                    else
+                    {
+                        // Duplicate last available channel (e.g., grayscale to RGB)
+                        srcCh = src.pixelBytes - 1;
+                    }
+                }
+
                 double sum = 0.0;
                 double totalWeight = 0.0;
 
@@ -825,7 +892,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
                         {
                             const double weight = (overlapX2 - overlapX1) * (overlapY2 - overlapY1);
 
-                            const unsigned long srcIdx = (sy * src.width + sx) * src.pixelBytes + ch;
+                            const unsigned long srcIdx = (sy * src.width + sx) * src.pixelBytes + srcCh;
                             sum += static_cast<double>(src.data[srcIdx]) * weight;
                             totalWeight += weight;
                         }
@@ -847,7 +914,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
                     scaledValue = static_cast<K>(std::clamp(result + 0.5, minVal, maxVal));
                 }
                 // Calculate destination index based on output layout
-                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                 dst.data[dstIdx] = scaledValue;
 
                 // Collect statistics if needed
@@ -864,7 +931,7 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
         stats.finalize();
         Normalizer<K, normalizationType> normalizer;
 
-        const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
+        const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
         {
             dst.data[i] = normalizer(dst.data[i], stats);
@@ -994,7 +1061,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
     }
 
     // Temporary buffer for horizontal pass (using double for precision)
-    std::vector<double> tempBuffer(dst.width * src.height * src.pixelBytes);
+    std::vector<double> tempBuffer(dst.width * src.height * dst.pixelBytes);
 
     // Horizontal pass - process each row
     for (unsigned long y = 0; y < src.height; y++)
@@ -1003,17 +1070,36 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
         {
             const auto& contrib = horizContribs[x];
 
-            for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
+            for (unsigned char ch = 0; ch < dst.pixelBytes; ch++)
             {
+                // Determine source channel
+                unsigned char srcCh = ch;
+                if (srcCh >= src.pixelBytes)
+                {
+                    if (ch == 3 && dst.pixelBytes == 4 && src.pixelBytes < 4)
+                    {
+                        // Alpha channel for RGBA output when source has no alpha
+                        const double alphaValue = 255.0;
+                        const unsigned long tempIdx = (y * dst.width + x) * dst.pixelBytes + ch;
+                        tempBuffer[tempIdx] = alphaValue;
+                        continue;
+                    }
+                    else
+                    {
+                        // Duplicate last available channel (e.g., grayscale to RGB)
+                        srcCh = src.pixelBytes - 1;
+                    }
+                }
+
                 double sum = 0.0;
 
                 for (int i = contrib.startIdx; i <= contrib.endIdx; i++)
                 {
-                    const unsigned long srcIdx = (y * src.width + i) * src.pixelBytes + ch;
+                    const unsigned long srcIdx = (y * src.width + i) * src.pixelBytes + srcCh;
                     sum += static_cast<double>(src.data[srcIdx]) * contrib.weights[i - contrib.startIdx];
                 }
 
-                const unsigned long tempIdx = (y * dst.width + x) * src.pixelBytes + ch;
+                const unsigned long tempIdx = (y * dst.width + x) * dst.pixelBytes + ch;
                 tempBuffer[tempIdx] = sum;
             }
         }
@@ -1026,13 +1112,13 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
 
         for (unsigned long x = 0; x < dst.width; x++)
         {
-            for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
+            for (unsigned char ch = 0; ch < dst.pixelBytes; ch++)
             {
                 double sum = 0.0;
 
                 for (int i = contrib.startIdx; i <= contrib.endIdx; i++)
                 {
-                    const unsigned long tempIdx = (i * dst.width + x) * src.pixelBytes + ch;
+                    const unsigned long tempIdx = (i * dst.width + x) * dst.pixelBytes + ch;
                     sum += tempBuffer[tempIdx] * contrib.weights[i - contrib.startIdx];
                 }
 
@@ -1050,7 +1136,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
                 }
 
                 // Calculate destination index based on output layout
-                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                 dst.data[dstIdx] = scaledValue;
             }
         }
@@ -1081,7 +1167,7 @@ void lanczosScaling(const ImageView<T>& src, ImageView<K>& dst)
     else if constexpr (normalizationType == NormalizationType::ZERO_CENTER)
     {
         common::logWarn("NON TESTED: Applying zero-centering normalization");
-        const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
+        const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
         ImageStats<K> stats;
 
         // Calculate mean
@@ -1123,8 +1209,28 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
                 const unsigned long srcStartX = x * xStep;
                 const unsigned long srcStartY = y * yStep;
 
-                for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
+                for (unsigned char ch = 0; ch < dst.pixelBytes; ch++)
                 {
+                    // Determine source channel
+                    unsigned char srcCh = ch;
+                    if (srcCh >= src.pixelBytes)
+                    {
+                        if (ch == 3 && dst.pixelBytes == 4 && src.pixelBytes < 4)
+                        {
+                            // Alpha channel for RGBA output when source has no alpha
+                            const K alphaValue = 255;
+                            const size_t dstIdx =
+                                calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                            dst.data[dstIdx] = alphaValue;
+                            continue;
+                        }
+                        else
+                        {
+                            // Duplicate last available channel (e.g., grayscale to RGB)
+                            srcCh = src.pixelBytes - 1;
+                        }
+                    }
+
                     int sum = 0;
 
                     for (int dy = 0; dy < yStep; dy++)
@@ -1132,13 +1238,13 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
                         for (int dx = 0; dx < xStep; dx++)
                         {
                             const unsigned long srcIdx =
-                                ((srcStartY + dy) * src.width + (srcStartX + dx)) * src.pixelBytes + ch;
+                                ((srcStartY + dy) * src.width + (srcStartX + dx)) * src.pixelBytes + srcCh;
                             sum += static_cast<int>(src.data[srcIdx]);
                         }
                     }
                     // Calculate destination index based on output layout
                     const size_t dstIdx =
-                        calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                        calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                     dst.data[dstIdx] = static_cast<K>(sum / totalSamples);
                 }
             }
@@ -1161,8 +1267,28 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
                 const int maxX = std::min(static_cast<int>(std::ceil(srcX2)), static_cast<int>(src.width));
                 const int maxY = std::min(static_cast<int>(std::ceil(srcY2)), static_cast<int>(src.height));
 
-                for (unsigned char ch = 0; ch < src.pixelBytes; ch++)
+                for (unsigned char ch = 0; ch < dst.pixelBytes; ch++)
                 {
+                    // Determine source channel
+                    unsigned char srcCh = ch;
+                    if (srcCh >= src.pixelBytes)
+                    {
+                        if (ch == 3 && dst.pixelBytes == 4 && src.pixelBytes < 4)
+                        {
+                            // Alpha channel for RGBA output when source has no alpha
+                            const K alphaValue = 255;
+                            const size_t dstIdx =
+                                calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                            dst.data[dstIdx] = alphaValue;
+                            continue;
+                        }
+                        else
+                        {
+                            // Duplicate last available channel (e.g., grayscale to RGB)
+                            srcCh = src.pixelBytes - 1;
+                        }
+                    }
+
                     double sum = 0.0;
                     int count = 0;
 
@@ -1170,7 +1296,7 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
                     {
                         for (int sx = minX; sx < maxX; sx++)
                         {
-                            const unsigned long srcIdx = (sy * src.width + sx) * src.pixelBytes + ch;
+                            const unsigned long srcIdx = (sy * src.width + sx) * src.pixelBytes + srcCh;
                             sum += static_cast<double>(src.data[srcIdx]);
                             count++;
                         }
@@ -1178,7 +1304,7 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
 
                     // Calculate destination index based on output layout
                     const size_t dstIdx =
-                        calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                        calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                     dst.data[dstIdx] = static_cast<K>(count > 0 ? sum / count : 0);
                 }
             }
@@ -1227,7 +1353,7 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
             const double fracX = srcX - xInt;
             const double fracY = srcY - yInt;
 
-            for (unsigned char ch = 0; ch < src.pixelBytes; ++ch)
+            for (unsigned char ch = 0; ch < dst.pixelBytes; ++ch)
             {
                 double col[4];
                 for (int m = -1; m <= 2; ++m)
@@ -1237,7 +1363,24 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
                     {
                         const int px = std::clamp(xInt + n, 0, static_cast<int>(src.width) - 1);
                         const int py = std::clamp(yInt + m, 0, static_cast<int>(src.height) - 1);
-                        row[n + 1] = static_cast<double>(src.data[(py * src.width + px) * src.pixelBytes + ch]);
+
+                        // Determine source channel
+                        unsigned char srcCh = ch;
+                        if (srcCh >= src.pixelBytes)
+                        {
+                            if (ch == 3 && dst.pixelBytes == 4 && src.pixelBytes < 4)
+                            {
+                                // Alpha channel for RGBA output when source has no alpha
+                                row[n + 1] = 255.0;
+                                continue;
+                            }
+                            else
+                            {
+                                // Duplicate last available channel (e.g., grayscale to RGB)
+                                srcCh = src.pixelBytes - 1;
+                            }
+                        }
+                        row[n + 1] = static_cast<double>(src.data[(py * src.width + px) * src.pixelBytes + srcCh]);
                     }
                     col[m + 1] = cubicHermite(row[0], row[1], row[2], row[3], fracX);
                 }
@@ -1255,7 +1398,7 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
                     scaledValue = static_cast<K>(std::clamp(value + 0.5, minVal, maxVal));
                 }
                 // Calculate destination index based on output layout
-                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, src.pixelBytes);
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                 dst.data[dstIdx] = scaledValue;
 
                 if (needsStats)
@@ -1271,7 +1414,7 @@ void bicubicScaling(const ImageView<T>& src, ImageView<K>& dst)
     {
         stats.finalize();
         const Normalizer<K, normalizationType> normalizer;
-        const size_t totalPixels = dst.width * dst.height * src.pixelBytes;
+        const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
         {
             dst.data[i] = normalizer(dst.data[i], stats);

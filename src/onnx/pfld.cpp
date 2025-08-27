@@ -17,22 +17,37 @@ PFLDDetector::PFLDDetector(const std::string& onnxModelPath) : OnnxDetector(onnx
         ready_ = false;
         common::logError("PFLDDetector: Invalid model or input dims");
         common::logError("Problem is %s, input dims: %s",
-                          output_node_names_str_.empty() ? "no outputs" : "invalid outputs",
-                          input_node_dims.empty() ? "empty" : "not empty");
+                         output_node_names_str_.empty() ? "no outputs" : "invalid outputs",
+                         input_node_dims.empty() ? "empty" : "not empty");
     }
 }
 
 Ort::Value PFLDDetector::transform(const std::unique_ptr<Image>& image)
 {
+    if (!image || image->info.width == 0 || image->info.height == 0 || !image->data())
+    {
+        common::logError("PFLDDetector::transform - Invalid input image");
+        throw std::runtime_error("Invalid input image for PFLD transform");
+    }
+
     const int targetHeight = static_cast<int>(input_node_dims.at(2));
     const int targetWidth = static_cast<int>(input_node_dims.at(3));
+
+    if (targetHeight != 112 || targetWidth != 112)
+    {
+        common::logError("PFLDDetector::transform - Unexpected target dimensions: %dx%d", targetWidth, targetHeight);
+        throw std::runtime_error("Unexpected target dimensions for PFLD model");
+    }
+
     Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
     auto* tensorData = inputTensor.GetTensorMutableData<float>();
 
-    // // Use a member TensorPadding to store the transform for landmark mapping
-    // pfld_padding_ = TensorPadding::scrfd();
-    // image->toTensor(tensor_data, pfld_padding_, target_width, target_height, NormalizationType::MINMAX);
+    if (!tensorData)
+    {
+        common::logError("PFLDDetector::transform - Failed to create tensor data");
+        throw std::runtime_error("Failed to create tensor data");
+    }
 
     // Convert image to tensor
     const image_utils::ImageView<unsigned char> srcView{image->data(), image->info.width, image->info.height,
@@ -50,6 +65,12 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
 
     auto leftEye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::LEYE);
     auto rightEye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::REYE);
+
+    if (leftEye.x < 0 || leftEye.y < 0 || rightEye.x < 0 || rightEye.y < 0)
+    {
+        common::logError("PFLDDetector::detect - Missing or invalid eye landmarks for face alignment");
+        return;
+    }
 
     const math_utils::Point<double> eyeCenter = {(leftEye.x + rightEye.x) / 2.0, (leftEye.y + rightEye.y) / 2.0};
 
@@ -124,9 +145,10 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     alignedFace = alignedFace->crop(cropRect);
     if (!alignedFace)
     {
-        common::logError("Failed to crop aligned face image for MediaPipe landmarks detection");
+        common::logError("Failed to crop aligned face image for PFLD landmarks detection");
         return;
     }
+
     // 4. Run PFLD on aligned face
     const Ort::Value inputTensor = this->transform(alignedFace);
 
@@ -149,6 +171,21 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     }
     const Ort::Value& landmarksTensor = outputTensors.at(outputIndex); // (1, 212)
     const auto* data = landmarksTensor.GetTensorData<float>();
+
+    if (!data)
+    {
+        common::logError("PFLDDetector: No tensor data received");
+        return;
+    }
+
+    // Verify tensor shape
+    const auto& tensorShape = landmarksTensor.GetTensorTypeAndShapeInfo().GetShape();
+    if (tensorShape.size() != 2 || tensorShape[0] != 1 || tensorShape[1] != 212)
+    {
+        common::logError("PFLDDetector: Unexpected tensor shape: [%d, %d]", tensorShape[0], tensorShape[1]);
+        return;
+    }
+
     const unsigned int numLandmarks = 106;
     face.loadNewFaceLandmarks({});
 
@@ -157,11 +194,17 @@ void PFLDDetector::detect(const std::unique_ptr<Image>& image, Face& face)
     std::vector<math_utils::Point<double>> alignedPts(numLandmarks);
     for (unsigned int i = 0; i < numLandmarks; ++i)
     {
-        const double x = data[2 * i] * 112.0;
-        const double y = data[2 * i + 1] * 112.0;
-    auto pt = alignedToOriginalCoords(x, y, cropLeft, cropTop, minX, minY, angleRad, eyeCenter, scale);
-    alignedPts[i].x = pt.x;
-    alignedPts[i].y = pt.y;
+        const unsigned int index = 2 * i;
+        if (index + 1 >= 212)
+        {
+            common::logError("PFLDDetector: Landmark index out of bounds: %u", index);
+            return;
+        }
+        const double x = data[index] * 112.0;
+        const double y = data[index + 1] * 112.0;
+        auto pt = alignedToOriginalCoords(x, y, cropLeft, cropTop, minX, minY, angleRad, eyeCenter, scale);
+        alignedPts[i].x = pt.x;
+        alignedPts[i].y = pt.y;
     }
 
     std::vector<FaceLandmark> pfldLandmarks;
@@ -247,7 +290,8 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
     for (unsigned int i = 0; i < numLandmarks; ++i)
     {
         // Convert Point to Point3D (z=0)
-        pfldLandmarks.push_back(FaceLandmark{i, math_utils::Point3D(unalignedPts[i].first, unalignedPts[i].second, 0.0)});
+        pfldLandmarks.push_back(
+            FaceLandmark{i, math_utils::Point3D(unalignedPts[i].first, unalignedPts[i].second, 0.0)});
     }
     face.loadNewFaceLandmarks(pfldLandmarks);
     Profiler::getInstance().stop("PFLDDetector", "detect landmarks");

@@ -150,7 +150,7 @@ void UI::paintMainWindow()
             static bool centerText = true;
             static bool forceSingleLine = false;
             static bool useTextWrapping = false;
-            static int textWidthLimit = 200;
+            static int textWidthLimit = 400;
             static int textAlignment = 1;  // 0=LEFT, 1=CENTER, 2=RIGHT
             static int textVAlignment = 1; // 0=TOP, 1=MIDDLE, 2=BOTTOM
             static int padding = 2;
@@ -249,12 +249,13 @@ void UI::paintMainWindow()
                     if (textImage)
                     {
                         Layer newText;
-                        newText.id = Layer::nextId++;
+                        newText.id = Layer::getNextId();
                         newText.type = LayerType::TEXT;
                         newText.img = textImage;                      // Store the generated text image
                         newText.textContent = add_text_layer_buffer_; // Keep text for reference
                         newText.name = add_text_layer_buffer_;
                         newText.setPosition(100, 100);
+                        newText.textOverlay.enabled = false; // Disable overlay for text layers to avoid duplicate text
 
                         layerManager_->addLayer(newText);
                     }
@@ -364,7 +365,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                         {
                             newImage->info.textureId = 0;
                             Layer newLayer;
-                            newLayer.id = Layer::nextId++;
+                            newLayer.id = Layer::getNextId();
                             newLayer.type = LayerType::IMAGE;
                             newLayer.name = item;
                             newLayer.img = std::move(newImage);
@@ -388,7 +389,7 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                     if (origGif && !origGif->frames().empty() && layerManager_)
                     {
                         Layer newLayer;
-                        newLayer.id = Layer::nextId++;
+                        newLayer.id = Layer::getNextId();
                         newLayer.type = LayerType::GIF;
                         newLayer.name = item;
                         newLayer.gif = origGif;

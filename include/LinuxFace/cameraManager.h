@@ -48,6 +48,9 @@ class CameraManager
     void updateCameraLayer(const std::shared_ptr<InputWebcam>& camera, std::unique_ptr<Image> newFrame);
     void createOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera);
     void updateOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera, const Image& compositeImage);
+    void createOutputPreviewLayer();
+    void updateOutputPreviewLayer(const Image& compositeImage);
+    void updatePreviewVisibility();
     std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
     std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
     std::shared_ptr<LayerManager> layerManager_{nullptr};

@@ -57,6 +57,20 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
     size_t mediaCount{0u};
 
     namespace fs = std::filesystem;
+
+    // Check if the folder exists and is actually a directory
+    if (!fs::exists(folderPath))
+    {
+        linuxface::common::logError("Media folder does not exist: %s", folderPath.c_str());
+        return 0;
+    }
+
+    if (!fs::is_directory(folderPath))
+    {
+        linuxface::common::logError("Path is not a directory: %s", folderPath.c_str());
+        return 0;
+    }
+
     for (const auto& entry : fs::directory_iterator(folderPath))
     {
     if (this->stopLoading_)

@@ -555,13 +555,13 @@ TEST_F(LayerManagerTest, LayerGetFormat)
 TEST_F(LayerManagerTest, LayerUniqueIds)
 {
     Layer layer1;
-    layer1.id = Layer::nextId++;
+    layer1.id = Layer::getNextId();
 
     Layer layer2;
-    layer2.id = Layer::nextId++;
+    layer2.id = Layer::getNextId();
 
     Layer layer3;
-    layer3.id = Layer::nextId++;
+    layer3.id = Layer::getNextId();
 
     EXPECT_NE(layer1.id, layer2.id);
     EXPECT_NE(layer2.id, layer3.id);

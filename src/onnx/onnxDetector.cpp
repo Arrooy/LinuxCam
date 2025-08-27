@@ -145,7 +145,7 @@ bool OnnxDetector::readModelInputSize()
     for (const auto& name : names)
     {
         input_node_names_str_.push_back(name);
-        // common::logInfo("OnnxDetector::readModelInputSize - input name: %s", name.c_str());
+        common::logInfo("OnnxDetector::readModelInputSize - input name: %s", name.c_str());
     }
 
     common::logInfo("OnnxDetector::readModelInputSize - batch_size_ = %d, channels_ = %d, width_ = %d, height_ = %d",
@@ -174,12 +174,10 @@ bool OnnxDetector::readModelInputSize()
     for (const auto& name : input_node_names_str_)
     {
         input_node_names_.push_back(name.c_str());
-        // common::logInfo("FSANet: input_tensor: %s", name.c_str());
     }
     for (const auto& name : output_node_names_str_)
     {
         output_node_names_.push_back(name.c_str());
-        // common::logInfo("FSANet: output_tensor: %s", name.c_str());
     }
     return true;
 }

@@ -464,9 +464,9 @@ Image& Image::pasteAt(const Image& other, long x, long y, bool expandCanvas)
 void Image::toTensor(float* outputData, TensorPadding& padding, int newWidth, int newHeight,
                      NormalizationType normType) const
 {
-    if (!isColorImage() || info.pixelSizeBytes != 3)
+    if (!isColorImage() || (info.pixelSizeBytes != 3 && info.pixelSizeBytes != 4))
     {
-        common::logError("Image::toTensor - Expected RGB format, got format: %s with pixel size: %d",
+        common::logError("Image::toTensor - Expected RGB or RGBA format, got format: %s with pixel size: %d",
                          fromImageFormatToString(info.format).c_str(), info.pixelSizeBytes);
         return;
     }
@@ -479,6 +479,7 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int newWidth, in
 
     const int origW = info.width;
     const int origH = info.height;
+    const int bytesPerPixel = info.pixelSizeBytes;
 
     // Step 1: Compute scale ratio (preserve aspect ratio)
     const float r = std::min(static_cast<float>(newWidth) / origW, static_cast<float>(newHeight) / origH);
@@ -557,7 +558,7 @@ void Image::toTensor(float* outputData, TensorPadding& padding, int newWidth, in
                 srcW = origW - 1;
             }
 
-            const int srcIdx = (srcH * origW + srcW) * 3; // RGB interleaved
+            const int srcIdx = (srcH * origW + srcW) * bytesPerPixel; // RGB or RGBA interleaved
 
             // Bounds check for source data
             if (srcIdx + 2 >= static_cast<int>(size_))
@@ -1459,7 +1460,7 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
             // Bounds check before calculating indices
             if (srcRow < 0 || srcRow >= static_cast<long>(src.info.height) || srcCol < 0
                 || srcCol >= static_cast<long>(src.info.width) || dstRow < 0
-                || dstRow >= static_cast<long>(canvasHeight) || dstCol < 0 || dstCol >= static_cast<long>(canvasWidth))
+                || dstRow >= static_cast<long>(info.height) || dstCol < 0 || dstCol >= static_cast<long>(info.width))
             {
                 continue;
             }
@@ -1467,7 +1468,7 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
             const size_t srcIdx =
                 (static_cast<size_t>(srcRow) * src.info.width + static_cast<size_t>(srcCol)) * srcPixelSize;
             const size_t dstIdx =
-                (static_cast<size_t>(dstRow) * canvasWidth + static_cast<size_t>(dstCol)) * dstPixelSize;
+                (static_cast<size_t>(dstRow) * info.width + static_cast<size_t>(dstCol)) * dstPixelSize;
 
             // Bounds check for buffer access
             if (srcIdx + srcPixelSize > src.size() || dstIdx + dstPixelSize > size_)

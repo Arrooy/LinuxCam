@@ -1,7 +1,10 @@
 #include "LinuxFace/application.h"
 
+#include <algorithm>
+#include <climits>
 #include <csignal>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 #include "LinuxFace/Image/image_utils.h"
@@ -68,7 +71,7 @@ Application::Application()
 }
 
 // Helper to connect window resize to layerManager
-    void Application::connectWindowResize()
+void Application::connectWindowResize()
 {
     if (!layerManager_)
     {
@@ -103,7 +106,7 @@ bool Application::initialize()
     layerManager_ = std::make_shared<LayerManager>();
 
     // Connect window resize to layerManager texture invalidation
-        this->connectWindowResize();
+    this->connectWindowResize();
 
     // Initialize UI with LayerManager
     ui_ = std::make_unique<UI>(layerManager_);
@@ -241,6 +244,38 @@ bool Application::initialize()
     const std::string pfldModel = modelsFolder + "pfld-106-v3.onnx";
     pfldDetector_ = std::make_shared<PFLDDetector>(pfldModel);
 
+
+    // auto image =
+    // ImageLoader::loadImageFromFile("/home/arroyo/Documents/Projectes/LinuxCam/experimental/pfld_106_face_landmarks/2.jpg");
+    // if (!image)
+    // {
+    //     linuxface::common::logError("Failed to load image at initialization");
+    // }
+
+    // std::vector<Face> scrfdFaces;
+    // if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
+    // {
+    //     scrfdFaces = scrfdDetector_->detect(image);
+    //     int i = 0;
+    //     for (const auto& face : scrfdFaces)
+    //     {
+    //         // face.paintBoundingBox(image, Pixel(200, 200, 200));
+    //         // face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
+    //         auto crop = image->crop(face.getBoundingBox().rect);
+    //         crop->saveToDisk("Crop_" + std::to_string(i++) + ".ppm");
+    //     }
+    // }
+
+    // if (pfldDetector_ != nullptr && pfldDetector_->isReady() && scrfdFaces.size() >= 1)
+    // {
+    //     auto input_face = scrfdFaces[0];
+    //     pfldDetector_->detect(image, input_face);
+    //     input_face.paintAllFaceLandmarks(image, false, Pixel(200, 0, 200), 1.0f);
+    //     image->saveToDisk("result_linuxface.ppm");
+    // }else{
+    //     linuxface::common::logError("PFLD not ready or no faces detected");
+    // }
+
     linuxface::common::logInfo("Application initialized successfully");
     return true;
 }
@@ -252,7 +287,11 @@ void Application::run()
     // Main loop
     while (!window_.shouldClose() && !gShouldExit)
     {
-    // Main loop body is handled by run(), update(), and render() below
+        if (update())
+        {
+            render();
+            // break; // For testing purposes, remove this line in production
+        }
     }
 
     cameraManager_->shutdown();
@@ -267,56 +306,53 @@ bool Application::update()
     window_.pollEvents();
 
     // Update camera inputs - this now creates/updates individual layers per camera
-    cameraManager_->updateInput();
+    if (!cameraManager_->updateInput())
+    {
+        return false;
+    }
 
     // Composite all layers for output (if we have output cameras)
     auto& layers = layerManager_->getLayers();
-    if (!layers.empty())
+    if (layers.empty())
     {
-        // Get window/viewport size for composite
-        int windowWidth = 0;
-        int windowHeight = 0;
-        window_.getFramebufferSize(windowWidth, windowHeight);
-
-        if (windowWidth > 0 && windowHeight > 0)
-        {
-            // Create window-sized composite image with transparent background
-            const Pixel transparentPixel{0, 0, 0, 0};
-            auto compositeImage = std::make_unique<Image>(transparentPixel, static_cast<unsigned int>(windowWidth),
-                                                          static_cast<unsigned int>(windowHeight));
-
-            // Set image info
-            compositeImage->info.width = static_cast<unsigned int>(windowWidth);
-            compositeImage->info.height = static_cast<unsigned int>(windowHeight);
-            compositeImage->info.format = ImageFormat::RGBA;
-
-            // Composite all layers onto the window-sized canvas
-            for (auto& layer : layers)
-            {
-                // Skip output camera overlays from the composite sent to output
-                if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
-                {
-                    continue;
-                }
-
-                if (layer.type == LayerType::IMAGE && layer.img)
-                {
-                    compositeImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
-                }
-                else if (layer.type == LayerType::GIF && layer.gif && !layer.gif->frames().empty())
-                {
-                    auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-                    compositeImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
-                }
-            }
-
-            // Send composite to output cameras with cropping
-            if (!cameraManager_->updateOutput(compositeImage))
-            {
-                linuxface::common::logError("Failed to update output cameras");
-            }
-        }
+        return false;
     }
+
+    // Get window/viewport size for composite
+    int windowWidth = 0;
+    int windowHeight = 0;
+    window_.getFramebufferSize(windowWidth, windowHeight);
+
+    if (windowWidth <= 0 || windowHeight <= 0)
+    {
+        common::logInfo("Window FrameBuffer size is invalid. W,H - %d %d", windowWidth, windowHeight);
+        return false;
+    }
+
+    float minX, minY, maxX, maxY;
+    calculateCompositeBounds(layers, windowWidth, windowHeight, minX, minY, maxX, maxY);
+    unsigned int compositeWidth = (minX < maxX) ? static_cast<unsigned int>(maxX - minX) : windowWidth;
+    unsigned int compositeHeight = (minY < maxY) ? static_cast<unsigned int>(maxY - minY) : windowHeight;
+    compositeWidth = std::min(compositeWidth, static_cast<unsigned int>(windowWidth));
+    compositeHeight = std::min(compositeHeight, static_cast<unsigned int>(windowHeight));
+
+    std::unique_ptr<Image> compositeImage;
+    bool compositeValid = createCompositeImage(compositeImage, layers, minX, minY, compositeWidth, compositeHeight);
+
+    if (!compositeValid)
+    {
+        common::logInfo("Composite image is not valid.");
+        return false;
+    }
+
+    // Send composite to output cameras with cropping
+    if (!cameraManager_->updateOutput(compositeImage))
+    {
+        linuxface::common::logError("Failed to update output cameras");
+    }
+
+    process(compositeImage);
+
     ui_->handleKeyboard();
     ui_->newFrame();
     ui_->paint();
@@ -325,12 +361,27 @@ bool Application::update()
 
 void Application::render()
 {
-    // TODO(arroyo): Implement render logic here
+    // Set viewport
+    window_.setViewport();
+
+    // Clear screen
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Render all layers
+    int width = 0;
+    int height = 0;
+    window_.getFramebufferSize(width, height);
+    imageRender_->renderLayers(layerManager_->getLayers(), width, height);
+
+    // Render UI
+    ui_->render();
+
+    // Swap buffers
+    window_.swapBuffers();
 }
 
-    // Render body is handled by the non-static member function below
-
-void Application::process(std::unique_ptr<Image>& image /*image*/)
+void Application::process(std::unique_ptr<Image>& image)
 {
     auto raw = image->deepCopy();
 
@@ -350,6 +401,32 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
             face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
         }
     }
+
+
+    if (pfldDetector_ != nullptr && pfldDetector_->isReady() && scrfdFaces.size() >= 1)
+    {
+        auto input_face = scrfdFaces[0];
+        pfldDetector_->detect(image, input_face);
+        input_face.paintAllFaceLandmarks(image, false, Pixel(200, 0, 200), 2.0f);
+    }
+    else
+    {
+        linuxface::common::logError("PFLD not ready or no faces detected");
+    }
+
+
+    // if (modnetDetector_ && modnetDetector_->isReady())
+    // {
+    //     std::unique_ptr<Image> matting = image->deepCopy();
+    //     modnetDetector_->detect(image, matting);
+    //     matting->info.x = image->info.width;
+    //     matting->info.y = 0;
+    //     image->paste(*matting, true);
+    // }
+
+    // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
+    // {
+    //     FaceBoundingBox bbx = scrfd_faces[0].getBoundingBox();
 
     // Dlib landmark detection using dlib face
     // if (dlibShapeDetector_ && !dlib_faces.empty())
@@ -437,7 +514,17 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //     }
     // }
 
+    // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
+    // {
+    //     auto face = scrfd_faces[0];
 
+    //     auto left_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::LEYE);
+    //     auto right_eye = face.getLandmarkByIndex(SCRFDetector::LandmarkIndex::REYE);
+
+    //     math_utils::Point<double> eye_center = {(left_eye.x + right_eye.x) / 2.0, (left_eye.y + right_eye.y) / 2.0};
+    //     double bbox_scale_factor = 1.5; // Scale factor for bounding box size
+    //     double dx = right_eye.x - left_eye.x;
+    //     double dy = right_eye.y - left_eye.y;
     //     double angleRad = -std::atan2(dy, dx); // rotate to horizontal
     //     double eye_dist = std::sqrt(dx * dx + dy * dy);
 
@@ -652,4 +739,98 @@ alignedToOriginalCoords(double xAligned, double yAligned, double cropLeft, doubl
     const double yOrig = sinA * xRel + cosA * yRel + eyeCenter.y;
 
     return {xOrig, yOrig};
+}
+
+void Application::calculateCompositeBounds(const std::vector<Layer>& layers, int windowWidth, int windowHeight,
+                                           float& minX, float& minY, float& maxX, float& maxY)
+{
+    minX = std::numeric_limits<float>::max();
+    minY = std::numeric_limits<float>::max();
+    maxX = std::numeric_limits<float>::min();
+    maxY = std::numeric_limits<float>::min();
+
+    for (const auto& layer : layers)
+    {
+        // Skip output camera overlays from the composite sent to output
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
+        {
+            continue;
+        }
+        // Skip preview output layers
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.find("preview") != std::string::npos)
+        {
+            continue;
+        }
+
+        float layerMinX = layer.x;
+        float layerMinY = layer.y;
+        float layerMaxX = layer.x;
+        float layerMaxY = layer.y;
+
+        if (layer.type == LayerType::IMAGE && layer.img)
+        {
+            layerMaxX += static_cast<float>(layer.img->info.width);
+            layerMaxY += static_cast<float>(layer.img->info.height);
+        }
+        else if (layer.type == LayerType::GIF && layer.gif && !layer.gif->frames().empty())
+        {
+            auto& frame = layer.gif->frames()[0]; // Use first frame for bounds calculation
+            layerMaxX += static_cast<float>(frame->info.width);
+            layerMaxY += static_cast<float>(frame->info.height);
+        }
+
+        minX = std::min(minX, layerMinX);
+        minY = std::min(minY, layerMinY);
+        maxX = std::max(maxX, layerMaxX);
+        maxY = std::max(maxY, layerMaxY);
+    }
+
+    // If no valid layers, use window size
+    if (minX == std::numeric_limits<float>::max())
+    {
+        minX = 0.0f;
+        minY = 0.0f;
+        maxX = static_cast<float>(windowWidth);
+        maxY = static_cast<float>(windowHeight);
+    }
+}
+
+bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, const std::vector<Layer>& layers,
+                                       float minX, float minY, unsigned int compositeWidth,
+                                       unsigned int compositeHeight)
+{
+    bool compositeValid{false};
+    const Pixel transparentPixel{0, 0, 0, 0};
+    compositeImage = std::make_unique<Image>(transparentPixel, compositeWidth, compositeHeight);
+
+    // Composite all layers onto the canvas
+    for (const auto& layer : layers)
+    {
+        // Skip output camera overlays from the composite sent to output
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
+        {
+            continue;
+        }
+
+        // Skip preview output layers
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.find("preview") != std::string::npos)
+        {
+            continue;
+        }
+
+        if (layer.type == LayerType::IMAGE && layer.img)
+        {
+            compositeImage->pasteAt(*layer.img, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
+                                    false);
+            compositeValid = true;
+        }
+        else if (layer.type == LayerType::GIF && layer.gif && !layer.gif->frames().empty())
+        {
+            auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
+            compositeImage->pasteAt(*frame, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
+                                    false);
+            compositeValid = true;
+        }
+    }
+    return compositeValid;
 }
