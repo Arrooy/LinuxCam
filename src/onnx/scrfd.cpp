@@ -16,7 +16,7 @@ SCRFDetector::SCRFDetector(const std::string& onnxModelPath) : OnnxDetector(onnx
     }
     else
     {
-    generatePoints();
+        generatePoints();
     }
 }
 
@@ -102,12 +102,12 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
         }
 
         // level 8 & 16 & 32 with kps
-        generateBboxesKpsSingleStride(score8, bbox8, kps8, 8, ScoreThreshold, image->info.width,
-                                     image->info.height, faces);
-        generateBboxesKpsSingleStride(score16, bbox16, kps16, 16, ScoreThreshold, image->info.width,
-                                     image->info.height, faces);
-        generateBboxesKpsSingleStride(score32, bbox32, kps32, 32, ScoreThreshold, image->info.width,
-                                     image->info.height, faces);
+        generateBboxesKpsSingleStride(score8, bbox8, kps8, 8, ScoreThreshold, image->info.width, image->info.height,
+                                      faces);
+        generateBboxesKpsSingleStride(score16, bbox16, kps16, 16, ScoreThreshold, image->info.width, image->info.height,
+                                      faces);
+        generateBboxesKpsSingleStride(score32, bbox32, kps32, 32, ScoreThreshold, image->info.width, image->info.height,
+                                      faces);
 
         // Apply NMS to all collected faces
         Profiler::getInstance().start("SCRFD", "NMS");
@@ -153,7 +153,7 @@ void SCRFDetector::applyNMS(std::vector<Face>& faces) const
             faces[writeIdx] = faces[i];
         }
 
-    const auto& currentRect = faces[writeIdx].getBoundingBox().rect;
+        const auto& currentRect = faces[writeIdx].getBoundingBox().rect;
 
         // Early termination if confidence too low
         if (faces[writeIdx].getBoundingBox().score < 0.02f)

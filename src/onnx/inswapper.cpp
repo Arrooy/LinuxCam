@@ -7,8 +7,11 @@ using namespace linuxface;
 
 InSwapper::InSwapper(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath)
 {
-    // You can add model-specific checks or logging here if needed
-    ready_ = true;
+    if (input_node_dims.size() != 4)
+    {
+        common::logError("InSwapper only support 4D input");
+        ready_ = false;
+    }
 }
 
 Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
@@ -37,6 +40,19 @@ bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<m
     Profiler::getInstance().start("InSwapper", "Swap");
     if (!ready_)
     {
+        return false;
+    }
+
+    // Check for valid input parameters
+    if (srcEmbedding.empty() || srcEmbedding.size() != 512)
+    {
+        common::logError(("InSwapper: Invalid embedding size. Expected 512, got " + std::to_string(srcEmbedding.size())).c_str());
+        return false;
+    }
+
+    if (dstLandmarks.size() != 5)
+    {
+        common::logError(("InSwapper: Invalid landmark count. Expected 5, got " + std::to_string(dstLandmarks.size())).c_str());
         return false;
     }
 
