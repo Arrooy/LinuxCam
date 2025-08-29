@@ -17,9 +17,7 @@ using namespace linuxface;
 // | `#version 400+` | 4.0+   | Geometry shaders, tessellation, more precision   |
 // | `#version 450`  | 4.5    | Modern, powerful (ubiquitous with newer drivers) |
 
-Window::Window() : window_(nullptr), glslVersion_("#version 400")
-{
-}
+Window::Window() = default;
 
 Window::~Window()
 {
@@ -27,7 +25,7 @@ Window::~Window()
 }
 
 // Callback for framebuffer resize
-static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+static void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
     // Retrieve the pointer to the Window instance
     auto* win = static_cast<Window*>(glfwGetWindowUserPointer(window));
@@ -44,7 +42,7 @@ bool Window::initialize()
 
     if (glfwInit() == 0)
     {
-        linuxface::common::log_error("Failed to initialize GLFW");
+        linuxface::common::logError("Failed to initialize GLFW");
         return false;
     }
 
@@ -59,13 +57,13 @@ bool Window::initialize()
     int width = 0;
     int height = 0;
     Config::getInstance().getWindowSize(width, height);
-    std::string title = Config::getInstance().getWindowTitle();
+    const std::string title = Config::getInstance().getWindowTitle();
 
     // Create window with graphics context
     window_ = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     if (window_ == nullptr)
     {
-        linuxface::common::log_error("Failed to create GLFW window");
+        linuxface::common::logError("Failed to create GLFW window");
         glfwTerminate();
         return false;
     }
@@ -76,12 +74,12 @@ bool Window::initialize()
     // Set user pointer for callbacks
     glfwSetWindowUserPointer(window_, this);
     // Set framebuffer resize callback
-    glfwSetFramebufferSizeCallback(window_, framebuffer_size_callback);
+    glfwSetFramebufferSizeCallback(window_, framebufferSizeCallback);
 
     // Initialize GLAD
     if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) == 0)
     {
-        linuxface::common::log_error("Failed to initialize GLAD");
+        linuxface::common::logError("Failed to initialize GLAD");
         return false;
     }
 
@@ -90,7 +88,7 @@ bool Window::initialize()
     // images[0] = load_icon(media_path + "icon.png");
     // glfwSetWindowIcon(window_, 1, images);
 
-    linuxface::common::log_info("GLFW Window initialized successfully. Size %d x %d", width, height);
+    linuxface::common::logInfo("GLFW Window initialized successfully. Size %d x %d", width, height);
     return true;
 }
 
@@ -158,7 +156,7 @@ void Window::updateResizeEvents()
             now = testTime;
         }
         // If enough time has passed since the last callback, fire the callback (debounce)
-        if (now - lastResizeCallbackTime_ > RESIZE_DEBOUNCE_DELAY)
+        if (now - lastResizeCallbackTime_ > ResizeDebounceDelay)
         {
             resizeCallback_(lastResizeWidth_, lastResizeHeight_);
             lastResizeCallbackTime_ = now;
@@ -198,13 +196,13 @@ void Window::setViewport() const
 
 void Window::errorCallback(int error, const char* description)
 {
-    linuxface::common::log_error("GLFW Error %d: %s", error, description);
+    linuxface::common::logError("GLFW Error %d: %s", error, description);
 }
 
 // Allow setting a callback for resize events
-void Window::setResizeCallback(std::function<void(int, int)> cb)
+void Window::setResizeCallback(const std::function<void(int, int)>& cb)
 {
-    resizeCallback_ = std::move(cb);
+    resizeCallback_ = cb;
 }
 
 bool Window::isKeyPressed(int key) const

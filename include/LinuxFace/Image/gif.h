@@ -21,6 +21,12 @@ class Gif
     explicit Gif(const std::string& filename);
     ~Gif();
 
+    // Rule of five
+    Gif(const Gif&) = delete;
+    Gif& operator=(const Gif&) = delete;
+    Gif(Gif&&) noexcept = default;
+    Gif& operator=(Gif&&) noexcept = default;
+
     bool isOpen() const;
 
     // Loads and stores all frames as Image objects
@@ -32,13 +38,13 @@ class Gif
     bool hasNext() const;
     std::unique_ptr<Image>& next();
 
-    inline void move(long x, long y)
+    void setPosition(long x, long y)
     {
         x_ = x;
         y_ = y;
     }
-    inline std::string getFilename() const { return filename_; }
-    inline size_t getSize() const { return size_; }
+    std::string getFilename() const { return filename_; }
+    size_t getSize() const { return size_; }
   private:
     gd_GIF* gif_ = nullptr;
     std::vector<std::unique_ptr<Image>> frameImages_;

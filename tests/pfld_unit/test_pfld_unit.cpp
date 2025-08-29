@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <fstream>
+#include <iostream>
 #include <opencv2/opencv.hpp>
 #include <onnxruntime_cxx_api.h>
 #include "config.hpp"
@@ -19,16 +21,26 @@ class PFLDUnitTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Load test configuration - only use test config, not root config
-        std::string config_paths[] = {
-            "tests/wflw_integration/test_config.yaml",
-            "../tests/wflw_integration/test_config.yaml"
-        };
-        
+        std::vector<std::string> config_paths = {"../config.yaml", "config.yaml",
+                                                 "../tests/wflw_integration/test_config.yaml"};
         bool config_loaded = false;
-        for (const auto& config_path : config_paths) {
-            if (Config::getInstance().reloadFromFile(config_path.c_str())) {
-                config_loaded = Config::getInstance().loadConfiguration();
-                if (config_loaded) break;
+
+        for (const auto& config_path : config_paths)
+        {
+            if (std::ifstream(config_path).good())
+            {
+                // Force reload config from specific path
+                bool reloaded = Config::getInstance().reloadFromFile(config_path.c_str());
+                if (reloaded)
+                {
+                    // Parse the loaded configuration
+                    config_loaded = Config::getInstance().loadConfiguration();
+                }
+                if (config_loaded)
+                {
+                    std::cout << "Loaded test configuration from: " << config_path << std::endl;
+                    break;
+                }
             }
         }
         ASSERT_TRUE(config_loaded) << "Could not find test_config.yaml in expected test paths";

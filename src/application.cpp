@@ -1,7 +1,10 @@
 #include "LinuxFace/application.h"
 
+#include <algorithm>
+#include <climits>
 #include <csignal>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 #include "LinuxFace/Image/image_utils.h"
@@ -37,22 +40,20 @@ using linuxface::UI;
 // https://drive.usercontent.google.com/download?id=1krOLgjW2tAPaqV-Bw4YALz0xT5zlb5HF&export=download&authuser=0 PLEASE
 // VERIFY Checksum md5sum ./inswapper_128.onnx a3a155b90354160350efd66fed6b3d80  ./inswapper_128.onnx
 
-std::atomic<bool> g_should_exit{false};
-
+std::atomic<bool> gShouldExit{false};
 
 linuxface::math_utils::Point<double>
-AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x,
-                        double min_y, double angle_rad, const linuxface::math_utils::Point<double>& eye_center);
+alignedToOriginalCoords(double xAligned, double yAligned, double cropLeft, double cropTop, double minX, double minY,
+                        double angleRad, const linuxface::math_utils::Point<double>& eyeCenter);
 
-void SignalHandler(int signal)
+void signalHandler(int signal)
 {
     if (signal == SIGINT)
     {
-        linuxface::common::log_warn("Received SIGINT, exiting...");
-        g_should_exit = true;
+        linuxface::common::logWarn("Received SIGINT, exiting...");
+        gShouldExit = true;
     }
 }
-
 
 Application::Application()
     : ui_(nullptr)
@@ -93,25 +94,25 @@ Application::~Application()
 
 bool Application::initialize()
 {
-    std::signal(SIGINT, SignalHandler);
+    std::signal(SIGINT, signalHandler);
 
     // Initialize window
     if (!window_.initialize())
     {
-        linuxface::common::log_error("Failed to initialize window");
+        linuxface::common::logError("Failed to initialize window");
         return false;
     }
 
     layerManager_ = std::make_shared<LayerManager>();
 
     // Connect window resize to layerManager texture invalidation
-    connectWindowResize();
+    this->connectWindowResize();
 
     // Initialize UI with LayerManager
     ui_ = std::make_unique<UI>(layerManager_);
     if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
     {
-        linuxface::common::log_error("Failed to initialize UI");
+        linuxface::common::logError("Failed to initialize UI");
         return false;
     }
 
@@ -140,76 +141,76 @@ bool Application::initialize()
         }
         if (!webcam->setupDevice())
         {
-            linuxface::common::log_error("Failed to setup webcam: %s", wc.name.c_str());
+            linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
             continue;
         }
 
         if (!webcam->start())
         {
-            linuxface::common::log_error("Failed to start webcam: %s", wc.name.c_str());
+            linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
             continue;
         }
         webcam->setCurrentlySelected(true);
-        if (!cameraManager_->addCamera(std::move(webcam)))
+        if (!cameraManager_->addCamera(webcam))
         {
-            linuxface::common::log_error("Failed to add webcam: %s", wc.name.c_str());
+            linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
             continue;
         }
     }
 
-    auto available_device_paths = cameraManager_->discoverAvailableVideoDevices();
-    for (const auto& device_path : available_device_paths)
+    auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
+    for (const auto& devicePath : availableDevicePaths)
     {
-        std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", device_path, 0, 0, 2);
+        std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
         if (!webcam->setupDevice())
         {
-            linuxface::common::log_error("Failed to setup webcam: %s", device_path.c_str());
+            linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
             continue;
         }
         if (!cameraManager_->addCamera(std::move(webcam)))
         {
-            linuxface::common::log_error("Failed to add webcam: %s", device_path.c_str());
+            linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
             return false;
         }
     }
 
     // Just here for benchmarking.
     // faceDetector_ = std::make_unique<DlibFaceDetector>();
-    std::string models_folder = Config::getInstance().getModelFolderPath();
+    const std::string modelsFolder = Config::getInstance().getModelFolderPath();
 
     // DlibShapeDetector initialization (landmarks)
-    std::string dlib_shape_model = models_folder + "shape_predictor_68_face_landmarks.dat";
+    const std::string dlibShapeModel = modelsFolder + "shape_predictor_68_face_landmarks.dat";
     // dlibShapeDetector_ = std::make_unique<DlibShapeDetector>(dlib_shape_model);
 
-    std::string var_onnx_path = models_folder + "fsanet-var.onnx";
+    const std::string varOnnxPath = modelsFolder + "fsanet-var.onnx";
     // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
-    std::string conv_onnx_path = models_folder + "fsanet-1x1.onnx";
+    const std::string convOnnxPath = modelsFolder + "fsanet-1x1.onnx";
     // fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
 
-    std::string scrfd_10g_bnkps_path = models_folder + "scrfd_10g_bnkps_shape640x640.onnx";
+    const std::string scrfd10gBnkpsPath = modelsFolder + "scrfd_10g_bnkps_shape640x640.onnx";
 
     // 1ms time inference
-    std::string scrfd_500m_bnkps_path = models_folder + "scrfd_500m_bnkps_shape640x640.onnx";
-    scrfdDetector_ = std::make_shared<SCRFDetector>(scrfd_500m_bnkps_path);
+    const std::string scrfd500mBnkpsPath = modelsFolder + "scrfd_500m_bnkps_shape640x640.onnx";
+    scrfdDetector_ = std::make_shared<SCRFDetector>(scrfd500mBnkpsPath);
 
-    std::string modnet_onnx_path = models_folder + "modnet.onnx";
+    const std::string modnetOnnxPath = modelsFolder + "modnet.onnx";
     // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
-    std::string rvm_model = models_folder + "rvm_mobilenetv3_fp32.onnx";
-    rvmDetector_ = std::make_unique<RobustVideoMatting>(rvm_model);
+    const std::string rvmModel = modelsFolder + "rvm_mobilenetv3_fp32.onnx";
+    rvmDetector_ = std::make_unique<RobustVideoMatting>(rvmModel);
 
 
     // ArcFace recognizer initialization
-    std::string arcface_model = models_folder + "arcface_w600k_r50.onnx";
-    arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcface_model);
+    const std::string arcfaceModel = modelsFolder + "arcface_w600k_r50.onnx";
+    arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcfaceModel);
 
     // InSwapper initialization
-    std::string inswapper_model = models_folder + "inswapper_128.onnx";
-    inswapper_ = std::make_shared<InSwapper>(inswapper_model);
+    const std::string inswapperModel = modelsFolder + "inswapper_128.onnx";
+    inswapper_ = std::make_shared<InSwapper>(inswapperModel);
 
     // MediaPipe Face Landmarks initialization
-    std::string mediapipe_landmarks_model = models_folder + "MediaPipeFaceLandmarkDetector.onnx";
+    const std::string mediapipeLandmarksModel = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
     // std::string mediapipe_landmarks_model = models_folder + "face_landmark_barracuda.onnx";
     // mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipe_landmarks_model);
 
@@ -218,13 +219,13 @@ bool Application::initialize()
     // Pass pointer instead of reference
     ui_->connect(cameraManager_);
 
-    linuxface::common::log_info("OpenGL version: %s", glGetString(GL_VERSION));
+    linuxface::common::logInfo("OpenGL version: %s", glGetString(GL_VERSION));
 
     // Initialize image renderer
     imageRender_ = std::make_shared<ImageRenderGL>();
     if (!imageRender_ || !imageRender_->initialize())
     {
-        linuxface::common::log_error("Failed to initialize image renderer");
+        linuxface::common::logError("Failed to initialize image renderer");
         return false;
     }
 
@@ -232,27 +233,59 @@ bool Application::initialize()
     ui_->connect(mediaManager_);
 
     // Load target faceswap image once
-    std::string target_path = Config::getInstance().getMediaFolderPath() + "../testing.jpeg";
-    target_img_ = ImageLoader::loadImageFromFile(target_path);
+    const std::string targetPath = Config::getInstance().getMediaFolderPath() + "../testing.jpeg";
+    target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
-        linuxface::common::log_error("Failed to load image at initialization");
+        linuxface::common::logError("Failed to load image at initialization");
     }
 
     // PFLD Landmarks initialization
-    std::string pfld_model = models_folder + "pfld-106-v3.onnx";
-    pfldDetector_ = std::make_shared<PFLDDetector>(pfld_model);
+    const std::string pfldModel = modelsFolder + "pfld-106-v3.onnx";
+    pfldDetector_ = std::make_shared<PFLDDetector>(pfldModel);
 
-    linuxface::common::log_info("Application initialized successfully");
+
+    // auto image =
+    // ImageLoader::loadImageFromFile("/home/arroyo/Documents/Projectes/LinuxCam/experimental/pfld_106_face_landmarks/2.jpg");
+    // if (!image)
+    // {
+    //     linuxface::common::logError("Failed to load image at initialization");
+    // }
+
+    // std::vector<Face> scrfdFaces;
+    // if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
+    // {
+    //     scrfdFaces = scrfdDetector_->detect(image);
+    //     int i = 0;
+    //     for (const auto& face : scrfdFaces)
+    //     {
+    //         // face.paintBoundingBox(image, Pixel(200, 200, 200));
+    //         // face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
+    //         auto crop = image->crop(face.getBoundingBox().rect);
+    //         crop->saveToDisk("Crop_" + std::to_string(i++) + ".ppm");
+    //     }
+    // }
+
+    // if (pfldDetector_ != nullptr && pfldDetector_->isReady() && scrfdFaces.size() >= 1)
+    // {
+    //     auto input_face = scrfdFaces[0];
+    //     pfldDetector_->detect(image, input_face);
+    //     input_face.paintAllFaceLandmarks(image, false, Pixel(200, 0, 200), 1.0f);
+    //     image->saveToDisk("result_linuxface.ppm");
+    // }else{
+    //     linuxface::common::logError("PFLD not ready or no faces detected");
+    // }
+
+    linuxface::common::logInfo("Application initialized successfully");
     return true;
 }
 
 void Application::run()
 {
-    linuxface::common::log_info("Starting main loop...");
+    linuxface::common::logInfo("Starting main loop...");
 
     // Main loop
-    while (!window_.shouldClose() && !g_should_exit)
+    while (!window_.shouldClose() && !gShouldExit)
     {
         if (update())
         {
@@ -264,7 +297,7 @@ void Application::run()
     cameraManager_->shutdown();
     mediaManager_->shutdown();
 
-    linuxface::common::log_info("Main loop ended");
+    linuxface::common::logInfo("Main loop ended");
 }
 
 bool Application::update()
@@ -273,67 +306,58 @@ bool Application::update()
     window_.pollEvents();
 
     // Update camera inputs - this now creates/updates individual layers per camera
-    cameraManager_->updateInput();
+    if (!cameraManager_->updateInput())
+    {
+        return false;
+    }
 
     // Composite all layers for output (if we have output cameras)
     auto& layers = layerManager_->getLayers();
-    if (!layers.empty())
+    if (layers.empty())
     {
-        // Get window/viewport size for composite
-        int windowWidth = 0;
-        int windowHeight = 0;
-        window_.getFramebufferSize(windowWidth, windowHeight);
-        
-        if (windowWidth > 0 && windowHeight > 0)
-        {
-            // Create window-sized composite image with transparent background
-            Pixel transparentPixel{0, 0, 0, 0};
-            auto compositeImage = std::make_unique<Image>(transparentPixel, 
-                                                        static_cast<unsigned int>(windowWidth), 
-                                                        static_cast<unsigned int>(windowHeight));
-            
-            // Set image info
-            compositeImage->info.width = static_cast<unsigned int>(windowWidth);
-            compositeImage->info.height = static_cast<unsigned int>(windowHeight);
-            compositeImage->info.format = ImageFormat::RGBA;
-
-            // Composite all layers onto the window-sized canvas
-            for (auto& layer : layers)
-            {
-                // Skip output camera overlays from the composite sent to output
-                if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
-                {
-                    continue;
-                }
-                
-                if (layer.type == LayerType::Image && layer.img)
-                {
-                    compositeImage->pasteAt(*layer.img, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
-                }
-                else if (layer.type == LayerType::Gif && layer.gif && !layer.gif->frames().empty())
-                {
-                    auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-                    compositeImage->pasteAt(*frame, static_cast<long>(layer.x), static_cast<long>(layer.y), false);
-                }
-            }
-
-            // Send composite to output cameras with cropping
-            if (!cameraManager_->updateOutput(compositeImage))
-            {
-                linuxface::common::log_error("Failed to update output cameras");
-            }
-        }
+        return false;
     }
+
+    // Get window/viewport size for composite
+    int windowWidth = 0;
+    int windowHeight = 0;
+    window_.getFramebufferSize(windowWidth, windowHeight);
+
+    if (windowWidth <= 0 || windowHeight <= 0)
+    {
+        common::logInfo("Window FrameBuffer size is invalid. W,H - %d %d", windowWidth, windowHeight);
+        return false;
+    }
+
+    float minX, minY, maxX, maxY;
+    calculateCompositeBounds(layers, windowWidth, windowHeight, minX, minY, maxX, maxY);
+    unsigned int compositeWidth = (minX < maxX) ? static_cast<unsigned int>(maxX - minX) : windowWidth;
+    unsigned int compositeHeight = (minY < maxY) ? static_cast<unsigned int>(maxY - minY) : windowHeight;
+    compositeWidth = std::min(compositeWidth, static_cast<unsigned int>(windowWidth));
+    compositeHeight = std::min(compositeHeight, static_cast<unsigned int>(windowHeight));
+
+    std::unique_ptr<Image> compositeImage;
+    bool compositeValid = createCompositeImage(compositeImage, layers, minX, minY, compositeWidth, compositeHeight);
+
+    if (!compositeValid)
+    {
+        common::logInfo("Composite image is not valid.");
+        return false;
+    }
+
+    // Send composite to output cameras with cropping
+    if (!cameraManager_->updateOutput(compositeImage))
+    {
+        linuxface::common::logError("Failed to update output cameras");
+    }
+
+    process(compositeImage);
+
     ui_->handleKeyboard();
-
-    // Start new UI frame
     ui_->newFrame();
-
-    // Paint UI elements
     ui_->paint();
     return true;
 }
-
 
 void Application::render()
 {
@@ -357,39 +381,39 @@ void Application::render()
     window_.swapBuffers();
 }
 
-void Application::process(std::unique_ptr<Image>& image /*image*/)
+void Application::process(std::unique_ptr<Image>& image)
 {
     auto raw = image->deepCopy();
 
-    std::vector<Face> dlib_faces;
+    std::vector<Face> dlibFaces;
     if (faceDetector_ != nullptr)
     {
         // dlib_faces = faceDetector_->detect(image);
     }
 
-    std::vector<Face> scrfd_faces;
+    std::vector<Face> scrfdFaces;
     if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
     {
-        scrfd_faces = scrfdDetector_->detect(image);
-        for (const auto& face : scrfd_faces)
+        scrfdFaces = scrfdDetector_->detect(image);
+        for (const auto& face : scrfdFaces)
         {
             face.paintBoundingBox(image, Pixel(200, 200, 200));
             face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
         }
     }
 
-    // Dlib landmark detection using dlib face
-    // if (dlibShapeDetector_ && !dlib_faces.empty())
-    // {
-    //     std::vector<math_utils::Rect<float>> rects;
-    //     rects.push_back(dlib_faces[0].getBoundingBox().rect);
-    //     auto dlib_landmark_faces = dlibShapeDetector_->detect(image, rects);
-    //     for (const auto& face : dlib_landmark_faces)
-    //     {
-    //         face.paintBoundingBox(image, Pixel(255, 0, 0));
-    //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
-    //     }
-    // }
+
+    if (pfldDetector_ != nullptr && pfldDetector_->isReady() && scrfdFaces.size() >= 1)
+    {
+        auto input_face = scrfdFaces[0];
+        pfldDetector_->detect(image, input_face);
+        input_face.paintAllFaceLandmarks(image, false, Pixel(200, 0, 200), 2.0f);
+    }
+    else
+    {
+        linuxface::common::logError("PFLD not ready or no faces detected");
+    }
+
 
     // if (modnetDetector_ && modnetDetector_->isReady())
     // {
@@ -404,12 +428,27 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     // {
     //     FaceBoundingBox bbx = scrfd_faces[0].getBoundingBox();
 
+    // Dlib landmark detection using dlib face
+    // if (dlibShapeDetector_ && !dlib_faces.empty())
+    // {
+    //     std::vector<math_utils::Rect<float>> rects;
+    //     rects.push_back(dlib_faces[0].getBoundingBox().rect);
+    //     auto dlib_landmark_faces = dlibShapeDetector_->detect(image, rects);
+    //     for (const auto& face : dlib_landmark_faces)
+    //     {
+    //         face.paintBoundingBox(image, Pixel(255, 0, 0));
+    //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
+    //     }
+    {
+        // TODO(arroyo): Implement render logic here
+    }
+
     //     // 1. Draw five-point landmarks used for alignment on the original image
     //     auto five_pts_2d = scrfd_faces[0].getFivePointLandmarksArcFaceOrder2D();
     //     // for (size_t i = 0; i < five_pts.size(); ++i)
     //     // {
     //     //     image->ppx(five_pts[i].x, five_pts[i].y, Pixel(0, 255, 255));
-    //     //     linuxface::common::log_info("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
+    //     //     linuxface::common::logInfo("Five-point landmark %zu: (%.1f, %.1f)", i, (float) five_pts[i].x,
     //     //                      (float) five_pts[i].y);
     //     // }
 
@@ -421,7 +460,7 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
 
     //     if (!aligned_image)
     //     {
-    //         linuxface::common::log_error("Failed to wrap face image for MediaPipe landmarks detection");
+    //         linuxface::common::logError("Failed to wrap face image for MediaPipe landmarks detection");
     //         return;
     //     }
     //     auto test = aligned_image->deepCopy();
@@ -436,7 +475,7 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //         double invM[6];
     //         if (!math_utils::invert_affine(affine.data(), invM))
     //         {
-    //             linuxface::common::log_error("Failed to invert affine for MediaPipe unalignment");
+    //             linuxface::common::logError("Failed to invert affine for MediaPipe unalignment");
     //             return;
     //         }
 
@@ -457,7 +496,7 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //             float z = aligned_z[i];
     //             if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
     //             {
-    //                 linuxface::common::log_warn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
+    //                 linuxface::common::logWarn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
     //                 continue;
     //             }
     //             image->ppx(x, y, Pixel(0, 0, 255));
@@ -471,10 +510,9 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //     }
     //     else
     //     {
-    //         linuxface::common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+    //         linuxface::common::logWarn("MediaPipe landmarks detection score too low: %f", result.score);
     //     }
     // }
-
 
     // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
     // {
@@ -569,7 +607,7 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //     aligned_face = aligned_face->crop(crop_rect);
     //     if (!aligned_face)
     //     {
-    //         linuxface::common::log_error("Failed to crop aligned face image for MediaPipe landmarks detection");
+    //         linuxface::common::logError("Failed to crop aligned face image for MediaPipe landmarks detection");
     //         return;
     //     }
 
@@ -596,7 +634,7 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //     }
     //     else
     //     {
-    //         linuxface::common::log_warn("MediaPipe landmarks detection score too low: %f", result.score);
+    //         linuxface::common::logWarn("MediaPipe landmarks detection score too low: %f", result.score);
     //     }
     // }
 
@@ -651,7 +689,7 @@ void Application::process(std::unique_ptr<Image>& image /*image*/)
     //     if (fake_background_ && !image->isCompatible(*fake_background_))
     //     {
     //         fake_background_ = fake_background_->scale(image->info.width, image->info.height);
-    //         linuxface::common::log_info("Scaling test image to %dx%d", image->info.width, image->info.height);
+    //         linuxface::common::logInfo("Scaling test image to %dx%d", image->info.width, image->info.height);
     //     }
     //     image->changeBackgroundImage(*matting, *fake_background_);
     //     // foreground->info.x = 0;
@@ -682,23 +720,117 @@ void Application::shutdown()
 }
 
 linuxface::math_utils::Point<double>
-AlignedToOriginalCoords(double x_aligned, double y_aligned, double crop_left, double crop_top, double min_x,
-                        double min_y, double angle_rad, const linuxface::math_utils::Point<double>& eye_center)
+alignedToOriginalCoords(double xAligned, double yAligned, double cropLeft, double cropTop, double minX, double minY,
+                        double angleRad, const linuxface::math_utils::Point<double>& eyeCenter)
 {
     // Step 1: undo crop
-    double x_rotated = x_aligned + crop_left;
-    double y_rotated = y_aligned + crop_top;
+    const double xRotated = xAligned + cropLeft;
+    const double yRotated = yAligned + cropTop;
 
     // Step 2: get absolute rotated coordinates
-    double x_rel = x_rotated + min_x;
-    double y_rel = y_rotated + min_y;
+    const double xRel = xRotated + minX;
+    const double yRel = yRotated + minY;
 
     // Step 3: un-rotate around eye center
-    double cosA = std::cos(-angle_rad);
-    double sinA = std::sin(-angle_rad);
+    const double cosA = std::cos(-angleRad);
+    const double sinA = std::sin(-angleRad);
 
-    double x_orig = cosA * x_rel - sinA * y_rel + eye_center.x;
-    double y_orig = sinA * x_rel + cosA * y_rel + eye_center.y;
+    const double xOrig = cosA * xRel - sinA * yRel + eyeCenter.x;
+    const double yOrig = sinA * xRel + cosA * yRel + eyeCenter.y;
 
-    return {x_orig, y_orig};
+    return {xOrig, yOrig};
+}
+
+void Application::calculateCompositeBounds(const std::vector<Layer>& layers, int windowWidth, int windowHeight,
+                                           float& minX, float& minY, float& maxX, float& maxY)
+{
+    minX = std::numeric_limits<float>::max();
+    minY = std::numeric_limits<float>::max();
+    maxX = std::numeric_limits<float>::min();
+    maxY = std::numeric_limits<float>::min();
+
+    for (const auto& layer : layers)
+    {
+        // Skip output camera overlays from the composite sent to output
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
+        {
+            continue;
+        }
+        // Skip preview output layers
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.find("preview") != std::string::npos)
+        {
+            continue;
+        }
+
+        float layerMinX = layer.x;
+        float layerMinY = layer.y;
+        float layerMaxX = layer.x;
+        float layerMaxY = layer.y;
+
+        if (layer.type == LayerType::IMAGE && layer.img)
+        {
+            layerMaxX += static_cast<float>(layer.img->info.width);
+            layerMaxY += static_cast<float>(layer.img->info.height);
+        }
+        else if (layer.type == LayerType::GIF && layer.gif && !layer.gif->frames().empty())
+        {
+            auto& frame = layer.gif->frames()[0]; // Use first frame for bounds calculation
+            layerMaxX += static_cast<float>(frame->info.width);
+            layerMaxY += static_cast<float>(frame->info.height);
+        }
+
+        minX = std::min(minX, layerMinX);
+        minY = std::min(minY, layerMinY);
+        maxX = std::max(maxX, layerMaxX);
+        maxY = std::max(maxY, layerMaxY);
+    }
+
+    // If no valid layers, use window size
+    if (minX == std::numeric_limits<float>::max())
+    {
+        minX = 0.0f;
+        minY = 0.0f;
+        maxX = static_cast<float>(windowWidth);
+        maxY = static_cast<float>(windowHeight);
+    }
+}
+
+bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, const std::vector<Layer>& layers,
+                                       float minX, float minY, unsigned int compositeWidth,
+                                       unsigned int compositeHeight)
+{
+    bool compositeValid{false};
+    const Pixel transparentPixel{0, 0, 0, 0};
+    compositeImage = std::make_unique<Image>(transparentPixel, compositeWidth, compositeHeight);
+
+    // Composite all layers onto the canvas
+    for (const auto& layer : layers)
+    {
+        // Skip output camera overlays from the composite sent to output
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
+        {
+            continue;
+        }
+
+        // Skip preview output layers
+        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.find("preview") != std::string::npos)
+        {
+            continue;
+        }
+
+        if (layer.type == LayerType::IMAGE && layer.img)
+        {
+            compositeImage->pasteAt(*layer.img, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
+                                    false);
+            compositeValid = true;
+        }
+        else if (layer.type == LayerType::GIF && layer.gif && !layer.gif->frames().empty())
+        {
+            auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
+            compositeImage->pasteAt(*frame, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
+                                    false);
+            compositeValid = true;
+        }
+    }
+    return compositeValid;
 }

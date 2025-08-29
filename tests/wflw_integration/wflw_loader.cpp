@@ -22,7 +22,7 @@ void WFLWLoader::load_examples_from_file(const std::string& data_file_path, bool
     std::ifstream file(data_file_path);
     if (!file.is_open())
     {
-        common::log_error("Could not open data file: %s", data_file_path.c_str());
+    common::logError("Could not open data file: %s", data_file_path.c_str());
         return;
     }
 
@@ -65,19 +65,19 @@ void WFLWLoader::load_examples_from_file(const std::string& data_file_path, bool
         }
         else
         {
-            common::log_warn("Skipping invalid line: %s", line.c_str());
+            common::logWarn("Skipping invalid line: %s", line.c_str());
         }
     }
     file.close();
     
     if (load_challenging_only)
     {
-        common::log_info("Prepared %d challenging condition examples from %d total processed samples (images will be loaded on-demand)", 
+        common::logInfo("Prepared %d challenging condition examples from %d total processed samples (images will be loaded on-demand)", 
                         num_examples, total_processed);
     }
     else
     {
-        common::log_info("Prepared %d examples from %d total processed samples (images will be loaded on-demand)", 
+        common::logInfo("Prepared %d examples from %d total processed samples (images will be loaded on-demand)", 
                         num_examples, total_processed);
     }
 }
@@ -86,7 +86,7 @@ bool WFLWLoader::load_example(int index, WFLWExample& example) const
 {
     if (index < 0 || static_cast<size_t>(index) >= examples_.size())
     {
-        common::log_error("Invalid example index: %d", index);
+        common::logError("Invalid example index: %d", index);
         return false;
     }
 

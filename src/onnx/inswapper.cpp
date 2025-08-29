@@ -5,10 +5,13 @@
 
 using namespace linuxface;
 
-InSwapper::InSwapper(const std::string& onnx_model_path) : OnnxDetector(onnx_model_path)
+InSwapper::InSwapper(const std::string& onnxModelPath) : OnnxDetector(onnxModelPath)
 {
-    // You can add model-specific checks or logging here if needed
-    ready_ = true;
+    if (input_node_dims.size() != 4)
+    {
+        common::logError("InSwapper only support 4D input");
+        ready_ = false;
+    }
 }
 
 Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
@@ -16,23 +19,23 @@ Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
     // [batch, channels, height, width]
     if (input_node_dims[2] == -1 || input_node_dims[3] == -1)
     {
-        input_node_dims[0] = 1;
-        input_node_dims[1] = 3;
-        input_node_dims[2] = input_height_;
-        input_node_dims[3] = input_width_;
+    input_node_dims[0] = 1;
+    input_node_dims[1] = 3;
+    input_node_dims[2] = InputHeight;
+    input_node_dims[3] = InputWidth;
     }
-    Ort::Value input_tensor =
+    Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
-    padding_ = TensorPadding::no_padding();
+    padding_ = TensorPadding::noPadding();
 
-    float* tensor_data = input_tensor.GetTensorMutableData<float>();
-    image->toTensor(tensor_data, padding_, input_width_, input_height_, NormalizationType::MINMAX);
+    auto* tensorData = inputTensor.GetTensorMutableData<float>();
+    image->toTensor(tensorData, padding_, InputWidth, InputHeight, NormalizationType::MINMAX);
 
-    return input_tensor;
+    return inputTensor;
 }
 
-bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<math_utils::Point<>>& dst_landmarks,
-                     const Image& dst_face, Image& out_image)
+bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<math_utils::Point<>>& dstLandmarks,
+                     const Image& dstFace, Image& outImage)
 {
     Profiler::getInstance().start("InSwapper", "Swap");
     if (!ready_)
@@ -40,39 +43,51 @@ bool InSwapper::swap(const std::vector<float>& src_embedding, const std::vector<
         return false;
     }
 
-    const int target_size = input_width_;
+    // Check for valid input parameters
+    if (srcEmbedding.empty() || srcEmbedding.size() != 512)
+    {
+        common::logError(("InSwapper: Invalid embedding size. Expected 512, got " + std::to_string(srcEmbedding.size())).c_str());
+        return false;
+    }
+
+    if (dstLandmarks.size() != 5)
+    {
+        common::logError(("InSwapper: Invalid landmark count. Expected 5, got " + std::to_string(dstLandmarks.size())).c_str());
+        return false;
+    }
+
+    const int targetSize = InputWidth;
     auto [aligned, affine] =
-        image_utils::affine_face_transform(dst_face, dst_landmarks, image_utils::template_128, target_size);
+        image_utils::affineFaceTransform(dstFace, dstLandmarks, image_utils::TEMPLATE_128, targetSize);
     if (!aligned)
     {
         return false;
     }
     // 2. Prepare ONNX input tensors
-    auto dst_tensor = transform(aligned);
-    std::vector<int64_t> emb_dims = {1, 512};
-    // TODO: try using allocator instead.
-    Ort::Value src_tensor = Ort::Value::CreateTensor<float>(memory_info_, const_cast<float*>(src_embedding.data()), 512,
-                                                            emb_dims.data(), emb_dims.size());
-    std::vector<Ort::Value> input_tensors;
-    input_tensors.push_back(std::move(dst_tensor));
-    input_tensors.push_back(std::move(src_tensor));
+    auto dstTensor = transform(aligned);
+    std::vector<int64_t> embDims = {1, 512};
+    Ort::Value srcTensor = Ort::Value::CreateTensor<float>(memory_info_, const_cast<float*>(srcEmbedding.data()), 512,
+                                                           embDims.data(), embDims.size());
+    std::vector<Ort::Value> inputTensors;
+    inputTensors.push_back(std::move(dstTensor));
+    inputTensors.push_back(std::move(srcTensor));
     // 3. Run ONNX inference
-    Ort::RunOptions runOptions;
-    std::vector<const char*> input_names = {"target", "source"};
-    std::vector<const char*> output_names = {"output"};
-    auto output_tensors =
-        detector_session_->Run(runOptions, input_names.data(), input_tensors.data(), 2, output_names.data(), 1);
-    float* out_data = output_tensors[0].GetTensorMutableData<float>();
+    const Ort::RunOptions runOptions;
+    std::vector<const char*> inputNames = {"target", "source"};
+    std::vector<const char*> outputNames = {"output"};
+    auto outputTensors =
+        detector_session_->Run(runOptions, inputNames.data(), inputTensors.data(), 2, outputNames.data(), 1);
+    auto* outData = outputTensors[0].GetTensorMutableData<float>();
     // 4. Convert output tensor to Image
-    out_image.resize(input_width_ * input_height_ * 3, false);
-    out_image.info.width = input_width_;
-    out_image.info.height = input_height_;
-    out_image.info.format = ImageFormat::RGB;
-    out_image.info.pixelSizeBytes = 3;
-    TensorPadding pad = TensorPadding::no_padding();
-    out_image.fromTensor(out_data, {1, 3, input_height_, input_width_}, input_width_, input_height_, pad,
+    outImage.resize(InputWidth * InputHeight * 3, false);
+    outImage.info.width = InputWidth;
+    outImage.info.height = InputHeight;
+    outImage.info.format = ImageFormat::RGB;
+    outImage.info.pixelSizeBytes = 3;
+    const TensorPadding pad = TensorPadding::noPadding();
+    outImage.fromTensor(outData, {1, 3, InputHeight, InputWidth}, InputWidth, InputHeight, pad,
                          NormalizationType::MINMAX);
-    out_image.saveToDisk("swapped_face_raw.ppm");
+    outImage.saveToDisk("swapped_face_raw.ppm");
     Profiler::getInstance().stop("InSwapper", "Swap");
     return true;
 }

@@ -12,14 +12,14 @@ std::string Profiler::makeKey(const std::string& sourceName, const std::string& 
 
 void Profiler::start(const std::string& sourceName, const std::string& name)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     timers_[makeKey(sourceName, name)] = std::chrono::high_resolution_clock::now();
 }
 
 void Profiler::stop(const std::string& sourceName, const std::string& name)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    std::string key = makeKey(sourceName, name);
+    const std::lock_guard<std::mutex> lock(mutex_);
+    const std::string key = makeKey(sourceName, name);
     auto it = timers_.find(key);
     if (it != timers_.end())
     {
@@ -33,7 +33,7 @@ void Profiler::stop(const std::string& sourceName, const std::string& name)
 bool Profiler::duration(const std::string& sourceName, const std::string& name,
                         std::chrono::microseconds& duration) const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     auto it = durations_.find(makeKey(sourceName, name));
     if (it != durations_.end())
     {
@@ -45,21 +45,21 @@ bool Profiler::duration(const std::string& sourceName, const std::string& name,
 
 const std::unordered_map<std::string, std::chrono::microseconds>& Profiler::getDurations() const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     return durations_;
 }
 
 std::unordered_map<std::string, std::chrono::microseconds> Profiler::getDurations(const std::string& sourceName) const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     std::unordered_map<std::string, std::chrono::microseconds> result;
-    std::string prefix = sourceName + "::";
+    const std::string prefix = sourceName + "::";
 
     for (const auto& pair : durations_)
     {
         if (pair.first.size() >= prefix.size() && pair.first.substr(0, prefix.size()) == prefix)
         {
-            std::string operationName = pair.first.substr(prefix.length());
+            const std::string operationName = pair.first.substr(prefix.length());
             result[operationName] = pair.second;
         }
     }
@@ -71,7 +71,7 @@ std::unordered_map<std::string, std::chrono::microseconds> Profiler::getDuration
 std::vector<std::pair<std::string, std::chrono::microseconds>> Profiler::getDurationsSorted() const
 {
     std::vector<std::pair<std::string, std::chrono::microseconds>> result;
-    std::lock_guard<std::mutex> lock(mutex_);
+    const std::lock_guard<std::mutex> lock(mutex_);
     result.reserve(durations_.size());
     for (const auto& pair : durations_)
     {

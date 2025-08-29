@@ -1,3 +1,4 @@
+
 #ifndef DLIBDETECTORS_H
 #define DLIBDETECTORS_H
 
@@ -64,12 +65,12 @@ inline void* image_data(DlibImageWrapper& img)
 
 inline void set_image_size(DlibImageWrapper& img, long rows, long cols)
 {
-    common::log_error("DlibImageWrapper::set_image_size is not implemented!!");
+    common::logError("DlibImageWrapper::set_image_size is not implemented!!");
 }
 
 inline void swap(DlibImageWrapper& a, DlibImageWrapper& b)
 {
-    common::log_error("DlibImageWrapper::swap is not implemented!!");
+    common::logError("DlibImageWrapper::swap is not implemented!!");
 }
 
 class DlibFaceDetector : public FaceDetector
@@ -92,12 +93,12 @@ class DlibShapeDetector : public ShapeDetector
     ~DlibShapeDetector();
     // Given an image and bounding boxes, returns Face objects with landmarks
     virtual std::vector<Face>
-    detect(const std::unique_ptr<Image>& image, const std::vector<math_utils::Rect<float>>& faces_rect) override;
+    detect(const std::unique_ptr<Image>& image, std::vector<math_utils::Rect<float>>& facesRect) override;
 
   private:
     std::unique_ptr<dlib::shape_predictor> predictor_;
     std::string model_path_;
 };
-
 } // namespace linuxface
+
 #endif // DLIBDETECTORS_H

@@ -42,8 +42,11 @@ class Application
     void shutdown();
 
   private:
-    // Connect window resize to layerManager texture invalidation
     void connectWindowResize();
+    void calculateCompositeBounds(const std::vector<Layer>& layers, int windowWidth, int windowHeight, float& minX,
+                                  float& minY, float& maxX, float& maxY);
+    bool createCompositeImage(std::unique_ptr<Image>& compositeImage, const std::vector<Layer>& layers, float minX,
+                              float minY, unsigned int compositeWidth, unsigned int compositeHeight);
     Window window_;
     std::unique_ptr<UI> ui_;
 

@@ -11,7 +11,7 @@ TEST(MathUtilsTest, EstimateProcrustesSimilarity_Identity)
     double src[] = {0, 0, 1, 0};
     double dst[] = {0, 0, 1, 0};
     double M[6];
-    bool ok = math_utils::estimate_procrustes_similarity(src, dst, 2, M);
+    bool ok = math_utils::estimateProcrustesSimilarity(src, dst, 2, M);
     EXPECT_TRUE(ok);
     EXPECT_NEAR(M[0], 1, 1e-6);
     EXPECT_NEAR(M[1], 0, 1e-6);
@@ -26,6 +26,6 @@ TEST(MathUtilsTest, EstimateProcrustesSimilarity_Failure)
     double src[] = {0, 0, 0, 0};
     double dst[] = {0, 0, 0, 0};
     double M[6];
-    bool ok = math_utils::estimate_procrustes_similarity(src, dst, 2, M);
+    bool ok = math_utils::estimateProcrustesSimilarity(src, dst, 2, M);
     EXPECT_FALSE(ok);
 }

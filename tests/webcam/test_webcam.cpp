@@ -81,8 +81,8 @@ class WebcamTest : public ::testing::Test
   protected:
     void SetUp() override
     {
-        inputWebcam_ = std::make_unique<MockWebcam>("Test Input", "/dev/video0", WebcamType::PhysicalInput, 640, 480);
-        outputWebcam_ = std::make_unique<MockWebcam>("Test Output", "/dev/video10", WebcamType::VirtualOutput, 1920, 1080);
+    inputWebcam_ = std::make_unique<MockWebcam>("Test Input", "/dev/video0", WebcamType::PHYSICAL_INPUT, 640, 480);
+    outputWebcam_ = std::make_unique<MockWebcam>("Test Output", "/dev/video10", WebcamType::VIRTUAL_OUTPUT, 1920, 1080);
     }
 
     void TearDown() override {}
@@ -96,14 +96,14 @@ TEST_F(WebcamTest, WebcamConstruction)
     // Test input webcam properties
     EXPECT_EQ(inputWebcam_->getName(), "Test Input");
     EXPECT_EQ(inputWebcam_->getDevicePath(), "/dev/video0");
-    EXPECT_EQ(inputWebcam_->getType(), WebcamType::PhysicalInput);
+    EXPECT_EQ(inputWebcam_->getType(), WebcamType::PHYSICAL_INPUT);
     EXPECT_EQ(inputWebcam_->getDesiredWidth(), 640);
     EXPECT_EQ(inputWebcam_->getDesiredHeight(), 480);
     
     // Test output webcam properties
     EXPECT_EQ(outputWebcam_->getName(), "Test Output");
     EXPECT_EQ(outputWebcam_->getDevicePath(), "/dev/video10");
-    EXPECT_EQ(outputWebcam_->getType(), WebcamType::VirtualOutput);
+    EXPECT_EQ(outputWebcam_->getType(), WebcamType::VIRTUAL_OUTPUT);
     EXPECT_EQ(outputWebcam_->getDesiredWidth(), 1920);
     EXPECT_EQ(outputWebcam_->getDesiredHeight(), 1080);
 }
@@ -174,7 +174,7 @@ TEST_F(WebcamTest, WebcamSelection)
 TEST_F(WebcamTest, WebcamEncodingSettings)
 {
     // Test basic properties since encoding-specific methods are now in V4L2LoopbackWriter
-    EXPECT_EQ(outputWebcam_->getType(), WebcamType::VirtualOutput);
+    EXPECT_EQ(outputWebcam_->getType(), WebcamType::VIRTUAL_OUTPUT);
     EXPECT_FALSE(outputWebcam_->isCurrentlySelected()); // Default state
 }
 
@@ -219,11 +219,11 @@ TEST_F(WebcamTest, WebcamTypes)
     MockWebcam unknownWebcam("Unknown", "/dev/video99", WebcamType::UNKNOWN, 320, 240);
     EXPECT_EQ(unknownWebcam.getType(), WebcamType::UNKNOWN);
     
-    MockWebcam physicalWebcam("Physical", "/dev/video1", WebcamType::PhysicalInput, 640, 480);
-    EXPECT_EQ(physicalWebcam.getType(), WebcamType::PhysicalInput);
+    MockWebcam physicalWebcam("Physical", "/dev/video1", WebcamType::PHYSICAL_INPUT, 640, 480);
+    EXPECT_EQ(physicalWebcam.getType(), WebcamType::PHYSICAL_INPUT);
     
-    MockWebcam virtualWebcam("Virtual", "/dev/video20", WebcamType::VirtualOutput, 1920, 1080);
-    EXPECT_EQ(virtualWebcam.getType(), WebcamType::VirtualOutput);
+    MockWebcam virtualWebcam("Virtual", "/dev/video20", WebcamType::VIRTUAL_OUTPUT, 1920, 1080);
+    EXPECT_EQ(virtualWebcam.getType(), WebcamType::VIRTUAL_OUTPUT);
 }
 
 // Test the Buffer struct

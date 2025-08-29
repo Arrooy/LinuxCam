@@ -2,22 +2,24 @@
 
 #include "imgui.h"
 
+#include <utility>
+
 #include "LinuxFace/common.h"
 #include "LinuxFace/inputWebcam.h"
 #include "LinuxFace/v4l2loopbackWritter.h"
 #include "LinuxFace/webcam.h"
 
 using namespace linuxface;
-const char* subsampling_options[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};
+const char* subsamplingOptions[] = {"4:4:4", "4:2:2", "4:2:0", "GRAY", "4:4:0", "4:1:1"};
 
 void PaintWebcam::setWebcam(std::shared_ptr<Webcam> webcam)
 {
-    webcam_ = webcam;
+    webcam_ = std::move(webcam);
 }
 
 void PaintWebcam::setNewDeviceModalWebcam(std::shared_ptr<Webcam> webcam)
 {
-    webcam_new_device_ = webcam;
+    webcam_new_device_ = std::move(webcam);
 }
 
 std::shared_ptr<Webcam> PaintWebcam::getWebcam() const
@@ -33,14 +35,14 @@ void PaintWebcam::paintDevice()
         return;
     }
 
-    const std::string& camera_key = webcam_->getDevicePath();
+    const std::string& cameraKey = webcam_->getDevicePath();
 
     // Device Information
     if (ImGui::CollapsingHeader("Device Information"))
     {
         ImGui::Text("Name: %s", webcam_->getName().c_str());
-        ImGui::Text("Path: %s", camera_key.c_str());
-        CameraCapabilities capabilities = webcam_->getCapabilities();
+        ImGui::Text("Path: %s", cameraKey.c_str());
+        const CameraCapabilities capabilities = webcam_->getCapabilities();
         if (!capabilities.driver.empty())
         {
             ImGui::Text("Driver: %s", capabilities.driver.c_str());
@@ -52,30 +54,31 @@ void PaintWebcam::paintDevice()
     // Current Settings
     if (ImGui::CollapsingHeader("Current Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        Format usedFormat = webcam_->getSelectedFormat();
-        FrameSize selectedFrameSize = usedFormat.sizes[usedFormat.selectedFrameSize];
+        const Format usedFormat = webcam_->getSelectedFormat();
+        const FrameSize selectedFrameSize = usedFormat.sizes[usedFormat.selectedFrameSize];
         ImGui::Text("FPS: %u", selectedFrameSize.getFps(selectedFrameSize.selectedFPS));
         ImGui::Text("Resolution: %ux%u", selectedFrameSize.width, selectedFrameSize.height);
         ImGui::Text("System format description: %s", usedFormat.description.c_str());
         ImGui::Text("Pixel format %u", usedFormat.pixelformat);
         ImGui::Text("Encoding Algorithm %s", fromImageFormatToString(usedFormat.format).c_str());
-        if (webcam_->getType() == WebcamType::VirtualOutput)
+    if (webcam_->getType() == WebcamType::VIRTUAL_OUTPUT)
         {
             // Cast to V4L2LoopbackWriter to access V4L2-specific methods
             auto v4l2Writer = std::dynamic_pointer_cast<V4L2LoopbackWriter>(webcam_);
-            if (v4l2Writer) {
+            if (v4l2Writer)
+            {
                 ImGui::Text("Chrominance Subsampling: %s",
-                            subsampling_options[static_cast<int>(v4l2Writer->getChrominanceSubsampling())]);
+                            subsamplingOptions[static_cast<int>(v4l2Writer->getChrominanceSubsampling())]);
                 ImGui::Text("JPEG Quality: %d", v4l2Writer->getQuality());
             }
         }
     }
 
-    if (webcam_->getType() == WebcamType::PhysicalInput)
+    if (webcam_->getType() == WebcamType::PHYSICAL_INPUT)
     {
         paintPhysicalInput();
     }
-    else if (webcam_->getType() == WebcamType::VirtualOutput)
+    else if (webcam_->getType() == WebcamType::VIRTUAL_OUTPUT)
     {
         paintVirtualOutput();
     }
@@ -96,7 +99,7 @@ void PaintWebcam::paintDevice()
         }
     }
 
-    if (webcam_->getType() == WebcamType::PhysicalInput)
+    if (webcam_->getType() == WebcamType::PHYSICAL_INPUT)
     {
         ImGui::SameLine();
         ImGui::Separator();
@@ -111,74 +114,75 @@ void PaintWebcam::paintDevice()
 
 void PaintWebcam::paintPhysicalInput()
 {
-    const std::string& camera_key = webcam_->getDevicePath();
+    const std::string& cameraKey = webcam_->getDevicePath();
     // Show available Formats
     if (ImGui::CollapsingHeader("Available Formats", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        auto current_format = webcam_->getSelectedFormat();
-        CameraCapabilities capabilities = webcam_->getCapabilities();
-        
+        auto currentFormat = webcam_->getSelectedFormat();
+        const CameraCapabilities capabilities = webcam_->getCapabilities();
+
         // Calculate current indices from webcam state
-        int current_format_idx = -1;
+        int currentFormatIdx = -1;
         for (std::size_t i = 0; i < capabilities.formats.size(); i++)
         {
-            if (current_format.pixelformat == capabilities.formats[i].pixelformat)
+            if (currentFormat.pixelformat == capabilities.formats[i].pixelformat)
             {
-                current_format_idx = static_cast<int>(i);
+                currentFormatIdx = static_cast<int>(i);
                 break;
             }
         }
-        
-        int current_size_idx = current_format.selectedFrameSize;
-        int current_fps_idx = current_format.sizes[current_format.selectedFrameSize].selectedFPS;
 
-        for (std::size_t fmt_idx = 0; fmt_idx < capabilities.formats.size(); fmt_idx++)
+        const int currentSizeIdx = currentFormat.selectedFrameSize;
+        const int currentFpsIdx = currentFormat.sizes[currentFormat.selectedFrameSize].selectedFPS;
+
+        for (std::size_t fmtIdx = 0; fmtIdx < capabilities.formats.size(); fmtIdx++)
         {
             ImGuiTreeNodeFlags flags = 0;
             // Open treenode of the currently selected format
-            if (current_format_idx == static_cast<int>(fmt_idx))
+            if (currentFormatIdx == static_cast<int>(fmtIdx))
             {
                 flags |= ImGuiTreeNodeFlags_DefaultOpen;
             }
-            const auto& format = capabilities.formats[fmt_idx];
+            const auto& format = capabilities.formats[fmtIdx];
             if (ImGui::TreeNodeEx(("Format: " + format.description).c_str(), flags))
             {
-                for (std::size_t size_idx = 0; size_idx < format.sizes.size(); size_idx++)
+                for (std::size_t sizeIdx = 0; sizeIdx < format.sizes.size(); sizeIdx++)
                 {
                     flags = 0;
                     // Auto-expand currently active size for better visibility
-                    if (current_format_idx == static_cast<int>(fmt_idx) && current_size_idx == static_cast<int>(size_idx))
+                    if (currentFormatIdx == static_cast<int>(fmtIdx) && currentSizeIdx == static_cast<int>(sizeIdx))
                     {
                         flags |= ImGuiTreeNodeFlags_DefaultOpen;
                     }
-                    const auto& size = format.sizes[size_idx];
-                    std::string size_text = std::to_string(size.width) + "x" + std::to_string(size.height);
-                    if (ImGui::TreeNodeEx(size_text.c_str(), flags))
+                    const auto& size = format.sizes[sizeIdx];
+                    const std::string sizeText = std::to_string(size.width) + "x" + std::to_string(size.height);
+                    if (ImGui::TreeNodeEx(sizeText.c_str(), flags))
                     {
-                        for (std::size_t fps_idx = 0; fps_idx < size.fps.size(); fps_idx++)
+                        for (std::size_t fpsIdx = 0; fpsIdx < size.fps.size(); fpsIdx++)
                         {
-                            const auto& fps = size.getFps(fps_idx);
-                            // common::log_error("User selected  fps amount %d in indx %d", fps, fps_idx);
-                            bool is_current = (current_format_idx == static_cast<int>(fmt_idx)
-                                               && current_size_idx == static_cast<int>(size_idx)
-                                               && current_fps_idx == static_cast<int>(fps_idx));
+                            const auto& fps = size.getFps(fpsIdx);
+                            // common::logError("User selected  fps amount %d in indx %d", fps, fps_idx);
+                            const bool isCurrent = (currentFormatIdx == static_cast<int>(fmtIdx)
+                                                    && currentSizeIdx == static_cast<int>(sizeIdx)
+                                                    && currentFpsIdx == static_cast<int>(fpsIdx));
 
-                            ImGui::PushID(fmt_idx * 5000 + size_idx * 500 + fps_idx);
-                            std::string fps_text = std::to_string(fps) + "fps";
-                            if (ImGui::Selectable(fps_text.c_str(), is_current))
+                            ImGui::PushID(fmtIdx * 5000 + sizeIdx * 500 + fpsIdx);
+                            const std::string fpsText = std::to_string(fps) + "fps";
+                            if (ImGui::Selectable(fpsText.c_str(), isCurrent))
                             {
-                                if (!is_current) // Only apply if it's a different selection
+                                if (!isCurrent) // Only apply if it's a
+                                                // different selection
                                 {
-                                    common::log_info("Applying format change: format %d, size %dx%d (index %d), fps %d", 
-                                                     fmt_idx, size.width, size.height, size_idx, fps_idx);
-                                    
+                                    common::logInfo("Applying format change: format %d, size %dx%d (index %d), fps %d",
+                                                     fmtIdx, size.width, size.height, sizeIdx, fpsIdx);
+
                                     // Apply changes immediately for input camera
                                     auto inputCam = std::dynamic_pointer_cast<InputWebcam>(webcam_);
                                     if (inputCam)
                                     {
-                                        if (!inputCam->reconfigureFormat(fmt_idx, size_idx, fps_idx))
+                                        if (!inputCam->reconfigureFormat(fmtIdx, sizeIdx, fpsIdx))
                                         {
-                                            common::log_error("Failed to apply camera format changes");
+                                            common::logError("Failed to apply camera format changes");
                                         }
                                     }
                                 }
@@ -193,52 +197,53 @@ void PaintWebcam::paintPhysicalInput()
         }
 
         // Show current selection info
-        if (current_format_idx >= 0 && current_size_idx >= 0 && current_fps_idx >= 0)
+        if (currentFormatIdx >= 0 && currentSizeIdx >= 0 && currentFpsIdx >= 0)
         {
             ImGui::Separator();
-            const auto& sel_format = capabilities.formats[current_format_idx];
-            const auto& sel_size = sel_format.sizes[current_size_idx];
-            const auto& sel_fps = sel_size.getFps(current_fps_idx);
+            const auto& selFormat = capabilities.formats[currentFormatIdx];
+            const auto& selSize = selFormat.sizes[currentSizeIdx];
+            const auto& selFps = selSize.getFps(currentFpsIdx);
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.4f, 1.0f), "Current: %s - %ux%u (%d FPS)",
-                               sel_format.description.c_str(), sel_size.width, sel_size.height, sel_fps);
+                               selFormat.description.c_str(), selSize.width, selSize.height, selFps);
         }
     }
 }
 
 void PaintWebcam::paintVirtualOutput()
 {
-    const std::string& camera_key = webcam_->getDevicePath();
-
+    const std::string& cameraKey = webcam_->getDevicePath();
 
     // Initialize if not exists
-    if (selected_subsampling_.find(camera_key) == selected_subsampling_.end())
+    if (selected_subsampling_.find(cameraKey) == selected_subsampling_.end())
     {
         // Cast to V4L2LoopbackWriter to access V4L2-specific methods
         auto v4l2Writer = std::dynamic_pointer_cast<V4L2LoopbackWriter>(webcam_);
-        if (v4l2Writer) {
-            selected_subsampling_[camera_key] = static_cast<int>(v4l2Writer->getChrominanceSubsampling());
-        } else {
-            selected_subsampling_[camera_key] = 0; // Default value
+        if (v4l2Writer)
+        {
+            selected_subsampling_[cameraKey] = static_cast<int>(v4l2Writer->getChrominanceSubsampling());
+        }
+        else
+        {
+            selected_subsampling_[cameraKey] = 0; // Default value
         }
     }
 
-
     if (ImGui::CollapsingHeader("Available Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        int current_subsampling = selected_subsampling_[camera_key];
+        int currentSubsampling = selected_subsampling_[cameraKey];
 
         // Show subsampling and quality options
-        if (ImGui::Combo("Subsampling", &current_subsampling, subsampling_options, IM_ARRAYSIZE(subsampling_options)))
+        if (ImGui::Combo("Subsampling", &currentSubsampling, subsamplingOptions, IM_ARRAYSIZE(subsamplingOptions)))
         {
-            selected_subsampling_[camera_key] = current_subsampling;
-            common::log_warn("User changed subsampling to %s", subsampling_options[current_subsampling]);
+            selected_subsampling_[cameraKey] = currentSubsampling;
+            common::logWarn("User changed subsampling to %s", subsamplingOptions[currentSubsampling]);
         }
-        auto flags_for_sliders = ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoInput
-                                 | ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_NoSpeedTweaks;
+        auto flagsForSliders = ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoInput
+                               | ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_NoSpeedTweaks;
 
-        ImGui::SliderInt("Image Quality", &selected_quality_value_, 0, 100, "%d", flags_for_sliders);
+        ImGui::SliderInt("Image Quality", &selected_quality_value_, 0, 100, "%d", flagsForSliders);
 
-        bool applyChangesDisabled = selected_subsampling_.find(camera_key) == selected_subsampling_.end();
+        const bool applyChangesDisabled = selected_subsampling_.find(cameraKey) == selected_subsampling_.end();
 
         if (applyChangesDisabled)
         {
@@ -251,10 +256,10 @@ void PaintWebcam::paintVirtualOutput()
             auto outputCam = std::dynamic_pointer_cast<V4L2LoopbackWriter>(webcam_);
             if (outputCam)
             {
-                TJSAMP new_subsampling = static_cast<TJSAMP>(selected_subsampling_[camera_key]);
-                if (!outputCam->reconfigure(new_subsampling, selected_quality_value_))
+                auto newSubsampling = static_cast<TJSAMP>(selected_subsampling_[cameraKey]);
+                if (!outputCam->reconfigure(newSubsampling, selected_quality_value_))
                 {
-                    selected_subsampling_[camera_key] = -1;
+                    selected_subsampling_[cameraKey] = -1;
                 }
             }
         }
@@ -266,36 +271,36 @@ void PaintWebcam::paintVirtualOutput()
     }
 }
 
-bool PaintWebcam::paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> temp_webcams)
+bool PaintWebcam::paintAddDeviceModal(const std::vector<std::shared_ptr<Webcam>>& tempWebcams)
 {
-    if (temp_webcams.empty())
+    if (tempWebcams.empty())
     {
         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No video devices found in /dev/video*");
         return true;
     }
 
     // Locate the PopupModal
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_Appearing);
 
-    bool modal_open = true;
-    if (ImGui::BeginPopupModal("Add New Device", &modal_open,
+    bool modalOpen = true;
+    if (ImGui::BeginPopupModal("Add New Device", &modalOpen,
                                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
     {
-        const std::string combo_text = webcam_new_device_ ? webcam_new_device_->getDevicePath() : "Select device...";
-        if (ImGui::BeginCombo("Video Device", combo_text.c_str()))
+        const std::string comboText = webcam_new_device_ ? webcam_new_device_->getDevicePath() : "Select device...";
+        if (ImGui::BeginCombo("Video Device", comboText.c_str()))
         {
-            for (auto& temp_webcam : temp_webcams)
+            for (const auto& tempWebcam : tempWebcams)
             {
-                bool is_selected =
-                    !webcam_new_device_ ? false : (temp_webcam->getDevicePath() == webcam_new_device_->getDevicePath());
+                const bool isSelected =
+                    !webcam_new_device_ ? false : (tempWebcam->getDevicePath() == webcam_new_device_->getDevicePath());
 
-                if (ImGui::Selectable(temp_webcam->getDevicePath().c_str(), is_selected))
+                if (ImGui::Selectable(tempWebcam->getDevicePath().c_str(), isSelected))
                 {
-                    webcam_new_device_ = temp_webcam;
+                    webcam_new_device_ = tempWebcam;
                 }
-                if (is_selected)
+                if (isSelected)
                 {
                     ImGui::SetItemDefaultFocus();
                 }
@@ -305,7 +310,7 @@ bool PaintWebcam::paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> temp_
 
         if (webcam_new_device_)
         {
-            // TODO: Load and show device info using other methods
+            // TODO(arroyo): Load and show device info using other methods
             ImGui::Text("Device Name: %s", webcam_new_device_->getName().c_str());
         }
         ImGui::Separator();
@@ -328,8 +333,8 @@ bool PaintWebcam::paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> temp_
         if (ImGui::Button("Cancel"))
         {
             // Close modal and reset states
-            modal_open = false;
-            common::log_info("UI::paintAddDeviceModal - User cancelled adding device");
+            modalOpen = false;
+            common::logInfo("UI::paintAddDeviceModal - User cancelled adding device");
             ImGui::CloseCurrentPopup();
         }
 
@@ -343,7 +348,7 @@ bool PaintWebcam::paintAddDeviceModal(std::vector<std::shared_ptr<Webcam>> temp_
     }
 
     // Check if modal was closed by Cancel, X button or ESC key
-    if (!modal_open)
+    if (!modalOpen)
     {
         if (webcam_new_device_)
         {

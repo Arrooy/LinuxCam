@@ -27,14 +27,14 @@ namespace linuxface
 class CameraManager
 {
   public:
-    CameraManager();
+    CameraManager() = default;
     ~CameraManager();
 
     void setLayerManager(std::shared_ptr<LayerManager> layerManager);
 
-    bool addCamera(std::shared_ptr<Webcam> camera);
-    bool removeCamera(std::shared_ptr<Webcam> camera);
-    bool updateCamera(std::shared_ptr<Webcam> camera);
+    bool addCamera(const std::shared_ptr<Webcam>& camera);
+    bool removeCamera(const std::shared_ptr<Webcam>& camera);
+    bool updateCamera(const std::shared_ptr<Webcam>& camera);
 
     bool updateInput();
     bool updateOutput(std::unique_ptr<Image>& outputImage);
@@ -44,13 +44,16 @@ class CameraManager
 
     std::vector<std::string> discoverAvailableVideoDevices();
   private:
-    bool isDeviceUsable(const std::string& devicePath);
-    void updateCameraLayer(std::shared_ptr<InputWebcam> camera, std::unique_ptr<Image> newFrame);
-    void createOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera);
-    void updateOutputCameraOverlay(std::shared_ptr<V4L2LoopbackWriter> camera, const Image& compositeImage);
+    static bool isDeviceUsable(const std::string& devicePath);
+    void updateCameraLayer(const std::shared_ptr<InputWebcam>& camera, std::unique_ptr<Image> newFrame);
+    void createOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera);
+    void updateOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera, const Image& compositeImage);
+    void createOutputPreviewLayer();
+    void updateOutputPreviewLayer(const Image& compositeImage);
+    void updatePreviewVisibility();
     std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
     std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
-    std::shared_ptr<LayerManager> layerManager_;
+    std::shared_ptr<LayerManager> layerManager_{nullptr};
     // std::unordered_map<int, int> connections_;
 };
 
@@ -65,7 +68,9 @@ bool addCameraImpl(std::vector<std::shared_ptr<T>>& container, std::shared_ptr<T
 
     if (it != container.end())
     {
-        common::log_error("CameraManager::addCamera - Camera with device path %s already exists.", devicePath.c_str());
+        common::logError("CameraManager::addCamera - Camera with device path %s already "
+                         "exists.",
+                         devicePath.c_str());
         return false; // Already exists
     }
 
@@ -84,7 +89,7 @@ bool removeCameraImpl(std::vector<std::shared_ptr<T>>& container, const std::str
         container.erase(it, container.end());
         return true;
     }
-    common::log_error("CameraManager::removeCamera - Camera with device path %s not found.", devicePath.c_str());
+    common::logError("CameraManager::removeCamera - Camera with device path %s not found.", devicePath.c_str());
     return false;
 }
 
@@ -102,13 +107,13 @@ bool updateCameraImpl(std::vector<std::shared_ptr<T>>& container, std::shared_pt
 
         // if (!camera->setupDevice())
         // {
-        //     common::log_error("Failed to setup camera device: %s", devicePath.c_str());
+        //     common::logError("Failed to setup camera device: %s", devicePath.c_str());
         //     return false;
         // }
 
         // if (!camera->start())
         // {
-        //     common::log_error("Failed to start camera device: %s", devicePath.c_str());
+        //     common::logError("Failed to start camera device: %s", devicePath.c_str());
         //     return false;
         // }
 

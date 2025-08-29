@@ -5,7 +5,7 @@
 
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/math_utils.h"
-// TODO: Add gtest of this helper.
+// TODO(runner): Add gtest of this helper.
 /**
  * 8x8 monochrome bitmap fonts for rendering
  * Author: Daniel Hepper <daniel@hepper.net>
@@ -13,7 +13,7 @@
  * License: Public Domain
  */
 
-static const unsigned char font8x8_basic[128][8] = {
+static const unsigned char FONT8X8_BASIC[128][8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // U+0000 (nul)
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // U+0001
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // U+0002
@@ -190,9 +190,9 @@ inline TextSize getMultilineTextSize(const std::string& text, int scale = 1, int
     }
 
     // Calculate dimensions
-    int lineHeight = 8 * scale + lineSpacing;
-    int width = static_cast<int>(maxLineLength) * 8 * scale;
-    int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing; // Remove last spacing
+    const int lineHeight = 8 * scale + lineSpacing;
+    const int width = static_cast<int>(maxLineLength) * 8 * scale;
+    const int height = static_cast<int>(lines.size()) * lineHeight - lineSpacing; // Remove last spacing
 
     return {width, height};
 }
@@ -204,13 +204,13 @@ inline void drawCharDDA(Image& img, int x, int y, char c, const Pixel& color, in
     {
         return;
     }
-    const unsigned char* glyph = font8x8_basic[(int) c];
+    const unsigned char* glyph = FONT8X8_BASIC[static_cast<int>(c)];
     for (int row = 0; row < 8; row++)
     {
-        uint8_t bits = glyph[row];
+        const uint8_t bits = glyph[row];
         for (int col = 0; col < 8; col++)
         {
-            if (bits & (1 << col))
+            if ((bits & (1 << col)) != 0)
             {
                 img.fillRect(x + col * scale, y + row * scale, scale, scale, color);
             }
@@ -227,11 +227,11 @@ drawText(Image& img, int x, int y, const std::string& text, const Pixel& color, 
     {
         return;
     }
-    TextSize ts = getTextSize(text, scale);
-    int drawX = center ? x - ts.width / 2 : x;
-    int drawY = center ? y - ts.height / 2 : y;
+    const TextSize ts = getTextSize(text, scale);
+    const int drawX = center ? x - ts.width / 2 : x;
+    const int drawY = center ? y - ts.height / 2 : y;
     int cursorX = drawX;
-    for (char c : text)
+    for (const char c : text)
     {
         drawCharDDA(img, cursorX, drawY, c, color, scale);
         cursorX += 8 * scale;
@@ -249,15 +249,15 @@ inline void drawTextWithBackground(Image& img, int x, int y, const std::string& 
         return;
     }
 
-    TextSize ts = getTextSize(text, scale);
-    int drawX = center ? x - ts.width / 2 : x;
-    int drawY = center ? y - ts.height / 2 : y;
+    const TextSize ts = getTextSize(text, scale);
+    const int drawX = center ? x - ts.width / 2 : x;
+    const int drawY = center ? y - ts.height / 2 : y;
 
     // Draw background rectangle with padding
-    int bgX = drawX - padding;
-    int bgY = drawY - padding;
-    int bgWidth = ts.width + 2 * padding;
-    int bgHeight = ts.height + 2 * padding;
+    const int bgX = drawX - padding;
+    const int bgY = drawY - padding;
+    const int bgWidth = ts.width + 2 * padding;
+    const int bgHeight = ts.height + 2 * padding;
 
     // Fill background using optimized rectangle fill
     img.fillRect(bgX, bgY, bgWidth, bgHeight, bgColor);
@@ -286,7 +286,7 @@ inline void drawMultilineText(Image& img, int x, int y, const std::string& text,
     }
 
     int currentY = y;
-    int lineHeight = 8 * scale + lineSpacing;
+    const int lineHeight = 8 * scale + lineSpacing;
 
     for (const auto& textLine : lines)
     {
@@ -315,7 +315,7 @@ inline void drawTextAligned(Image& img, int rectX, int rectY, int rectWidth, int
         return;
     }
 
-    TextSize ts = getTextSize(text, scale);
+    const TextSize ts = getTextSize(text, scale);
 
     int textX = rectX;
     switch (hAlign)
@@ -362,7 +362,7 @@ inline bool textFitsInRect(const std::string& text, int scale, int maxWidth, int
         return false;
     }
 
-    TextSize ts = getTextSize(text, scale);
+    const TextSize ts = getTextSize(text, scale);
     return ts.width <= maxWidth && ts.height <= maxHeight;
 }
 
@@ -394,7 +394,7 @@ inline bool isCharacterRenderable(char c)
 inline size_t countRenderableCharacters(const std::string& text)
 {
     size_t count = 0;
-    for (char c : text)
+    for (const char c : text)
     {
         if (isCharacterRenderable(c))
         {
@@ -411,7 +411,7 @@ inline const unsigned char* getFontGlyph(char c)
     {
         return nullptr;
     }
-    return font8x8_basic[static_cast<int>(c)];
+    return FONT8X8_BASIC[static_cast<int>(c)];
 }
 
 } // namespace linuxface
