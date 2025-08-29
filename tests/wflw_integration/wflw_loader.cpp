@@ -72,7 +72,12 @@ void WFLWLoader::load_examples_from_file(const std::string& data_file_path, bool
     
     if (load_challenging_only)
     {
-        common::log_info("Loaded %d challenging condition examples from %d total processed samples", 
+        common::log_info("Prepared %d challenging condition examples from %d total processed samples (images will be loaded on-demand)", 
+                        num_examples, total_processed);
+    }
+    else
+    {
+        common::log_info("Prepared %d examples from %d total processed samples (images will be loaded on-demand)", 
                         num_examples, total_processed);
     }
 }
@@ -81,7 +86,7 @@ bool WFLWLoader::load_example(int index, WFLWExample& example) const
 {
     if (index < 0 || static_cast<size_t>(index) >= examples_.size())
     {
-        common::log_error("Invalid example index: %lu", index);
+        common::log_error("Invalid example index: %d", index);
         return false;
     }
 
@@ -90,16 +95,23 @@ bool WFLWLoader::load_example(int index, WFLWExample& example) const
     example.bounding_box = examples_[index].bounding_box;
     example.attributes = examples_[index].attributes;
     example.image_name = examples_[index].image_name;
+    example.image_path = examples_[index].image_path;
 
-    // Create a deep copy of the image
-    if (examples_[index].image)
+    // Load the image on-demand if not already loaded
+    if (!examples_[index].image)
     {
-        example.image = examples_[index].image->deepCopy();
+        // Load the image from the stored path
+        examples_[index].image = ImageLoader::loadImageFromFile(examples_[index].image_path);
+        if (!examples_[index].image)
+        {
+            common::log_error("Could not load image: %s", examples_[index].image_path.c_str());
+            return false;
+        }
+        common::log_info("Loaded image on-demand: %s", examples_[index].image_path.c_str());
     }
-    else
-    {
-        example.image = nullptr;
-    }
+
+    // Create a deep copy of the image for the caller
+    example.image = examples_[index].image->deepCopy();
 
     return true;
 }
@@ -146,7 +158,7 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
         return false;
     }
 
-    // Load the image using ImageLoader
+    // Construct the full image path for lazy loading (don't load the image yet)
     const auto& base_image_dir = Config::getInstance().getWFLWFolderPath();
 
     // Normalize the path by ensuring clean directory separators
@@ -166,14 +178,9 @@ bool WFLWLoader::parse_line(const std::string& line, WFLWExample& example)
         pos += 1;
     }
 
-    const auto image_path = normalized_base + "/WFLW_images/" + example.image_name;
-    example.image = ImageLoader::loadImageFromFile(image_path);
-    if (!example.image)
-    {
-        common::log_error("Could not load image: %s", image_path.c_str());
-        return false;
-    }
-    common::log_info("Loaded image: %s", image_path.c_str());
+    example.image_path = normalized_base + "/WFLW_images/" + example.image_name;
+    example.image = nullptr; // Will be loaded on-demand
+
     return true;
 }
 

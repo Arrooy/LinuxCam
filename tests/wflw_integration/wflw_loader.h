@@ -27,7 +27,8 @@ struct WFLWExample
     bool hasNoOcclusion() const { return attributes[4] == 0; }
     bool isClear() const { return attributes[5] == 0; }
     std::string image_name;
-    std::unique_ptr<Image> image;
+    std::string image_path;
+    mutable std::unique_ptr<Image> image;
 
     // Move constructor and assignment
     WFLWExample() = default;
