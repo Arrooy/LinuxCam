@@ -237,7 +237,7 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
         common::logError("PFLDDetector: Failed to warp face for alignment");
         return;
     }
-    alignedFace->saveToDisk("aligned_face_similar.ppm");
+    // alignedFace->saveToDisk("aligned_face_similar.ppm");
     // 4. Run PFLD on aligned face
     const Ort::Value inputTensor = this->transform(alignedFace);
 

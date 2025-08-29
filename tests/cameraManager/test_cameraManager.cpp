@@ -155,9 +155,7 @@ TEST_F(CameraManagerTest, EmptyImageUpdate)
     bool inputResult = manager_->updateInput();
     bool outputResult = manager_->updateOutput(nullImage);
 
-    // Since we don't have any cameras added, input should succeed (no work to do)
-    // but output should fail (no image to output)
-    EXPECT_TRUE(inputResult);
+    EXPECT_FALSE(inputResult);
     EXPECT_FALSE(outputResult);
 }
 

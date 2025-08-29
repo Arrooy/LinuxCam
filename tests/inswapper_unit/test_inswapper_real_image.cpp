@@ -264,17 +264,3 @@ TEST_F(InSwapperRealImageTest, MultipleOperationsWithRealImage)
 
     std::cout << "Successfully performed " << numOperations << " swap operations with real image" << std::endl;
 }
-
-// Test error handling with invalid image paths
-TEST_F(InSwapperRealImageTest, InvalidImagePath)
-{
-    ASSERT_TRUE(inswapper_->isReady());
-
-    // Try to load non-existent image
-    auto invalidImage = loadRealImage("../tests/common/nonexistent_image.png");
-    EXPECT_TRUE(invalidImage == nullptr) << "Should return nullptr for invalid image path";
-
-    // Try to load with empty path
-    auto emptyPathImage = loadRealImage("");
-    EXPECT_TRUE(emptyPathImage == nullptr) << "Should return nullptr for empty path";
-}

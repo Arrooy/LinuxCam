@@ -47,6 +47,8 @@ class Profiler
     static std::string formatDuration(std::chrono::high_resolution_clock::time_point start,
                                       std::chrono::high_resolution_clock::time_point end) noexcept;
 
+    void reset();
+
   private:
     Profiler() = default;
 

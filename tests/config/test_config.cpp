@@ -1,6 +1,5 @@
-#include <gtest/gtest.h>
-
 #include <fstream>
+#include <gtest/gtest.h>
 #include <string>
 #include <vector>
 
@@ -61,7 +60,8 @@ window:
 
 TEST_F(ConfigTest, ValidConfigLoading)
 {
-    Config& config = Config::getInstance("test_valid_config.yaml");
+    Config& config = Config::getInstance();
+    EXPECT_TRUE(config.reloadFromFile("test_valid_config.yaml"));
     EXPECT_TRUE(config.loadConfiguration());
 
     // Test GPU setting
@@ -110,10 +110,10 @@ TEST_F(ConfigTest, InvalidConfigFile)
     file << "invalid_yaml: [unclosed_list\n";
     file.close();
 
-    // Create a fresh config instance with the invalid file
-    Config& config = Config::getInstance(filename);
-    // Should fail to load due to invalid YAML
-    EXPECT_FALSE(config.loadConfiguration());
+    // Use the singleton and reload with invalid file
+    Config& config = Config::getInstance();
+    // Should fail to reload due to invalid YAML
+    EXPECT_FALSE(config.reloadFromFile(filename));
 
     std::remove(filename);
 }
@@ -123,10 +123,10 @@ TEST_F(ConfigTest, MissingConfigFile)
     // Ensure the file does not exist
     const char* filename = "nonexistent_config.yaml";
     std::remove(filename);
-    
-    // Create a fresh config instance with the missing file
-    Config& config = Config::getInstance(filename);
-    EXPECT_FALSE(config.loadConfiguration());
+
+    // Use the singleton and reload with missing file
+    Config& config = Config::getInstance();
+    EXPECT_FALSE(config.reloadFromFile(filename));
     std::remove(filename);
 }
 
@@ -167,7 +167,8 @@ window:
 
 TEST_F(ConfigTest, GetTemplateMethod)
 {
-    Config& config = Config::getInstance("test_valid_config.yaml");
+    Config& config = Config::getInstance();
+    EXPECT_TRUE(config.reloadFromFile("test_valid_config.yaml"));
     config.loadConfiguration();
 
     // Test template get method with existing key
@@ -185,8 +186,8 @@ TEST_F(ConfigTest, GetTemplateMethod)
 
 TEST_F(ConfigTest, SingletonBehavior)
 {
-    Config& config1 = Config::getInstance("test_valid_config.yaml");
-    Config& config2 = Config::getInstance("test_valid_config.yaml");
+    Config& config1 = Config::getInstance();
+    Config& config2 = Config::getInstance();
 
     // Should be the same instance
     EXPECT_EQ(&config1, &config2);
@@ -247,15 +248,18 @@ window:
     auto cameras = config.getWebcams();
     EXPECT_EQ(cameras.size(), 4); // 1 input + 3 outputs
     int i = 0;
-    std::vector sampling_expectations = {TJSAMP_420, TJSAMP_422,TJSAMP_444};
-    for (const auto & cam : cameras)
+    std::vector sampling_expectations = {TJSAMP_420, TJSAMP_422, TJSAMP_444};
+    for (const auto& cam : cameras)
     {
-        if(cam.is_input) continue;
+        if (cam.is_input)
+        {
+            continue;
+        }
         // Check subsampling values (implementation specific, but should handle different formats)
         EXPECT_EQ(cam.subsampling, sampling_expectations[i]);
         i++;
     }
-    
+
     std::remove("test_subsampling_config.yaml");
 }
 
@@ -304,7 +308,8 @@ window:
 
 TEST_F(ConfigTest, PreloadContentDisabled)
 {
-    Config& config = Config::getInstance("test_valid_config.yaml");
+    Config& config = Config::getInstance();
+    EXPECT_TRUE(config.reloadFromFile("test_valid_config.yaml"));
     config.loadConfiguration();
 
     // Modify our test file to have preload_content: false
@@ -385,7 +390,7 @@ window:
 
     Config& config = Config::getInstance();
     EXPECT_TRUE(config.reloadFromFile("test_invalid_subsampling_config.yaml"));
-    
+
     // This might succeed if the validation isn't happening, so let's just ensure config loads
     // The actual validation might happen at runtime rather than during config parsing
     config.loadConfiguration(); // Just ensure no crash

@@ -45,7 +45,8 @@ protected:
 };
 
 TEST_F(ConfigPathNormalizationTest, PathsEndWithSingleSlash) {
-    Config& config = Config::getInstance(testConfigPath.c_str());
+    Config& config = Config::getInstance();
+    ASSERT_TRUE(config.reloadFromFile(testConfigPath.c_str()));
     ASSERT_TRUE(config.loadConfiguration());
     
     // Test that all paths end with exactly one slash using public methods
@@ -92,7 +93,8 @@ TEST_F(ConfigPathNormalizationTest, EmptyPathHandling) {
     configFile << "  title: \"Test\"\n";
     configFile.close();
     
-    Config& config = Config::getInstance(emptyConfigPath.c_str());
+    Config& config = Config::getInstance();
+    ASSERT_TRUE(config.reloadFromFile(emptyConfigPath.c_str()));
     ASSERT_TRUE(config.loadConfiguration());
     
     // Empty path should become "/"

@@ -4,21 +4,20 @@
 #include <iostream>
 #include <memory>
 #include <onnxruntime_cxx_api.h>
-#include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
 
+#include "../test_utils.h" // Use unified test utilities from parent directory
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_draw.h"
 #include "LinuxFace/face.h"
+#include "LinuxFace/imageLoader.h"
 #include "LinuxFace/math_utils.h"
 #include "LinuxFace/onnx/arcfaceRecognizer.h"
 #include "LinuxFace/onnx/inswapper.h"
 #include "LinuxFace/onnx/scrfd.h"
 #include "LinuxFace/onnx/swapPipeline.h"
-#include "LinuxFace/imageLoader.h"
 #include "config.hpp"
-#include "../test_utils.h"  // Use unified test utilities from parent directory
 
 using namespace linuxface;
 
@@ -40,7 +39,7 @@ class SwapPipelineIntegrationTest : public ::testing::Test
     {
         // Load test configuration using unified test utilities
         std::string config_path = TestUtils::getConfigPath();
-        
+
         if (std::ifstream(config_path).good())
         {
             // Force reload config from absolute path
@@ -124,30 +123,34 @@ class SwapPipelineIntegrationTest : public ::testing::Test
      * @param targetImagePath Path to the target image used
      * @param executionTimeMs Execution time in milliseconds (optional)
      */
-    void addResultTextOverlay(Image* image, const std::string& testName,
-                              const std::string& sourceImagePath = "",
-                              const std::string& targetImagePath = "",
-                              long long executionTimeMs = 0)
+    void addResultTextOverlay(Image* image, const std::string& testName, const std::string& sourceImagePath = "",
+                              const std::string& targetImagePath = "", long long executionTimeMs = 0)
     {
-        if (!image) return;
+        if (!image)
+        {
+            return;
+        }
 
         // Create text content
         std::string text = "Test: " + testName + "\n";
-        if (!sourceImagePath.empty()) {
+        if (!sourceImagePath.empty())
+        {
             // Extract just the filename from the path
             size_t lastSlash = sourceImagePath.find_last_of("/\\");
-            std::string sourceFilename = (lastSlash != std::string::npos) ?
-                sourceImagePath.substr(lastSlash + 1) : sourceImagePath;
+            std::string sourceFilename =
+                (lastSlash != std::string::npos) ? sourceImagePath.substr(lastSlash + 1) : sourceImagePath;
             text += "Source: " + sourceFilename + "\n";
         }
-        if (!targetImagePath.empty()) {
+        if (!targetImagePath.empty())
+        {
             // Extract just the filename from the path
             size_t lastSlash = targetImagePath.find_last_of("/\\");
-            std::string targetFilename = (lastSlash != std::string::npos) ?
-                targetImagePath.substr(lastSlash + 1) : targetImagePath;
+            std::string targetFilename =
+                (lastSlash != std::string::npos) ? targetImagePath.substr(lastSlash + 1) : targetImagePath;
             text += "Target: " + targetFilename + "\n";
         }
-        if (executionTimeMs > 0) {
+        if (executionTimeMs > 0)
+        {
             text += "Time: " + std::to_string(executionTimeMs) + "ms\n";
         }
 
@@ -156,7 +159,8 @@ class SwapPipelineIntegrationTest : public ::testing::Test
         auto time_t_now = std::chrono::system_clock::to_time_t(now);
         std::string dateStr = std::ctime(&time_t_now);
         // Remove newline from ctime
-        if (!dateStr.empty() && dateStr.back() == '\n') {
+        if (!dateStr.empty() && dateStr.back() == '\n')
+        {
             dateStr.pop_back();
         }
         text += "Date: " + dateStr;
@@ -172,7 +176,7 @@ class SwapPipelineIntegrationTest : public ::testing::Test
 
         // Draw the text with automatic background
         Pixel textColor(255, 255, 255); // White text
-        Pixel bgColor(0, 0, 0, 128); // Semi-transparent black background
+        Pixel bgColor(0, 0, 0, 128);    // Semi-transparent black background
         drawMultilineTextWithBackground(*image, x, y, text, textColor, bgColor, scale, 2, padding);
     }
 };
@@ -352,7 +356,8 @@ TEST_F(SwapPipelineIntegrationTest, PipelinePerformance)
         // Add text overlay with test information and execution time
         std::string sourcePath = TestUtils::getTestImagePath("single_face.jpeg");
         std::string targetPath = TestUtils::getTestImagePath("single_face_2.jpg");
-        addResultTextOverlay(source_image.get(), "PipelinePerformance", sourcePath, targetPath, execution_duration.count());
+        addResultTextOverlay(source_image.get(), "PipelinePerformance", sourcePath, targetPath,
+                             execution_duration.count());
 
         std::string outputPath = "../tests/swapPipeline_integration/results/PipelinePerformance_result.ppm";
         bool saveResult = source_image->saveToDisk(outputPath);
@@ -364,7 +369,8 @@ TEST_F(SwapPipelineIntegrationTest, PipelinePerformance)
     }
 
     // Verify performance requirements
-    EXPECT_LT(execution_duration.count(), 5000) << "Pipeline took " << execution_duration.count() << "ms, exceeds 5s limit";
+    EXPECT_LT(execution_duration.count(), 5000)
+        << "Pipeline took " << execution_duration.count() << "ms, exceeds 5s limit";
 
     // Log performance results
     std::cout << "Pipeline execution time: " << execution_duration.count() << "ms" << std::endl;
@@ -376,10 +382,10 @@ TEST_F(SwapPipelineIntegrationTest, DifferentImageSizes)
 {
     // Test various image sizes to ensure pipeline robustness
     const std::vector<std::pair<int, int>> test_sizes = {
-        {320,  240},   // Small size
-        {640,  480},   // Standard webcam size
-        {800,  600},   // Medium size
-        {1024, 768}    // Large size
+        {320,  240}, // Small size
+        {640,  480}, // Standard webcam size
+        {800,  600}, // Medium size
+        {1024, 768}  // Large size
     };
 
     for (const auto& [width, height] : test_sizes)
@@ -405,7 +411,8 @@ TEST_F(SwapPipelineIntegrationTest, DifferentImageSizes)
             std::string testName = "DifferentImageSizes_" + std::to_string(width) + "x" + std::to_string(height);
             addResultTextOverlay(source_image.get(), testName, sourcePath, targetPath);
 
-            std::string outputPath = "../tests/swapPipeline_integration/results/DifferentImageSizes_" + std::to_string(width) + "x" + std::to_string(height) + "_result.ppm";
+            std::string outputPath = "../tests/swapPipeline_integration/results/DifferentImageSizes_"
+                                     + std::to_string(width) + "x" + std::to_string(height) + "_result.ppm";
             bool saveResult = source_image->saveToDisk(outputPath);
             EXPECT_TRUE(saveResult) << "Failed to save result image for size " << width << "x" << height;
             if (saveResult)
@@ -585,7 +592,7 @@ TEST_F(SwapPipelineIntegrationTest, ConcurrentOperations)
 
 /**
  * @brief Test face swapping of an image with itself (self-swap)
- * 
+ *
  * This test validates the pipeline behavior when both source and target are the same image.
  * Theoretically, the result should be identical to the original image since we're swapping
  * the face with itself. This test helps identify any artifacts or quality degradation
@@ -598,15 +605,15 @@ TEST_F(SwapPipelineIntegrationTest, SelfSwapSingleIteration)
     // Load the same image as both source and target
     auto sourceImage = loadSourceImage();
     auto targetImage = loadSourceImage(); // Same image as source
-    
+
     ASSERT_TRUE(sourceImage != nullptr) << "Source image loading failed";
     ASSERT_TRUE(targetImage != nullptr) << "Target image loading failed";
 
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     // Perform self-swap
     bool result = swap_pipeline_->run(sourceImage, targetImage);
-    
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
@@ -614,14 +621,14 @@ TEST_F(SwapPipelineIntegrationTest, SelfSwapSingleIteration)
 
     // Add informative text overlay
     std::string sourcePath = TestUtils::getTestImagePath("man1.jpeg");
-    addResultTextOverlay(sourceImage.get(), "SelfSwapSingleIteration", 
-                        sourcePath, sourcePath, duration.count());
+    addResultTextOverlay(sourceImage.get(), "SelfSwapSingleIteration", sourcePath, sourcePath, duration.count());
 
     // Save result for visual inspection
-    std::string outputPath = TestUtils::getTestResultPath("swapPipeline_integration", "SelfSwapSingleIteration_result.ppm");
+    std::string outputPath =
+        TestUtils::getTestResultPath("swapPipeline_integration", "SelfSwapSingleIteration_result.ppm");
     bool saveResult = sourceImage->saveToDisk(outputPath);
     EXPECT_TRUE(saveResult) << "Failed to save result image to: " << outputPath;
-    
+
     if (saveResult)
     {
         std::cout << "Saved self-swap result to: " << outputPath << std::endl;
@@ -631,14 +638,14 @@ TEST_F(SwapPipelineIntegrationTest, SelfSwapSingleIteration)
 
 /**
  * @brief Test multiple consecutive self-swaps
- * 
+ *
  * This test performs multiple iterations of self-swapping on the same image.
  * Each iteration should theoretically produce the same result, but in practice
  * we might observe cumulative artifacts or quality degradation due to:
  * - Floating point precision errors
  * - Image compression/decompression artifacts
  * - Transformation approximations
- * 
+ *
  * This test helps identify stability and quality preservation issues.
  */
 TEST_F(SwapPipelineIntegrationTest, SelfSwapMultipleIterations)
@@ -656,12 +663,12 @@ TEST_F(SwapPipelineIntegrationTest, SelfSwapMultipleIterations)
     {
         // Create a copy of the working image to use as target
         auto targetImage = workingImage->deepCopy();
-        
+
         auto start = std::chrono::high_resolution_clock::now();
-        
+
         // Perform self-swap iteration
         bool result = swap_pipeline_->run(workingImage, targetImage);
-        
+
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         executionTimes.push_back(duration.count());
@@ -671,19 +678,19 @@ TEST_F(SwapPipelineIntegrationTest, SelfSwapMultipleIterations)
         // Save intermediate results for quality analysis
         std::string filename = "SelfSwapMultiple_iteration" + std::to_string(i + 1) + "_result.ppm";
         std::string outputPath = TestUtils::getTestResultPath("swapPipeline_integration", filename);
-        
+
         // Add iteration-specific text overlay
-        std::string iterationInfo = "SelfSwapMultiple (Iteration " + std::to_string(i + 1) + "/" + 
-                                   std::to_string(iterations) + ")";
+        std::string iterationInfo =
+            "SelfSwapMultiple (Iteration " + std::to_string(i + 1) + "/" + std::to_string(iterations) + ")";
         addResultTextOverlay(workingImage.get(), iterationInfo, sourcePath, sourcePath, duration.count());
-        
+
         bool saveResult = workingImage->saveToDisk(outputPath);
         EXPECT_TRUE(saveResult) << "Failed to save iteration " << (i + 1) << " result";
-        
+
         if (saveResult)
         {
-            std::cout << "Saved iteration " << (i + 1) << " result to: " << outputPath 
-                      << " (time: " << duration.count() << " ms)" << std::endl;
+            std::cout << "Saved iteration " << (i + 1) << " result to: " << outputPath << " (time: " << duration.count()
+                      << " ms)" << std::endl;
         }
     }
 
@@ -693,16 +700,16 @@ TEST_F(SwapPipelineIntegrationTest, SelfSwapMultipleIterations)
         long long totalTime = 0;
         long long minTime = executionTimes[0];
         long long maxTime = executionTimes[0];
-        
+
         for (long long time : executionTimes)
         {
             totalTime += time;
             minTime = std::min(minTime, time);
             maxTime = std::max(maxTime, time);
         }
-        
+
         double avgTime = static_cast<double>(totalTime) / executionTimes.size();
-        
+
         std::cout << "Multiple self-swap statistics:" << std::endl;
         std::cout << "  Total iterations: " << iterations << std::endl;
         std::cout << "  Average time: " << avgTime << " ms" << std::endl;

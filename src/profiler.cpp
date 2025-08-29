@@ -82,3 +82,10 @@ std::vector<std::pair<std::string, std::chrono::microseconds>> Profiler::getDura
                  const std::pair<std::string, std::chrono::microseconds>& b) { return a.second > b.second; });
     return result;
 }
+
+void Profiler::reset()
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    timers_.clear();
+    durations_.clear();
+}

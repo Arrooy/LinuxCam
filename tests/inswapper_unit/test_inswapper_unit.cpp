@@ -1,22 +1,24 @@
-#include <gtest/gtest.h>
-#include <memory>
-#include <string>
-#include <vector>
 #include <chrono>
 #include <fstream>
+#include <gtest/gtest.h>
 #include <iostream>
-#include <opencv2/opencv.hpp>
+#include <memory>
 #include <onnxruntime_cxx_api.h>
-#include "config.hpp"
-#include "LinuxFace/onnx/inswapper.h"
+#include <string>
+#include <vector>
+
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/math_utils.h"
+#include "LinuxFace/onnx/inswapper.h"
+#include "config.hpp"
 
 using namespace linuxface;
 
-class InSwapperUnitTest : public ::testing::Test {
-protected:
-    void SetUp() override {
+class InSwapperUnitTest : public ::testing::Test
+{
+  protected:
+    void SetUp() override
+    {
         // Load test configuration - only use test config, not root config
         std::vector<std::string> config_paths = {"../config.yaml", "config.yaml",
                                                  "../tests/wflw_integration/test_config.yaml"};
@@ -46,7 +48,8 @@ protected:
         inswapper_ = std::make_unique<InSwapper>(models_folder + "inswapper_128.onnx");
     }
 
-    std::unique_ptr<Image> createTestImage(int width = 256, int height = 256) {
+    std::unique_ptr<Image> createTestImage(int width = 256, int height = 256)
+    {
         size_t data_size = width * height * 3;
         auto image = std::make_unique<Image>(data_size);
         image->info.width = width;
@@ -56,27 +59,32 @@ protected:
 
         // Fill with test pattern - gradient
         unsigned char* data = image->data();
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
+        for (int y = 0; y < height; ++y)
+        {
+            for (int x = 0; x < width; ++x)
+            {
                 int idx = (y * width + x) * 3;
-                data[idx] = (x * 255) / width;     // R channel
+                data[idx] = (x * 255) / width;      // R channel
                 data[idx + 1] = (y * 255) / height; // G channel
-                data[idx + 2] = 128;               // B channel
+                data[idx + 2] = 128;                // B channel
             }
         }
         return image;
     }
 
-    std::vector<float> createTestEmbedding() {
+    std::vector<float> createTestEmbedding()
+    {
         // Create a mock 512-dimensional embedding (typical for face recognition)
         std::vector<float> embedding(512);
-        for (size_t i = 0; i < embedding.size(); ++i) {
+        for (size_t i = 0; i < embedding.size(); ++i)
+        {
             embedding[i] = static_cast<float>(i % 100) / 100.0f - 0.5f; // Values between -0.5 and 0.5
         }
         return embedding;
     }
 
-    std::vector<math_utils::Point<>> createTestLandmarks() {
+    std::vector<math_utils::Point<>> createTestLandmarks()
+    {
         // Create 5-point face landmarks in ArcFace order
         std::vector<math_utils::Point<>> landmarks(5);
         // Standard face landmark positions (left eye, right eye, nose, left mouth, right mouth)
@@ -92,17 +100,20 @@ protected:
 };
 
 // Test constructor and initialization
-TEST_F(InSwapperUnitTest, ConstructorValidModel) {
+TEST_F(InSwapperUnitTest, ConstructorValidModel)
+{
     EXPECT_TRUE(inswapper_->isReady());
 }
 
-TEST_F(InSwapperUnitTest, ConstructorInvalidModel) {
+TEST_F(InSwapperUnitTest, ConstructorInvalidModel)
+{
     InSwapper invalid_inswapper("nonexistent_model.onnx");
     EXPECT_FALSE(invalid_inswapper.isReady());
 }
 
 // Test basic functionality
-TEST_F(InSwapperUnitTest, BasicSwapOperation) {
+TEST_F(InSwapperUnitTest, BasicSwapOperation)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_image = createTestImage();
@@ -123,7 +134,8 @@ TEST_F(InSwapperUnitTest, BasicSwapOperation) {
 }
 
 // Test input validation
-TEST_F(InSwapperUnitTest, InvalidEmbeddingSize) {
+TEST_F(InSwapperUnitTest, InvalidEmbeddingSize)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_image = createTestImage();
@@ -138,7 +150,8 @@ TEST_F(InSwapperUnitTest, InvalidEmbeddingSize) {
     EXPECT_TRUE(swap_result || !swap_result); // Accept both outcomes for now
 }
 
-TEST_F(InSwapperUnitTest, InvalidLandmarkCount) {
+TEST_F(InSwapperUnitTest, InvalidLandmarkCount)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_image = createTestImage();
@@ -153,24 +166,31 @@ TEST_F(InSwapperUnitTest, InvalidLandmarkCount) {
 }
 
 // Test different image sizes
-TEST_F(InSwapperUnitTest, DifferentImageSizes) {
+TEST_F(InSwapperUnitTest, DifferentImageSizes)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_embedding = createTestEmbedding();
     auto test_landmarks = createTestLandmarks();
 
     std::vector<std::pair<int, int>> sizes = {
-        {128, 128}, {256, 256}, {320, 240}, {640, 480}, {800, 600}
+        {128, 128},
+        {256, 256},
+        {320, 240},
+        {640, 480},
+        {800, 600}
     };
 
-    for (const auto& size : sizes) {
+    for (const auto& size : sizes)
+    {
         auto test_image = createTestImage(size.first, size.second);
         Image output_image;
 
         const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
         EXPECT_TRUE(swap_result) << "Failed for size " << size.first << "x" << size.second;
 
-        if (swap_result) {
+        if (swap_result)
+        {
             EXPECT_EQ(output_image.info.width, 128);
             EXPECT_EQ(output_image.info.height, 128);
         }
@@ -178,7 +198,8 @@ TEST_F(InSwapperUnitTest, DifferentImageSizes) {
 }
 
 // Test edge case image sizes
-TEST_F(InSwapperUnitTest, EdgeCaseImageSizes) {
+TEST_F(InSwapperUnitTest, EdgeCaseImageSizes)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_embedding = createTestEmbedding();
@@ -204,7 +225,8 @@ TEST_F(InSwapperUnitTest, EdgeCaseImageSizes) {
 }
 
 // Test null image input
-TEST_F(InSwapperUnitTest, NullImageInput) {
+TEST_F(InSwapperUnitTest, NullImageInput)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_embedding = createTestEmbedding();
@@ -221,7 +243,8 @@ TEST_F(InSwapperUnitTest, NullImageInput) {
 }
 
 // Test performance bounds
-TEST_F(InSwapperUnitTest, PerformanceBounds) {
+TEST_F(InSwapperUnitTest, PerformanceBounds)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_image = createTestImage();
@@ -243,7 +266,8 @@ TEST_F(InSwapperUnitTest, PerformanceBounds) {
 }
 
 // Test multiple consecutive operations
-TEST_F(InSwapperUnitTest, MultipleConsecutiveOperations) {
+TEST_F(InSwapperUnitTest, MultipleConsecutiveOperations)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_embedding = createTestEmbedding();
@@ -252,12 +276,14 @@ TEST_F(InSwapperUnitTest, MultipleConsecutiveOperations) {
     const int num_operations = 5;
     std::vector<Image> output_images(num_operations);
 
-    for (int i = 0; i < num_operations; ++i) {
+    for (int i = 0; i < num_operations; ++i)
+    {
         auto test_image = createTestImage();
         const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_images[i]);
         EXPECT_TRUE(swap_result) << "Failed on operation " << i;
 
-        if (swap_result) {
+        if (swap_result)
+        {
             EXPECT_EQ(output_images[i].info.width, 128);
             EXPECT_EQ(output_images[i].info.height, 128);
         }
@@ -265,7 +291,8 @@ TEST_F(InSwapperUnitTest, MultipleConsecutiveOperations) {
 }
 
 // Test memory allocation and cleanup
-TEST_F(InSwapperUnitTest, MemoryAllocationTest) {
+TEST_F(InSwapperUnitTest, MemoryAllocationTest)
+{
     ASSERT_TRUE(inswapper_->isReady());
 
     auto test_image = createTestImage();
@@ -278,5 +305,6 @@ TEST_F(InSwapperUnitTest, MemoryAllocationTest) {
 
     EXPECT_TRUE(swap_result);
     EXPECT_GT(output_image.size(), 0);
-    EXPECT_EQ(output_image.info.width * output_image.info.height * output_image.info.pixelSizeBytes, output_image.size());
+    EXPECT_EQ(output_image.info.width * output_image.info.height * output_image.info.pixelSizeBytes,
+              output_image.size());
 }

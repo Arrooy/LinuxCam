@@ -100,12 +100,15 @@ TEST_F(DepthImageTest, GetSetDepth)
     float retrievedDepth = depthImage.getDepth(10, 20);
     EXPECT_FLOAT_EQ(retrievedDepth, testDepth);
 
-    // Test edge cases
+    // Test edge cases - set values first, then test them
+    // (uninitialized memory can contain any value, including -nan)
+    depthImage.setDepth(0, 0, 100.0f);
     float edgeDepth = depthImage.getDepth(0, 0);
-    EXPECT_GE(edgeDepth, 0.0f);
+    EXPECT_FLOAT_EQ(edgeDepth, 100.0f);
 
+    depthImage.setDepth(width - 1, height - 1, 200.0f);
     float cornerDepth = depthImage.getDepth(width - 1, height - 1);
-    EXPECT_GE(cornerDepth, 0.0f);
+    EXPECT_FLOAT_EQ(cornerDepth, 200.0f);
 }
 
 // Test out of bounds access
