@@ -1459,8 +1459,8 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
 
             // Bounds check before calculating indices
             if (srcRow < 0 || srcRow >= static_cast<long>(src.info.height) || srcCol < 0
-                || srcCol >= static_cast<long>(src.info.width) || dstRow < 0
-                || dstRow >= static_cast<long>(info.height) || dstCol < 0 || dstCol >= static_cast<long>(info.width))
+                || srcCol >= static_cast<long>(src.info.width) || dstRow < 0 || dstRow >= static_cast<long>(info.height)
+                || dstCol < 0 || dstCol >= static_cast<long>(info.width))
             {
                 continue;
             }

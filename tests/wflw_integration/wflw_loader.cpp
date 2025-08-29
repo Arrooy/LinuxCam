@@ -104,10 +104,10 @@ bool WFLWLoader::load_example(int index, WFLWExample& example) const
         examples_[index].image = ImageLoader::loadImageFromFile(examples_[index].image_path);
         if (!examples_[index].image)
         {
-            common::log_error("Could not load image: %s", examples_[index].image_path.c_str());
+            common::logError("Could not load image: %s", examples_[index].image_path.c_str());
             return false;
         }
-        common::log_info("Loaded image on-demand: %s", examples_[index].image_path.c_str());
+        common::logInfo("Loaded image on-demand: %s", examples_[index].image_path.c_str());
     }
 
     // Create a deep copy of the image for the caller

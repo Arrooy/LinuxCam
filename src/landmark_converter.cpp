@@ -37,12 +37,12 @@ std::vector<FaceLandmark> LandmarkConverter::pfldToWflw(const std::vector<FaceLa
             if (pfldIdx < static_cast<int>(pfldLandmarks.size()))
             {
                 // Direct mapping available
-                wflw_landmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflw_idx), pfld_landmarks[pfld_idx].p});
+                wflwLandmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflwIdx), pfldLandmarks[pfldIdx].p});
             }
             else
             {
                 // Should not happen with valid mapping, but add safeguard
-                wflw_landmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflw_idx), math_utils::Point3D(0, 0, 0)});
+                wflwLandmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflwIdx), math_utils::Point3D(0, 0, 0)});
             }
         }
         else
@@ -51,12 +51,12 @@ std::vector<FaceLandmark> LandmarkConverter::pfldToWflw(const std::vector<FaceLa
             // For now, use first 98 landmarks as fallback (our current approach)
             if (wflwIdx < static_cast<int>(pfldLandmarks.size()))
             {
-                wflw_landmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflw_idx), pfld_landmarks[wflw_idx].p});
+                wflwLandmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflwIdx), pfldLandmarks[wflwIdx].p});
             }
             else
             {
                 // Fallback to origin - should not happen
-                wflw_landmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflw_idx), math_utils::Point3D(0, 0, 0)});
+                wflwLandmarks.emplace_back(FaceLandmark{static_cast<unsigned int>(wflwIdx), math_utils::Point3D(0, 0, 0)});
             }
         }
     }
@@ -93,7 +93,7 @@ std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLa
     // Initialize all landmarks to origin
     for (int i = 0; i < 106; ++i)
     {
-        pfld_landmarks[i] = FaceLandmark{static_cast<unsigned int>(i), math_utils::Point3D(0, 0, 0)};
+        pfldLandmarks[i] = FaceLandmark{static_cast<unsigned int>(i), math_utils::Point3D(0, 0, 0)};
     }
 
     // Map existing landmarks
@@ -105,7 +105,7 @@ std::vector<FaceLandmark> LandmarkConverter::wflwToPfld(const std::vector<FaceLa
             const int pfldIdx = it->second;
             if (pfldIdx < 106)
             {
-                pfld_landmarks[pfld_idx] = FaceLandmark{static_cast<unsigned int>(pfld_idx), wflw_landmarks[wflw_idx].p};
+                pfldLandmarks[pfldIdx] = FaceLandmark{static_cast<unsigned int>(pfldIdx), wflwLandmarks[wflwIdx].p};
             }
         }
     }
@@ -503,12 +503,12 @@ std::vector<FaceLandmark> LandmarkConverter::interpolateLandmarks(const std::vec
         if (count > 0)
         {
             interpolated.emplace_back(
-                FaceLandmark{static_cast<unsigned int>(missing_idx), math_utils::Point3D(sum_x / count, sum_y / count, sum_z / count)});
+                FaceLandmark{static_cast<unsigned int>(missingIdx), math_utils::Point3D(sumX / count, sumY / count, sumZ / count)});
         }
         else
         {
             // Fallback: use center point or zero
-            interpolated.emplace_back(FaceLandmark{static_cast<unsigned int>(missing_idx), math_utils::Point3D(0, 0, 0)});
+            interpolated.emplace_back(FaceLandmark{static_cast<unsigned int>(missingIdx), math_utils::Point3D(0, 0, 0)});
         }
     }
 
