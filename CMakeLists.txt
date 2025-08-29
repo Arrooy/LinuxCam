@@ -333,6 +333,15 @@ if(BUILD_TESTING)
     enable_testing()
     include(GoogleTest)
 
+    # Define test data directory for test resources
+    set(TEST_DATA_DIR "${CMAKE_SOURCE_DIR}/tests/common")
+    
+    # Configure a header file with test paths
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/tests/test_config.h.in"
+        "${CMAKE_BINARY_DIR}/test_config.h"
+    )
+
     # Automatically find all test source files
     file(GLOB_RECURSE TEST_SRC_FILES CONFIGURE_DEPENDS "tests/*.cpp")
 
@@ -342,6 +351,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         "${LIBJPEG_TURBO_INSTALL_DIR}/include"
+        ${CMAKE_BINARY_DIR}  # For generated test_config.h
     )
 
     # Only link the static library and gtest_main

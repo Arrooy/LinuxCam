@@ -115,9 +115,9 @@ TEST_F(InSwapperRealImageTest, LoadRealImageFromFile)
 {
     ASSERT_TRUE(inswapper_->isReady());
 
-    // Try to load the real image.jpeg file
-    auto realImage = loadRealImage("../tests/common/image.jpeg");
-    ASSERT_TRUE(realImage != nullptr) << "Failed to load real image from ../tests/common/image.jpeg";
+    // Try to load the real single_face.jpeg file
+    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    ASSERT_TRUE(realImage != nullptr) << "Failed to load real image from ../tests/common/single_face.jpeg";
 
     // Verify image properties
     EXPECT_GT(realImage->info.width, 0);
@@ -137,8 +137,8 @@ TEST_F(InSwapperRealImageTest, BasicSwapWithRealImage)
 {
     ASSERT_TRUE(inswapper_->isReady());
 
-    // Try to load the real image.jpeg file
-    auto realImage = loadRealImage("../tests/common/image.jpeg");
+    // Try to load the real single_face.jpeg file
+    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto testEmbedding = createTestEmbedding();
@@ -164,7 +164,7 @@ TEST_F(InSwapperRealImageTest, SwapWithDifferentLandmarks)
     ASSERT_TRUE(inswapper_->isReady());
 
     // Load real image
-    auto realImage = loadRealImage("../tests/common/image.jpeg");
+    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto testEmbedding = createTestEmbedding();
@@ -213,7 +213,7 @@ TEST_F(InSwapperRealImageTest, PerformanceWithRealImage)
     ASSERT_TRUE(inswapper_->isReady());
 
     // Load real image
-    auto realImage = loadRealImage("../tests/common/image.jpeg");
+    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto testEmbedding = createTestEmbedding();
@@ -240,7 +240,7 @@ TEST_F(InSwapperRealImageTest, MultipleOperationsWithRealImage)
     ASSERT_TRUE(inswapper_->isReady());
 
     // Load real image
-    auto realImage = loadRealImage("../tests/common/image.jpeg");
+    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto testEmbedding = createTestEmbedding();

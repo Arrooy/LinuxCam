@@ -1800,6 +1800,16 @@ void Image::alphaBlend(const Image& src, const Image& mask)
     const int npixels = info.width * info.height;
     for (int i = 0; i < npixels; ++i)
     {
+        // TODO: This this out of bounds transformation by using RGBA images in the hole pipeline.
+        const unsigned char* srcPixel = srcData + i * 3;
+        
+        // Skip blending if source pixel is black (likely from out-of-bounds transformation)
+        // This prevents black edges from appearing when faces are rotated
+        if (srcPixel[0] == 0 && srcPixel[1] == 0 && srcPixel[2] == 0)
+        {
+            continue; // Keep original destination pixel unchanged
+        }
+        
         // Blend each pixel using the mask
         pixel_operations::blendPixels(dstData + i * 3, srcData + i * 3, 3, maskData[i], 3, 255);
     }

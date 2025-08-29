@@ -295,6 +295,31 @@ inline void drawMultilineText(Image& img, int x, int y, const std::string& text,
     }
 }
 
+// Draw multiline text with background for better visibility
+inline void drawMultilineTextWithBackground(Image& img, int x, int y, const std::string& text, const Pixel& textColor,
+                                           const Pixel& bgColor, int scale = 1, int lineSpacing = 2, int padding = 2)
+{
+    if (scale <= 0 || text.empty())
+    {
+        return;
+    }
+
+    // Calculate text dimensions for background
+    const TextSize ts = getMultilineTextSize(text, scale, lineSpacing);
+
+    // Draw background rectangle with padding
+    const int bgX = x - padding;
+    const int bgY = y - padding;
+    const int bgWidth = ts.width + 2 * padding;
+    const int bgHeight = ts.height + 2 * padding;
+
+    // Fill background using optimized rectangle fill
+    img.fillRect(bgX, bgY, bgWidth, bgHeight, bgColor);
+
+    // Draw multiline text on top
+    drawMultilineText(img, x, y, text, textColor, scale, lineSpacing);
+}
+
 // Draw text aligned within a bounding rectangle
 enum class TextAlignment
 {

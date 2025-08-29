@@ -1,7 +1,8 @@
 /**
  * TEST UTILITIES IMPLEMENTATION
  *
- * Common utility functions for WFLW integration tests
+ * Common utility functions for integration tests
+ * Provides environment variable handling, test configuration helpers, and path resolution
  */
 
 #include "test_utils.h"
@@ -13,8 +14,13 @@
 #include <stdexcept>
 #include <string>
 
+// Include the generated test configuration
+#include "test_config.h"
+
 namespace TestUtils
 {
+
+// ========== Environment Variable Utilities ==========
 
 int getMaxSamples(int max_available)
 {
@@ -61,6 +67,43 @@ bool getEnvVarBool(const char* var_name)
     std::transform(value.begin(), value.end(), value.begin(), ::tolower);
     
     return value == "1" || value == "true" || value == "yes" || value == "on" || value == "enabled";
+}
+
+// ========== Path Resolution Utilities ==========
+
+std::string getTestDataDir()
+{
+    return ::getTestDataDir();  // Delegate to the generated function
+}
+
+std::string getTestImagePath(const std::string& filename)
+{
+    return ::getTestImagePath(filename);  // Delegate to the generated function
+}
+
+std::string getTestResultsDir(const std::string& test_suite_name)
+{
+    return ::getSourceDir() + "/tests/" + test_suite_name + "/results";
+}
+
+std::string getTestResultPath(const std::string& test_suite_name, const std::string& filename)
+{
+    return getTestResultsDir(test_suite_name) + "/" + filename;
+}
+
+std::string getConfigPath()
+{
+    return ::getConfigFile();  // Delegate to the generated function
+}
+
+std::string getModelsDir()
+{
+    return ::getModelsDirectory();  // Delegate to the generated function
+}
+
+std::string getModelPath(const std::string& model_name)
+{
+    return getModelsDir() + "/" + model_name;
 }
 
 } // namespace TestUtils

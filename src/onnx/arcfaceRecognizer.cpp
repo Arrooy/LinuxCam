@@ -69,20 +69,20 @@ bool ArcfaceRecognizer::recognize(const Image& inputImg, const std::vector<math_
         val /= norm;
     }
     // print embedding for debugging
-    {
-        // Print embedding in numpy array format for easy copy-paste to Python
-        std::string npArray = "np.array([";
-        for (size_t i = 0; i < embedding.size(); ++i)
-        {
-            npArray += std::to_string(embedding[i]);
-            if (i != embedding.size() - 1)
-            {
-                npArray += ", ";
-            }
-        }
-        npArray += "])";
-        common::logInfo("%s", npArray.c_str());
-    }
+    // {
+    //     // Print embedding in numpy array format for easy copy-paste to Python
+    //     std::string npArray = "np.array([";
+    //     for (size_t i = 0; i < embedding.size(); ++i)
+    //     {
+    //         npArray += std::to_string(embedding[i]);
+    //         if (i != embedding.size() - 1)
+    //         {
+    //             npArray += ", ";
+    //         }
+    //     }
+    //     npArray += "])";
+    //     common::logInfo("%s", npArray.c_str());
+    // }
     Profiler::getInstance().stop("ArcfaceRecognizer", "recognize");
     return true;
 }
