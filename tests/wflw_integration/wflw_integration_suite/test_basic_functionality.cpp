@@ -18,7 +18,7 @@ TEST_F(BasicFunctionalityTest, DetectorInitialization)
 {
     EXPECT_TRUE(scrfd_detector_->isReady());
     EXPECT_TRUE(pfld_detector_->isReady());
-    EXPECT_GT(wflw_loader_->get_num_examples(), 0);
+    EXPECT_GT(wflw_loader_->getSampleCount(), 0);
 }
 
 TEST_F(BasicFunctionalityTest, ConfigurationValidation)
@@ -43,30 +43,31 @@ TEST_F(BasicFunctionalityTest, ConfigurationValidation)
 
 TEST_F(BasicFunctionalityTest, SingleImagePipeline)
 {
-    WFLWExample example;
-    ASSERT_TRUE(wflw_loader_->load_example(0, example));
-    ASSERT_TRUE(example.image != nullptr);
+    const auto& sample = wflw_loader_->getSample(0);
+    auto image_ptr = sample.loadImage();
+    ASSERT_TRUE(image_ptr != nullptr);
 
     // Face detection
-    auto detected_faces = scrfd_detector_->detect(example.image);
+    auto detected_faces = scrfd_detector_->detect(image_ptr);
     EXPECT_GT(detected_faces.size(), 0) << "No faces detected in test image";
 
     if (!detected_faces.empty())
     {
         // Use face matching to find the best corresponding face
-        auto match_result = findBestMatchingFace(detected_faces, example.bounding_box);
+        math_utils::Rect<double> gt_rect(sample.bbox[0], sample.bbox[1], sample.bbox[2], sample.bbox[3]);
+        auto match_result = findBestMatchingFace(detected_faces, gt_rect);
 
         if (match_result.found_match)
         {
             Face& face = *match_result.best_face;
 
             std::cout << "\n=== Single Image Pipeline Test ===\n";
-            std::cout << "Image size: " << example.image->info.width << "x" << example.image->info.height << "\n";
-            std::cout << "WFLW ground truth landmarks: " << example.landmarks.size() << "\n";
+            std::cout << "Image size: " << image_ptr->info.width << "x" << image_ptr->info.height << "\n";
+            std::cout << "WFLW ground truth landmarks: " << sample.landmarks.size() << "\n";
             std::cout << "Selected face " << match_result.face_index << " with IoU: " << match_result.iou_score << "\n";
 
             // Run PFLD landmark detection
-            pfld_detector_->detect(example.image, face);
+            pfld_detector_->detect(image_ptr, face);
             auto landmarks = face.getLandmarks();
 
             std::vector<FaceLandmark> pfld_98_landmarks;
@@ -78,9 +79,15 @@ TEST_F(BasicFunctionalityTest, SingleImagePipeline)
                 // Convert PFLD 106 landmarks to WFLW 98 format
                 pfld_98_landmarks = LandmarkConverter::pfldToWflw(landmarks);
 
-                if (pfld_98_landmarks.size() == example.landmarks.size())
+                if (pfld_98_landmarks.size() == sample.landmarks.size())
                 {
-                    mne = calculateMNE(pfld_98_landmarks, example.landmarks, iod);
+                    // Convert sample landmarks from array<double,2> to math_utils::Point<double>
+                    std::vector<math_utils::Point<double>> ground_truth;
+                    for (const auto& landmark : sample.landmarks) {
+                        ground_truth.emplace_back(landmark[0], landmark[1]);
+                    }
+                    
+                    mne = calculateMNE(pfld_98_landmarks, ground_truth, iod);
                     std::cout << "Landmarks detected: 106 -> 98, IOD: " << std::fixed << std::setprecision(2) << iod
                               << ", MNE: " << mne << "\n";
 
@@ -88,7 +95,7 @@ TEST_F(BasicFunctionalityTest, SingleImagePipeline)
                 }
                 else
                 {
-                    FAIL() << "Landmark conversion failed: expected " << example.landmarks.size() << " landmarks, got "
+                    FAIL() << "Landmark conversion failed: expected " << sample.landmarks.size() << " landmarks, got "
                            << pfld_98_landmarks.size();
                 }
             }
@@ -101,7 +108,7 @@ TEST_F(BasicFunctionalityTest, SingleImagePipeline)
             const char* save_images_env = std::getenv("SAVE_IMAGES");
             if (save_images_env && !pfld_98_landmarks.empty())
             {
-                saveDetectionVisualizationWithFaceInfo(example, pfld_98_landmarks, 0, mne, match_result.face_index,
+                saveDetectionVisualizationWithFaceInfo(sample, pfld_98_landmarks, 0, mne, match_result.face_index,
                                                        match_result.iou_score, static_cast<int>(detected_faces.size()));
             }
         }

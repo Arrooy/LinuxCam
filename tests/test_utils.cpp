@@ -22,10 +22,10 @@ namespace TestUtils
 
 // ========== Environment Variable Utilities ==========
 
-int getMaxSamples(int max_available)
+int getMaxSamples(int upper_limit)
 {
     int samples = getEnvVarInt("WFLW_MAX_SAMPLES", 5);
-    return std::max(1, std::min(samples, max_available));
+    return std::max(1, std::min(samples, upper_limit));
 }
 
 int getMaxFacesPerImage()

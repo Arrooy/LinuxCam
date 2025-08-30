@@ -2,12 +2,15 @@
  * TEST UTILITIES
  *
  * Common utility functions for integration tests
- * Provides environment variable handling, test configuration helpers, and path resolution
+ * Provides environment variable handling, test configuration helpers, path resolution, and dataset loading
  */
 
 #pragma once
 
 #include <string>
+
+// Forward declare dataset utilities namespace
+namespace TestUtils::Datasets { class SimpleWFLWLoader; }
 
 namespace TestUtils
 {
@@ -16,10 +19,10 @@ namespace TestUtils
 
 /**
  * Get maximum number of samples to process from WFLW_MAX_SAMPLES environment variable
- * @param max_available Maximum samples available in the dataset
- * @return Number of samples to process (default: 5, min: 1, max: max_available)
+ * @param upper_limit Upper limit for samples to process (caps the result)
+ * @return Number of samples to process (default: 5, min: 1, max: upper_limit)
  */
-int getMaxSamples(int max_available);
+int getMaxSamples(int upper_limit);
 
 /**
  * Get maximum number of faces per image from WFLW_MAX_FACES_PER_IMAGE environment variable

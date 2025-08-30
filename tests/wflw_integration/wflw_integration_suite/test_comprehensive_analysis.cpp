@@ -69,90 +69,69 @@ class ComprehensiveAnalysisTest : public WFLWTestBase
                           << "/" << example_indices.size() << ")\n";
             }
 
-            WFLWExample example;
-            if (!wflw_loader_->load_example(idx, example) || !example.image)
+            const auto& sample = wflw_loader_->getSample(idx);
+            auto image_ptr = sample.loadImage();
+            if (!image_ptr)
             {
                 results.image_load_failures++;
                 continue;
             }
-
-            // Time SCRFD detection
             auto scrfd_start = std::chrono::high_resolution_clock::now();
-            auto detected_faces = scrfd_detector_->detect(example.image);
+            auto detected_faces = scrfd_detector_->detect(image_ptr);
             auto scrfd_end = std::chrono::high_resolution_clock::now();
-
             double scrfd_time = std::chrono::duration<double, std::milli>(scrfd_end - scrfd_start).count();
             total_scrfd_time += scrfd_time;
-
             if (detected_faces.empty())
             {
                 results.scrfd_failures++;
                 continue;
             }
-
-            // Find best matching face
-            auto match_result = findBestMatchingFace(detected_faces, example.bounding_box, 0.1);
+            math_utils::Rect<double> gt_rect(sample.bbox[0], sample.bbox[1], sample.bbox[2], sample.bbox[3]);
+            auto match_result = findBestMatchingFace(detected_faces, gt_rect, 0.1);
             if (!match_result.found_match)
             {
                 results.face_match_failures++;
                 continue;
             }
-
-            // Time PFLD detection
             auto pfld_start = std::chrono::high_resolution_clock::now();
-            pfld_detector_->detect(example.image, *match_result.best_face);
+            pfld_detector_->detect(image_ptr, *match_result.best_face);
             auto pfld_end = std::chrono::high_resolution_clock::now();
-
             double pfld_time = std::chrono::duration<double, std::milli>(pfld_end - pfld_start).count();
             total_pfld_time += pfld_time;
-
             auto landmarks = match_result.best_face->getLandmarks();
             if (landmarks.size() != 106)
             {
                 results.pfld_failures++;
                 continue;
             }
-
-            // Convert and validate
             auto pfld_98_landmarks = LandmarkConverter::pfldToWflw(landmarks);
             double iod = calculateInterocularDistance(*match_result.best_face);
-
             if (pfld_98_landmarks.size() != 98)
             {
                 results.conversion_failures++;
                 continue;
             }
-
             if (iod <= 0.0)
             {
                 results.iod_failures++;
                 continue;
             }
-
-            // Calculate MNE
-            double mne = calculateMNE(pfld_98_landmarks, example.landmarks, iod);
-            if (mne < 100.0) // Sanity check
+            std::vector<math_utils::Point<double>> gt_landmarks;
+            for (const auto& lm : sample.landmarks)
+                gt_landmarks.emplace_back(lm[0], lm[1]);
+            double mne = calculateMNE(pfld_98_landmarks, gt_landmarks, iod);
+            if (mne < 100.0)
             {
                 results.individual_mne_scores.push_back(mne);
                 results.successful_detections++;
-
-                // Categorize performance
                 if (mne < 0.03)
-                {
                     results.excellent_count++;
-                }
                 else if (mne < 0.05)
-                {
                     results.good_count++;
-                }
                 else if (mne < 0.08)
-                {
                     results.fair_count++;
-                }
                 else
-                {
                     results.poor_count++;
-                }
             }
         }
 
@@ -297,18 +276,18 @@ TEST_F(ComprehensiveAnalysisTest, AttributeBasedAnalysis)
     };
 
     std::vector<AttributeComparison> comparisons = {
-        {"POSE",         wflw_loader_->getExamplesByAttribute(true, true, true, true, true, true),
-         wflw_loader_->getExamplesByAttribute(false, true,  true,  true,  true,  true) },
-        {"EXPRESSION",   wflw_loader_->getExamplesByAttribute(true, true, true, true, true, true),
-         wflw_loader_->getExamplesByAttribute(true,  false, true,  true,  true,  true) },
-        {"ILLUMINATION", wflw_loader_->getExamplesByAttribute(true, true, true, true, true, true),
-         wflw_loader_->getExamplesByAttribute(true,  true,  false, true,  true,  true) },
-        {"MAKEUP",       wflw_loader_->getExamplesByAttribute(true, true, true, true, true, true),
-         wflw_loader_->getExamplesByAttribute(true,  true,  true,  false, true,  true) },
-        {"OCCLUSION",    wflw_loader_->getExamplesByAttribute(true, true, true, true, true, true),
-         wflw_loader_->getExamplesByAttribute(true,  true,  true,  true,  false, true) },
-        {"BLUR",         wflw_loader_->getExamplesByAttribute(true, true, true, true, true, true),
-         wflw_loader_->getExamplesByAttribute(true,  true,  true,  true,  true,  false)}
+        {"POSE",         wflw_loader_->getSamplesByAttributes(true, true, true, true, true, true),
+         wflw_loader_->getSamplesByAttributes(false, true,  true,  true,  true,  true) },
+        {"EXPRESSION",   wflw_loader_->getSamplesByAttributes(true, true, true, true, true, true),
+         wflw_loader_->getSamplesByAttributes(true,  false, true,  true,  true,  true) },
+        {"ILLUMINATION", wflw_loader_->getSamplesByAttributes(true, true, true, true, true, true),
+         wflw_loader_->getSamplesByAttributes(true,  true,  false, true,  true,  true) },
+        {"MAKEUP",       wflw_loader_->getSamplesByAttributes(true, true, true, true, true, true),
+         wflw_loader_->getSamplesByAttributes(true,  true,  true,  false, true,  true) },
+        {"OCCLUSION",    wflw_loader_->getSamplesByAttributes(true, true, true, true, true, true),
+         wflw_loader_->getSamplesByAttributes(true,  true,  true,  true,  false, true) },
+        {"BLUR",         wflw_loader_->getSamplesByAttributes(true, true, true, true, true, true),
+         wflw_loader_->getSamplesByAttributes(true,  true,  true,  true,  true,  false)}
     };
 
     // Allow dynamic sample size control via environment variable

@@ -28,7 +28,7 @@ class Profiler
         return instance;
     }
     // TODO(runner): Instead of storing last time, store list and average? Min,
-    // max? refresh every 20sec
+    // max? refresh every x seconds configurable.
     void start(const std::string& sourceName, const std::string& name);
     void stop(const std::string& sourceName, const std::string& name);
 

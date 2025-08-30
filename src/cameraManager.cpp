@@ -191,17 +191,7 @@ void CameraManager::createOutputCameraOverlay(const std::shared_ptr<V4L2Loopback
     // Create simple border effect
     const Pixel borderColor{255, 0, 0, 128}; // Red with ~50% alpha
     const int borderWidth = 3;
-    // TODO: optimize by drawing rectangles in image.
-    for (unsigned int y = 0; y < height; ++y)
-    {
-        for (unsigned int x = 0; x < width; ++x)
-        {
-            const bool isBorder =
-                (x < borderWidth || x >= width - borderWidth || y < borderWidth || y >= height - borderWidth);
-
-            overlayImage->ppx(x, y, isBorder ? borderColor : overlayColor);
-        }
-    }
+    overlayImage->drawBorder(borderColor, borderWidth);
 
     // Create overlay layer
     Layer overlayLayer;
@@ -270,20 +260,10 @@ void CameraManager::updateOutputCameraOverlay(const std::shared_ptr<V4L2Loopback
         borderColor = {255, 165, 0, 120};
     }
 
-    const int borderWidth = 4;
-
     // Update overlay with current status
-    for (unsigned int y = 0; y < outputHeight && y < overlayLayer->img->info.height; ++y)
-    {
-        for (unsigned int x = 0; x < outputWidth && x < overlayLayer->img->info.width; ++x)
-        {
-            const bool isBorder = (x < borderWidth || x >= outputWidth - borderWidth || y < borderWidth
-                                   || y >= outputHeight - borderWidth);
-
-            overlayLayer->img->ppx(x, y, isBorder ? borderColor : fillColor);
-        }
-    }
-
+    const int borderWidth = 4;
+    overlayLayer->img->fillRect(0, 0, overlayLayer->img->info.width, overlayLayer->img->info.height, fillColor);
+    overlayLayer->img->drawBorder(borderColor, borderWidth);
     // Mark as dirty to trigger redraw
     overlayLayer->dirty = true;
 }

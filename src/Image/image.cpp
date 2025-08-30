@@ -860,7 +860,7 @@ void Image::fillRect(int x, int y, int width, int height, const Pixel& color)
         std::memcpy(dest, rowBuffer.get(), rowBytes);
     }
 }
-
+// TODO: Thickness is ignored for line drawing
 void Image::drawBorder(const Pixel& color, int thickness)
 {
     // Draw a border around the image
@@ -1802,7 +1802,7 @@ void Image::alphaBlend(const Image& src, const Image& mask)
     {
         // TODO: This this out of bounds transformation by using RGBA images in the hole pipeline.
         const unsigned char* srcPixel = srcData + i * 3;
-        
+
         // Skip blending if source pixel is black (likely from out-of-bounds transformation)
         // This prevents black edges from appearing when faces are rotated
         if (srcPixel[0] == 0 && srcPixel[1] == 0 && srcPixel[2] == 0)

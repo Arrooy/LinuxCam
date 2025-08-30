@@ -8,6 +8,7 @@
 
 using namespace linuxface;
 
+// TODO: Create thickness parameterized tests. Currently thickness is ignored.
 TEST(ImageMisc, DrawBorderZeroThickness)
 {
     Image img(Pixel(1, 2, 3), 2, 2);

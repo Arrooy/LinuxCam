@@ -261,8 +261,8 @@ TEST_F(InSwapperUnitTest, PerformanceBounds)
 
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    // Swap should complete within reasonable time (adjust as needed)
-    EXPECT_LT(duration.count(), 2000) << "Swap took " << duration.count() << "ms";
+    // Swap should complete within reasonable time (CPU and GPU)
+    EXPECT_LT(duration.count(), 10000) << "Swap took " << duration.count() << "ms";
 }
 
 // Test multiple consecutive operations

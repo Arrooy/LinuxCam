@@ -599,7 +599,7 @@ class DepthZ16Decoder : public Decoder
         }
     }
 
-    void jetColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b) const
+    static void jetColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b)
     {
         // Clamp value to [0, 1]
         value = std::max(0.0f, std::min(1.0f, value));
@@ -629,8 +629,8 @@ class DepthZ16Decoder : public Decoder
             b = 0;
         }
     }
-    // TODO(arroyo): Could be static
-    void hotColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b) const
+
+    static void hotColorMap(float value, unsigned char& r, unsigned char& g, unsigned char& b)
     {
         // Clamp value to [0, 1]
         value = std::max(0.0f, std::min(1.0f, value));

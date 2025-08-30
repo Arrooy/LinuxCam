@@ -96,7 +96,8 @@ class LandmarkMappingTest : public ::testing::Test
         ASSERT_TRUE(pfld_detector_->isReady())
             << "PFLD detector failed to initialize. Expected path: " << models_folder << "pfld-106-v3.onnx";
 
-        const std::string test_annotations = WFLWTestBase::getWFLWAnnotationsPath() + "/list_98pt_rect_attr_test.txt";
+        const std::string base_path = Config::getInstance().getWFLWFolderPath();
+        const std::string test_annotations = base_path + "/WFLW_annotations/list_98pt_rect_attr_train_test/list_98pt_rect_attr_test.txt";
         wflw_loader_ = std::make_unique<WFLWLoader>(test_annotations, 50);
 
         ASSERT_GT(wflw_loader_->get_num_examples(), 0);

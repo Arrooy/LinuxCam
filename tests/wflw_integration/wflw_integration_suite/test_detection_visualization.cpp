@@ -28,7 +28,7 @@ TEST_F(DetectionVisualizationTest, MultiImageDetectionVisualization)
     }
 
     // Select a diverse set of images to visualize (first 10 images)
-    int num_images_to_process = std::min(10, wflw_loader_->get_num_examples());
+    int num_images_to_process = std::min(10, wflw_loader_->getSampleCount());
     std::cout << "Processing " << num_images_to_process << " images for visualization\n";
 
     int successful_detections = 0;
@@ -37,24 +37,19 @@ TEST_F(DetectionVisualizationTest, MultiImageDetectionVisualization)
 
     for (int img_idx = 0; img_idx < num_images_to_process; ++img_idx)
     {
-        WFLWExample example;
-        if (!wflw_loader_->load_example(img_idx, example))
+        const auto& sample = wflw_loader_->getSample(img_idx);
+        auto image_ptr = sample.loadImage();
+        if (!image_ptr)
         {
             std::cout << "Failed to load image " << img_idx << ", skipping...\n";
             continue;
         }
 
-        if (!example.image)
-        {
-            std::cout << "Image " << img_idx << " is null, skipping...\n";
-            continue;
-        }
-
-        std::cout << "Processing image " << img_idx << " (" << example.image->info.width << "x"
-                  << example.image->info.height << ")\n";
+        std::cout << "Processing image " << img_idx << " (" << image_ptr->info.width << "x"
+                  << image_ptr->info.height << ")\n";
 
         // Detect faces using SCRFD
-        auto detected_faces = scrfd_detector_->detect(example.image);
+        auto detected_faces = scrfd_detector_->detect(image_ptr);
 
         if (detected_faces.empty())
         {
@@ -65,11 +60,13 @@ TEST_F(DetectionVisualizationTest, MultiImageDetectionVisualization)
         std::cout << "Detected " << detected_faces.size() << " faces\n";
 
         // Find the best matching face for the ground truth landmarks using IoU
-        const auto& gt_bbox = example.bounding_box;
-        std::cout << "Ground truth bbox: [" << gt_bbox.l << "," << gt_bbox.t << "," << gt_bbox.r << "," << gt_bbox.b
+        const auto& gt_bbox = sample.bbox;
+        std::cout << "Ground truth bbox: [" << gt_bbox[0] << "," << gt_bbox[1] << "," << gt_bbox[2] << "," << gt_bbox[3]
                   << "]\n";
 
-        auto match_result = findBestMatchingFace(detected_faces, gt_bbox, 0.1);
+        // Convert bbox to math_utils::Rect<double>
+        math_utils::Rect<double> gt_rect(gt_bbox[0], gt_bbox[1], gt_bbox[2], gt_bbox[3]);
+        auto match_result = findBestMatchingFace(detected_faces, gt_rect, 0.1);
 
         if (!match_result.found_match)
         {
@@ -82,8 +79,7 @@ TEST_F(DetectionVisualizationTest, MultiImageDetectionVisualization)
                 std::cout << "Detected face " << face_idx << " bbox: [" << det_bbox.rect.l << "," << det_bbox.rect.t
                           << "," << det_bbox.rect.r << "," << det_bbox.rect.b << "]\n";
 
-                // Calculate and show IoU even if below threshold
-                auto debug_result = findBestMatchingFace({detected_faces[face_idx]}, gt_bbox, 0.0);
+                auto debug_result = findBestMatchingFace({detected_faces[face_idx]}, gt_rect, 0.0);
                 std::cout << "Face " << face_idx << " IoU: " << std::fixed << std::setprecision(3)
                           << debug_result.iou_score << "\n";
             }
@@ -95,7 +91,7 @@ TEST_F(DetectionVisualizationTest, MultiImageDetectionVisualization)
 
         // Run PFLD landmark detection on the best matching face
         Face& selected_face = *match_result.best_face;
-        pfld_detector_->detect(example.image, selected_face);
+        pfld_detector_->detect(image_ptr, selected_face);
         auto landmarks = selected_face.getLandmarks();
 
         if (landmarks.size() != 106)
@@ -116,7 +112,12 @@ TEST_F(DetectionVisualizationTest, MultiImageDetectionVisualization)
             continue;
         }
 
-        double mne = calculateMNE(pfld_98_landmarks, example.landmarks, iod);
+        // Convert sample.landmarks to vector<math_utils::Point<double>>
+        std::vector<math_utils::Point<double>> gt_landmarks;
+        for (const auto& lm : sample.landmarks)
+            gt_landmarks.emplace_back(lm[0], lm[1]);
+
+        double mne = calculateMNE(pfld_98_landmarks, gt_landmarks, iod);
         std::cout << "Landmarks detected: 106 -> 98, IOD: " << std::fixed << std::setprecision(2) << iod
                   << ", MNE: " << mne << "\n";
 
@@ -128,7 +129,7 @@ TEST_F(DetectionVisualizationTest, MultiImageDetectionVisualization)
         // Save visualization if requested
         if (save_images_env)
         {
-            saveDetectionVisualizationWithFaceInfo(example, pfld_98_landmarks, img_idx, mne, match_result.face_index,
+            saveDetectionVisualizationWithFaceInfo(sample, pfld_98_landmarks, img_idx, mne, match_result.face_index,
                                                    match_result.iou_score, static_cast<int>(detected_faces.size()));
         }
     }
@@ -177,17 +178,18 @@ TEST_F(DetectionVisualizationTest, FaceMatchingAccuracy)
     int multi_face_images = 0;
 
     // Test first 20 images to find multi-face scenarios
-    int max_test_images = std::min(20, wflw_loader_->get_num_examples());
+    int max_test_images = std::min(20, wflw_loader_->getSampleCount());
 
     for (int img_idx = 0; img_idx < max_test_images; ++img_idx)
     {
-        WFLWExample example;
-        if (!wflw_loader_->load_example(img_idx, example) || !example.image)
+        const auto& sample = wflw_loader_->getSample(img_idx);
+        auto image_ptr = sample.loadImage();
+        if (!image_ptr)
         {
             continue;
         }
 
-        auto detected_faces = scrfd_detector_->detect(example.image);
+        auto detected_faces = scrfd_detector_->detect(image_ptr);
         if (detected_faces.size() < 2)
         {
             continue; // Skip single-face images for this test
@@ -199,7 +201,7 @@ TEST_F(DetectionVisualizationTest, FaceMatchingAccuracy)
         std::cout << "Image " << img_idx << ": " << detected_faces.size() << " faces detected\n";
 
         // Find best match
-        auto match_result = findBestMatchingFace(detected_faces, example.bounding_box, 0.1);
+        auto match_result = findBestMatchingFace(detected_faces, math_utils::Rect<double>(sample.bbox[0], sample.bbox[1], sample.bbox[2], sample.bbox[3]), 0.1);
 
         if (match_result.found_match)
         {

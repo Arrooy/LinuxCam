@@ -5,7 +5,7 @@
 
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/math_utils.h"
-// TODO(runner): Add gtest of this helper.
+
 /**
  * 8x8 monochrome bitmap fonts for rendering
  * Author: Daniel Hepper <daniel@hepper.net>

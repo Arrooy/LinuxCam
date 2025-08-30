@@ -41,35 +41,21 @@ class FailureAnalysisTest : public WFLWTestBase
                 break;
             }
 
-            WFLWExample example;
             FailureCase failure_case;
             failure_case.image_index = idx;
-
-            // Try to load example
-            if (!wflw_loader_->load_example(idx, example))
+            const auto& sample = wflw_loader_->getSample(idx);
+            auto image_ptr = sample.loadImage();
+            if (!image_ptr)
             {
                 failure_case.failure_type = "IMAGE_LOAD_FAILURE";
-                failure_case.description = "Failed to load WFLW example or image data";
+                failure_case.description = "Failed to load WFLW sample or image data";
                 failures.push_back(failure_case);
                 continue;
             }
-
-            if (!example.image)
-            {
-                failure_case.failure_type = "NULL_IMAGE";
-                failure_case.description = "Image pointer is null after loading";
-                failures.push_back(failure_case);
-                continue;
-            }
-
-            // Store ground truth bbox info
             failure_case.has_ground_truth_bbox = true;
-            failure_case.ground_truth_bbox = example.bounding_box;
-
-            // Try SCRFD detection
-            auto detected_faces = scrfd_detector_->detect(example.image);
+            failure_case.ground_truth_bbox = math_utils::Rect<double>(sample.bbox[0], sample.bbox[1], sample.bbox[2], sample.bbox[3]);
+            auto detected_faces = scrfd_detector_->detect(image_ptr);
             failure_case.detected_faces = detected_faces.size();
-
             if (detected_faces.empty())
             {
                 failure_case.failure_type = "SCRFD_NO_DETECTION";
@@ -77,17 +63,10 @@ class FailureAnalysisTest : public WFLWTestBase
                 failures.push_back(failure_case);
                 continue;
             }
-
-            // Store detected bboxes for analysis
             for (const auto& face : detected_faces)
-            {
                 failure_case.detected_bboxes.push_back(face.getBoundingBox().rect);
-            }
-
-            // Try face matching
-            auto match_result = findBestMatchingFace(detected_faces, example.bounding_box, 0.1);
+            auto match_result = findBestMatchingFace(detected_faces, failure_case.ground_truth_bbox, 0.1);
             failure_case.attempted_iou = match_result.iou_score;
-
             if (!match_result.found_match)
             {
                 failure_case.failure_type = "FACE_MATCH_FAILURE";
@@ -96,11 +75,8 @@ class FailureAnalysisTest : public WFLWTestBase
                 failures.push_back(failure_case);
                 continue;
             }
-
-            // Try PFLD detection
-            pfld_detector_->detect(example.image, *match_result.best_face);
+            pfld_detector_->detect(image_ptr, *match_result.best_face);
             auto landmarks = match_result.best_face->getLandmarks();
-
             if (landmarks.size() != 106)
             {
                 failure_case.failure_type = "PFLD_LANDMARK_FAILURE";
@@ -109,8 +85,6 @@ class FailureAnalysisTest : public WFLWTestBase
                 failures.push_back(failure_case);
                 continue;
             }
-
-            // Try conversion
             auto pfld_98_landmarks = LandmarkConverter::pfldToWflw(landmarks);
             if (pfld_98_landmarks.size() != 98)
             {
@@ -120,8 +94,6 @@ class FailureAnalysisTest : public WFLWTestBase
                 failures.push_back(failure_case);
                 continue;
             }
-
-            // Try IOD calculation
             double iod = calculateInterocularDistance(*match_result.best_face);
             if (iod <= 0.0)
             {
@@ -130,10 +102,11 @@ class FailureAnalysisTest : public WFLWTestBase
                 failures.push_back(failure_case);
                 continue;
             }
-
-            // Try MNE calculation - flag extremely high MNE as potential failure
-            double mne = calculateMNE(pfld_98_landmarks, example.landmarks, iod);
-            if (mne > 0.15) // Very high error threshold
+            std::vector<math_utils::Point<double>> gt_landmarks;
+            for (const auto& lm : sample.landmarks)
+                gt_landmarks.emplace_back(lm[0], lm[1]);
+            double mne = calculateMNE(pfld_98_landmarks, gt_landmarks, iod);
+            if (mne > 0.15)
             {
                 failure_case.failure_type = "HIGH_MNE_ERROR";
                 failure_case.description = "Extremely high MNE score: " + std::to_string(mne);
@@ -148,14 +121,10 @@ class FailureAnalysisTest : public WFLWTestBase
 
     void generateFailureDebugVisualization(const FailureCase& failure_case) const
     {
-        WFLWExample example;
-        if (!wflw_loader_->load_example(failure_case.image_index, example) || !example.image)
-        {
-            return; // Can't visualize if we can't load the image
-        }
-
-        // Create a copy of the image for debug visualization
-        auto debug_image = example.image->deepCopy();
+        const auto& sample = wflw_loader_->getSample(failure_case.image_index);
+        auto image_ptr = sample.loadImage();
+        if (!image_ptr) return;
+        auto debug_image = image_ptr->deepCopy();
 
         // Draw ground truth bounding box outline
         if (failure_case.has_ground_truth_bbox)
@@ -244,10 +213,10 @@ class FailureAnalysisTest : public WFLWTestBase
         Pixel blue_color(0, 0, 255);
         std::vector<math_utils::Point<long>> landmark_points;
 
-        for (const auto& landmark : example.landmarks)
+        for (const auto& landmark : sample.landmarks)
         {
-            int x = static_cast<int>(landmark.x);
-            int y = static_cast<int>(landmark.y);
+            int x = static_cast<int>(landmark[0]);
+            int y = static_cast<int>(landmark[1]);
             landmark_points.emplace_back(x, y);
         }
         debug_image->paintPoints(landmark_points, blue_color);
@@ -298,7 +267,7 @@ TEST_F(FailureAnalysisTest, DetectAndAnalyzeFailures)
 
     // Test on a subset of images to find failures
     std::vector<int> test_indices;
-    int max_test_images = std::min(100, wflw_loader_->get_num_examples());
+    int max_test_images = std::min(100, wflw_loader_->getSampleCount());
     for (int i = 0; i < max_test_images; ++i)
     {
         test_indices.push_back(i);
@@ -370,7 +339,7 @@ TEST_F(FailureAnalysisTest, GenerateDebugVisualizations)
 
     // Find some failures to visualize
     std::vector<int> test_indices;
-    int max_test_images = std::min(50, wflw_loader_->get_num_examples());
+    int max_test_images = std::min(50, wflw_loader_->getSampleCount());
     for (int i = 0; i < max_test_images; ++i)
     {
         test_indices.push_back(i);
@@ -409,12 +378,26 @@ TEST_F(FailureAnalysisTest, ErrorHandlingValidation)
 
     // Test 1: Invalid image index
     std::cout << "Testing invalid image index handling...\n";
-    WFLWExample invalid_example;
-    bool load_result = wflw_loader_->load_example(-1, invalid_example);
-    EXPECT_FALSE(load_result) << "Should handle invalid negative index gracefully";
+    
+    // Test negative index - should handle gracefully
+    bool negative_index_handled = false;
+    try {
+        const auto& sample = wflw_loader_->getSample(-1);
+        negative_index_handled = false; // Should not reach here
+    } catch (const std::exception&) {
+        negative_index_handled = true; // Expected behavior
+    }
+    EXPECT_TRUE(negative_index_handled) << "Should handle invalid negative index gracefully";
 
-    load_result = wflw_loader_->load_example(999999, invalid_example);
-    EXPECT_FALSE(load_result) << "Should handle out-of-range index gracefully";
+    // Test out-of-range index - should handle gracefully  
+    bool out_of_range_handled = false;
+    try {
+        const auto& sample = wflw_loader_->getSample(999999);
+        out_of_range_handled = false; // Should not reach here
+    } catch (const std::exception&) {
+        out_of_range_handled = true; // Expected behavior
+    }
+    EXPECT_TRUE(out_of_range_handled) << "Should handle out-of-range index gracefully";
 
     // Test 2: Null image handling
     std::cout << "Testing null image handling...\n";

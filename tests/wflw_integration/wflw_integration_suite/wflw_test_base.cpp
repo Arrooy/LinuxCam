@@ -14,7 +14,6 @@
 #include "config.hpp"
 
 using namespace linuxface;
-using namespace linuxface::test;
 
 void WFLWTestBase::SetUp()
 {
@@ -82,38 +81,14 @@ void WFLWTestBase::SetUp()
         GTEST_SKIP() << "Failed to initialize PFLD detector: " << e.what();
     }
 
-    // Initialize WFLW loader
-    std::string wflw_annotations_path = getWFLWAnnotationsPath() + "/list_98pt_rect_attr_test.txt";
-    if (!std::filesystem::exists(wflw_annotations_path))
-    {
-        GTEST_SKIP() << "WFLW annotations not found at: " << wflw_annotations_path;
-    }
-
-    // Get max samples from environment variable, default to 100 for tests
+    // Initialize WFLW loader using centralized dataset utilities
+    wflw_loader_ = std::make_unique<TestUtils::Datasets::SimpleWFLWLoader>();
     int max_samples = TestUtils::getEnvVarInt("WFLW_MAX_SAMPLES", 100);
-    
-    // For local development, allow unlimited samples
-    if (max_samples == -1)
-    {
-        std::cout << "Loading ALL available WFLW samples (this may take a while)" << std::endl;
+    if (!wflw_loader_->loadDataset(max_samples)) {
+        GTEST_SKIP() << "Failed to load WFLW dataset using centralized loader.";
     }
-    else
-    {
-        std::cout << "Loading up to " << max_samples << " WFLW samples for testing" << std::endl;
-    }
-
-    try
-    {
-        wflw_loader_ = std::make_unique<WFLWLoader>(wflw_annotations_path, max_samples);
-    }
-    catch (const std::exception& e)
-    {
-        GTEST_SKIP() << "Failed to initialize WFLW loader: " << e.what();
-    }
-
-    if (wflw_loader_->get_num_examples() == 0)
-    {
-        GTEST_SKIP() << "No WFLW examples loaded";
+    if (wflw_loader_->getSampleCount() == 0) {
+        GTEST_SKIP() << "No WFLW samples loaded.";
     }
 }
 
@@ -149,42 +124,6 @@ std::string WFLWTestBase::createTestOutputDirectory(const std::string& test_name
     }
     
     return output_dir.string();
-}
-
-std::string WFLWTestBase::normalizePath(const std::string& path)
-{
-    std::string normalized = path;
-
-    // Remove any trailing slashes first
-    while (!normalized.empty() && normalized.back() == '/')
-    {
-        normalized.pop_back();
-    }
-
-    // Replace double slashes with single slashes
-    size_t pos = 0;
-    while ((pos = normalized.find("//", pos)) != std::string::npos)
-    {
-        normalized.replace(pos, 2, "/");
-        pos += 1;
-    }
-
-    return normalized;
-}
-
-std::string WFLWTestBase::getWFLWBasePath()
-{
-    return normalizePath(Config::getInstance().getWFLWFolderPath());
-}
-
-std::string WFLWTestBase::getWFLWImagesPath()
-{
-    return normalizePath(getWFLWBasePath() + "/WFLW_images");
-}
-
-std::string WFLWTestBase::getWFLWAnnotationsPath()
-{
-    return normalizePath(getWFLWBasePath() + "/WFLW_annotations/list_98pt_rect_attr_train_test");
 }
 
 double WFLWTestBase::calculateMNE(const std::vector<FaceLandmark>& predicted_landmarks,
@@ -254,117 +193,63 @@ double WFLWTestBase::calculateInterocularDistance(const Face& face) const
     return std::sqrt(dx * dx + dy * dy);
 }
 
-void WFLWTestBase::saveDetectionVisualization(const WFLWExample& example,
+void WFLWTestBase::saveDetectionVisualization(const TestUtils::Datasets::WFLWSample& sample,
                                               const std::vector<FaceLandmark>& detected_landmarks, int image_index,
                                               double mne) const
 {
-    if (!example.image)
-    {
-        return;
-    }
-
-    // Only save images if SAVE_IMAGES environment variable is set
-    if (!TestUtils::getEnvVarBool("SAVE_IMAGES"))
-    {
-        return;
-    }
-
-    auto viz_image = example.image->deepCopy();
-
-    // Draw detected landmarks in red
+    auto image_ptr = sample.loadImage();
+    if (!image_ptr) return;
+    if (!TestUtils::getEnvVarBool("SAVE_IMAGES")) return;
+    auto viz_image = image_ptr->deepCopy();
     Pixel red_color(255, 0, 0);
     std::vector<math_utils::Point<long>> detected_points;
     for (const auto& landmark : detected_landmarks)
-    {
         detected_points.emplace_back(static_cast<long>(landmark.p.x), static_cast<long>(landmark.p.y));
-    }
     viz_image->paintPoints(detected_points, red_color);
-
-    // Draw ground truth landmarks in green
     Pixel green_color(0, 255, 0);
     std::vector<math_utils::Point<long>> gt_points;
-    for (const auto& gt_landmark : example.landmarks)
-    {
-        gt_points.emplace_back(static_cast<long>(gt_landmark.x), static_cast<long>(gt_landmark.y));
-    }
+    for (const auto& gt_landmark : sample.landmarks)
+        gt_points.emplace_back(static_cast<long>(gt_landmark[0]), static_cast<long>(gt_landmark[1]));
     viz_image->paintPoints(gt_points, green_color);
-
-    // Add MNE text
     std::string mne_text = "MNE: " + std::to_string(mne);
     drawText(*viz_image, 10, 10, mne_text, Pixel(255, 255, 255));
-
-    // Save visualization
     std::string output_dir = createTestOutputDirectory("detection_visualization");
     std::string filename = "detection_viz_img" + std::to_string(image_index) + "_mne" + std::to_string(mne) + ".ppm";
-    
-    // Combine with output directory
-    if (!output_dir.empty())
-    {
-        filename = output_dir + "/" + filename;
-    }
-    
+    if (!output_dir.empty()) filename = output_dir + "/" + filename;
     viz_image->saveToDisk(filename);
 }
 
-void WFLWTestBase::saveDetectionVisualizationWithFaceInfo(const WFLWExample& example,
+void WFLWTestBase::saveDetectionVisualizationWithFaceInfo(const TestUtils::Datasets::WFLWSample& sample,
                                                           const std::vector<FaceLandmark>& detected_landmarks,
                                                           int image_index, double mne, int face_index, double iou,
                                                           int total_faces) const
 {
-    if (!example.image)
-    {
-        return;
-    }
-
-    // Only save images if SAVE_IMAGES environment variable is set
-    if (!TestUtils::getEnvVarBool("SAVE_IMAGES"))
-    {
-        return;
-    }
-
-    auto viz_image = example.image->deepCopy();
-
-    // Draw detected landmarks in red
+    auto image_ptr = sample.loadImage();
+    if (!image_ptr) return;
+    if (!TestUtils::getEnvVarBool("SAVE_IMAGES")) return;
+    auto viz_image = image_ptr->deepCopy();
     Pixel red_color(255, 0, 0);
     std::vector<math_utils::Point<long>> detected_points;
     for (const auto& landmark : detected_landmarks)
-    {
         detected_points.emplace_back(static_cast<long>(landmark.p.x), static_cast<long>(landmark.p.y));
-    }
     viz_image->paintPoints(detected_points, red_color);
-
-    // Draw ground truth landmarks in green
     Pixel green_color(0, 255, 0);
     std::vector<math_utils::Point<long>> gt_points;
-    for (const auto& gt_landmark : example.landmarks)
-    {
-        gt_points.emplace_back(static_cast<long>(gt_landmark.x), static_cast<long>(gt_landmark.y));
-    }
+    for (const auto& gt_landmark : sample.landmarks)
+        gt_points.emplace_back(static_cast<long>(gt_landmark[0]), static_cast<long>(gt_landmark[1]));
     viz_image->paintPoints(gt_points, green_color);
-
-    // Add detailed info text
     std::vector<std::string> info_lines = {"MNE: " + std::to_string(mne),
                                            "Face: " + std::to_string(face_index) + "/" + std::to_string(total_faces),
                                            "IoU: " + std::to_string(iou)};
-
     Pixel white_color(255, 255, 255);
     int text_y = 10;
-    for (const auto& line : info_lines)
-    {
+    for (const auto& line : info_lines) {
         drawText(*viz_image, 10, text_y, line, white_color);
         text_y += 15;
     }
-
-    // Save visualization
     std::string output_dir = createTestOutputDirectory("detection_visualization");
     std::string filename = "detection_viz_detailed_img" + std::to_string(image_index) + "_face"
                            + std::to_string(face_index) + "_mne" + std::to_string(mne) + ".ppm";
-    
-    // Combine with output directory
-    if (!output_dir.empty())
-    {
-        filename = output_dir + "/" + filename;
-    }
-    
+    if (!output_dir.empty()) filename = output_dir + "/" + filename;
     viz_image->saveToDisk(filename);
 }

@@ -231,7 +231,8 @@ void Face::paintInside(std::unique_ptr<Image>& image, FaceIndex facepart) const
     }
 }
 
-void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color, float radius) const
+void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, bool joinPoints, Pixel color,
+                          float radius) const
 {
     const std::vector<FaceLandmark> points = landmarks_.at(facepart);
     math_utils::Point3D lastPoint(-1, -1, -1);
@@ -270,9 +271,21 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float /*thic
     const auto yaw = static_cast<float>(-pose_.yaw * M_PI / 180.0);
     const auto roll = static_cast<float>(pose_.roll * M_PI / 180.0);
 
-    // TODO(arroyoa): Set tdx tdy to the center of the face.
-    const int tdx = static_cast<int>(boundingBox_.rect.x() + boundingBox_.rect.width() / 2.0f);
-    const int tdy = static_cast<int>(boundingBox_.rect.y() + boundingBox_.rect.height() / 2.0f);
+    int tdx;
+    int tdy;
+
+    if ((landmarks_.count(NOSE) != 0u) && !landmarks_.at(NOSE).empty())
+    {
+        const auto nose_point = landmarks_.at(NOSE)[0].p;
+        tdx = static_cast<int>(nose_point.x);
+        tdy = static_cast<int>(nose_point.y);
+    } 
+    else
+    {
+        // Since Nose landmark is missing, use the center of the bounding box
+        tdx = static_cast<int>(boundingBox_.rect.x() + boundingBox_.rect.width() / 2.0f);
+        tdy = static_cast<int>(boundingBox_.rect.y() + boundingBox_.rect.height() / 2.0f);
+    }
 
     // X-Axis pointing to right. drawn in red
     const int x1 = static_cast<int>(size * std::cos(yaw) * std::cos(roll)) + tdx;
@@ -290,9 +303,9 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float /*thic
     const int x3 = static_cast<int>(size * std::sin(yaw)) + tdx;
     const int y3 = static_cast<int>(-size * std::cos(yaw) * std::sin(pitch)) + tdy;
 
-    auto xColor = Pixel(0, 0, 255);
-    auto yColor = Pixel(0, 255, 0);
-    auto zColor = Pixel(255, 0, 0);
+    const auto xColor = Pixel(0, 0, 255);
+    const auto yColor = Pixel(0, 255, 0);
+    const auto zColor = Pixel(255, 0, 0);
 
     auto x = math_utils::DDA(tdx, tdy, x1, y1);
     image->paintPoints(x, xColor);

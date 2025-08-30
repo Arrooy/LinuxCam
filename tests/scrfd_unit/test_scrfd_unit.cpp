@@ -7,11 +7,13 @@
 #include <string>
 #include <vector>
 
+#include "../test_utils.h"
+#include "../dataset_utils.h"
 #include "LinuxFace/Image/image.h"
+#include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/face.h"
 #include "LinuxFace/imageLoader.h"
 #include "LinuxFace/onnx/scrfd.h"
-#include "LinuxFace/Image/image_utils.h"
 #include "config.hpp"
 
 using namespace linuxface;
@@ -98,21 +100,20 @@ class SCRFDUnitTest : public ::testing::Test
     {
         // Get face bounding box
         const auto& bbox = face.getBoundingBox().rect;
-        
+
         // Add some padding around the face
         float padding_factor = 0.2f; // 20% padding
         float face_width = bbox.width();
         float face_height = bbox.height();
         float padding_x = face_width * padding_factor;
         float padding_y = face_height * padding_factor;
-        
+
         // Calculate crop coordinates with padding
         float crop_x = std::max(0.0f, bbox.x() - padding_x);
         float crop_y = std::max(0.0f, bbox.y() - padding_y);
-        float crop_width = std::min(static_cast<float>(originalImage.info.width) - crop_x, 
-                                   face_width + 2 * padding_x);
-        float crop_height = std::min(static_cast<float>(originalImage.info.height) - crop_y, 
-                                    face_height + 2 * padding_y);
+        float crop_width = std::min(static_cast<float>(originalImage.info.width) - crop_x, face_width + 2 * padding_x);
+        float crop_height =
+            std::min(static_cast<float>(originalImage.info.height) - crop_y, face_height + 2 * padding_y);
 
         // Create crop rectangle
         math_utils::Point<float> cropCorner{crop_x, crop_y};
@@ -133,7 +134,7 @@ class SCRFDUnitTest : public ::testing::Test
     bool validateFaceLandmarks(const Face& face, const Image& image)
     {
         auto landmarks = face.getFivePointLandmarksArcFaceOrder2D();
-        
+
         if (landmarks.size() != 5)
         {
             return false;
@@ -142,8 +143,7 @@ class SCRFDUnitTest : public ::testing::Test
         // Check if landmarks are within image bounds
         for (const auto& landmark : landmarks)
         {
-            if (landmark.x < 0 || landmark.x >= image.info.width ||
-                landmark.y < 0 || landmark.y >= image.info.height)
+            if (landmark.x < 0 || landmark.x >= image.info.width || landmark.y < 0 || landmark.y >= image.info.height)
             {
                 return false;
             }
@@ -151,7 +151,7 @@ class SCRFDUnitTest : public ::testing::Test
 
         // Basic sanity checks for landmark positions
         auto left_eye = landmarks[0];
-        auto right_eye = landmarks[1]; 
+        auto right_eye = landmarks[1];
         auto nose = landmarks[2];
         auto left_mouth = landmarks[3];
         auto right_mouth = landmarks[4];
@@ -290,29 +290,27 @@ TEST_F(SCRFDUnitTest, RealImageDetection)
     std::vector<Face> faces = detector_->detect(realImage);
 
     EXPECT_GT(faces.size(), 0) << "Should detect at least one face in real image";
-    
+
     if (faces.size() > 0)
     {
         const Face& face = faces[0];
         const auto& bbox = face.getBoundingBox();
-        
+
         // Verify bounding box is reasonable
         EXPECT_GT(bbox.rect.width(), 10);
         EXPECT_GT(bbox.rect.height(), 10);
         EXPECT_GT(bbox.score, 0.1f);
         EXPECT_TRUE(bbox.rect.isWithinBounds(realImage->info.width, realImage->info.height, 1.0f));
-        
+
         // Check if face has landmarks
         auto landmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (landmarks.size() == 5)
         {
             EXPECT_TRUE(validateFaceLandmarks(face, *realImage));
-            
-            std::cout << "Detected face with landmarks at: (" 
-                      << bbox.rect.x() << ", " << bbox.rect.y() 
-                      << ", " << bbox.rect.width() << ", " << bbox.rect.height() 
-                      << ") score: " << bbox.score << std::endl;
-            
+
+            std::cout << "Detected face with landmarks at: (" << bbox.rect.x() << ", " << bbox.rect.y() << ", "
+                      << bbox.rect.width() << ", " << bbox.rect.height() << ") score: " << bbox.score << std::endl;
+
             // Print landmark positions
             std::cout << "Landmarks (ArcFace order): ";
             for (size_t i = 0; i < landmarks.size(); ++i)
@@ -321,7 +319,7 @@ TEST_F(SCRFDUnitTest, RealImageDetection)
             }
             std::cout << std::endl;
         }
-        
+
         // Save face crop for manual inspection
         bool crop_saved = saveFaceCrop(*realImage, face, "scrfd_face_crop.ppm");
         if (crop_saved)
@@ -345,25 +343,23 @@ TEST_F(SCRFDUnitTest, MultipleFaceDetection)
     std::vector<Face> faces = detector_->detect(realImage);
 
     EXPECT_GT(faces.size(), 0) << "Should detect at least one face";
-    
+
     std::cout << "Detected " << faces.size() << " faces in multiple face image" << std::endl;
-    
+
     for (size_t i = 0; i < faces.size(); ++i)
     {
         const Face& face = faces[i];
         const auto& bbox = face.getBoundingBox();
-        
+
         // Verify each bounding box
         EXPECT_GT(bbox.rect.width(), 10);
         EXPECT_GT(bbox.rect.height(), 10);
         EXPECT_GT(bbox.score, 0.1f);
         EXPECT_TRUE(bbox.rect.isWithinBounds(realImage->info.width, realImage->info.height, 1.0f));
-        
-        std::cout << "Face " << i << ": (" 
-                  << bbox.rect.x() << ", " << bbox.rect.y() 
-                  << ", " << bbox.rect.width() << ", " << bbox.rect.height() 
-                  << ") score: " << bbox.score << std::endl;
-        
+
+        std::cout << "Face " << i << ": (" << bbox.rect.x() << ", " << bbox.rect.y() << ", " << bbox.rect.width()
+                  << ", " << bbox.rect.height() << ") score: " << bbox.score << std::endl;
+
         // Save individual face crops
         std::string crop_filename = "scrfd_face_crop_" + std::to_string(i) + ".ppm";
         bool crop_saved = saveFaceCrop(*realImage, face, crop_filename);
@@ -396,19 +392,20 @@ TEST_F(SCRFDUnitTest, DetectionConsistency)
     if (allDetections[0].size() > 0)
     {
         const auto& firstFace = allDetections[0][0];
-        
+
         for (int i = 1; i < numRuns; ++i)
         {
             if (allDetections[i].size() > 0)
             {
                 const auto& currentFace = allDetections[i][0];
-                
+
                 // Bounding boxes should be very similar
-                float bbox_diff = std::abs(firstFace.getBoundingBox().rect.x() - currentFace.getBoundingBox().rect.x()) +
-                                 std::abs(firstFace.getBoundingBox().rect.y() - currentFace.getBoundingBox().rect.y());
-                
+                float bbox_diff =
+                    std::abs(firstFace.getBoundingBox().rect.x() - currentFace.getBoundingBox().rect.x())
+                    + std::abs(firstFace.getBoundingBox().rect.y() - currentFace.getBoundingBox().rect.y());
+
                 EXPECT_LT(bbox_diff, 5.0f) << "Bounding box difference too large across runs: " << bbox_diff;
-                
+
                 // Scores should be identical
                 EXPECT_FLOAT_EQ(firstFace.getBoundingBox().score, currentFace.getBoundingBox().score);
             }
@@ -456,24 +453,25 @@ TEST_F(SCRFDUnitTest, LandmarkQuality)
 
     const Face& face = faces[0];
     auto landmarks = face.getFivePointLandmarksArcFaceOrder2D();
-    
+
     if (landmarks.size() == 5)
     {
         // Validate landmark geometry
         EXPECT_TRUE(validateFaceLandmarks(face, *realImage));
-        
+
         // Calculate inter-ocular distance for scale reference
         auto left_eye = landmarks[0];
         auto right_eye = landmarks[1];
         float iod = std::sqrt(std::pow(right_eye.x - left_eye.x, 2) + std::pow(right_eye.y - left_eye.y, 2));
-        
+
         EXPECT_GT(iod, 10.0f) << "Inter-ocular distance too small: " << iod;
         EXPECT_LT(iod, realImage->info.width * 0.5f) << "Inter-ocular distance too large: " << iod;
-        
+
         std::cout << "Landmark quality assessment:" << std::endl;
         std::cout << "Inter-ocular distance: " << iod << " pixels" << std::endl;
-        std::cout << "Landmark validation: " << (validateFaceLandmarks(face, *realImage) ? "PASSED" : "FAILED") << std::endl;
-        
+        std::cout << "Landmark validation: " << (validateFaceLandmarks(face, *realImage) ? "PASSED" : "FAILED")
+                  << std::endl;
+
         // Print detailed landmark info
         std::vector<std::string> landmark_names = {"Left Eye", "Right Eye", "Nose", "Left Mouth", "Right Mouth"};
         for (size_t i = 0; i < landmarks.size(); ++i)
@@ -492,110 +490,95 @@ TEST_F(SCRFDUnitTest, WFLWDatasetValidation)
 {
     ASSERT_TRUE(detector_->isReady());
 
-    // Check if WFLW dataset is available
-    std::string wflw_path = "../WFLW";
-    std::string wflw_images_path = wflw_path + "/WFLW_images";
-    std::string wflw_annotations_path = wflw_path + "/WFLW_annotations/list_98pt_rect_attr_test.txt";
-    
-    std::ifstream wflw_check(wflw_annotations_path);
-    if (!wflw_check.good())
-    {
-        GTEST_SKIP() << "WFLW dataset not found at " << wflw_annotations_path << ". Skipping WFLW validation test.";
+    // Check if WFLW dataset is available using centralized utilities
+    if (!TestUtils::Datasets::SimpleWFLWLoader::isWFLWAvailable()) {
+        auto paths = TestUtils::Datasets::SimpleWFLWLoader::getWFLWPaths();
+        GTEST_SKIP() << "WFLW dataset not found at " << paths.annotations_path << ". Skipping WFLW validation test.";
     }
-    wflw_check.close();
 
-    // Load a small sample of WFLW test data
-    std::ifstream annotations_file(wflw_annotations_path);
-    std::string line;
-    
+    // Load WFLW dataset using centralized loader
+    TestUtils::Datasets::SimpleWFLWLoader wflw_loader;
+    if (!wflw_loader.loadDataset()) {
+        GTEST_SKIP() << "Failed to load WFLW dataset. Skipping WFLW validation test.";
+    }
+
     int samples_tested = 0;
+    int samples_with_faces = 0;
     int faces_detected = 0;
     int valid_landmarks = 0;
-    const int max_samples = 10; // Test on first 10 samples for speed
-    
-    std::cout << "Testing SCRFD on WFLW dataset (sample size: " << max_samples << ")" << std::endl;
-    
-    while (std::getline(annotations_file, line) && samples_tested < max_samples)
-    {
-        std::istringstream iss(line);
-        std::vector<std::string> tokens;
-        std::string token;
-        
-        // Parse the annotation line
-        while (iss >> token)
-        {
-            tokens.push_back(token);
-        }
-        
-        if (tokens.size() < 199) // 196 landmarks (98*2) + 2 image path tokens + 1 for potential extra
-        {
-            continue;
-        }
-        
-        // Extract image path (last token)
-        std::string image_filename = tokens.back();
-        std::string full_image_path = wflw_images_path + "/" + image_filename;
+    const int max_samples = std::min(wflw_loader.getSampleCount(), TestUtils::getMaxSamples(wflw_loader.getSampleCount()));
+
+    std::cout << "Testing SCRFD on WFLW dataset (sample size: " << max_samples << " of " << wflw_loader.getSampleCount() << " available)" << std::endl;
+
+    for (int sample_idx = 0; sample_idx < max_samples; ++sample_idx) {
+        const auto& wflw_sample = wflw_loader.getSample(sample_idx);
         
         // Load the image
-        auto wflw_image = loadRealImage(full_image_path);
-        if (!wflw_image)
-        {
+        auto wflw_image = wflw_sample.loadImage();
+        if (!wflw_image) {
             continue; // Skip if image can't be loaded
         }
-        
+
         samples_tested++;
-        
+
         // Run SCRFD detection
         std::vector<Face> faces = detector_->detect(wflw_image);
-        
-        if (faces.size() > 0)
-        {
-            faces_detected++;
-            
-            // Check if the detected face has valid landmarks
-            const Face& face = faces[0]; // Test on primary face
-            auto landmarks = face.getFivePointLandmarksArcFaceOrder2D();
-            
-            if (landmarks.size() == 5 && validateFaceLandmarks(face, *wflw_image))
-            {
-                valid_landmarks++;
-                
-                // Additional quality checks
-                auto left_eye = landmarks[0];
-                auto right_eye = landmarks[1];
-                float iod = std::sqrt(std::pow(right_eye.x - left_eye.x, 2) + std::pow(right_eye.y - left_eye.y, 2));
-                
-                // Inter-ocular distance should be reasonable
-                EXPECT_GT(iod, 5.0f) << "Inter-ocular distance too small for WFLW image: " << image_filename;
-                EXPECT_LT(iod, wflw_image->info.width * 0.8f) << "Inter-ocular distance too large for WFLW image: " << image_filename;
+
+        if (faces.size() > 0) {
+            samples_with_faces++;
+
+            // Test on up to getMaxFacesPerImage faces instead of just the first one
+            int max_faces_to_test = std::min(static_cast<int>(faces.size()), TestUtils::getMaxFacesPerImage());
+            int valid_faces_for_sample = 0;
+
+            for (int face_idx = 0; face_idx < max_faces_to_test; ++face_idx) {
+                const Face& face = faces[face_idx];
+                auto landmarks = face.getFivePointLandmarksArcFaceOrder2D();
+
+                if (landmarks.size() == 5 && validateFaceLandmarks(face, *wflw_image)) {
+                    valid_faces_for_sample++;
+
+                    // Additional quality checks for each face
+                    auto left_eye = landmarks[0];
+                    auto right_eye = landmarks[1];
+                    float iod = std::sqrt(std::pow(right_eye.x - left_eye.x, 2) + std::pow(right_eye.y - left_eye.y, 2));
+
+                    // Inter-ocular distance should be reasonable
+                    EXPECT_GT(iod, 5.0f) << "Inter-ocular distance too small for WFLW image: " << wflw_sample.image_filename << " face " << face_idx;
+                    EXPECT_LT(iod, wflw_image->info.width * 0.8f)
+                        << "Inter-ocular distance too large for WFLW image: " << wflw_sample.image_filename << " face " << face_idx;
+                }
             }
+
+            faces_detected += max_faces_to_test;
+            valid_landmarks += valid_faces_for_sample;
         }
-        
+
         // Print progress every few samples
-        if (samples_tested % 5 == 0)
-        {
+        if (samples_tested % 5 == 0) {
             std::cout << "Processed " << samples_tested << "/" << max_samples << " WFLW samples..." << std::endl;
         }
     }
-    
-    annotations_file.close();
-    
+
     // Calculate validation metrics
-    float detection_rate = static_cast<float>(faces_detected) / samples_tested;
-    float landmark_quality_rate = static_cast<float>(valid_landmarks) / faces_detected;
-    
+    float detection_rate = samples_tested > 0 ? static_cast<float>(samples_with_faces) / samples_tested : 0.0f;
+    float landmark_quality_rate = faces_detected > 0 ? static_cast<float>(valid_landmarks) / faces_detected : 0.0f;
+
     std::cout << "\nWFLW Dataset Validation Results:" << std::endl;
     std::cout << "Samples tested: " << samples_tested << std::endl;
-    std::cout << "Faces detected: " << faces_detected << " (" << (detection_rate * 100.0f) << "%)" << std::endl;
-    std::cout << "Valid landmarks: " << valid_landmarks << " (" << (landmark_quality_rate * 100.0f) << "%)" << std::endl;
-    
+    std::cout << "Max faces tested per image: " << TestUtils::getMaxFacesPerImage() << std::endl;
+    std::cout << "Samples with at least one face detected: " << samples_with_faces << " (" << (detection_rate * 100.0f) << "%)" << std::endl;
+    std::cout << "Total faces tested: " << faces_detected << std::endl;
+    std::cout << "Faces with valid landmarks: " << valid_landmarks << " (" << (landmark_quality_rate * 100.0f) << "%)" << std::endl;
+
     // Set reasonable expectations for SCRFD performance on WFLW
-    EXPECT_GT(detection_rate, 0.6f) << "SCRFD face detection rate too low on WFLW dataset: " << (detection_rate * 100.0f) << "%";
-    
-    if (faces_detected > 0)
-    {
-        EXPECT_GT(landmark_quality_rate, 0.7f) << "SCRFD landmark quality rate too low on WFLW dataset: " << (landmark_quality_rate * 100.0f) << "%";
+    EXPECT_GT(detection_rate, 0.6f) << "SCRFD face detection rate too low on WFLW dataset: "
+                                    << (detection_rate * 100.0f) << "%";
+
+    if (faces_detected > 0) {
+        EXPECT_GT(landmark_quality_rate, 0.7f)
+            << "SCRFD landmark quality rate too low on WFLW dataset: " << (landmark_quality_rate * 100.0f) << "%";
     }
-    
+
     std::cout << "WFLW validation completed successfully!" << std::endl;
 }

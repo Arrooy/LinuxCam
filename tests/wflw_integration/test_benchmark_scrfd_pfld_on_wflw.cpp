@@ -1,11 +1,9 @@
-#include "wflw_loader.h"
 #include "../test_utils.h"
+#include "../dataset_utils.h"
 
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-
-#include "wflw_integration_suite/wflw_test_base.h"
 /**
  * BENCHMARK TEST: SCRFD + PFLD PERFORMANCE ON WFLW DATASET
  *
@@ -30,7 +28,6 @@
 #include "config.hpp"
 
 using namespace linuxface;
-using namespace linuxface::test;
 
 // Helper function to check CUDA availability (similar to OnnxDetector::checkCudaAvailability)
 static bool checkCudaAvailability()
@@ -164,12 +161,14 @@ class FaceKeypointBenchmark : public ::testing::Test
         ASSERT_TRUE(pfld_detector_->isReady())
             << "PFLD detector failed to initialize. Expected path: " << models_folder << "pfld-106-v3.onnx";
 
-        // Load WFLW dataset with environment variable control
+        // Load WFLW dataset with environment variable control using centralized loader
         const int max_wflw_samples = TestUtils::getEnvVarInt("WFLW_MAX_SAMPLES", 5);
-        const std::string test_annotations = WFLWTestBase::getWFLWAnnotationsPath() + "/list_98pt_rect_attr_test.txt";
-        wflw_loader_ = std::make_unique<WFLWLoader>(test_annotations, max_wflw_samples);
+        simple_wflw_loader_ = std::make_unique<TestUtils::Datasets::SimpleWFLWLoader>();
+        if (!simple_wflw_loader_->loadDataset(max_wflw_samples)) {
+            GTEST_SKIP() << "Failed to load WFLW dataset using centralized loader.";
+        }
 
-        ASSERT_GT(wflw_loader_->get_num_examples(), 0) << "No WFLW examples loaded for benchmarking";
+        ASSERT_GT(simple_wflw_loader_->getSampleCount(), 0) << "No WFLW samples loaded for benchmarking";
     }
 
     struct DetailedMetrics
@@ -221,15 +220,16 @@ class FaceKeypointBenchmark : public ::testing::Test
 
         for (int idx : example_indices)
         {
-            WFLWExample example;
-            if (!wflw_loader_->load_example(idx, example))
+            const auto& sample = simple_wflw_loader_->getSample(idx);
+            auto image_ptr = sample.loadImage();
+            if (!image_ptr)
             {
                 continue;
             }
 
             // Face detection timing
             auto face_start = std::chrono::high_resolution_clock::now();
-            auto detected_faces = scrfd_500m_detector_->detect(example.image);
+            auto detected_faces = scrfd_500m_detector_->detect(image_ptr);
             auto face_end = std::chrono::high_resolution_clock::now();
 
             double face_detection_time =
@@ -246,7 +246,7 @@ class FaceKeypointBenchmark : public ::testing::Test
 
             // Landmark detection timing
             auto landmark_start = std::chrono::high_resolution_clock::now();
-            pfld_detector_->detect(example.image, face);
+            pfld_detector_->detect(image_ptr, face);
             auto landmark_end = std::chrono::high_resolution_clock::now();
 
             double landmark_detection_time =
@@ -275,10 +275,10 @@ class FaceKeypointBenchmark : public ::testing::Test
             std::vector<FaceLandmark> pfld_98_landmarks(predicted_landmarks.begin(), predicted_landmarks.begin() + 98);
 
             double error_sum = 0.0;
-            for (size_t i = 0; i < pfld_98_landmarks.size() && i < example.landmarks.size(); ++i)
+            for (size_t i = 0; i < pfld_98_landmarks.size() && i < sample.landmarks.size(); ++i)
             {
-                double dx = pfld_98_landmarks[i].p.x - example.landmarks[i].x;
-                double dy = pfld_98_landmarks[i].p.y - example.landmarks[i].y;
+                double dx = pfld_98_landmarks[i].p.x - sample.landmarks[i][0];
+                double dy = pfld_98_landmarks[i].p.y - sample.landmarks[i][1];
                 error_sum += std::sqrt(dx * dx + dy * dy);
             }
 
@@ -431,7 +431,7 @@ class FaceKeypointBenchmark : public ::testing::Test
 
     std::shared_ptr<SCRFDetector> scrfd_500m_detector_;
     std::shared_ptr<PFLDDetector> pfld_detector_;
-    std::unique_ptr<WFLWLoader> wflw_loader_;
+    std::unique_ptr<TestUtils::Datasets::SimpleWFLWLoader> simple_wflw_loader_;
     bool has_cuda_available_ = false;
 };
 
@@ -457,7 +457,7 @@ TEST_F(FaceKeypointBenchmark, FullDatasetBenchmark)
 
 TEST_F(FaceKeypointBenchmark, NormalConditionsBenchmark)
 {
-    auto normal_indices = wflw_loader_->getExamplesByAttribute(true, true, true, true, true, true);
+    auto normal_indices = simple_wflw_loader_->getSamplesByAttributes(true, true, true, true, true, true);
 
     const int max_normal_samples = TestUtils::getEnvVarInt("WFLW_MAX_SAMPLES", 5);
     if (normal_indices.size() > static_cast<size_t>(max_normal_samples))
@@ -491,34 +491,24 @@ TEST_F(FaceKeypointBenchmark, NormalConditionsBenchmark)
 
 TEST_F(FaceKeypointBenchmark, ChallenginConditionsBenchmark)
 {
-    // Create a separate loader that only loads challenging condition examples
+    // Load challenging condition samples using centralized loader
     const int max_challenging_samples = TestUtils::getEnvVarInt("MAX_ATTRIBUTE_EXAMPLES_CHALLENGING", 5);
-    const std::string test_annotations = WFLWTestBase::getWFLWAnnotationsPath() + "/list_98pt_rect_attr_test.txt";
     
-    // Use the new constructor that filters for challenging conditions only
-    auto challenging_loader = std::make_unique<WFLWLoader>(test_annotations, true, max_challenging_samples);
+    // Use centralized loader to get challenging condition samples
+    auto challenging_indices = simple_wflw_loader_->getSamplesByAttributes(false, false, false, false, false, false);
     
-    if (challenging_loader->get_num_examples() == 0) {
+    if (challenging_indices.empty()) {
         GTEST_SKIP() << "No challenging condition examples found in WFLW dataset. "
                      << "Dataset may contain only normal conditions in this subset.";
     }
 
-    // Create indices for all challenging examples found
-    std::vector<int> challenging_indices;
-    for (int i = 0; i < challenging_loader->get_num_examples(); ++i)
-    {
-        challenging_indices.push_back(i);
+    // Limit to max samples
+    if (challenging_indices.size() > static_cast<size_t>(max_challenging_samples)) {
+        challenging_indices.resize(max_challenging_samples);
     }
 
-    // Create a temporary benchmark context with the challenging loader
-    auto original_loader = std::move(wflw_loader_);
-    wflw_loader_ = std::move(challenging_loader);
-    
     auto metrics = runDetailedBenchmark(challenging_indices, "Challenging Conditions");
     printDetailedReport(metrics, "Challenging Conditions");
-
-    // Restore original loader
-    wflw_loader_ = std::move(original_loader);
 
     // More lenient thresholds for challenging conditions
     EXPECT_GT(metrics.overall_success_rate, 50.0) << "Very poor performance on challenging conditions";
@@ -532,7 +522,8 @@ TEST_F(FaceKeypointBenchmark, PerformanceRegressionTest)
 {
     // Use environment variable for regression test sample count
     const int regression_samples = TestUtils::getEnvVarInt("WFLW_MAX_SAMPLES", 5);
-    const int actual_samples = std::min(regression_samples, wflw_loader_->get_num_examples());
+    const int total_samples = simple_wflw_loader_->getSampleCount();
+    const int actual_samples = std::min(regression_samples, total_samples);
     
     std::vector<int> regression_indices;
     for (int i = 0; i < actual_samples; ++i)
@@ -593,8 +584,8 @@ TEST_F(FaceKeypointBenchmark, AttributeSpecificAnalysis)
 
     for (const auto& test : attribute_tests)
     {
-        auto indices = wflw_loader_->getExamplesByAttribute(test.pose, test.expression, test.illumination, test.makeup,
-                                                            test.occlusion, test.blur);
+        auto indices = simple_wflw_loader_->getSamplesByAttributes(test.pose, test.expression, test.illumination, test.makeup,
+                                                                 test.occlusion, test.blur);
 
         if (indices.empty())
         {
