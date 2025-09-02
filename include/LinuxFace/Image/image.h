@@ -8,6 +8,7 @@
 #include <turbojpeg.h>
 
 #include "LinuxFace/Image/tensor_padding.h"
+#include "LinuxFace/Image/pixel_format.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/math_utils.h"
 
@@ -198,12 +199,6 @@ class Image
         return (y * info.width + x) * info.pixelSizeBytes;
     }
 
-    // Safe pixel access with bounds checking
-    [[nodiscard]] Pixel getPixel(size_t x, size_t y) const;
-    void setPixel(size_t x, size_t y, const Pixel& pixel);
-    void
-    setPixel(size_t x, size_t y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = DefaultAlpha);
-
     // Legacy pixel access methods (for backward compatibility)
     [[nodiscard]] Pixel operator()(size_t x, size_t y) const;
     void ppx(size_t col, size_t row, const Pixel& c);
@@ -279,10 +274,12 @@ class Image
     ImageMetadata info{};
 
     // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
-    // Affine warp: apply 2x3 matrix (row-major) to image, output size w x h
     // If invM is provided, it is used directly; otherwise, the inverse is computed from M
+    // targetFormat specifies the output format (RGB or RGBA)
+    // Supports: RGB->RGB, RGBA->RGB, RGBA->RGBA transformations
     std::unique_ptr<Image>
-    affineWarpBilinear(const double* m, int outWidth, int outHeight, const double* invM = nullptr) const;
+    affineWarpBilinear(const double* m, int outWidth, int outHeight, const double* invM = nullptr, 
+                       ImageFormat targetFormat = ImageFormat::RGB) const;
 
     // Affine warp for single-channel mask
     std::unique_ptr<Image>
@@ -305,6 +302,10 @@ class Image
     // Set all pixels to black (useful for clearing the image)
     void black();
     bool isFullyOpaque() const;
+
+    // Static utility methods
+    [[nodiscard]] static linuxface::image::PixelFormat pixelSizeToFormat(unsigned char pixelSize) noexcept;
+
   private:
     // Optimized helper methods
     void copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,

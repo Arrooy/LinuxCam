@@ -117,34 +117,38 @@ faceTransform(const std::vector<math_utils::Point<>>& landmarks, const double te
 
 // Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
 // Now returns both the aligned image and the affine matrix used
+// Supports RGB to RGB, RGBA to RGB, and RGBA to RGBA transformations based on targetFormat
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
 affineFaceTransform(const Image& inputImg, const std::vector<math_utils::Point<>>& landmarks,
-                    const double templatePoints[5][2], int targetSize, bool alignToTemplate = true)
+                    const double templatePoints[5][2], int targetSize, bool alignToTemplate = true,
+                    ImageFormat targetFormat = ImageFormat::RGB)
 {
     return faceTransform(
         landmarks, templatePoints, targetSize, math_utils::estimateAffine2d,
         [&](const double* m, int outWidth, int outHeight)
-        { return inputImg.affineWarpBilinear(m, outWidth, outHeight); }, alignToTemplate);
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, nullptr, targetFormat); }, alignToTemplate);
 }
 
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
 similarityFaceTransform(const Image& inputImg, const std::vector<math_utils::Point<>>& landmarks,
-                        const double templatePoints[5][2], int targetSize, bool alignToTemplate = true)
+                        const double templatePoints[5][2], int targetSize, bool alignToTemplate = true,
+                        ImageFormat targetFormat = ImageFormat::RGB)
 {
     return faceTransform(
         landmarks, templatePoints, targetSize, math_utils::estimateSimilarity2d,
         [&](const double* m, int outWidth, int outHeight)
-        { return inputImg.affineWarpBilinear(m, outWidth, outHeight); }, alignToTemplate);
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, nullptr, targetFormat); }, alignToTemplate);
 }
 
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
 procrustesSimilarityFaceTransform(const Image& inputImg, const std::vector<math_utils::Point<>>& landmarks,
-                                  const double templatePoints[5][2], int targetSize, bool alignToTemplate = true)
+                                  const double templatePoints[5][2], int targetSize, bool alignToTemplate = true,
+                                  ImageFormat targetFormat = ImageFormat::RGB)
 {
     return faceTransform(
         landmarks, templatePoints, targetSize, math_utils::estimateProcrustesSimilarity,
         [&](const double* m, int outWidth, int outHeight)
-        { return inputImg.affineWarpBilinear(m, outWidth, outHeight); }, alignToTemplate);
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, nullptr, targetFormat); }, alignToTemplate);
 }
 
 /**

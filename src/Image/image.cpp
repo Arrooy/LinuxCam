@@ -4,50 +4,36 @@
 #include <cmath>
 #include <cstring>
 #include <fcntl.h>
+#include <iostream>
 #include <unistd.h>
 #include <vector>
 
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/Image/pixel_conversion.h"
+#include "LinuxFace/Image/alpha_blender.h"
+#include "LinuxFace/Image/pixel_converter.h"
+#include "LinuxFace/Image/image_processor.h"
 
 using namespace linuxface;
 using namespace linuxface::pixel_conversion;
 
-// Optimized pixel operations using centralized conversion logic
+// Modern pixel operations using clean architecture
 namespace linuxface::pixel_operations
 {
-void blendPixels(unsigned char* dst, const unsigned char* src, unsigned char srcPixelSize, unsigned char srcAlpha,
-                 unsigned char dstPixelSize, unsigned char /*dstAlpha*/) noexcept
-{
-    // Skip transparent pixels for RGBA formats
-    if (srcPixelSize == 4 && srcAlpha == 0)
-    {
-        return;
-    }
 
-    // Determine conversion type and apply optimized conversion
-    const ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
-
-    // Special handling for RGBA->RGBA blending
-    if (convType == ConversionType::DIRECT_COPY && srcPixelSize == 4)
-    {
-        const bool needsBlending = (srcAlpha != 255 && srcAlpha != 0);
-        convertPixel(src, dst, convType, srcAlpha, needsBlending);
-        return;
-    }
-
-    // For grayscale blending with alpha
-    if (srcPixelSize == 1 && srcAlpha != 255 && srcAlpha != 0)
-    {
-        // Blend grayscale with alpha
-        dst[0] = static_cast<unsigned char>((srcAlpha * src[0] + (255 - srcAlpha) * dst[0]) / 255);
-        return;
-    }
-
-    // Use unified conversion for all other cases
-    convertPixel(src, dst, convType, srcAlpha, false);
-}
 } // namespace linuxface::pixel_operations
+
+// Static utility methods
+linuxface::image::PixelFormat Image::pixelSizeToFormat(unsigned char pixelSize) noexcept
+{
+    switch (pixelSize)
+    {
+        case 1: return linuxface::image::PixelFormat::GRAYSCALE;
+        case 3: return linuxface::image::PixelFormat::RGB;
+        case 4: return linuxface::image::PixelFormat::RGBA;
+        default: return linuxface::image::PixelFormat::RGB; // Default fallback
+    }
+}
 
 // Constructors with improved memory management
 Image::Image(size_t size) : size_(size)
@@ -215,25 +201,35 @@ void Image::ppx(size_t col, size_t row, const Pixel& c)
 void Image::pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b,
                 const unsigned char a)
 {
-    const size_t idx = index(col, row);
-    if (idx >= size_ || !data_)
+    const size_t pixelIdx = row * info.width + col;  // Calculate pixel index
+    if (pixelIdx >= info.width * info.height || !data_)
     {
-        common::logError("Image::pxy: index out of bounds [col,row] %zu, %zu Index: %zu", col, row, idx);
+        common::logError("Image::pxy: index out of bounds [col,row] %zu, %zu Pixel Index: %zu", col, row, pixelIdx);
         return;
     }
-    this->pidx(idx, r, g, b, a);
+    this->pidx(pixelIdx, r, g, b, a);
 }
 
-void Image::pidx(size_t idx, const unsigned char r, const unsigned char g, const unsigned char b, const unsigned char a)
+void Image::pidx(size_t pixelIdx, const unsigned char r, const unsigned char g, const unsigned char b, const unsigned char a)
 {
+    // Convert pixel index to byte index
+    const size_t byteIdx = pixelIdx * info.pixelSizeBytes;
+    
+    // Bounds check using byte index
+    if (byteIdx >= size_ || !data_)
+    {
+        common::logError("Image::pidx: pixel index out of bounds. Pixel index: %zu, byte index: %zu, size: %zu", pixelIdx, byteIdx, size_);
+        return;
+    }
+    
     // Use PixelOperations for consistency
     if (info.pixelSizeBytes == 4)
     {
-        pixel_operations::setPixelRGBA(data_.get(), idx, r, g, b, a);
+        pixel_operations::setPixelRGBA(data_.get(), byteIdx, r, g, b, a);
     }
     else
     {
-        pixel_operations::setPixelRGB(data_.get(), idx, r, g, b);
+        pixel_operations::setPixelRGB(data_.get(), byteIdx, r, g, b);
     }
 }
 
@@ -1429,15 +1425,42 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
     const long canvasRight = canvasLeft + static_cast<long>(canvasWidth);
     const long canvasBottom = canvasTop + static_cast<long>(canvasHeight);
 
-    const long clipLeft = std::max(srcLeft, canvasLeft);
-    const long clipTop = std::max(srcTop, canvasTop);
-    const long clipRight = std::min(srcRight, canvasRight);
-    const long clipBottom = std::min(srcBottom, canvasBottom);
+    // Also consider destination image bounds for clipping
+    const long destLeft = 0;
+    const long destTop = 0;
+    const long destRight = static_cast<long>(info.width);
+    const long destBottom = static_cast<long>(info.height);
+
+    const long clipLeft = std::max({srcLeft, canvasLeft, destLeft});
+    const long clipTop = std::max({srcTop, canvasTop, destTop});
+    const long clipRight = std::min({srcRight, canvasRight, destRight});
+    const long clipBottom = std::min({srcBottom, canvasBottom, destBottom});
+
+    // DEBUG: Print clipping information for troubleshooting
+    if (false) { // Set to true for debugging
+        std::cout << "Debug copyPixelsWithBlending:\n";
+        std::cout << "  srcGlobalX=" << srcGlobalX << ", srcGlobalY=" << srcGlobalY << "\n";
+        std::cout << "  canvasX=" << canvasX << ", canvasY=" << canvasY << "\n";
+        std::cout << "  canvasWidth=" << canvasWidth << ", canvasHeight=" << canvasHeight << "\n";
+        std::cout << "  src size: " << src.info.width << "x" << src.info.height << "\n";
+        std::cout << "  dest size: " << info.width << "x" << info.height << "\n";
+        std::cout << "  srcBounds: [" << srcLeft << "," << srcTop << "] to [" << srcRight << "," << srcBottom << "]\n";
+        std::cout << "  canvasBounds: [" << canvasLeft << "," << canvasTop << "] to [" << canvasRight << "," << canvasBottom << "]\n";
+        std::cout << "  destBounds: [" << destLeft << "," << destTop << "] to [" << destRight << "," << destBottom << "]\n";
+        std::cout << "  clipBounds: [" << clipLeft << "," << clipTop << "] to [" << clipRight << "," << clipBottom << "]\n";
+    }
 
     // Skip if no intersection
     if (clipLeft >= clipRight || clipTop >= clipBottom)
     {
+        if (false) { // Set to true for debugging
+            std::cout << "  No pixels to copy (empty clip region)\n";
+        }
         return;
+    }
+
+    if (false) { // Set to true for debugging
+        std::cout << "  Will iterate from (" << clipLeft << "," << clipTop << ") to (" << clipRight-1 << "," << clipBottom-1 << ")\n";
     }
 
     const unsigned char* srcData = src.data();
@@ -1445,23 +1468,32 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
     const unsigned char dstPixelSize = info.pixelSizeBytes;
     const unsigned char srcPixelSize = src.info.pixelSizeBytes;
 
-    // Determine conversion type once for the entire operation
-    const ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+    // Convert to new format system
+    const linuxface::image::PixelFormat srcFormat = Image::pixelSizeToFormat(srcPixelSize);
+    const linuxface::image::PixelFormat dstFormat = Image::pixelSizeToFormat(dstPixelSize);
 
     for (long y = clipTop; y < clipBottom; y++)
     {
-        const long srcRow = y - srcTop;
-        const long dstRow = y - canvasTop;
         for (long x = clipLeft; x < clipRight; x++)
         {
-            const long srcCol = x - srcLeft;
-            const long dstCol = x - canvasLeft;
+            // Map clipped coordinates back to source and destination
+            const long srcCol = x - srcGlobalX;  // Relative to source image position
+            const long srcRow = y - srcGlobalY;  // Relative to source image position
+            const long dstCol = x;               // Global canvas coordinate
+            const long dstRow = y;               // Global canvas coordinate
+
+            if (false) { // Set to true for debugging
+                std::cout << "  Processing (" << x << "," << y << ") -> src(" << srcCol << "," << srcRow << ") -> dst(" << dstCol << "," << dstRow << ")\n";
+            }
 
             // Bounds check before calculating indices
             if (srcRow < 0 || srcRow >= static_cast<long>(src.info.height) || srcCol < 0
                 || srcCol >= static_cast<long>(src.info.width) || dstRow < 0 || dstRow >= static_cast<long>(info.height)
                 || dstCol < 0 || dstCol >= static_cast<long>(info.width))
             {
+                if (false) { // Set to true for debugging
+                    std::cout << "    Skipping - out of bounds\n";
+                }
                 continue;
             }
 
@@ -1476,20 +1508,20 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
                 continue;
             }
 
-            // Handle RGBA->RGBA blending with alpha transparency
-            if (convType == ConversionType::DIRECT_COPY && srcPixelSize == 4)
+            // Handle RGBA blending with alpha transparency
+            if (srcFormat == PixelFormat::RGBA)
             {
                 const unsigned char srcAlpha = srcData[srcIdx + 3];
                 if (srcAlpha == 0)
                 {
                     continue; // Skip completely transparent pixels
                 }
-                convertPixel(&srcData[srcIdx], &dstData[dstIdx], convType, srcAlpha, srcAlpha != 255);
+                processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, srcAlpha != 255, srcAlpha);
             }
             else
             {
                 // Use centralized conversion for all other format combinations
-                convertPixel(&srcData[srcIdx], &dstData[dstIdx], convType);
+                processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, false, 255);
             }
         }
     }
@@ -1508,17 +1540,18 @@ void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dst
     const unsigned char dstPixelSize = info.pixelSizeBytes;
     const unsigned char srcPixelSize = src.info.pixelSizeBytes;
 
-    // Determine conversion type once for the entire operation
-    const ConversionType convType = getConversionType(srcPixelSize, dstPixelSize);
+    // Convert to new format system
+    const linuxface::image::PixelFormat srcFormat = Image::pixelSizeToFormat(srcPixelSize);
+    const linuxface::image::PixelFormat dstFormat = Image::pixelSizeToFormat(dstPixelSize);
 
     // Optimize for direct copy cases
-    if (convType == ConversionType::DIRECT_COPY)
+    if (srcFormat == dstFormat)
     {
         for (size_t row = 0; row < copyHeight; ++row)
         {
             const size_t srcRowIdx = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
             const size_t dstRowIdx = ((dstY + row) * info.width + dstX) * dstPixelSize;
-            copyPixelBlock(srcData, dstData, srcRowIdx, dstRowIdx, copyWidth, srcPixelSize);
+            std::memcpy(dstData + dstRowIdx, srcData + srcRowIdx, copyWidth * srcPixelSize);
         }
         return;
     }
@@ -1529,7 +1562,7 @@ void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dst
         const size_t srcRowStart = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
         const size_t dstRowStart = ((dstY + row) * info.width + dstX) * dstPixelSize;
 
-        convertPixelRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, convType);
+        convertRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, srcFormat, dstFormat);
     }
 }
 
@@ -1595,7 +1628,7 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     if (!expandCanvas || sameCanvasSize)
     {
         // Fast path: fully in-bounds, same format, fully opaque
-        const bool fullyOpaque = (info.pixelSizeBytes != 4) || other.isFullyOpaque();
+        const bool fullyOpaque = (other.info.pixelSizeBytes != 4) || other.isFullyOpaque();
         const bool fullyInBounds =
             otherLeft >= baseLeft && otherTop >= baseTop && otherRight <= baseRight && otherBottom <= baseBottom;
         if (fullyInBounds)
@@ -1609,7 +1642,7 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
             else
             {
                 // Only blend the region corresponding to the pasted image
-                copyPixelsWithBlending(other, 0, 0, dstX, dstY, info.width, info.height);
+                copyPixelsWithBlending(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
             }
             return *this;
         }
@@ -1640,14 +1673,27 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
 }
 // TODO(arroyo): SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM
 // EDGE.
-std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, int outHeight, const double* invM) const
+std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, int outHeight, const double* invM,
+                                                 ImageFormat targetFormat) const
 {
-    if (info.pixelSizeBytes != 3)
+    // Validate input format support (RGB and RGBA)
+    if (info.pixelSizeBytes != 3 && info.pixelSizeBytes != 4)
     {
-        common::logError("Image::affineWarpBilinear - Only RGB images are supported");
+        common::logError("Image::affineWarpBilinear - Only RGB and RGBA images are supported, got %d channels",
+                         info.pixelSizeBytes);
         return nullptr;
     }
 
+    // Validate target format support
+    if (targetFormat != ImageFormat::RGB && targetFormat != ImageFormat::RGBA)
+    {
+        common::logError("Image::affineWarpBilinear - Only RGB and RGBA target formats are supported");
+        return nullptr;
+    }
+
+    // Determine output channels and format
+    const int outChannels = (targetFormat == ImageFormat::RGBA) ? 4 : 3;
+    const int inChannels = info.pixelSizeBytes;
 
     // Accept optional inverse matrix for performance
     double localInvM[6];
@@ -1660,19 +1706,20 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, 
     {
         if (!math_utils::invertAffine(m, localInvM))
         {
-            common::logError("Image::affineWarpGeneric - Invalid affine matrix provided");
+            common::logError("Image::affineWarpBilinear - Invalid affine matrix provided");
             return nullptr;
         }
         useInvM = localInvM;
     }
 
-    const size_t outSize = outWidth * outHeight * info.pixelSizeBytes;
+    const size_t outSize = outWidth * outHeight * outChannels;
     auto outImg = std::make_unique<Image>(outSize);
     outImg->info = info;
     outImg->info.width = outWidth;
     outImg->info.height = outHeight;
-    outImg->info.pixelSizeBytes = info.pixelSizeBytes;
-    outImg->info.format = ImageFormat::RGB;
+    outImg->info.pixelSizeBytes = outChannels;
+    outImg->info.format = targetFormat;
+
     const int inWidth = info.width;
     const int inHeight = info.height;
 
@@ -1685,7 +1732,8 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, 
         {
             const double srcX = useInvM[0] * x + useInvM[1] * y + useInvM[2];
             const double srcY = useInvM[3] * x + useInvM[4] * y + useInvM[5];
-            unsigned char* pdst = dst + (y * outWidth + x) * 3;
+            unsigned char* pdst = dst + (y * outWidth + x) * outChannels;
+
             const int x0 = static_cast<int>(std::floor(srcX));
             const int y0 = static_cast<int>(std::floor(srcY));
             const int x1 = x0 + 1;
@@ -1696,20 +1744,45 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, 
                 const double wx = srcX - x0;
                 const double wy = srcY - y0;
 
+                // Process RGB channels (always present)
                 for (int c = 0; c < 3; ++c)
                 {
-                    const double v = (1 - wx) * (1 - wy) * src[(y0 * inWidth + x0) * 3 + c]
-                                     + wx * (1 - wy) * src[(y0 * inWidth + x1) * 3 + c]
-                                     + (1 - wx) * wy * src[(y1 * inWidth + x0) * 3 + c]
-                                     + wx * wy * src[(y1 * inWidth + x1) * 3 + c];
+                    const double v = (1 - wx) * (1 - wy) * src[(y0 * inWidth + x0) * inChannels + c]
+                                     + wx * (1 - wy) * src[(y0 * inWidth + x1) * inChannels + c]
+                                     + (1 - wx) * wy * src[(y1 * inWidth + x0) * inChannels + c]
+                                     + wx * wy * src[(y1 * inWidth + x1) * inChannels + c];
 
                     pdst[c] = static_cast<unsigned char>(std::round(std::clamp(v, 0.0, 255.0)));
+                }
+
+                // Handle alpha channel based on input/output format combinations
+                if (outChannels == 4) // RGBA output
+                {
+                    if (inChannels == 4) // RGBA input -> RGBA output
+                    {
+                        // Interpolate alpha channel
+                        const double alpha = (1 - wx) * (1 - wy) * src[(y0 * inWidth + x0) * inChannels + 3]
+                                             + wx * (1 - wy) * src[(y0 * inWidth + x1) * inChannels + 3]
+                                             + (1 - wx) * wy * src[(y1 * inWidth + x0) * inChannels + 3]
+                                             + wx * wy * src[(y1 * inWidth + x1) * inChannels + 3];
+                        pdst[3] = static_cast<unsigned char>(std::round(std::clamp(alpha, 0.0, 255.0)));
+                    }
+                    else // RGB input -> RGBA output
+                    {
+                        // Set alpha to full opacity for RGB to RGBA conversion
+                        pdst[3] = 255;
+                    }
                 }
             }
             else
             {
-                // If out of bounds, set black
-                std::memset(pdst, 0, 3);
+                // If out of bounds, set to black
+                pdst[0] = pdst[1] = pdst[2] = 0; // RGB = black
+                // If RGBA, set invisible
+                if (outChannels == 4)
+                {
+                    pdst[3] = 0; // Alpha = transparent
+                }
             }
         }
     }
@@ -1785,23 +1858,44 @@ Image::affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight, 
 
 void Image::alphaBlend(const Image& src, const Image& mask)
 {
-    // Assumes all images are the same size and mask is single-channel
+    // Validate image dimensions
     if (info.width != src.info.width || info.height != src.info.height || info.width != mask.info.width
-        || info.height != mask.info.height || info.pixelSizeBytes != 3 || src.info.pixelSizeBytes != 3
-        || mask.info.pixelSizeBytes != 1)
+        || info.height != mask.info.height)
     {
-        // Invalid input, do nothing
-        common::logError("Image::alphaBlend - Image sizes or pixel formats do not match");
+        common::logError("Image::alphaBlend - Image dimensions do not match: dst(%lux%lu), src(%lux%lu), mask(%lux%lu)",
+                         info.width, info.height, src.info.width, src.info.height, mask.info.width, mask.info.height);
         return;
     }
+
+    // Validate pixel formats - support RGB and RGBA for dst/src, single-channel for mask
+    if ((info.pixelSizeBytes != 3 && info.pixelSizeBytes != 4)
+        || (src.info.pixelSizeBytes != 3 && src.info.pixelSizeBytes != 4) || mask.info.pixelSizeBytes != 1)
+    {
+        common::logError("Image::alphaBlend - Invalid pixel formats: dst(%d), src(%d), mask(%d). "
+                         "Expected RGB(3) or RGBA(4) for dst/src, grayscale(1) for mask",
+                         info.pixelSizeBytes, src.info.pixelSizeBytes, mask.info.pixelSizeBytes);
+        return;
+    }
+
     unsigned char* dstData = this->data();
     const unsigned char* srcData = src.data();
     const unsigned char* maskData = mask.data();
     const int npixels = info.width * info.height;
+
+    const int dstChannels = info.pixelSizeBytes;
+    const int srcChannels = src.info.pixelSizeBytes;
+
     for (int i = 0; i < npixels; ++i)
     {
-        // TODO: This this out of bounds transformation by using RGBA images in the hole pipeline.
-        const unsigned char* srcPixel = srcData + i * 3;
+        const unsigned char* srcPixel = srcData + i * srcChannels;
+        unsigned char* dstPixel = dstData + i * dstChannels;
+        const unsigned char maskValue = maskData[i];
+
+        // Skip blending if mask is fully transparent
+        if (maskValue == 0)
+        {
+            continue; // Keep original destination pixel unchanged
+        }
 
         // Skip blending if source pixel is black (likely from out-of-bounds transformation)
         // This prevents black edges from appearing when faces are rotated
@@ -1809,8 +1903,42 @@ void Image::alphaBlend(const Image& src, const Image& mask)
         {
             continue; // Keep original destination pixel unchanged
         }
+
+        // Combine mask value with source alpha for RGBA sources
+        unsigned char effectiveSrcAlpha = maskValue;
+        if (srcChannels == 4)
+        {
+            // Combine mask alpha with source alpha: result = (mask * src_alpha) / 255
+            // Use floating-point arithmetic to avoid rounding errors
+            const float combinedAlpha = static_cast<float>(maskValue) * static_cast<float>(srcPixel[3]) / 255.0f;
+            effectiveSrcAlpha = static_cast<unsigned char>(std::round(std::clamp(combinedAlpha, 0.0f, 255.0f)));
+        }
+
+        // Use our new architecture to blend pixels        
+        // Convert to our new pixel format system
+        linuxface::image::PixelFormat srcFormat = (srcChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
+        linuxface::image::PixelFormat dstFormat = (dstChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
         
-        // Blend each pixel using the mask
-        pixel_operations::blendPixels(dstData + i * 3, srcData + i * 3, 3, maskData[i], 3, 255);
+        // Create temporary source pixel with effective alpha
+        unsigned char tempSrcPixel[4];
+        tempSrcPixel[0] = srcPixel[0];
+        tempSrcPixel[1] = srcPixel[1];
+        tempSrcPixel[2] = srcPixel[2];
+        
+        if (srcChannels == 4) {
+            tempSrcPixel[3] = effectiveSrcAlpha;
+            // Keep srcFormat as RGBA
+        } else {
+            // For RGB sources, use blendPixel with RGB format and alpha parameter
+            // Don't set tempSrcPixel[3] as it won't be used for RGB format
+        }
+        
+        // Use AlphaBlender to blend the pixel
+        linuxface::image::AlphaBlender blender;
+        if (srcChannels == 4) {
+            blender.blendPixel(tempSrcPixel, dstPixel, srcFormat, dstFormat);
+        } else {
+            blender.blendPixel(tempSrcPixel, dstPixel, srcFormat, dstFormat, effectiveSrcAlpha);
+        }
     }
 }

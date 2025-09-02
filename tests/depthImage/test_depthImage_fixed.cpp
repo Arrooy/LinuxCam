@@ -1,7 +1,6 @@
-#include <gtest/gtest.h>
-
 #include <cstdint>
 #include <cstring>
+#include <gtest/gtest.h>
 #include <memory>
 
 #include "LinuxFace/depthImage.h"

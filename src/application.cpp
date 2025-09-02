@@ -233,7 +233,7 @@ bool Application::initialize()
     ui_->connect(mediaManager_);
 
     // Load target faceswap image once
-    const std::string targetPath = Config::getInstance().getMediaFolderPath() + "../testing.jpeg";
+    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
@@ -394,25 +394,25 @@ void Application::process(std::unique_ptr<Image>& image)
     std::vector<Face> scrfdFaces;
     if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
     {
-        scrfdFaces = scrfdDetector_->detect(image);
-        for (const auto& face : scrfdFaces)
-        {
-            face.paintBoundingBox(image, Pixel(200, 200, 200));
-            face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
-        }
+        // scrfdFaces = scrfdDetector_->detect(image);
+        // for (const auto& face : scrfdFaces)
+        // {
+        //     face.paintBoundingBox(image, Pixel(200, 200, 200));
+        //     face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
+        // }
     }
 
 
-    if (pfldDetector_ != nullptr && pfldDetector_->isReady() && scrfdFaces.size() >= 1)
-    {
-        auto input_face = scrfdFaces[0];
-        pfldDetector_->detect(image, input_face);
-        input_face.paintAllFaceLandmarks(image, false, Pixel(200, 0, 200), 2.0f);
-    }
-    else
-    {
-        linuxface::common::logError("PFLD not ready or no faces detected");
-    }
+    // if (pfldDetector_ != nullptr && pfldDetector_->isReady() && scrfdFaces.size() >= 1)
+    // {
+    //     auto input_face = scrfdFaces[0];
+    //     pfldDetector_->detect(image, input_face);
+    //     input_face.paintAllFaceLandmarks(image, false, Pixel(200, 0, 200), 2.0f);
+    // }
+    // else
+    // {
+    //     linuxface::common::logError("PFLD not ready or no faces detected");
+    // }
 
 
     // if (modnetDetector_ && modnetDetector_->isReady())
@@ -639,33 +639,15 @@ void Application::process(std::unique_ptr<Image>& image)
     // }
 
 
-    // bool swap_success = false;
-    // if (swapPipeline_ && target_img_)
-    // {
-    //     swap_success = swapPipeline_->run(image, target_img_);
-    //     if (swap_success && layerManager_)
-    //     {
-    //         auto layer = layerManager_->getBaseLayer();
-    //         if (layer)
-    //         {
-    //             layer->dirty = true;
-    //         }
-    //     }
-    // }
+    bool swap_success = false;
+    if (swapPipeline_ && target_img_)
+    {
+        swap_success = swapPipeline_->run(image, target_img_);
+        if (swap_success && layerManager_)
+        {
 
-    // bool swap_success = false;
-    // if (swapPipeline_ && target_img_)
-    // {
-    //     swap_success = swapPipeline_->run(image, target_img_);
-    //     if (swap_success && layerManager_)
-    //     {
-    //         auto* layer = layerManager_->getBaseLayer();
-    //         if (layer != nullptr)
-    //         {
-    //             layer->dirty = true;
-    //         }
-    //     }
-    // }
+        }
+    }
 
     // if (rvmDetector_ && rvmDetector_->isReady())
     // {

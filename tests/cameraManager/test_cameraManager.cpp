@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-
 #include <memory>
 #include <string>
 
@@ -127,9 +126,13 @@ TEST_F(CameraManagerTest, MultipleInputCameras)
     for (const auto& cam : webcams)
     {
         if (cam->getDevicePath() == "/dev/video998")
+        {
             found_camera1 = true;
+        }
         if (cam->getDevicePath() == "/dev/video997")
+        {
             found_camera2 = true;
+        }
     }
     EXPECT_TRUE(found_camera1);
     EXPECT_TRUE(found_camera2);
@@ -217,7 +220,7 @@ TEST_F(CameraManagerEdgeCaseTest, NullCameraPointer)
     EXPECT_FALSE(manager_->addCamera(nullCamera));
     EXPECT_FALSE(manager_->removeCamera(nullCamera));
     EXPECT_FALSE(manager_->updateCamera(nullCamera));
-    
+
     // Verify manager state is unaffected
     EXPECT_EQ(manager_->getWebcams().size(), 0);
 }
@@ -230,8 +233,8 @@ TEST_F(CameraManagerEdgeCaseTest, MultipleInputWebcams)
 
     for (int i = 0; i < 10; ++i)
     {
-        auto camera = std::make_shared<InputWebcam>("Camera " + std::to_string(i), "/dev/video" + std::to_string(900 + i),
-                                                   640, 480, 4);
+        auto camera = std::make_shared<InputWebcam>("Camera " + std::to_string(i),
+                                                    "/dev/video" + std::to_string(900 + i), 640, 480, 4);
         cameras.push_back(camera);
         EXPECT_TRUE(manager_->addCamera(camera));
     }

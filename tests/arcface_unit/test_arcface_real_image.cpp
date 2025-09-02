@@ -12,6 +12,7 @@
 #include "LinuxFace/imageLoader.h"
 #include "LinuxFace/onnx/arcfaceRecognizer.h"
 #include "LinuxFace/onnx/scrfd.h"
+#include "../test_utils.h"
 #include "config.hpp"
 
 using namespace linuxface;
@@ -140,6 +141,16 @@ class ArcfaceRecognizerRealImageTest : public ::testing::Test
         }
 
         return dot_product; // Already normalized embeddings
+    }
+
+    float calculateL2Norm(const std::vector<float>& embedding)
+    {
+        float norm = 0.0f;
+        for (const float& val : embedding)
+        {
+            norm += val * val;
+        }
+        return std::sqrt(norm);
     }
 
     std::unique_ptr<ArcfaceRecognizer> arcface_recognizer_;
@@ -419,4 +430,93 @@ TEST_F(ArcfaceRecognizerRealImageTest, SameFaceSimilarity)
             std::cout << "Same face similarity (manual vs SCRFD landmarks): " << similarity << std::endl;
         }
     }
+}
+
+// Test inswapper compatibility feature
+TEST_F(ArcfaceRecognizerRealImageTest, InswapperCompatibilityBasic)
+{
+    ASSERT_TRUE(arcface_recognizer_->isReady());
+
+    // Test that inswapper compatibility is initially disabled
+    EXPECT_FALSE(arcface_recognizer_->isInswapperCompatibilityEnabled());
+
+    // Enable inswapper compatibility
+    std::string inswapperModelPath = TestUtils::getModelPath("inswapper_128.onnx");
+    bool enableResult = arcface_recognizer_->enableInswapperCompatibility(inswapperModelPath);
+    
+    EXPECT_TRUE(enableResult) << "Failed to enable inswapper compatibility";
+    EXPECT_TRUE(arcface_recognizer_->isInswapperCompatibilityEnabled());
+}
+
+// Test embedding transformation with inswapper compatibility
+TEST_F(ArcfaceRecognizerRealImageTest, InswapperCompatibilityEmbeddingTransformation)
+{
+    ASSERT_TRUE(arcface_recognizer_->isReady());
+
+    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
+
+    auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
+
+    // Get regular ArcFace embedding
+    std::vector<float> regularEmbedding;
+    bool regularResult = arcface_recognizer_->recognize(*realImage, landmarks, regularEmbedding);
+    ASSERT_TRUE(regularResult);
+    ASSERT_EQ(regularEmbedding.size(), 512);
+
+    // Enable inswapper compatibility
+    std::string inswapperModelPath = TestUtils::getModelPath("inswapper_128.onnx");
+    bool enableResult = arcface_recognizer_->enableInswapperCompatibility(inswapperModelPath);
+    ASSERT_TRUE(enableResult) << "Failed to enable inswapper compatibility";
+
+    // Get inswapper-compatible embedding
+    std::vector<float> inswapperEmbedding;
+    bool inswapperResult = arcface_recognizer_->recognize(*realImage, landmarks, inswapperEmbedding, true);
+    ASSERT_TRUE(inswapperResult);
+    ASSERT_EQ(inswapperEmbedding.size(), 512);
+
+    // Verify embeddings are different (transformation was applied)
+    float similarity = calculateCosineSimilarity(regularEmbedding, inswapperEmbedding);
+    EXPECT_LT(similarity, 0.99f) << "Inswapper transformation should modify the embedding significantly. Similarity: " << similarity;
+
+    // Verify both embeddings are normalized (L2 norm should be close to 1)
+    float regularNorm = calculateL2Norm(regularEmbedding);
+    float inswapperNorm = calculateL2Norm(inswapperEmbedding);
+    
+    EXPECT_NEAR(regularNorm, 1.0f, 0.01f) << "Regular embedding should be normalized. Norm: " << regularNorm;
+    EXPECT_NEAR(inswapperNorm, 1.0f, 0.01f) << "Inswapper embedding should be normalized. Norm: " << inswapperNorm;
+
+    std::cout << "Regular embedding norm: " << regularNorm << std::endl;
+    std::cout << "Inswapper embedding norm: " << inswapperNorm << std::endl;
+    std::cout << "Embedding similarity: " << similarity << std::endl;
+}
+
+// Test that default behavior still works (backward compatibility)
+TEST_F(ArcfaceRecognizerRealImageTest, InswapperCompatibilityDefaultBehavior)
+{
+    ASSERT_TRUE(arcface_recognizer_->isReady());
+
+    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
+
+    auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
+
+    // Enable inswapper compatibility
+    std::string inswapperModelPath = TestUtils::getModelPath("inswapper_128.onnx");
+    bool enableResult = arcface_recognizer_->enableInswapperCompatibility(inswapperModelPath);
+    ASSERT_TRUE(enableResult);
+
+    // Get embedding with default parameter (should be regular ArcFace)
+    std::vector<float> defaultEmbedding;
+    bool defaultResult = arcface_recognizer_->recognize(*realImage, landmarks, defaultEmbedding);
+    ASSERT_TRUE(defaultResult);
+
+    // Get embedding with explicit false parameter
+    std::vector<float> explicitRegularEmbedding;
+    bool explicitResult = arcface_recognizer_->recognize(*realImage, landmarks, explicitRegularEmbedding, false);
+    ASSERT_TRUE(explicitResult);
+
+    // They should be identical (both regular ArcFace embeddings)
+    float similarity = calculateCosineSimilarity(defaultEmbedding, explicitRegularEmbedding);
+    EXPECT_NEAR(similarity, 1.0f, 0.001f) << "Default and explicit false should produce identical embeddings";
 }

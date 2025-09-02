@@ -89,17 +89,27 @@ TEST(ImageUtilsMathTest, CubicHermiteBasic)
 
 TEST(ImageUtilsPaintTest, PaintCircle)
 {
-    // Properly construct a 10x10 RGB image with black background
-    Pixel black{0, 0, 0, 255};
+    // Create a 10x10 RGB image with black background
+    Pixel black{0, 0, 0};
     auto img = std::make_unique<linuxface::Image>(black, 10, 10);
+    
     Point3D center{5, 5, 0};
-    Pixel color{255, 255, 255, 255};
+    Pixel color{255, 255, 255};
     paintCircle(img, center, 2.0f, color);
-    // Check at least one pixel is painted
+    
+    // Check that pixels were painted by examining specific pixel values
     int painted = 0;
-    for (size_t i = 0; i < img->size(); ++i)
+    for (int y = 0; y < static_cast<int>(img->info.height); ++y)
     {
-        painted += img->data()[i] == 255 ? 1 : 0;
+        for (int x = 0; x < static_cast<int>(img->info.width); ++x)
+        {
+            Pixel p = (*img)(x, y);
+            // Check if this pixel is white (painted)
+            if (p.r == 255 && p.g == 255 && p.b == 255)
+            {
+                painted++;
+            }
+        }
     }
     EXPECT_GT(painted, 0);
 }
@@ -642,4 +652,145 @@ TEST(ImageUtilsIndexTest, CalculateDestIndexCHW)
 
     idx = calculateDestIndex<linuxface::ImageLayout::CHW>(1, 2, 2, 10, 10, 3);
     EXPECT_EQ(idx, 2 * (10 * 10) + 1 * 10 + 2);
+}
+
+// RGBA support tests for affineFaceTransform
+TEST(ImageUtilsRGBATest, AffineFaceTransform_RGBToRGBA)
+{
+    linuxface::Pixel color{255, 128, 64, 255};
+    auto img = std::make_unique<linuxface::Image>(color, 100, 100);
+    
+    // Valid 5-point landmarks
+    std::vector<Point<>> landmarks = {
+        {30, 40}, {70, 40}, {50, 60}, {35, 80}, {65, 80}
+    };
+    
+    auto [transformed, affine] = affineFaceTransform(*img, landmarks, TEMPLATE_112, 112, true, 
+                                                     linuxface::ImageFormat::RGBA);
+    
+    ASSERT_NE(transformed, nullptr);
+    EXPECT_EQ(transformed->info.width, 112);
+    EXPECT_EQ(transformed->info.height, 112);
+    EXPECT_EQ(transformed->info.pixelSizeBytes, 4);
+    EXPECT_EQ(transformed->info.format, linuxface::ImageFormat::RGBA);
+    
+    // Verify affine matrix is returned
+    EXPECT_EQ(affine.size(), 6);
+}
+
+TEST(ImageUtilsRGBATest, AffineFaceTransform_RGBAToRGB)
+{
+    // Create RGBA image manually
+    auto rgbaImg = std::make_unique<linuxface::Image>(100 * 100 * 4);
+    rgbaImg->info.width = 100;
+    rgbaImg->info.height = 100;
+    rgbaImg->info.pixelSizeBytes = 4;
+    rgbaImg->info.format = linuxface::ImageFormat::RGBA;
+    
+    // Fill with RGBA data (green with varying alpha)
+    unsigned char* data = rgbaImg->data();
+    for (int i = 0; i < 100 * 100; i++) {
+        data[i * 4 + 0] = 0;   // R
+        data[i * 4 + 1] = 255; // G
+        data[i * 4 + 2] = 0;   // B
+        data[i * 4 + 3] = 128; // A (half transparent)
+    }
+    
+    // Valid 5-point landmarks
+    std::vector<Point<>> landmarks = {
+        {30, 40}, {70, 40}, {50, 60}, {35, 80}, {65, 80}
+    };
+    
+    auto [transformed, affine] = affineFaceTransform(*rgbaImg, landmarks, TEMPLATE_112, 112, true, 
+                                                     linuxface::ImageFormat::RGB);
+    
+    ASSERT_NE(transformed, nullptr);
+    EXPECT_EQ(transformed->info.width, 112);
+    EXPECT_EQ(transformed->info.height, 112);
+    EXPECT_EQ(transformed->info.pixelSizeBytes, 3);
+    EXPECT_EQ(transformed->info.format, linuxface::ImageFormat::RGB);
+}
+
+TEST(ImageUtilsRGBATest, AffineFaceTransform_RGBAToRGBA)
+{
+    // Create RGBA image manually
+    auto rgbaImg = std::make_unique<linuxface::Image>(100 * 100 * 4);
+    rgbaImg->info.width = 100;
+    rgbaImg->info.height = 100;
+    rgbaImg->info.pixelSizeBytes = 4;
+    rgbaImg->info.format = linuxface::ImageFormat::RGBA;
+    
+    // Fill with RGBA data (blue with varying alpha)
+    unsigned char* data = rgbaImg->data();
+    for (int i = 0; i < 100 * 100; i++) {
+        data[i * 4 + 0] = 0;   // R
+        data[i * 4 + 1] = 0;   // G
+        data[i * 4 + 2] = 255; // B
+        data[i * 4 + 3] = (i % 256); // A (varying transparency)
+    }
+    
+    // Valid 5-point landmarks
+    std::vector<Point<>> landmarks = {
+        {30, 40}, {70, 40}, {50, 60}, {35, 80}, {65, 80}
+    };
+    
+    auto [transformed, affine] = affineFaceTransform(*rgbaImg, landmarks, TEMPLATE_112, 112, true, 
+                                                     linuxface::ImageFormat::RGBA);
+    
+    ASSERT_NE(transformed, nullptr);
+    EXPECT_EQ(transformed->info.width, 112);
+    EXPECT_EQ(transformed->info.height, 112);
+    EXPECT_EQ(transformed->info.pixelSizeBytes, 4);
+    EXPECT_EQ(transformed->info.format, linuxface::ImageFormat::RGBA);
+}
+
+TEST(ImageUtilsRGBATest, SimilarityFaceTransform_RGBA)
+{
+    linuxface::Pixel color{255, 128, 64, 255};
+    auto img = std::make_unique<linuxface::Image>(color, 100, 100);
+    
+    std::vector<Point<>> landmarks = {
+        {30, 40}, {70, 40}, {50, 60}, {35, 80}, {65, 80}
+    };
+    
+    auto [transformed, affine] = similarityFaceTransform(*img, landmarks, TEMPLATE_112, 112, true, 
+                                                         linuxface::ImageFormat::RGBA);
+    
+    ASSERT_NE(transformed, nullptr);
+    EXPECT_EQ(transformed->info.format, linuxface::ImageFormat::RGBA);
+    EXPECT_EQ(transformed->info.pixelSizeBytes, 4);
+}
+
+TEST(ImageUtilsRGBATest, ProcrustesSimilarityFaceTransform_RGBA)
+{
+    linuxface::Pixel color{255, 128, 64, 255};
+    auto img = std::make_unique<linuxface::Image>(color, 100, 100);
+    
+    std::vector<Point<>> landmarks = {
+        {30, 40}, {70, 40}, {50, 60}, {35, 80}, {65, 80}
+    };
+    
+    auto [transformed, affine] = procrustesSimilarityFaceTransform(*img, landmarks, TEMPLATE_112, 112, true, 
+                                                                   linuxface::ImageFormat::RGBA);
+    
+    ASSERT_NE(transformed, nullptr);
+    EXPECT_EQ(transformed->info.format, linuxface::ImageFormat::RGBA);
+    EXPECT_EQ(transformed->info.pixelSizeBytes, 4);
+}
+
+TEST(ImageUtilsRGBATest, AffineFaceTransform_DefaultFormat)
+{
+    linuxface::Pixel color{255, 128, 64, 255};
+    auto img = std::make_unique<linuxface::Image>(color, 100, 100);
+    
+    std::vector<Point<>> landmarks = {
+        {30, 40}, {70, 40}, {50, 60}, {35, 80}, {65, 80}
+    };
+    
+    // Test default behavior (should remain RGB)
+    auto [transformed, affine] = affineFaceTransform(*img, landmarks, TEMPLATE_112, 112);
+    
+    ASSERT_NE(transformed, nullptr);
+    EXPECT_EQ(transformed->info.format, linuxface::ImageFormat::RGB);
+    EXPECT_EQ(transformed->info.pixelSizeBytes, 3);
 }

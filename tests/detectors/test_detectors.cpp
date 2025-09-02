@@ -1,11 +1,10 @@
 #include <gtest/gtest.h>
-
 #include <memory>
 #include <vector>
 
+#include "LinuxFace/Image/image.h"
 #include "LinuxFace/detectors.h"
 #include "LinuxFace/face.h"
-#include "LinuxFace/Image/image.h"
 
 using namespace linuxface;
 
@@ -48,8 +47,8 @@ class MockShapeDetector : public ShapeDetector
   public:
     MockShapeDetector(bool shouldSucceed = true) : shouldSucceed_(shouldSucceed), detectCallCount_(0) {}
 
-    std::vector<Face> detect(const std::unique_ptr<Image>& image,
-                            std::vector<math_utils::Rect<float>>& faces_rect) override
+    std::vector<Face>
+    detect(const std::unique_ptr<Image>& image, std::vector<math_utils::Rect<float>>& faces_rect) override
     {
         detectCallCount_++;
         lastImageProcessed_ = image.get();
@@ -94,7 +93,7 @@ class DetectorsTest : public ::testing::Test
         testImage_->info.height = 100;
         testImage_->info.format = ImageFormat::RGB;
         testImage_->info.pixelSizeBytes = 3;
-        
+
         faceDetector_ = std::make_unique<MockFaceDetector>();
         shapeDetector_ = std::make_unique<MockShapeDetector>();
     }
@@ -110,9 +109,9 @@ TEST_F(DetectorsTest, FaceDetectorInterface)
 {
     // Test that the face detector interface works correctly
     EXPECT_NE(faceDetector_, nullptr);
-    
+
     auto faces = faceDetector_->detect(testImage_);
-    
+
     EXPECT_EQ(faceDetector_->getDetectCallCount(), 1);
     EXPECT_EQ(faceDetector_->getLastImageProcessed(), testImage_.get());
     EXPECT_EQ(faces.size(), 1);
@@ -121,9 +120,9 @@ TEST_F(DetectorsTest, FaceDetectorInterface)
 TEST_F(DetectorsTest, FaceDetectorWithNullImage)
 {
     std::unique_ptr<Image> nullImage = nullptr;
-    
+
     auto faces = faceDetector_->detect(nullImage);
-    
+
     EXPECT_EQ(faceDetector_->getDetectCallCount(), 1);
     EXPECT_EQ(faceDetector_->getLastImageProcessed(), nullptr);
     EXPECT_TRUE(faces.empty());
@@ -132,9 +131,9 @@ TEST_F(DetectorsTest, FaceDetectorWithNullImage)
 TEST_F(DetectorsTest, FaceDetectorFailure)
 {
     faceDetector_->setShouldSucceed(false);
-    
+
     auto faces = faceDetector_->detect(testImage_);
-    
+
     EXPECT_EQ(faceDetector_->getDetectCallCount(), 1);
     EXPECT_TRUE(faces.empty());
 }
@@ -143,14 +142,12 @@ TEST_F(DetectorsTest, ShapeDetectorInterface)
 {
     // Test that the shape detector interface works correctly
     EXPECT_NE(shapeDetector_, nullptr);
-    
-    std::vector<math_utils::Rect<float>> inputRects = {
-        math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f),
-        math_utils::Rect<float>(100.0f, 150.0f, 80.0f, 90.0f)
-    };
-    
+
+    std::vector<math_utils::Rect<float>> inputRects = {math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f),
+                                                       math_utils::Rect<float>(100.0f, 150.0f, 80.0f, 90.0f)};
+
     auto faces = shapeDetector_->detect(testImage_, inputRects);
-    
+
     EXPECT_EQ(shapeDetector_->getDetectCallCount(), 1);
     EXPECT_EQ(shapeDetector_->getLastImageProcessed(), testImage_.get());
     EXPECT_EQ(shapeDetector_->getLastFaceRects().size(), 2);
@@ -160,9 +157,9 @@ TEST_F(DetectorsTest, ShapeDetectorInterface)
 TEST_F(DetectorsTest, ShapeDetectorWithEmptyRects)
 {
     std::vector<math_utils::Rect<float>> emptyRects;
-    
+
     auto faces = shapeDetector_->detect(testImage_, emptyRects);
-    
+
     EXPECT_EQ(shapeDetector_->getDetectCallCount(), 1);
     EXPECT_TRUE(faces.empty());
 }
@@ -170,12 +167,10 @@ TEST_F(DetectorsTest, ShapeDetectorWithEmptyRects)
 TEST_F(DetectorsTest, ShapeDetectorWithNullImage)
 {
     std::unique_ptr<Image> nullImage = nullptr;
-    std::vector<math_utils::Rect<float>> inputRects = {
-        math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f)
-    };
-    
+    std::vector<math_utils::Rect<float>> inputRects = {math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f)};
+
     auto faces = shapeDetector_->detect(nullImage, inputRects);
-    
+
     EXPECT_EQ(shapeDetector_->getDetectCallCount(), 1);
     EXPECT_EQ(shapeDetector_->getLastImageProcessed(), nullptr);
     EXPECT_TRUE(faces.empty());
@@ -184,13 +179,11 @@ TEST_F(DetectorsTest, ShapeDetectorWithNullImage)
 TEST_F(DetectorsTest, ShapeDetectorFailure)
 {
     shapeDetector_->setShouldSucceed(false);
-    
-    std::vector<math_utils::Rect<float>> inputRects = {
-        math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f)
-    };
-    
+
+    std::vector<math_utils::Rect<float>> inputRects = {math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f)};
+
     auto faces = shapeDetector_->detect(testImage_, inputRects);
-    
+
     EXPECT_EQ(shapeDetector_->getDetectCallCount(), 1);
     EXPECT_TRUE(faces.empty());
 }
@@ -201,16 +194,14 @@ TEST_F(DetectorsTest, MultipleDetectorCalls)
     faceDetector_->detect(testImage_);
     faceDetector_->detect(testImage_);
     faceDetector_->detect(testImage_);
-    
+
     EXPECT_EQ(faceDetector_->getDetectCallCount(), 3);
-    
-    std::vector<math_utils::Rect<float>> inputRects = {
-        math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f)
-    };
-    
+
+    std::vector<math_utils::Rect<float>> inputRects = {math_utils::Rect<float>(10.0f, 20.0f, 50.0f, 60.0f)};
+
     shapeDetector_->detect(testImage_, inputRects);
     shapeDetector_->detect(testImage_, inputRects);
-    
+
     EXPECT_EQ(shapeDetector_->getDetectCallCount(), 2);
 }
 
@@ -220,15 +211,13 @@ TEST_F(DetectorsTest, FaceToShapeDetectionPipeline)
     // Detect faces first
     auto faces = faceDetector_->detect(testImage_);
     EXPECT_FALSE(faces.empty());
-    
+
     // Create mock face rectangles since Face doesn't expose bbox directly
-    std::vector<math_utils::Rect<float>> faceRects = {
-        math_utils::Rect<float>(10.0f, 10.0f, 100.0f, 100.0f)
-    };
-    
+    std::vector<math_utils::Rect<float>> faceRects = {math_utils::Rect<float>(10.0f, 10.0f, 100.0f, 100.0f)};
+
     // Use face rectangles for shape detection
     auto facesWithLandmarks = shapeDetector_->detect(testImage_, faceRects);
-    
+
     EXPECT_EQ(facesWithLandmarks.size(), faceRects.size());
     EXPECT_FALSE(facesWithLandmarks.empty());
 }

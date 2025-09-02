@@ -49,7 +49,8 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
                     common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
                 }
 
-                arcface_->recognize(*targetImg, target_img_landmarks_, target_img_embedding_);
+                // Generate inswapper-compatible embedding
+                arcface_->recognize(*targetImg, target_img_landmarks_, target_img_embedding_, true);
                 target_img_embedding_ready_ = (target_img_embedding_.size() == 512);
             }
             if (debug_)
@@ -204,6 +205,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             // Alpha blend crop_mask onto temp_img using warped_mask
 
             image->alphaBlend(*warpedSwappedFace, *warpedMask);
+            image->saveToDisk("Result.ppm");
             Profiler::getInstance().stop("SwapPipeline", "Alpha blending");
         }
         Profiler::getInstance().stop("SwapPipeline", "run");

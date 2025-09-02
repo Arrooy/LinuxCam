@@ -104,8 +104,8 @@ INSTANTIATE_TEST_SUITE_P(
         PasteParams{ImageFormat::RGBA, ImageFormat::RGBA, 128, 255, 100, 50, 25, 128, "RGBA->RGBA alpha=128 (blended)"},
         // RGBA->RGBA, alpha=0: no change (src alpha 0, so dst unchanged, which is zero)
         PasteParams{ImageFormat::RGBA, ImageFormat::RGBA, 0, 0, 0, 0, 0, 0, "RGBA->RGBA alpha=0 (no change)"},
-        // RGBA->RGB, alpha=128: copy RGB, ignore alpha
-        PasteParams{ImageFormat::RGBA, ImageFormat::RGB, 128, 255, 200, 100, 50, 255, "RGBA->RGB alpha=128 (alpha ignored)"},
+        // RGBA->RGB, alpha=128: blend using alpha
+        PasteParams{ImageFormat::RGBA, ImageFormat::RGB, 128, 255, 100, 50, 25, 255, "RGBA->RGB alpha=128 (blended)"},
         // RGB->RGBA: copy RGB, alpha set to 255
         PasteParams{ImageFormat::RGB, ImageFormat::RGBA, 255, 255, 200, 100, 50, 255, "RGB->RGBA (direct copy, alpha=255)"},
         // RGB->RGB: direct copy
@@ -160,8 +160,9 @@ TEST(ImagePaste, PasteAlphaBlending)
     other.info.pixelSizeBytes = 4;
     img.paste(other, true);
     int blended = img.data()[0];
-    // Should be direct copy, not blended (new logic: only blend if both have alpha)
-    EXPECT_EQ(blended, 255); // src R is copied directly if src alpha > 0
+    // Should be blended: src alpha 128/255 ≈ 0.502
+    // Expected: 255 * 0.502 + 1 * 0.498 ≈ 128 + 0.5 ≈ 128
+    EXPECT_NEAR(blended, 128, 2); // Alpha blending of red channel
 }
 
 TEST(ImagePaste, PasteRGBtoRGB)
