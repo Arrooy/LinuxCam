@@ -244,7 +244,6 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
     return true;
 }
 
-
 void V4L2LoopbackWriter::cleanup()
 {
     // 1. Stop streaming_

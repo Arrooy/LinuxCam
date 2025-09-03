@@ -269,14 +269,10 @@ void UI::paintMainWindow()
         ImGui::EndMainMenuBar();
     }
 
-    // Calculate base position for window stacking
-    const float menuBarHeight = ImGui::GetFrameHeight();
-    current_y_ = menuBarHeight;
-
     // Render profiler window
     if (show_profiler_)
     {
-        ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(0, ImGui::GetFrameHeight()), ImGuiCond_FirstUseEver);
         // Set intelligent default size based on content and screen size
         const ImGuiIO& io = ImGui::GetIO();
         const float defaultWidth = std::min(800.0f, io.DisplaySize.x * 0.8f);
@@ -404,27 +400,10 @@ void UI::paintMainWindow()
     // Render device configuration window with tabs
     if (show_device_config_)
     {
-        ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_Always);
         paintDeviceConfigurationTabs();
     }
 
-    if (oneshot_add_device_popup_)
-    {
-        ImGui::OpenPopup("Add New Device");
-        show_add_device_modal_ = true;
-        oneshot_add_device_popup_ = false;
-    }
 
-    // Render add device modal
-    if (show_add_device_modal_)
-    {
-        show_add_device_modal_ = paintWebcam_->paintAddDeviceModal(temp_modal_webcams_);
-        if (!show_add_device_modal_)
-        {
-            // Cleanup the modal
-            temp_modal_webcams_.clear();
-        }
-    }
 
     if (mediaBrowserUI_ && mediaBrowserVisible_)
     {
@@ -511,9 +490,12 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
 
 void UI::paintDeviceConfigurationTabs()
 {
+
+    ImGui::SetNextWindowPos(ImVec2(0, ImGui::GetFrameHeight()), ImGuiCond_FirstUseEver);
+
     // Calculate available space
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float availableHeight = viewport->WorkSize.y - current_y_ - 10; // 10px padding from bottom
+    const float availableHeight = viewport->WorkSize.y - ImGui::GetFrameHeight() - 10; // 10px padding from bottom
 
     // Set window size constraints
     ImGui::SetNextWindowSizeConstraints(ImVec2(-1, 200), // Minimum size
@@ -522,8 +504,7 @@ void UI::paintDeviceConfigurationTabs()
     );
 
     ImGui::Begin("Device Configuration", &show_device_config_,
-                 ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize
-                     | ImGuiWindowFlags_NoMove);
+                 ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
 
 
     if (ImGui::BeginTabBar("DeviceTabs", ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_Reorderable))
@@ -547,71 +528,18 @@ void UI::paintDeviceConfigurationTabs()
             // Add webcam type indicator
             tabName += webcam->getType() == WebcamType::PHYSICAL_INPUT ? " (IN)" : " (OUT)";
 
-            // Add close button to tab
-            bool tabOpen = true;
-            if (ImGui::BeginTabItem((tabName + "###tab" + std::to_string(tabIndex++)).c_str(), &tabOpen, flags))
+            // Create tab without close button
+            if (ImGui::BeginTabItem((tabName + "###tab" + std::to_string(tabIndex++)).c_str(), nullptr, flags))
             {
                 paintWebcam_->setWebcam(webcam);
                 paintWebcam_->paintDevice();
                 last_device_tab_index_ = tabIndex; // Save last active tab
                 ImGui::EndTabItem();
             }
-
-            // Handle tab closing
-            // TODO(arroyo): not working.
-            if (!tabOpen)
-            {
-                common::logError("Closing device tab: %s", tabName.c_str());
-                if (active_device_tab_ >= 1)
-                {
-                    active_device_tab_--;
-                }
-                break; // Break to avoid iterator invalidation
-            }
-        }
-
-        // Add new device button as trailing tab
-        if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip
-                                          | ImGuiTabItemFlags_NoCloseWithMiddleMouseButton))
-        {
-            // Check if this is the first frame this tab became active
-            if (!was_plus_tab_active_ && !show_add_device_modal_)
-            {
-                // Create temporary webcams for all available devices
-                temp_modal_webcams_.clear();
-
-                // Use CameraManager to discover devices
-                const std::vector<std::string> devicePaths = cameraManager_->discoverAvailableVideoDevices();
-                temp_modal_webcams_.reserve(devicePaths.size());
-
-                // Create a temp webcam for each device.
-                for (const auto& devicePath : devicePaths)
-                {
-                    auto tempWebcam = std::make_shared<InputWebcam>("temp_" + devicePath, devicePath, 640, 480, 1);
-                    temp_modal_webcams_.push_back(tempWebcam);
-                    common::logInfo("Created temporary webcam for %s", devicePath.c_str());
-                }
-
-                // Reset selected webcam
-                paintWebcam_->setNewDeviceModalWebcam(nullptr);
-                // Trigger the add device popup
-                oneshot_add_device_popup_ = true;
-
-                was_plus_tab_active_ = true;
-                common::logInfo("UI::paintDeviceConfigurationTabs - Opening add device modal");
-            }
-        }
-        else
-        {
-            // Reset the flag when not on the + tab
-            was_plus_tab_active_ = false;
         }
 
         ImGui::EndTabBar();
     }
-
-    // Update position for next window
-    current_y_ += ImGui::GetWindowSize().y;
     ImGui::End();
 }
 

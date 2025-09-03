@@ -92,15 +92,7 @@ class UI
 
     bool show_profiler_{false};
 
-    bool was_plus_tab_active_ = false;
-    bool go_back_to_last_device_ = false;
     unsigned int last_device_tab_index_ = 0;
-    std::vector<std::shared_ptr<Webcam>> temp_modal_webcams_;
-
-    bool oneshot_add_device_popup_{false};
-
-    // Window positioning tracking
-    float current_y_{0.0f};
 
     std::shared_ptr<CameraManager> cameraManager_;
     std::shared_ptr<MediaManager> mediaManager_;
@@ -114,11 +106,6 @@ class UI
     int active_device_tab_ = 0;
     int requestedTab_ = 0;
 
-    // Add device modal state
-    bool show_add_device_modal_ = false;
-    int selected_video_device_ = -1;
-    char device_name_buffer_[256] = "";
-
     // Add Text Layer modal state
     char add_text_layer_buffer_[256] = "Write here";
 
@@ -129,7 +116,6 @@ class UI
 
     // UI drawing functions
     void paintMainWindow();
-    void paintAddDeviceModal();
     void paintDeviceConfigurationTabs();
     // Helper method to render collapsing headers dynamically
     void renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,

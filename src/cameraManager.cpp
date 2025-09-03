@@ -158,14 +158,38 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
     }
 
     bool success = true;
+    std::unique_ptr<Image> processedOutputImage{nullptr};
+
     for (auto& output : outWebcam_)
     {
         if (output->isRunning())
         {
-            // Use full composite for output
-            std::unique_ptr<Image> outputImage = image->deepCopy();
+            // Pre-process image once for all outputs with the same dimensions
+            const unsigned long desiredWidth = output->getDesiredWidth();
+            const unsigned long desiredHeight = output->getDesiredHeight();
 
-            if (!output->writeFrame(*outputImage))
+            // Check if we can reuse the already processed image
+            if (!processedOutputImage || processedOutputImage->info.width != desiredWidth
+                || processedOutputImage->info.height != desiredHeight)
+            {
+                // Create a copy of the original image for processing
+                processedOutputImage = image->deepCopy();
+
+                // Scale if needed
+                processedOutputImage->scaleToInPlace(desiredWidth, desiredHeight, ScalingAlgorithm::BICUBIC);
+
+                // Convert RGBA to RGB for JPEG encoder compatibility
+                if (!processedOutputImage->convertToRGBInplace())
+                {
+                    common::logError("CameraManager::updateOutput - Failed to convert RGBA to RGB");
+                    success = false;
+                    continue;
+                }
+            }
+
+            // Use the pre-processed image
+            std::unique_ptr<Image> outputImageCopy = processedOutputImage->deepCopy();
+            if (!output->writeFrame(*outputImageCopy))
             {
                 common::logError("Failed to write frame to output device %s", output->getDevicePath().c_str());
                 success = false;
@@ -175,8 +199,15 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
 
     Profiler::getInstance().stop("CameraManager", "Encode and write all output images");
 
-    // Always update output preview layer
-    updateOutputPreviewLayer(*image);
+    // Update preview layer with the processed image if available, otherwise use original
+    if (processedOutputImage)
+    {
+        updateOutputPreviewLayer(*processedOutputImage);
+    }
+    else
+    {
+        updateOutputPreviewLayer(*image);
+    }
 
     return success;
 }
@@ -336,8 +367,26 @@ void CameraManager::createOutputPreviewLayer()
         return; // Already exists
     }
 
-    // Create preview image with fixed dimensions
-    auto previewImage = std::make_shared<Image>(Pixel(0, 0, 0, 0), 640, 480);
+    // Determine preview dimensions based on output devices
+    unsigned int previewWidth = 640;  // Default width
+    unsigned int previewHeight = 480; // Default height
+
+    // Use dimensions from the first output device if available
+    if (!outWebcam_.empty() && outWebcam_[0])
+    {
+        previewWidth = outWebcam_[0]->getDesiredWidth();
+        previewHeight = outWebcam_[0]->getDesiredHeight();
+        common::logInfo("CameraManager::createOutputPreviewLayer - Using output device dimensions: %dx%d", previewWidth,
+                        previewHeight);
+    }
+    else
+    {
+        common::logInfo("CameraManager::createOutputPreviewLayer - Using default dimensions: %dx%d", previewWidth,
+                        previewHeight);
+    }
+
+    // Create preview image with determined dimensions
+    auto previewImage = std::make_shared<Image>(Pixel(0, 0, 0, 0), previewWidth, previewHeight);
 
     // Create preview layer as a regular IMAGE layer
     Layer previewLayer;
@@ -388,19 +437,34 @@ void CameraManager::updateOutputPreviewLayer(const Image& compositeImage)
         }
     }
 
-    // Get preview dimensions from the existing image
+    // Get desired preview dimensions
     unsigned int targetWidth = previewLayer->img->info.width;
     unsigned int targetHeight = previewLayer->img->info.height;
 
-    // Scale the composite image to fit the preview dimensions
-    auto scaledImage = compositeImage.scaleTo(targetWidth, targetHeight, ScalingAlgorithm::BILINEAR);
+    std::unique_ptr<Image> finalImage;
 
-    if (scaledImage)
+    // Check if the composite image is already the right size (preprocessed case)
+    if (compositeImage.info.width == targetWidth && compositeImage.info.height == targetHeight)
     {
-        common::logInfo("CameraManager::updateOutputPreviewLayer - Updated preview with scaled composite (%dx%d)",
-                        scaledImage->info.width, scaledImage->info.height);
-        // Update the preview layer with the scaled composite image
-        previewLayer->img = std::shared_ptr<Image>(scaledImage.release());
+        // Use the image as-is, just copy it
+        finalImage = compositeImage.deepCopy(); // TODO: Too much deep copy in this file.
+    }
+    else
+    {
+        // Scale the composite image to fit the preview dimensions
+        finalImage = compositeImage.scaleTo(targetWidth, targetHeight, ScalingAlgorithm::BILINEAR);
+        if (finalImage)
+        {
+            common::logInfo("CameraManager::updateOutputPreviewLayer - Scaled composite from %lux%lu to %dx%d",
+                            compositeImage.info.width, compositeImage.info.height, finalImage->info.width,
+                            finalImage->info.height);
+        }
+    }
+
+    if (finalImage)
+    {
+        // Update the preview layer with the final image
+        previewLayer->img = std::shared_ptr<Image>(finalImage.release());
         previewLayer->dirty = true;
         // Preserve the layer name
         if (previewLayer->img)

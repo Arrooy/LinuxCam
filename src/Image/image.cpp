@@ -1381,8 +1381,8 @@ math_utils::Point<double> Image::rotate(double angleRad, math_utils::Point<doubl
         }
     }
 
-    // Resize internal buffer and update info
-    data_.reset(new unsigned char[newSize]);
+    // Resize internal buffer and update info with proper array deleter
+    data_.reset(new unsigned char[newSize], std::default_delete<unsigned char[]>());
     size_ = newSize;
     std::memcpy(data_.get(), rotated.data(), newSize);
     info.width = newWidth;

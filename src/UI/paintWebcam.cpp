@@ -17,11 +17,6 @@ void PaintWebcam::setWebcam(std::shared_ptr<Webcam> webcam)
     webcam_ = std::move(webcam);
 }
 
-void PaintWebcam::setNewDeviceModalWebcam(std::shared_ptr<Webcam> webcam)
-{
-    webcam_new_device_ = std::move(webcam);
-}
-
 std::shared_ptr<Webcam> PaintWebcam::getWebcam() const
 {
     return webcam_;
@@ -269,92 +264,4 @@ void PaintWebcam::paintVirtualOutput()
             ImGui::EndDisabled();
         }
     }
-}
-
-bool PaintWebcam::paintAddDeviceModal(const std::vector<std::shared_ptr<Webcam>>& tempWebcams)
-{
-    if (tempWebcams.empty())
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No video devices found in /dev/video*");
-        return true;
-    }
-
-    // Locate the PopupModal
-    const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_Appearing);
-
-    bool modalOpen = true;
-    if (ImGui::BeginPopupModal("Add New Device", &modalOpen,
-                               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
-    {
-        const std::string comboText = webcam_new_device_ ? webcam_new_device_->getDevicePath() : "Select device...";
-        if (ImGui::BeginCombo("Video Device", comboText.c_str()))
-        {
-            for (const auto& tempWebcam : tempWebcams)
-            {
-                const bool isSelected =
-                    !webcam_new_device_ ? false : (tempWebcam->getDevicePath() == webcam_new_device_->getDevicePath());
-
-                if (ImGui::Selectable(tempWebcam->getDevicePath().c_str(), isSelected))
-                {
-                    webcam_new_device_ = tempWebcam;
-                }
-                if (isSelected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndCombo();
-        }
-
-        if (webcam_new_device_)
-        {
-            // TODO(arroyo): Load and show device info using other methods
-            ImGui::Text("Device Name: %s", webcam_new_device_->getName().c_str());
-        }
-        ImGui::Separator();
-
-        if (!webcam_new_device_)
-        {
-            ImGui::BeginDisabled();
-        }
-
-        if (ImGui::Button("Add Device"))
-        {
-        }
-
-        if (!webcam_new_device_)
-        {
-            ImGui::EndDisabled();
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel"))
-        {
-            // Close modal and reset states
-            modalOpen = false;
-            common::logInfo("UI::paintAddDeviceModal - User cancelled adding device");
-            ImGui::CloseCurrentPopup();
-        }
-
-
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
-        {
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
-
-    // Check if modal was closed by Cancel, X button or ESC key
-    if (!modalOpen)
-    {
-        if (webcam_new_device_)
-        {
-            webcam_new_device_.reset();
-        }
-        return false;
-    }
-    return true;
 }
