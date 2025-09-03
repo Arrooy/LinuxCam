@@ -12,7 +12,7 @@
 #include "LinuxFace/imageLoader.h"
 #include "LinuxFace/onnx/arcfaceRecognizer.h"
 #include "LinuxFace/onnx/scrfd.h"
-#include "../test_utils.h"
+#include "../common/test_utils.h"
 #include "config.hpp"
 
 using namespace linuxface;

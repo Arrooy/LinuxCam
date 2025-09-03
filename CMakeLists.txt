@@ -338,7 +338,7 @@ if(BUILD_TESTING)
     
     # Configure a header file with test paths
     configure_file(
-        "${CMAKE_SOURCE_DIR}/tests/test_config.h.in"
+        "${CMAKE_SOURCE_DIR}/tests/config/test_config.h.in"
         "${CMAKE_BINARY_DIR}/test_config.h"
     )
 

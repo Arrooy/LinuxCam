@@ -1,18 +1,19 @@
 #include "LinuxFace/Image/pixel_converter.h"
+
 #include <cstring>
 
 namespace linuxface::image
 {
 
-void PixelConverter::convertPixel(const uint8_t* src, uint8_t* dst, 
-                                 PixelFormat srcFormat, PixelFormat dstFormat) noexcept
+void PixelConverter::convertPixel(const uint8_t* src, uint8_t* dst, PixelFormat srcFormat,
+                                  PixelFormat dstFormat) noexcept
 {
     if (srcFormat == dstFormat)
     {
         copyPixel(src, dst, srcFormat);
         return;
     }
-    
+
     // Delegate to specific conversion functions
     switch (srcFormat)
     {
@@ -28,18 +29,18 @@ void PixelConverter::convertPixel(const uint8_t* src, uint8_t* dst,
     }
 }
 
-void PixelConverter::convertRow(const uint8_t* srcRow, uint8_t* dstRow, size_t pixelCount,
-                               PixelFormat srcFormat, PixelFormat dstFormat) noexcept
+void PixelConverter::convertRow(const uint8_t* srcRow, uint8_t* dstRow, size_t pixelCount, PixelFormat srcFormat,
+                                PixelFormat dstFormat) noexcept
 {
     if (srcFormat == dstFormat)
     {
         copyRow(srcRow, dstRow, pixelCount, srcFormat);
         return;
     }
-    
+
     const uint8_t srcBytes = PixelFormatInfo::getBytesPerPixel(srcFormat);
     const uint8_t dstBytes = PixelFormatInfo::getBytesPerPixel(dstFormat);
-    
+
     for (size_t i = 0; i < pixelCount; ++i)
     {
         convertPixel(srcRow + i * srcBytes, dstRow + i * dstBytes, srcFormat, dstFormat);
@@ -64,12 +65,12 @@ void PixelConverter::convertFromRGB(const uint8_t* src, uint8_t* dst, PixelForma
     {
         case PixelFormat::RGB:
             dst[0] = src[0]; // R
-            dst[1] = src[1]; // G  
+            dst[1] = src[1]; // G
             dst[2] = src[2]; // B
             break;
         case PixelFormat::RGBA:
             dst[0] = src[0]; // R
-            dst[1] = src[1]; // G  
+            dst[1] = src[1]; // G
             dst[2] = src[2]; // B
             dst[3] = 255;    // A (opaque)
             break;

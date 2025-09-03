@@ -12,8 +12,8 @@
 #include <sys/stat.h>
 #include <vector>
 
-#include "../dataset_utils.h"
-#include "../test_utils.h"
+#include "../common/dataset_utils.h"
+#include "../common/test_utils.h"
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/Image/text_draw.h"

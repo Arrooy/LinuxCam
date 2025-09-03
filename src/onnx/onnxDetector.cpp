@@ -10,6 +10,7 @@ OnnxDetector::OnnxDetector(const std::string& onnxModelPath)
     , detector_session_{nullptr}
     , memory_info_{nullptr}
     , io_binding_(nullptr)
+    , onnx_model_path_(onnxModelPath)
     , has_cuda_(Config::getInstance().isGPUEnabled() && checkCudaAvailability())
 {
     // session_options_.SetInterOpNumThreads(2);  // e.g., parallel execution of independent ops
@@ -56,7 +57,7 @@ OnnxDetector::OnnxDetector(const std::string& onnxModelPath)
 
     try
     {
-    common::logInfo("OnnxDetector: Loading ONNX model from %s", onnxModelPath.c_str());
+        common::logInfo("OnnxDetector: Loading ONNX model from %s", onnxModelPath.c_str());
         // Create ONNX Runtime detector_session_ for the detector
         detector_session_ = std::make_unique<Ort::Session>(env_, onnxModelPath.c_str(), session_options_);
 
@@ -149,7 +150,7 @@ bool OnnxDetector::readModelInputSize()
     }
 
     common::logInfo("OnnxDetector::readModelInputSize - batch_size_ = %d, channels_ = %d, width_ = %d, height_ = %d",
-                     batch_size_, channels_, width_, height_);
+                    batch_size_, channels_, width_, height_);
     if (width_ == 0 || height_ == 0)
     {
         common::logError("OnnxDetector::readModelInputSize - width_ or height_ is 0");

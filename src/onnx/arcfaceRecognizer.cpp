@@ -103,17 +103,21 @@ std::vector<float> ArcfaceRecognizer::transformEmbeddingForInswapper(const std::
         return arcfaceEmbedding;
     }
 
-    // Apply emap transformation: transformed = emap * embedding
+    // Apply emap transformation exactly like face_utils::dot_product
+    // result[j] = sum(vec[i] * matrix[i * matrix_cols + j]) for each column j
+    // This computes: transformed = arcfaceEmbedding^T * emap_matrix
     std::vector<float> transformed(EmbeddingSize, 0.0f);
-    for (int i = 0; i < EmbeddingSize; ++i)
+    for (int j = 0; j < EmbeddingSize; ++j)
     {
-        for (int j = 0; j < EmbeddingSize; ++j)
+        float sum = 0.0f;
+        for (int i = 0; i < EmbeddingSize; ++i)
         {
-            transformed[i] += emap_matrix_[i * EmbeddingSize + j] * arcfaceEmbedding[j];
+            sum += arcfaceEmbedding[i] * emap_matrix_[i * EmbeddingSize + j];
         }
+        transformed[j] = sum;
     }
 
-    // Normalize the transformed embedding
+    // Normalize the transformed embedding exactly like face_utils::normalize
     float norm = 0.0f;
     for (const auto& val : transformed)
     {
@@ -121,7 +125,7 @@ std::vector<float> ArcfaceRecognizer::transformEmbeddingForInswapper(const std::
     }
     norm = std::sqrt(norm);
     
-    if (norm > 1e-8f) // Avoid division by zero
+    if (norm > 0.0f) // Match face_utils::normalize condition
     {
         for (auto& val : transformed)
         {
@@ -134,8 +138,6 @@ std::vector<float> ArcfaceRecognizer::transformEmbeddingForInswapper(const std::
 
 bool ArcfaceRecognizer::loadEmapMatrixFromOnnx(const std::string& inswapperModelPath)
 {
-    // For now, we'll implement a simple binary file loader
-    // The emap matrix should be extracted from the inswapper model and saved as a binary file
     std::string emapFilePath = inswapperModelPath + ".emap";
     
     std::ifstream file(emapFilePath, std::ios::binary);

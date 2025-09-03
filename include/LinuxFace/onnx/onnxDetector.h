@@ -11,6 +11,7 @@ class OnnxDetector
 {
   public:
     bool isReady() const { return ready_; };
+    std::string getModelPath() const { return onnx_model_path_; }
 
   protected:
     explicit OnnxDetector(const std::string& onnxModelPath);
@@ -38,6 +39,7 @@ class OnnxDetector
     Ort::IoBinding io_binding_;
     Ort::AllocatorWithDefaultOptions allocator_;
 
+    std::string onnx_model_path_;
     bool ready_{false};
     bool has_cuda_{false};
 

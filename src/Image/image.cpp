@@ -8,14 +8,12 @@
 #include <unistd.h>
 #include <vector>
 
-#include "LinuxFace/Image/image_utils.h"
-#include "LinuxFace/Image/pixel_conversion.h"
 #include "LinuxFace/Image/alpha_blender.h"
-#include "LinuxFace/Image/pixel_converter.h"
 #include "LinuxFace/Image/image_processor.h"
+#include "LinuxFace/Image/image_utils.h"
+#include "LinuxFace/Image/pixel_converter.h"
 
 using namespace linuxface;
-using namespace linuxface::pixel_conversion;
 
 // Modern pixel operations using clean architecture
 namespace linuxface::pixel_operations
@@ -28,10 +26,14 @@ linuxface::image::PixelFormat Image::pixelSizeToFormat(unsigned char pixelSize) 
 {
     switch (pixelSize)
     {
-        case 1: return linuxface::image::PixelFormat::GRAYSCALE;
-        case 3: return linuxface::image::PixelFormat::RGB;
-        case 4: return linuxface::image::PixelFormat::RGBA;
-        default: return linuxface::image::PixelFormat::RGB; // Default fallback
+        case 1:
+            return image::PixelFormat::GRAYSCALE;
+        case 3:
+            return image::PixelFormat::RGB;
+        case 4:
+            return image::PixelFormat::RGBA;
+        default:
+            return image::PixelFormat::RGB; // Default fallback
     }
 }
 
@@ -201,7 +203,7 @@ void Image::ppx(size_t col, size_t row, const Pixel& c)
 void Image::pxy(size_t col, size_t row, const unsigned char r, const unsigned char g, const unsigned char b,
                 const unsigned char a)
 {
-    const size_t pixelIdx = row * info.width + col;  // Calculate pixel index
+    const size_t pixelIdx = row * info.width + col; // Calculate pixel index
     if (pixelIdx >= info.width * info.height || !data_)
     {
         common::logError("Image::pxy: index out of bounds [col,row] %zu, %zu Pixel Index: %zu", col, row, pixelIdx);
@@ -210,18 +212,20 @@ void Image::pxy(size_t col, size_t row, const unsigned char r, const unsigned ch
     this->pidx(pixelIdx, r, g, b, a);
 }
 
-void Image::pidx(size_t pixelIdx, const unsigned char r, const unsigned char g, const unsigned char b, const unsigned char a)
+void Image::pidx(size_t pixelIdx, const unsigned char r, const unsigned char g, const unsigned char b,
+                 const unsigned char a)
 {
     // Convert pixel index to byte index
     const size_t byteIdx = pixelIdx * info.pixelSizeBytes;
-    
+
     // Bounds check using byte index
     if (byteIdx >= size_ || !data_)
     {
-        common::logError("Image::pidx: pixel index out of bounds. Pixel index: %zu, byte index: %zu, size: %zu", pixelIdx, byteIdx, size_);
+        common::logError("Image::pidx: pixel index out of bounds. Pixel index: %zu, byte index: %zu, size: %zu",
+                         pixelIdx, byteIdx, size_);
         return;
     }
-    
+
     // Use PixelOperations for consistency
     if (info.pixelSizeBytes == 4)
     {
@@ -1038,80 +1042,138 @@ bool Image::saveToDisk(const std::string& destPath) const
 
 std::vector<unsigned char> Image::convertToRGB() const
 {
-    if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
+    // Use the modern pixel conversion system for comprehensive format support
+    if (info.format == ImageFormat::RGB && info.pixelSizeBytes == 3)
     {
-        const size_t pixelCount = info.width * info.height;
-        std::vector<unsigned char> rgbData(pixelCount * 3);
-        const unsigned char* gray = data_.get();
-        for (size_t i = 0; i < pixelCount; ++i)
-        {
-            rgbData[i * 3 + 0] = gray[i];
-            rgbData[i * 3 + 1] = gray[i];
-            rgbData[i * 3 + 2] = gray[i];
-        }
+        // Already RGB - return copy of existing data
+        std::vector<unsigned char> rgbData(size_);
+        std::memcpy(rgbData.data(), data_.get(), size_);
         return rgbData;
     }
-    return {};
+
+    const size_t pixelCount = info.width * info.height;
+    std::vector<unsigned char> rgbData(pixelCount * 3);
+
+    // Determine source format
+    image::PixelFormat srcFormat;
+    if (info.format == ImageFormat::RGBA && info.pixelSizeBytes == 4)
+    {
+        srcFormat = image::PixelFormat::RGBA;
+    }
+    else if (info.format == ImageFormat::GRAYSCALE && info.pixelSizeBytes == 1)
+    {
+        srcFormat = image::PixelFormat::GRAYSCALE;
+    }
+    else
+    {
+        common::logError("Image::convertToRGB - Unsupported source format: %s",
+                         fromImageFormatToString(info.format).c_str());
+        return {};
+    }
+
+    // Use ImageProcessor for proper format conversion
+    const size_t srcStride = info.width * info.pixelSizeBytes;
+    const size_t dstStride = info.width * 3;
+
+    image::ImageProcessor::convertImage(data_.get(), rgbData.data(), info.width, info.height, srcStride,
+                                       dstStride, srcFormat, image::PixelFormat::RGB);
+
+    return rgbData;
 }
 
 bool Image::convertToRGBAInplace()
 {
+    if (info.format == ImageFormat::RGBA && info.pixelSizeBytes == 4)
+    {
+        return true; // Already RGBA
+    }
+
+    const size_t pixelCount = info.width * info.height;
+    const size_t newSize = pixelCount * 4;
+
+    // Create new RGBA buffer
+    auto newData = std::shared_ptr<unsigned char>(new unsigned char[newSize], std::default_delete<unsigned char[]>());
+
+    // Determine source format
+    image::PixelFormat srcFormat;
     if (info.format == ImageFormat::RGB && info.pixelSizeBytes == 3)
     {
-        const size_t pixelCount = info.width * info.height;
-        const size_t newSize = pixelCount * 4;
-
-        // Create new RGBA data
-        auto newData =
-            std::shared_ptr<unsigned char>(new unsigned char[newSize], std::default_delete<unsigned char[]>());
-
-        // Convert RGB to RGBA by adding alpha=255
-        const unsigned char* rgb = data_.get();
-        unsigned char* rgba = newData.get();
-
-        for (size_t i = 0; i < pixelCount; ++i)
-        {
-            rgba[i * 4 + 0] = rgb[i * 3 + 0]; // R
-            rgba[i * 4 + 1] = rgb[i * 3 + 1]; // G
-            rgba[i * 4 + 2] = rgb[i * 3 + 2]; // B
-            rgba[i * 4 + 3] = 255;            // A
-        }
-
-        // Update image properties
-        data_ = std::move(newData);
-        size_ = newSize;
-        info.format = ImageFormat::RGBA;
-        info.pixelSizeBytes = 4;
-
-        return true;
+        srcFormat = image::PixelFormat::RGB;
     }
-    return false;
+    else if (info.format == ImageFormat::GRAYSCALE && info.pixelSizeBytes == 1)
+    {
+        srcFormat = image::PixelFormat::GRAYSCALE;
+    }
+    else
+    {
+        common::logError("Image::convertToRGBAInplace - Unsupported source format: %s",
+                         fromImageFormatToString(info.format).c_str());
+        return false;
+    }
+
+    // Use ImageProcessor for proper format conversion
+    const size_t srcStride = info.width * info.pixelSizeBytes;
+    const size_t dstStride = info.width * 4;
+
+    image::ImageProcessor::convertImage(data_.get(), newData.get(), info.width, info.height, srcStride, dstStride,
+                                       srcFormat, image::PixelFormat::RGBA);
+
+    // Update image properties
+    data_ = std::move(newData);
+    size_ = newSize;
+    info.format = ImageFormat::RGBA;
+    info.pixelSizeBytes = 4;
+    info.TJPixelFormat = TJPF_RGBA;
+
+    return true;
 }
 
 bool Image::convertToRGBInplace()
 {
-    if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
+    // Use the modern pixel conversion system for comprehensive format support
+    if (info.format == ImageFormat::RGB && info.pixelSizeBytes == 3)
     {
-        const std::vector<unsigned char> rgbData = convertToRGB();
-        size_t i = 0;
-        const size_t pixelCount = info.width * info.height * 3;
-        resize(pixelCount, true);
-        for (const unsigned char pixel : rgbData)
-        {
-            data_.get()[i] = pixel;
-            i += 1;
-        }
-        if (i != pixelCount)
-        {
-            common::logError("Image::convertToRGB - Error converting grayscale to RGB. Size mismatch.");
-            return false;
-        }
-        info.format = ImageFormat::RGB;
-        info.pixelSizeBytes = 3;
-
-        return true;
+        return true; // Already RGB
     }
-    return false;
+
+    const size_t pixelCount = info.width * info.height;
+    const size_t newSize = pixelCount * 3;
+
+    // Create new RGB buffer
+    auto newData = std::shared_ptr<unsigned char>(new unsigned char[newSize], std::default_delete<unsigned char[]>());
+
+    // Determine source format
+    image::PixelFormat srcFormat;
+    if (info.format == ImageFormat::RGBA && info.pixelSizeBytes == 4)
+    {
+        srcFormat = image::PixelFormat::RGBA;
+    }
+    else if (info.format == ImageFormat::GRAYSCALE && info.pixelSizeBytes == 1)
+    {
+        srcFormat = image::PixelFormat::GRAYSCALE;
+    }
+    else
+    {
+        common::logError("Image::convertToRGBInplace - Unsupported source format: %s",
+                         fromImageFormatToString(info.format).c_str());
+        return false;
+    }
+
+    // Use ImageProcessor for proper format conversion
+    const size_t srcStride = info.width * info.pixelSizeBytes;
+    const size_t dstStride = info.width * 3;
+
+    image::ImageProcessor::convertImage(data_.get(), newData.get(), info.width, info.height, srcStride, dstStride,
+                                       srcFormat, image::PixelFormat::RGB);
+
+    // Update image properties
+    data_ = std::move(newData);
+    size_ = newSize;
+    info.format = ImageFormat::RGB;
+    info.pixelSizeBytes = 3;
+    info.TJPixelFormat = TJPF_RGB;
+
+    return true;
 }
 
 void Image::changeBackgroundImage(const Image& matting, const Image& background)
@@ -1173,7 +1235,7 @@ void Image::toGrayscale()
             const unsigned char r = data_.get()[idx];
             const unsigned char g = data_.get()[idx + 1];
             const unsigned char b = data_.get()[idx + 2];
-            const unsigned char gray = pixel_conversion::rgbToGrayscale(r, g, b);
+            const unsigned char gray = image::PixelConverter::rgbToGrayscale(r, g, b);
             data_.get()[idx] = gray;
             data_.get()[idx + 1] = gray;
             data_.get()[idx + 2] = gray;
@@ -1420,7 +1482,7 @@ void Image::copyPixelsWithBlending(const Image& src, long srcDestX, long srcDest
     const long srcTop = srcDestY;
     const long srcRight = srcLeft + static_cast<long>(src.info.width);
     const long srcBottom = srcTop + static_cast<long>(src.info.height);
-    
+
     const long canvasLeft = canvasX;
     const long canvasTop = canvasY;
     const long canvasRight = canvasLeft + static_cast<long>(canvasWidth);
@@ -1459,10 +1521,10 @@ void Image::copyPixelsWithBlending(const Image& src, long srcDestX, long srcDest
         {
             // CONSISTENT COORDINATE MAPPING:
             // All coordinates are in destination space, source mapping is relative to srcDestX/srcDestY
-            const long srcCol = x - srcDestX;  // Position in source image
-            const long srcRow = y - srcDestY;  // Position in source image
-            const long dstCol = x;             // Position in destination image
-            const long dstRow = y;             // Position in destination image
+            const long srcCol = x - srcDestX; // Position in source image
+            const long srcRow = y - srcDestY; // Position in source image
+            const long dstCol = x;            // Position in destination image
+            const long dstRow = y;            // Position in destination image
 
             // Bounds check before calculating indices
             if (srcRow < 0 || srcRow >= static_cast<long>(src.info.height) || srcCol < 0
@@ -1484,19 +1546,19 @@ void Image::copyPixelsWithBlending(const Image& src, long srcDestX, long srcDest
             }
 
             // Handle RGBA blending with alpha transparency
-            if (srcFormat == PixelFormat::RGBA)
+            if (srcFormat == image::PixelFormat::RGBA)
             {
                 const unsigned char srcAlpha = srcData[srcIdx + 3];
                 if (srcAlpha == 0)
                 {
                     continue; // Skip completely transparent pixels
                 }
-                processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, srcAlpha != 255, srcAlpha);
+                image::ImageProcessor::processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, srcAlpha != 255, srcAlpha);
             }
             else
             {
                 // Use centralized conversion for all other format combinations
-                processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, false, 255);
+                image::ImageProcessor::processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, false, 255);
             }
         }
     }
@@ -1537,7 +1599,7 @@ void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dst
         const size_t srcRowStart = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
         const size_t dstRowStart = ((dstY + row) * info.width + dstX) * dstPixelSize;
 
-        convertRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, srcFormat, dstFormat);
+        image::PixelConverter::convertRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, srcFormat, dstFormat);
     }
 }
 
@@ -1890,30 +1952,38 @@ void Image::alphaBlend(const Image& src, const Image& mask)
             effectiveSrcAlpha = static_cast<unsigned char>(std::round(std::clamp(combinedAlpha, 0.0f, 255.0f)));
         }
 
-        // Use our new architecture to blend pixels        
+        // Use our new architecture to blend pixels
         // Convert to our new pixel format system
-        linuxface::image::PixelFormat srcFormat = (srcChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
-        linuxface::image::PixelFormat dstFormat = (dstChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
-        
+        linuxface::image::PixelFormat srcFormat =
+            (srcChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
+        linuxface::image::PixelFormat dstFormat =
+            (dstChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
+
         // Create temporary source pixel with effective alpha
         unsigned char tempSrcPixel[4];
         tempSrcPixel[0] = srcPixel[0];
         tempSrcPixel[1] = srcPixel[1];
         tempSrcPixel[2] = srcPixel[2];
-        
-        if (srcChannels == 4) {
+
+        if (srcChannels == 4)
+        {
             tempSrcPixel[3] = effectiveSrcAlpha;
             // Keep srcFormat as RGBA
-        } else {
+        }
+        else
+        {
             // For RGB sources, use blendPixel with RGB format and alpha parameter
             // Don't set tempSrcPixel[3] as it won't be used for RGB format
         }
-        
+
         // Use AlphaBlender to blend the pixel
         linuxface::image::AlphaBlender blender;
-        if (srcChannels == 4) {
+        if (srcChannels == 4)
+        {
             blender.blendPixel(tempSrcPixel, dstPixel, srcFormat, dstFormat);
-        } else {
+        }
+        else
+        {
             blender.blendPixel(tempSrcPixel, dstPixel, srcFormat, dstFormat, effectiveSrcAlpha);
         }
     }

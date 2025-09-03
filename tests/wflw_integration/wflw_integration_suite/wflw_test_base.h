@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-#include "../../dataset_utils.h"
+#include "../../common/dataset_utils.h"
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_draw.h"
 #include "LinuxFace/face.h"

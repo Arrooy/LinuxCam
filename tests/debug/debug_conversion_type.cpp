@@ -1,22 +1,9 @@
 #include <gtest/gtest.h>
 #include <LinuxFace/Image/image.h>
-#include <LinuxFace/Image/pixel_conversion.h>
+#include <LinuxFace/Image/image_processor.h>
 #include <iostream>
 
 using namespace linuxface;
-using namespace linuxface::pixel_conversion;
-
-// Helper function to convert pixel size to format
-PixelFormat pixelSizeToFormat(unsigned char pixelSize) noexcept
-{
-    switch (pixelSize)
-    {
-        case 1: return PixelFormat::GRAYSCALE;
-        case 3: return PixelFormat::RGB;
-        case 4: return PixelFormat::RGBA;
-        default: return PixelFormat::RGB; // Default fallback
-    }
-}
 
 TEST(DebugPaste, PixelFormatCheck)
 {
@@ -24,13 +11,13 @@ TEST(DebugPaste, PixelFormatCheck)
     unsigned char srcPixelSize = 4;  // RGBA
     unsigned char dstPixelSize = 4;  // RGBA
     
-    PixelFormat srcFormat = pixelSizeToFormat(srcPixelSize);
-    PixelFormat dstFormat = pixelSizeToFormat(dstPixelSize);
+    image::PixelFormat srcFormat = Image::pixelSizeToFormat(srcPixelSize);
+    image::PixelFormat dstFormat = Image::pixelSizeToFormat(dstPixelSize);
     
     std::cout << "Source format for 4-byte pixel: " << static_cast<int>(srcFormat) << std::endl;
     std::cout << "Dest format for 4-byte pixel: " << static_cast<int>(dstFormat) << std::endl;
-    std::cout << "RGB enum value: " << static_cast<int>(PixelFormat::RGB) << std::endl;
-    std::cout << "RGBA enum value: " << static_cast<int>(PixelFormat::RGBA) << std::endl;
+    std::cout << "RGB enum value: " << static_cast<int>(image::PixelFormat::RGB) << std::endl;
+    std::cout << "RGBA enum value: " << static_cast<int>(image::PixelFormat::RGBA) << std::endl;
     
     // Test condition
     bool directCopyCondition = (srcFormat == dstFormat);
@@ -38,7 +25,7 @@ TEST(DebugPaste, PixelFormatCheck)
     
     // Test alpha condition
     unsigned char srcAlpha = 128;
-    bool needsBlending = (srcFormat == PixelFormat::RGBA && srcAlpha != 255);
+    bool needsBlending = (srcFormat == image::PixelFormat::RGBA && srcAlpha != 255);
     std::cout << "Needs blending (RGBA with alpha != 255): " << needsBlending << std::endl;
     
     // Test processPixel directly using ImageProcessor
@@ -48,8 +35,8 @@ TEST(DebugPaste, PixelFormatCheck)
     std::cout << "\nDirect processPixel test:" << std::endl;
     std::cout << "Before: dst=(" << (int)dst[0] << "," << (int)dst[1] << "," << (int)dst[2] << "," << (int)dst[3] << ")" << std::endl;
     
-    // Use the new architecture to process the pixel
-    processPixel(src, dst, srcFormat, dstFormat, needsBlending, srcAlpha);
+    // Use ImageProcessor to process the pixel directly  
+    image::ImageProcessor::processPixel(src, dst, srcFormat, dstFormat, needsBlending, srcAlpha);
     
     std::cout << "After: dst=(" << (int)dst[0] << "," << (int)dst[1] << "," << (int)dst[2] << "," << (int)dst[3] << ")" << std::endl;
 }

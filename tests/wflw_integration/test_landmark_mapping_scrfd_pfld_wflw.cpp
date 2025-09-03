@@ -9,7 +9,7 @@
  * Uses LandmarkConverter for proper format translation between coordinate systems
  */
 #include "wflw_loader.h"
-#include "../test_utils.h"
+#include "../common/test_utils.h"
 
 #include <fstream>
 #include <gtest/gtest.h>

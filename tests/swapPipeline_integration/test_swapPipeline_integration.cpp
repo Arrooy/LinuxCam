@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "../test_utils.h" // Use unified test utilities from parent directory
+#include "../common/test_utils.h" // Use unified test utilities from common directory
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_draw.h"
 #include "LinuxFace/face.h"

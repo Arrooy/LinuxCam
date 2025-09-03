@@ -14,10 +14,13 @@ namespace linuxface
 
 SwapPipeline::SwapPipeline(std::shared_ptr<InSwapper> inswapper, std::shared_ptr<ArcfaceRecognizer> arcface,
                            std::shared_ptr<SCRFDetector> scrfd)
-    : inswapper_(std::move(std::move(inswapper)))
-    , arcface_(std::move(std::move(arcface)))
-    , scrfd_(std::move(std::move(scrfd)))
+    : inswapper_(std::move(inswapper)), arcface_(std::move(arcface)), scrfd_(std::move(scrfd))
 {
+    // Enable inswapper compatibility for better face swapping quality
+    if (arcface_ && !arcface_->enableInswapperCompatibility(inswapper_->getModelPath()))
+    {
+        linuxface::common::logWarn("Failed to enable inswapper compatibility - face swapping quality may be reduced");
+    }
 }
 
 bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& targetImg)
@@ -36,9 +39,9 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         if (!targetFaces.empty())
         {
             common::logInfo("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", 99,
-                             targetFaces[0].getBoundingBox().rect.x(), targetFaces[0].getBoundingBox().rect.y(),
-                             targetFaces[0].getBoundingBox().rect.width(),
-                             targetFaces[0].getBoundingBox().rect.height());
+                            targetFaces[0].getBoundingBox().rect.x(), targetFaces[0].getBoundingBox().rect.y(),
+                            targetFaces[0].getBoundingBox().rect.width(),
+                            targetFaces[0].getBoundingBox().rect.height());
             target_img_landmarks_ = targetFaces[0].getFivePointLandmarksArcFaceOrder2D();
             if (target_img_landmarks_.size() == 5)
             {
@@ -78,15 +81,15 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         common::logWarn("SwapPipeline: No faces detected in the webcam image.");
         return false;
     }
-        bool worked = false;
+    bool worked = false;
     int i = 0;
     Image swappedFace; // Reuse buffer for all faces
     for (const auto& face : scrfdFaces)
     {
         // print bounding box coords
         common::logInfo("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", i,
-                         face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
-                         face.getBoundingBox().rect.width(), face.getBoundingBox().rect.height());
+                        face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
+                        face.getBoundingBox().rect.width(), face.getBoundingBox().rect.height());
         std::vector<math_utils::Point<>> webcamLandmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (webcamLandmarks.size() != 5)
         {
@@ -94,10 +97,10 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
                              static_cast<int>(webcamLandmarks.size()));
             return false;
         }
-            common::logInfo("Source image landmarks %zu", i++);
-            for (const auto& landmark : webcamLandmarks)
-            {
-                common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
+        common::logInfo("Source image landmarks %zu", i++);
+        for (const auto& landmark : webcamLandmarks)
+        {
+            common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
         }
         Profiler::getInstance().stop("SwapPipeline", "detect image faces");
         Profiler::getInstance().start("SwapPipeline", "swap face");

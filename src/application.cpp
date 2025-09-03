@@ -216,6 +216,7 @@ bool Application::initialize()
 
     // Initialize SwapPipeline after all models are loaded
     swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
+
     // Pass pointer instead of reference
     ui_->connect(cameraManager_);
 
@@ -233,7 +234,8 @@ bool Application::initialize()
     ui_->connect(mediaManager_);
 
     // Load target faceswap image once
-    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
+    // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
+    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/zoe.jpeg";
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
@@ -290,7 +292,6 @@ void Application::run()
         if (update())
         {
             render();
-            // break; // For testing purposes, remove this line in production
         }
     }
 
@@ -345,13 +346,13 @@ bool Application::update()
         return false;
     }
 
+    process(compositeImage);
+
     // Send composite to output cameras with cropping
     if (!cameraManager_->updateOutput(compositeImage))
     {
         linuxface::common::logError("Failed to update output cameras");
     }
-
-    process(compositeImage);
 
     ui_->handleKeyboard();
     ui_->newFrame();
@@ -645,7 +646,6 @@ void Application::process(std::unique_ptr<Image>& image)
         swap_success = swapPipeline_->run(image, target_img_);
         if (swap_success && layerManager_)
         {
-
         }
     }
 

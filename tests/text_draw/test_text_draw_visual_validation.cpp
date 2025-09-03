@@ -16,7 +16,7 @@
 
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_draw.h"
-#include "../test_utils.h"
+#include "../common/test_utils.h"
 
 using namespace linuxface;
 

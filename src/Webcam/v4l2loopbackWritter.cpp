@@ -165,14 +165,25 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         scaledImage = image.scale(desiredWidth, desiredHeight);
         if (!scaledImage)
         {
-            common::logError("V4L2LoopbackWriter::writeFrame - Failed to scale image");
+            common::logError("V4L2LoopbackWriter::writeFrame - Failed to scale image from %lux%lu to %lux%lu",
+                             image.info.width, image.info.height, desiredWidth, desiredHeight);
             Profiler::getInstance().stop(name_, "Encode and write output image");
             return false;
         }
+        common::logInfo("V4L2LoopbackWriter::writeFrame - Scaled image from %lux%lu to %lux%lu", image.info.width,
+                        image.info.height, desiredWidth, desiredHeight);
     }
 
     // Use scaled image if available, otherwise use original
-    const Image& imageToEncode = scaledImage ? *scaledImage : image;
+    Image& imageToEncode = scaledImage ? *scaledImage : image;
+
+    // Convert RGBA to RGB if necessary for JPEG encoder compatibility
+    if (!imageToEncode.convertToRGBInplace())
+    {
+        common::logError("V4L2LoopbackWriter::writeFrame - Failed to convert RGBA to RGB");
+        Profiler::getInstance().stop(name_, "Encode and write output image");
+        return false;
+    }
 
     // 1. Dequeue a buffer (get an available buffer)
     struct v4l2_buffer buf = {0};
@@ -194,7 +205,10 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
     unsigned long actualCompressedSize{0u};
     if (!encoder_->encode(imageToEncode, v4l2Image, actualCompressedSize))
     {
-        common::logError("Failed to encode image");
+        common::logError(
+            "V4L2LoopbackWriter::writeFrame - Failed to encode image. Format: %s, Size: %lux%lu, PixelSize: %u",
+            fromImageFormatToString(imageToEncode.info.format).c_str(), imageToEncode.info.width,
+            imageToEncode.info.height, imageToEncode.info.pixelSizeBytes);
         // Re-queue buffer
         if (ioctl(fd_, VIDIOC_QBUF, &buf) < 0)
         {
@@ -308,7 +322,7 @@ bool V4L2LoopbackWriter::reconfigure(TJSAMP subsampling, int quality)
         .width(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].width)
         .height(selectedFormat_->sizes[selectedFormat_->selectedFrameSize].height)
         .quality(quality)
-    .chrominanceSubsampling(chrominance_subsampling_);
+        .chrominanceSubsampling(chrominance_subsampling_);
 
     encoder_ = CodecFactory::create<Encoder>(configBuilder);
     if (encoder_ == nullptr)

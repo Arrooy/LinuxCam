@@ -5,7 +5,7 @@
  */
 
 #include "wflw_test_base.h"
-#include "../../test_utils.h"
+#include "../../common/test_utils.h"
 
 #include <filesystem>
 #include <fstream>
