@@ -18,16 +18,6 @@ using linuxface::Image;
 using linuxface::Pixel;
 using linuxface::Webcam;
 
-// Constants for preview layer
-namespace
-{
-constexpr unsigned int PREVIEW_WIDTH = 640;
-constexpr unsigned int PREVIEW_HEIGHT = 580;
-constexpr float PREVIEW_POSITION_X = 50.0f;
-constexpr float PREVIEW_POSITION_Y = 50.0f;
-const Pixel PREVIEW_BACKGROUND_COLOR{0, 0, 0, 255};
-} // namespace
-
 CameraManager::~CameraManager()
 {
     shutdown();
@@ -157,117 +147,6 @@ void CameraManager::updateCameraLayer(const std::shared_ptr<InputWebcam>& camera
     }
 }
 
-void CameraManager::createOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera)
-{
-    if (!layerManager_)
-    {
-        return;
-    }
-
-    // Check if overlay already exists
-    const std::string overlayName = "Output: " + camera->getName();
-    if (layerManager_->getLayerByName(overlayName) != nullptr)
-    {
-        return; // Already exists
-    }
-
-    // Get camera dimensions
-    auto format = camera->getSelectedFormat();
-    if (format.sizes.empty())
-    {
-        common::logWarn("CameraManager::createOutputCameraOverlay - No format available for camera %s",
-                        camera->getName().c_str());
-        return;
-    }
-
-    auto& selectedSize = format.sizes[format.selectedFrameSize];
-    const unsigned int width = selectedSize.width;
-    const unsigned int height = selectedSize.height;
-
-    // Create overlay image with transparent background
-    const Pixel overlayColor{255, 0, 0, 76}; // Red with ~30% alpha
-    auto overlayImage = std::make_shared<Image>(overlayColor, width, height);
-
-    // Create simple border effect
-    const Pixel borderColor{255, 0, 0, 128}; // Red with ~50% alpha
-    const int borderWidth = 3;
-    overlayImage->drawBorder(borderColor, borderWidth);
-
-    // Create overlay layer
-    Layer overlayLayer;
-    overlayLayer.id = Layer::getNextId();
-    overlayLayer.type = LayerType::IMAGE;
-    overlayLayer.name = overlayName;
-    overlayLayer.cameraDevicePath = "output:" + camera->getDevicePath();
-    overlayLayer.selected = false;
-    overlayLayer.resizeScale = 1.0f;
-    overlayLayer.img = overlayImage;
-    overlayLayer.dirty = true;
-    overlayLayer.locked = false;
-
-    if (overlayLayer.img)
-    {
-        overlayLayer.img->info.layer = overlayLayer.id;
-        overlayLayer.img->info.filename = overlayName;
-    }
-
-    layerManager_->addLayer(overlayLayer);
-    common::logInfo("CameraManager::createOutputCameraOverlay - Created overlay for output camera %s (%dx%d)",
-                    camera->getName().c_str(), width, height);
-}
-
-void CameraManager::updateOutputCameraOverlay(const std::shared_ptr<V4L2LoopbackWriter>& camera,
-                                              const Image& /*compositeImage*/)
-{
-    if (!layerManager_)
-    {
-        return;
-    }
-
-    // Find the overlay layer for this output camera
-    const std::string overlayName = "Output: " + camera->getName();
-    Layer* overlayLayer = layerManager_->getLayerByName(overlayName);
-
-    if ((overlayLayer == nullptr) || !overlayLayer->img)
-    {
-        return;
-    }
-
-    // Get camera dimensions
-    auto format = camera->getSelectedFormat();
-    if (format.sizes.empty())
-    {
-        return;
-    }
-
-    auto& selectedSize = format.sizes[format.selectedFrameSize];
-    const unsigned int outputWidth = selectedSize.width;
-    const unsigned int outputHeight = selectedSize.height;
-
-    // Different colors based on recording status
-    Pixel fillColor;
-    Pixel borderColor;
-    if (camera->isRunning())
-    {
-        // Recording: red with transparency
-        fillColor = {255, 0, 0, 60};
-        borderColor = {255, 0, 0, 120};
-    }
-    else
-    {
-        // Not recording: orange with transparency
-        fillColor = {255, 165, 0, 50};
-        borderColor = {255, 165, 0, 120};
-    }
-
-    // Update overlay with current status
-    const int borderWidth = 4;
-    overlayLayer->img->fillRect(0, 0, overlayLayer->img->info.width, overlayLayer->img->info.height, fillColor);
-    overlayLayer->img->drawBorder(borderColor, borderWidth);
-    // Mark as dirty to trigger redraw
-    overlayLayer->dirty = true;
-}
-
 bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
 {
     Profiler::getInstance().start("CameraManager", "Encode and write all output images");
@@ -283,67 +162,8 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
     {
         if (output->isRunning())
         {
-            // Get the output camera overlay to determine crop region
-            const std::string overlayName = "Output: " + output->getName();
-            Layer* overlayLayer = layerManager_ ? layerManager_->getLayerByName(overlayName) : nullptr;
-
-            std::unique_ptr<Image> outputImage;
-
-            if ((overlayLayer != nullptr) && overlayLayer->img)
-            {
-                // Crop the composite based on overlay position
-                int cropX = static_cast<int>(overlayLayer->x);
-                int cropY = static_cast<int>(overlayLayer->y);
-                unsigned int cropWidth = overlayLayer->img->info.width;
-                unsigned int cropHeight = overlayLayer->img->info.height;
-
-                // Ensure crop region is within bounds
-                if (cropX < 0)
-                {
-                    cropX = 0;
-                }
-                if (cropY < 0)
-                {
-                    cropY = 0;
-                }
-                if (cropX + cropWidth > image->info.width)
-                {
-                    cropWidth = image->info.width - cropX;
-                }
-                if (cropY + cropHeight > image->info.height)
-                {
-                    cropHeight = image->info.height - cropY;
-                }
-
-                // Create crop rectangle
-                const math_utils::Point<float> cropCorner{static_cast<float>(cropX), static_cast<float>(cropY)};
-                const math_utils::Rect<float> cropRect{cropCorner, static_cast<float>(cropWidth),
-                                                       static_cast<float>(cropHeight)};
-
-                // Crop the composite image
-                outputImage = image->crop(cropRect);
-
-                if (!outputImage)
-                {
-                    common::logError("Failed to crop composite for output camera %s", output->getDevicePath().c_str());
-                    outputImage = image->deepCopy(); // Fallback to full composite
-                }
-                else
-                {
-                    common::logInfo("Cropped output for %s: region (%d,%d) %ux%u from composite %ux%u",
-                                    output->getName().c_str(), cropX, cropY, cropWidth, cropHeight, image->info.width,
-                                    image->info.height);
-                }
-            }
-            else
-            {
-                // No overlay found, use full composite
-                outputImage = image->deepCopy();
-                common::logWarn("No output overlay found for %s, using full composite", output->getName().c_str());
-            }
-
-            // Update the output camera overlay to show what region is being recorded
-            updateOutputCameraOverlay(output, *image);
+            // Use full composite for output
+            std::unique_ptr<Image> outputImage = image->deepCopy();
 
             if (!output->writeFrame(*outputImage))
             {
@@ -351,7 +171,6 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
                 success = false;
             }
         }
-        break;
     }
 
     Profiler::getInstance().stop("CameraManager", "Encode and write all output images");
@@ -370,12 +189,7 @@ bool CameraManager::addCamera(const std::shared_ptr<Webcam>& camera)
     }
     if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
     {
-        const bool result = addCameraImpl(outWebcam_, output);
-        if (result && layerManager_)
-        {
-            createOutputCameraOverlay(output);
-        }
-        return result;
+        return addCameraImpl(outWebcam_, output);
     }
 
     common::logError("CameraManager::addCamera - Unknown webcam type");
@@ -394,22 +208,7 @@ bool CameraManager::removeCamera(const std::shared_ptr<Webcam>& camera)
 
     if (auto output = std::dynamic_pointer_cast<V4L2LoopbackWriter>(camera))
     {
-        // Remove the overlay layer for this output camera
-        if (layerManager_)
-        {
-            const std::string overlayName = "Output: " + camera->getName();
-            Layer* overlayLayer = layerManager_->getLayerByName(overlayName);
-            if (overlayLayer != nullptr)
-            {
-                layerManager_->removeLayer(overlayLayer->id);
-                common::logInfo("CameraManager::removeCamera - Removed overlay for output camera %s",
-                                camera->getName().c_str());
-            }
-        }
-
-        const bool result = removeCameraImpl(outWebcam_, devicePath);
-
-        return result;
+        return removeCameraImpl(outWebcam_, devicePath);
     }
 
     common::logError("CameraManager::removeCamera unknown webcam type");
@@ -538,7 +337,7 @@ void CameraManager::createOutputPreviewLayer()
     }
 
     // Create preview image with fixed dimensions
-    auto previewImage = std::make_shared<Image>(PREVIEW_BACKGROUND_COLOR, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+    auto previewImage = std::make_shared<Image>(Pixel(0, 0, 0, 0), 640, 480);
 
     // Create preview layer as a regular IMAGE layer
     Layer previewLayer;
@@ -553,8 +352,8 @@ void CameraManager::createOutputPreviewLayer()
     previewLayer.locked = false;
 
     // Set initial position
-    previewLayer.x = PREVIEW_POSITION_X;
-    previewLayer.y = PREVIEW_POSITION_Y;
+    previewLayer.x = 0;
+    previewLayer.y = 0;
 
     if (previewLayer.img)
     {
@@ -563,8 +362,8 @@ void CameraManager::createOutputPreviewLayer()
     }
 
     layerManager_->addLayer(previewLayer);
-    common::logInfo("CameraManager::createOutputPreviewLayer - Created output preview layer (%dx%d)", PREVIEW_WIDTH,
-                    PREVIEW_HEIGHT);
+    common::logInfo("CameraManager::createOutputPreviewLayer - Created output preview layer (%dx%d)",
+                    previewLayer.img->info.width, previewLayer.img->info.height);
 }
 
 void CameraManager::updateOutputPreviewLayer(const Image& compositeImage)

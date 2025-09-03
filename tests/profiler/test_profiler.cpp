@@ -40,7 +40,7 @@ TEST_F(ProfilerTest, StartStop)
     profiler.stop("TestSource", "TestTimer");
 
     std::chrono::microseconds duration;
-    bool found = profiler.duration("TestSource", "TestTimer", duration);
+    bool found = profiler.getDuration("TestSource", "TestTimer", duration);
 
     EXPECT_TRUE(found);
     EXPECT_GT(duration.count(), 0);
@@ -64,8 +64,8 @@ TEST_F(ProfilerTest, MultipleTimers)
     profiler.stop("Source2", "Timer2");
 
     std::chrono::microseconds duration1, duration2;
-    EXPECT_TRUE(profiler.duration("Source1", "Timer1", duration1));
-    EXPECT_TRUE(profiler.duration("Source2", "Timer2", duration2));
+    EXPECT_TRUE(profiler.getDuration("Source1", "Timer1", duration1));
+    EXPECT_TRUE(profiler.getDuration("Source2", "Timer2", duration2));
 
     // Timer2 should be longer than Timer1 since it ran for ~100µs vs ~50µs
     // But allow for timing variance - just ensure both are reasonable
@@ -79,7 +79,7 @@ TEST_F(ProfilerTest, NonExistentTimer)
     Profiler& profiler = Profiler::getInstance();
 
     std::chrono::microseconds duration;
-    bool found = profiler.duration("NonExistent", "Timer", duration);
+    bool found = profiler.getDuration("NonExistent", "Timer", duration);
 
     EXPECT_FALSE(found);
 }
@@ -96,7 +96,7 @@ TEST_F(ProfilerTest, GetDurations)
     std::this_thread::sleep_for(std::chrono::microseconds(20));
     profiler.stop("TestSource", "Timer2");
 
-    auto durations = profiler.getDurations("TestSource");
+    auto durations = profiler.getDurationsBySource("TestSource");
     EXPECT_EQ(durations.size(), 2);
 
     // Just ensure both timers recorded positive durations
@@ -212,7 +212,7 @@ TEST_F(ProfilerTest, StopWithoutStart)
     profiler.stop("NonExistent", "Timer");
 
     std::chrono::microseconds duration;
-    bool found = profiler.duration("NonExistent", "Timer", duration);
+    bool found = profiler.getDuration("NonExistent", "Timer", duration);
     EXPECT_FALSE(found);
 }
 
@@ -229,8 +229,8 @@ TEST_F(ProfilerTest, SameTimerNameDifferentSources)
     profiler.stop("Source2", "SameName");
 
     std::chrono::microseconds duration1, duration2;
-    EXPECT_TRUE(profiler.duration("Source1", "SameName", duration1));
-    EXPECT_TRUE(profiler.duration("Source2", "SameName", duration2));
+    EXPECT_TRUE(profiler.getDuration("Source1", "SameName", duration1));
+    EXPECT_TRUE(profiler.getDuration("Source2", "SameName", duration2));
 
     // Both should be valid and positive
     EXPECT_GT(duration1.count(), 0);
@@ -256,18 +256,18 @@ TEST_F(ProfilerTest, Reset)
     profiler.stop("Source2", "Timer2");
 
     // Verify they exist
-    auto durations = profiler.getDurations();
+    auto durations = profiler.getAllDurations();
     EXPECT_EQ(durations.size(), 2);
 
     // Reset and verify empty
     profiler.reset();
-    durations = profiler.getDurations();
+    durations = profiler.getAllDurations();
     EXPECT_EQ(durations.size(), 0);
 
     // Verify specific lookups fail
     std::chrono::microseconds duration;
-    EXPECT_FALSE(profiler.duration("Source1", "Timer1", duration));
-    EXPECT_FALSE(profiler.duration("Source2", "Timer2", duration));
+    EXPECT_FALSE(profiler.getDuration("Source1", "Timer1", duration));
+    EXPECT_FALSE(profiler.getDuration("Source2", "Timer2", duration));
 }
 
 TEST_F(ProfilerTest, ResetWithActiveTimers)
@@ -284,21 +284,21 @@ TEST_F(ProfilerTest, ResetWithActiveTimers)
     profiler.stop("Source3", "CompletedTimer");
 
     // Verify completed timer exists
-    auto durations = profiler.getDurations();
+    auto durations = profiler.getAllDurations();
     EXPECT_EQ(durations.size(), 1);
 
     // Reset should clear everything including active timers
     profiler.reset();
 
     // Verify everything is cleared
-    durations = profiler.getDurations();
+    durations = profiler.getAllDurations();
     EXPECT_EQ(durations.size(), 0);
 
     // Try to stop the previously active timers - should not crash or create entries
     profiler.stop("Source1", "ActiveTimer1");
     profiler.stop("Source2", "ActiveTimer2");
 
-    durations = profiler.getDurations();
+    durations = profiler.getAllDurations();
     EXPECT_EQ(durations.size(), 0);
 }
 
@@ -312,7 +312,7 @@ TEST_F(ProfilerTest, GetDurationsEmptySource)
     profiler.stop("OtherSource", "Timer1");
 
     // Query for non-existent source
-    auto durations = profiler.getDurations("NonExistentSource");
+    auto durations = profiler.getDurationsBySource("NonExistentSource");
     EXPECT_EQ(durations.size(), 0);
 }
 
@@ -334,8 +334,8 @@ TEST_F(ProfilerTest, GetDurationsMultipleSources)
     profiler.stop("Source2", "Timer1");
 
     // Query specific source
-    auto durations1 = profiler.getDurations("Source1");
-    auto durations2 = profiler.getDurations("Source2");
+    auto durations1 = profiler.getDurationsBySource("Source1");
+    auto durations2 = profiler.getDurationsBySource("Source2");
 
     EXPECT_EQ(durations1.size(), 2);
     EXPECT_EQ(durations2.size(), 1);
@@ -390,9 +390,9 @@ TEST_F(ProfilerTest, ConcurrentTimers)
     profiler.stop("Source3", "Timer3");
 
     std::chrono::microseconds duration1, duration2, duration3;
-    EXPECT_TRUE(profiler.duration("Source1", "Timer1", duration1));
-    EXPECT_TRUE(profiler.duration("Source2", "Timer2", duration2));
-    EXPECT_TRUE(profiler.duration("Source3", "Timer3", duration3));
+    EXPECT_TRUE(profiler.getDuration("Source1", "Timer1", duration1));
+    EXPECT_TRUE(profiler.getDuration("Source2", "Timer2", duration2));
+    EXPECT_TRUE(profiler.getDuration("Source3", "Timer3", duration3));
 
     EXPECT_GT(duration1.count(), 0);
     EXPECT_GT(duration2.count(), 0);
@@ -409,7 +409,7 @@ TEST_F(ProfilerTest, OverwriteTimer)
     profiler.stop("Source", "Timer");
 
     std::chrono::microseconds duration1;
-    EXPECT_TRUE(profiler.duration("Source", "Timer", duration1));
+    EXPECT_TRUE(profiler.getDuration("Source", "Timer", duration1));
 
     // Start and stop the same timer again (should overwrite)
     profiler.start("Source", "Timer");
@@ -417,7 +417,7 @@ TEST_F(ProfilerTest, OverwriteTimer)
     profiler.stop("Source", "Timer");
 
     std::chrono::microseconds duration2;
-    EXPECT_TRUE(profiler.duration("Source", "Timer", duration2));
+    EXPECT_TRUE(profiler.getDuration("Source", "Timer", duration2));
 
     // Second duration should be different (and likely longer)
     EXPECT_NE(duration1.count(), duration2.count());
@@ -433,7 +433,7 @@ TEST_F(ProfilerTest, EdgeCaseEmptyStrings)
     profiler.stop("", "");
 
     std::chrono::microseconds duration;
-    EXPECT_TRUE(profiler.duration("", "", duration));
+    EXPECT_TRUE(profiler.getDuration("", "", duration));
     EXPECT_GT(duration.count(), 0);
 
     // Test mixed empty strings
@@ -441,7 +441,7 @@ TEST_F(ProfilerTest, EdgeCaseEmptyStrings)
     std::this_thread::sleep_for(std::chrono::microseconds(10));
     profiler.stop("Source", "");
 
-    EXPECT_TRUE(profiler.duration("Source", "", duration));
+    EXPECT_TRUE(profiler.getDuration("Source", "", duration));
     EXPECT_GT(duration.count(), 0);
 }
 
@@ -461,4 +461,144 @@ TEST_F(ProfilerTest, FormatDurationEdgeCases)
 
     std::string boundaryS = Profiler::formatDuration(static_cast<int64_t>(1000000)); // Exactly 1s
     EXPECT_NE(boundaryS.find("s"), std::string::npos);
+}
+
+TEST_F(ProfilerTest, UpdateMethod)
+{
+    Profiler& profiler = Profiler::getInstance();
+
+    // Add some timing data
+    profiler.start("TestSource", "Timer1");
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
+    profiler.stop("TestSource", "Timer1");
+
+    profiler.start("TestSource", "Timer2");
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
+    profiler.stop("TestSource", "Timer2");
+
+    // Verify data exists
+    auto durations = profiler.getDurationsBySource("TestSource");
+    EXPECT_EQ(durations.size(), 2);
+
+    // Call update multiple times - should not affect fresh data
+    for (int i = 0; i < 10; ++i)
+    {
+        profiler.update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    // Data should still exist (not stale yet)
+    durations = profiler.getDurationsBySource("TestSource");
+    EXPECT_EQ(durations.size(), 2);
+
+    // Test that update initializes correctly (safe to call multiple times)
+    profiler.update();
+    profiler.update();
+    profiler.update();
+
+    // Data should still be there
+    durations = profiler.getDurationsBySource("TestSource");
+    EXPECT_EQ(durations.size(), 2);
+}
+
+// Test new statistics functionality
+TEST_F(ProfilerTest, StatisticsCollection)
+{
+    Profiler& profiler = Profiler::getInstance();
+    profiler.reset();
+    
+    // Configure statistics for testing
+    profiler.configureStatistics(5);
+    
+    // Collect multiple samples with different durations
+    std::vector<int> sleepMicros = {100, 200, 300, 150, 250};
+    
+    for (int i = 0; i < static_cast<int>(sleepMicros.size()); ++i)
+    {
+        profiler.start("TestSource", "StatTimer");
+        std::this_thread::sleep_for(std::chrono::microseconds(sleepMicros[i]));
+        profiler.stop("TestSource", "StatTimer");
+    }
+    
+    // Get statistics
+    Profiler::TimerStatistics stats;
+    EXPECT_TRUE(profiler.getTimerStatistics("TestSource", "StatTimer", stats));
+    
+    // Verify we have samples
+    EXPECT_EQ(stats.sampleCount, 5);
+    EXPECT_GT(stats.current.count(), 0);
+    EXPECT_GT(stats.average.count(), 0);
+    EXPECT_GT(stats.maximum.count(), stats.minimum.count());
+    EXPECT_GE(stats.maximum.count(), stats.current.count());
+    EXPECT_LE(stats.minimum.count(), stats.current.count());
+}
+
+TEST_F(ProfilerTest, StatisticsWindow)
+{
+    Profiler& profiler = Profiler::getInstance();
+    profiler.reset();
+    
+    // Configure small window for testing
+    profiler.configureStatistics(3);
+    
+    // Add more samples than the window size
+    for (int i = 0; i < 5; ++i)
+    {
+        profiler.start("TestSource", "WindowTimer");
+        std::this_thread::sleep_for(std::chrono::microseconds(100 + i * 50));
+        profiler.stop("TestSource", "WindowTimer");
+    }
+    
+    Profiler::TimerStatistics stats;
+    EXPECT_TRUE(profiler.getTimerStatistics("TestSource", "WindowTimer", stats));
+    
+    // Should only keep the last 3 samples
+    EXPECT_EQ(stats.sampleCount, 3);
+}
+
+TEST_F(ProfilerTest, GetAllStatistics)
+{
+    Profiler& profiler = Profiler::getInstance();
+    profiler.reset();
+    
+    // Add timers from different sources
+    profiler.start("Source1", "Timer1");
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
+    profiler.stop("Source1", "Timer1");
+    
+    profiler.start("Source2", "Timer2");
+    std::this_thread::sleep_for(std::chrono::microseconds(200));
+    profiler.stop("Source2", "Timer2");
+    
+    auto allStats = profiler.getAllTimerStatistics();
+    EXPECT_EQ(allStats.size(), 2);
+    
+    EXPECT_TRUE(allStats.find("Source1::Timer1") != allStats.end());
+    EXPECT_TRUE(allStats.find("Source2::Timer2") != allStats.end());
+}
+
+TEST_F(ProfilerTest, GetStatisticsBySource)
+{
+    Profiler& profiler = Profiler::getInstance();
+    profiler.reset();
+    
+    // Add multiple timers to the same source
+    profiler.start("TestSource", "Timer1");
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
+    profiler.stop("TestSource", "Timer1");
+    
+    profiler.start("TestSource", "Timer2");
+    std::this_thread::sleep_for(std::chrono::microseconds(150));
+    profiler.stop("TestSource", "Timer2");
+    
+    profiler.start("OtherSource", "Timer3");
+    std::this_thread::sleep_for(std::chrono::microseconds(75));
+    profiler.stop("OtherSource", "Timer3");
+    
+    auto stats = profiler.getTimerStatisticsBySource("TestSource");
+    EXPECT_EQ(stats.size(), 2);
+    
+    EXPECT_TRUE(stats.find("Timer1") != stats.end());
+    EXPECT_TRUE(stats.find("Timer2") != stats.end());
+    EXPECT_TRUE(stats.find("Timer3") == stats.end()); // Should not include other sources
 }

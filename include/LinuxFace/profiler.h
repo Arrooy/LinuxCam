@@ -32,15 +32,36 @@ class Profiler
     void start(const std::string& sourceName, const std::string& name);
     void stop(const std::string& sourceName, const std::string& name);
 
-    bool duration(const std::string& sourceName, const std::string& name, std::chrono::microseconds& duration) const;
-    const std::unordered_map<std::string, std::chrono::microseconds>& getDurations() const;
+    /**
+     * Get a single duration for a specific timer.
+     * @param sourceName The source name of the timer
+     * @param name The name of the timer
+     * @param duration Output parameter to store the duration if found
+     * @return true if timer was found, false otherwise
+     */
+    bool getDuration(const std::string& sourceName, const std::string& name, std::chrono::microseconds& duration) const;
 
     /**
-     * Returns all durations for a given source name.
+     * Get all durations as a map (full keys: "source::name" -> duration).
+     * @return Map of full timer keys to durations
      */
-    std::unordered_map<std::string, std::chrono::microseconds> getDurations(const std::string& sourceName) const;
+    std::unordered_map<std::string, std::chrono::microseconds> getAllDurations() const;
 
-    std::vector<std::pair<std::string, std::chrono::microseconds>> getDurationsSorted() const;
+    /**
+     * Get durations as a map for a specific source (operation names only).
+     * @param sourceName The source name to filter by
+     * @return Map of operation names to durations (without source prefix)
+     */
+    std::unordered_map<std::string, std::chrono::microseconds>
+    getDurationsBySource(const std::string& sourceName) const;
+
+    /**
+     * Get durations sorted by value for debugging/display purposes.
+     * @param sourceName Source filter (empty string = all sources)
+     * @return Vector of name-duration pairs sorted by duration (descending)
+     */
+    std::vector<std::pair<std::string, std::chrono::microseconds>>
+    getDurationsSorted(const std::string& sourceName = "") const;
 
     static std::string formatDuration(std::chrono::microseconds duration) noexcept;
     static std::string formatDuration(int64_t micros) noexcept;
@@ -49,14 +70,103 @@ class Profiler
 
     void reset();
 
+    /**
+     * Cleans up stale profiling data that hasn't been updated for more than 3 seconds.
+     * Logs all deleted data with their last values before deletion.
+     */
+    void cleanupStaleData();
+
+    /**
+     * Updates the profiler, handling periodic cleanup automatically.
+     * Should be called regularly from the main application loop.
+     */
+    void update();
+
+  public:
+    /**
+     * Statistical data for a timer over a time window.
+     */
+    struct TimerStatistics
+    {
+        std::chrono::microseconds current{0}; // Most recent measurement
+        std::chrono::microseconds minimum{0}; // Minimum value in window
+        std::chrono::microseconds maximum{0}; // Maximum value in window
+        std::chrono::microseconds average{0}; // Average value in window
+        size_t sampleCount{0};                // Number of samples in current window
+        std::chrono::high_resolution_clock::time_point lastUpdated{};
+    };
+
+    /**
+     * Get statistical data for a specific timer.
+     * @param sourceName The source name of the timer
+     * @param name The name of the timer
+     * @param stats Output parameter to store the statistics if found
+     * @return true if timer was found, false otherwise
+     */
+    bool getTimerStatistics(const std::string& sourceName, const std::string& name, TimerStatistics& stats) const;
+
+    /**
+     * Get all timer statistics as a map.
+     * @return Map of full timer keys to statistics
+     */
+    std::unordered_map<std::string, TimerStatistics> getAllTimerStatistics() const;
+
+    /**
+     * Get timer statistics for a specific source.
+     * @param sourceName The source name to filter by
+     * @return Map of operation names to statistics
+     */
+    std::unordered_map<std::string, TimerStatistics> getTimerStatisticsBySource(const std::string& sourceName) const;
+
+    /**
+     * Configure the statistics collection window.
+     * @param windowSize Size of the moving average window (default: 100 samples)
+     */
+    void configureStatistics(size_t windowSize = 100);
+
+    /**
+     * Reset all statistics, clearing all collected samples.
+     */
+    void resetStatistics();
+
   private:
     Profiler() = default;
 
+    struct TimingData
+    {
+        std::chrono::microseconds duration{0};
+        std::chrono::high_resolution_clock::time_point lastUpdated{};
+        std::chrono::high_resolution_clock::time_point startTime{}; // Only used while timing is active
+        bool isActive{false};                                       // True when timing is in progress
+
+        // Statistical data collection - moving average window
+        std::vector<std::chrono::microseconds> samples;
+        std::chrono::microseconds minimumDuration{std::chrono::microseconds::max()};
+        std::chrono::microseconds maximumDuration{0};
+        size_t sampleIndex{0};  // Current position in circular buffer
+    };
+
     static std::string makeKey(const std::string& sourceName, const std::string& name);
 
-    std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> timers_;
-    std::unordered_map<std::string, std::chrono::microseconds> durations_;
+    /**
+     * Updates statistical data for a timer with a new sample using moving average.
+     */
+    void updateStatistics(TimingData& data, std::chrono::microseconds duration);
+
+    /**
+     * Calculates the moving average from the current sample window.
+     */
+    std::chrono::microseconds calculateMovingAverage(const TimingData& data) const;
+
+    std::unordered_map<std::string, TimingData> timingData_;
     mutable std::mutex mutex_;
+
+    // Cleanup timing
+    std::chrono::high_resolution_clock::time_point lastCleanup_{};
+    static constexpr std::chrono::seconds CLEANUP_INTERVAL{5}; // Check every 5 seconds
+
+    // Statistics configuration
+    size_t windowSize_{150};  // Size of the moving average window
 };
 
 inline std::string Profiler::formatDuration(int64_t micros) noexcept

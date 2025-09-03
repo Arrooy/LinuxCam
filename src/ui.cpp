@@ -276,29 +276,128 @@ void UI::paintMainWindow()
     // Render profiler window
     if (show_profiler_)
     {
-        ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_Always);
-        ImGui::Begin("Profiler", &show_profiler_, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
-
+        ImGui::SetNextWindowPos(ImVec2(0, current_y_), ImGuiCond_FirstUseEver);
+        // Set intelligent default size based on content and screen size
         const ImGuiIO& io = ImGui::GetIO();
-        const auto frameDuration = 1.0f / io.Framerate;
-        ImGui::TextColored(getProfileColorFromDuration(frameDuration), "Application average %.3f ms/frame (%.1f FPS)",
-                           frameDuration * 1000.0f, io.Framerate);
+        const float defaultWidth = std::min(800.0f, io.DisplaySize.x * 0.8f);
+        const float defaultHeight = std::min(600.0f, io.DisplaySize.y * 0.8f);
+        ImGui::SetNextWindowSize(ImVec2(defaultWidth, defaultHeight), ImGuiCond_FirstUseEver);
 
-        auto durations = Profiler::getInstance().getDurationsSorted();
-
-        for (const auto& pair : durations)
+        if (ImGui::Begin("Profiler", &show_profiler_, ImGuiWindowFlags_None))
         {
-            ImGui::TextColored(getProfileColorFromDuration(pair.second.count()), "%s - %s", pair.first.c_str(),
-                            Profiler::formatDuration(pair.second).c_str());
-        }
+            const ImGuiIO& io = ImGui::GetIO();
+            const auto frameDuration = 1.0f / io.Framerate;
+            const auto frameDurationMicros =
+                static_cast<int64_t>(frameDuration * 1000000.0f); // Convert to microseconds
+            ImGui::TextColored(getProfileColorFromDuration(frameDurationMicros),
+                               "Application average %.3f ms/frame (%.1f FPS)", frameDuration * 1000.0f, io.Framerate);
 
-        if (ImGui::Button("Close"))
-        {
-            show_profiler_ = false;
-        }
+            // Add reset button
+            ImGui::Separator();
+            if (ImGui::Button("Reset Statistics"))
+            {
+                Profiler::getInstance().resetStatistics();
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(?)");
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("All statistics use a moving window (last 150 samples).\n"
+                                  "Min/Max values reflect the range within this window,\n"
+                                  "not all-time values. Reset clears all collected data.");
+            }
 
-        const ImVec2 windowSize = ImGui::GetWindowSize();
-        current_y_ += windowSize.y;
+            ImGui::Separator();
+
+            // Use statistics instead of just durations
+            auto allStats = Profiler::getInstance().getAllTimerStatistics();
+
+            // Sort by current duration for display
+            std::vector<std::pair<std::string, Profiler::TimerStatistics>> sortedStats;
+            sortedStats.reserve(allStats.size());
+
+            for (const auto& pair : allStats)
+            {
+                sortedStats.emplace_back(pair.first, pair.second);
+            }
+
+            std::sort(sortedStats.begin(), sortedStats.end(),
+                      [](const auto& a, const auto& b) { return a.second.current > b.second.current; });
+
+            if (!sortedStats.empty())
+            {
+                // Use scrollable table with flexible columns that auto-resize to content
+                if (ImGui::BeginTable("ProfilerStats", 4,
+                                      ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
+                                          | ImGuiTableFlags_ScrollY
+                                          | ImGuiTableFlags_SizingFixedFit)) // Auto-fit content
+                {
+                    ImGui::TableSetupColumn("Timer", ImGuiTableColumnFlags_WidthStretch,
+                                            0.0f); // Timer name gets remaining space
+                    ImGui::TableSetupColumn("Current", ImGuiTableColumnFlags_WidthFixed, 0.0f); // Auto-size to content
+                    ImGui::TableSetupColumn("Average", ImGuiTableColumnFlags_WidthFixed, 0.0f); // Auto-size to content
+                    ImGui::TableSetupColumn("Min/Max (Window)", ImGuiTableColumnFlags_WidthFixed,
+                                            0.0f); // Auto-size to content
+                    ImGui::TableHeadersRow();
+
+                    for (const auto& pair : sortedStats)
+                    {
+                        const auto& stats = pair.second;
+                        ImGui::TableNextRow();
+
+                        // Timer name
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::Text("%s", pair.first.c_str());
+
+                        // Current duration
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::TextColored(getProfileColorFromDuration(stats.current.count()), "%s",
+                                           Profiler::formatDuration(stats.current).c_str());
+
+                        // Average duration
+                        ImGui::TableSetColumnIndex(2);
+                        ImGui::TextColored(getProfileColorFromDuration(stats.average.count()), "%s",
+                                           Profiler::formatDuration(stats.average).c_str());
+
+                        // Min/Max range (from moving window)
+                        ImGui::TableSetColumnIndex(3);
+                        if (stats.sampleCount > 0)
+                        {
+                            // Use simplified formatting without Hz for min/max to keep it compact
+                            auto formatSimple = [](std::chrono::microseconds duration) -> std::string
+                            {
+                                const int64_t micros = duration.count();
+                                if (micros < 1000)
+                                {
+                                    return std::to_string(micros) + "µs";
+                                }
+                                else if (micros < 1000000)
+                                {
+                                    return std::to_string(static_cast<int>(micros / 1000)) + "ms";
+                                }
+                                else
+                                {
+                                    return std::to_string(static_cast<int>(micros / 1000000)) + "s";
+                                }
+                            };
+
+                            ImGui::Text("%s / %s", formatSimple(stats.minimum).c_str(),
+                                        formatSimple(stats.maximum).c_str());
+                        }
+                        else
+                        {
+                            ImGui::Text("N/A");
+                        }
+                    }
+
+                    ImGui::EndTable();
+                }
+            }
+            else
+            {
+                ImGui::Text("No profiling data available");
+            }
+        }
         ImGui::End();
     }
 
@@ -333,7 +432,7 @@ void UI::paintMainWindow()
     }
 }
 void UI::renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
-                                       const std::string& type)
+                                const std::string& type)
 {
     if (items.empty())
     {
@@ -430,7 +529,7 @@ void UI::paintDeviceConfigurationTabs()
     if (ImGui::BeginTabBar("DeviceTabs", ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_Reorderable))
     {
         auto managedWebcams = cameraManager_->getWebcams();
-            unsigned int tabIndex{0u};
+        unsigned int tabIndex{0u};
         // Render tabs for existing devices
         for (auto& webcam : managedWebcams)
         {

@@ -289,6 +289,9 @@ void Application::run()
     // Main loop
     while (!window_.shouldClose() && !gShouldExit)
     {
+        // handle periodic cleanup automatically
+        profiler_.update();
+
         if (update())
         {
             render();
@@ -348,7 +351,7 @@ bool Application::update()
 
     process(compositeImage);
 
-    // Send composite to output cameras with cropping
+    // Send processed composite to output cameras with cropping
     if (!cameraManager_->updateOutput(compositeImage))
     {
         linuxface::common::logError("Failed to update output cameras");
@@ -733,13 +736,8 @@ void Application::calculateCompositeBounds(const std::vector<Layer>& layers, int
 
     for (const auto& layer : layers)
     {
-        // Skip output camera overlays from the composite sent to output
-        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
-        {
-            continue;
-        }
-        // Skip preview output layers
-        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.find("preview") != std::string::npos)
+        // Skip preview output layers (identified by name since they have empty cameraDevicePath)
+        if (layer.name == "Output Preview")
         {
             continue;
         }
@@ -788,14 +786,8 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
     // Composite all layers onto the canvas
     for (const auto& layer : layers)
     {
-        // Skip output camera overlays from the composite sent to output
-        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.compare(0, 7, "output:") == 0)
-        {
-            continue;
-        }
-
-        // Skip preview output layers
-        if (!layer.cameraDevicePath.empty() && layer.cameraDevicePath.find("preview") != std::string::npos)
+        // Skip preview output layers (identified by name since they have empty cameraDevicePath)
+        if (layer.name == "Output Preview")
         {
             continue;
         }
