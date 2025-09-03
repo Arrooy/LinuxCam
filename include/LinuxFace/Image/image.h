@@ -310,7 +310,18 @@ class Image
     // Optimized helper methods
     void copyPixelsOptimized(const Image& src, long srcX, long srcY, long dstX, long dstY, size_t copyWidth,
                              size_t copyHeight);
-    void copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGlobalY, long canvasX, long canvasY,
+    /**
+     * Copy pixels from source image to destination with alpha blending support.
+     * 
+     * COORDINATE SYSTEM CONVENTION:
+     * All coordinates are in DESTINATION IMAGE coordinate space.
+     * 
+     * @param src - Source image to copy from
+     * @param srcDestX, srcDestY - Position in DESTINATION coordinates where source image top-left should be placed
+     * @param canvasX, canvasY - Top-left corner of canvas region in DESTINATION coordinates  
+     * @param canvasWidth, canvasHeight - Size of canvas region to copy to
+     */
+    void copyPixelsWithBlending(const Image& src, long srcDestX, long srcDestY, long canvasX, long canvasY,
                                 size_t canvasWidth, size_t canvasHeight);
     Image& pasteImpl(const Image& other, long x, long y, bool expandCanvas);
 

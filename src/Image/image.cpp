@@ -1406,7 +1406,7 @@ size_t Image::index(size_t col, size_t row) const noexcept
     return (row * info.width + col) * info.pixelSizeBytes;
 }
 
-void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGlobalY, long canvasX, long canvasY,
+void Image::copyPixelsWithBlending(const Image& src, long srcDestX, long srcDestY, long canvasX, long canvasY,
                                    size_t canvasWidth, size_t canvasHeight)
 {
     if ((src.data() == nullptr) || !data_)
@@ -1415,52 +1415,33 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
         return;
     }
 
-    // Use signed arithmetic for proper bounds handling
-    const long srcLeft = srcGlobalX;
-    const long srcTop = srcGlobalY;
+    // Calculate bounds in destination coordinate space
+    const long srcLeft = srcDestX;
+    const long srcTop = srcDestY;
     const long srcRight = srcLeft + static_cast<long>(src.info.width);
     const long srcBottom = srcTop + static_cast<long>(src.info.height);
+    
     const long canvasLeft = canvasX;
     const long canvasTop = canvasY;
     const long canvasRight = canvasLeft + static_cast<long>(canvasWidth);
     const long canvasBottom = canvasTop + static_cast<long>(canvasHeight);
 
-    // Also consider destination image bounds for clipping
+    // Destination image bounds
     const long destLeft = 0;
     const long destTop = 0;
     const long destRight = static_cast<long>(info.width);
     const long destBottom = static_cast<long>(info.height);
 
+    // Calculate clipping region as intersection of all bounds
     const long clipLeft = std::max({srcLeft, canvasLeft, destLeft});
     const long clipTop = std::max({srcTop, canvasTop, destTop});
     const long clipRight = std::min({srcRight, canvasRight, destRight});
     const long clipBottom = std::min({srcBottom, canvasBottom, destBottom});
 
-    // DEBUG: Print clipping information for troubleshooting
-    if (false) { // Set to true for debugging
-        std::cout << "Debug copyPixelsWithBlending:\n";
-        std::cout << "  srcGlobalX=" << srcGlobalX << ", srcGlobalY=" << srcGlobalY << "\n";
-        std::cout << "  canvasX=" << canvasX << ", canvasY=" << canvasY << "\n";
-        std::cout << "  canvasWidth=" << canvasWidth << ", canvasHeight=" << canvasHeight << "\n";
-        std::cout << "  src size: " << src.info.width << "x" << src.info.height << "\n";
-        std::cout << "  dest size: " << info.width << "x" << info.height << "\n";
-        std::cout << "  srcBounds: [" << srcLeft << "," << srcTop << "] to [" << srcRight << "," << srcBottom << "]\n";
-        std::cout << "  canvasBounds: [" << canvasLeft << "," << canvasTop << "] to [" << canvasRight << "," << canvasBottom << "]\n";
-        std::cout << "  destBounds: [" << destLeft << "," << destTop << "] to [" << destRight << "," << destBottom << "]\n";
-        std::cout << "  clipBounds: [" << clipLeft << "," << clipTop << "] to [" << clipRight << "," << clipBottom << "]\n";
-    }
-
     // Skip if no intersection
     if (clipLeft >= clipRight || clipTop >= clipBottom)
     {
-        if (false) { // Set to true for debugging
-            std::cout << "  No pixels to copy (empty clip region)\n";
-        }
         return;
-    }
-
-    if (false) { // Set to true for debugging
-        std::cout << "  Will iterate from (" << clipLeft << "," << clipTop << ") to (" << clipRight-1 << "," << clipBottom-1 << ")\n";
     }
 
     const unsigned char* srcData = src.data();
@@ -1476,24 +1457,18 @@ void Image::copyPixelsWithBlending(const Image& src, long srcGlobalX, long srcGl
     {
         for (long x = clipLeft; x < clipRight; x++)
         {
-            // Map clipped coordinates back to source and destination
-            const long srcCol = x - srcGlobalX;  // Relative to source image position
-            const long srcRow = y - srcGlobalY;  // Relative to source image position
-            const long dstCol = x;               // Global canvas coordinate
-            const long dstRow = y;               // Global canvas coordinate
-
-            if (false) { // Set to true for debugging
-                std::cout << "  Processing (" << x << "," << y << ") -> src(" << srcCol << "," << srcRow << ") -> dst(" << dstCol << "," << dstRow << ")\n";
-            }
+            // CONSISTENT COORDINATE MAPPING:
+            // All coordinates are in destination space, source mapping is relative to srcDestX/srcDestY
+            const long srcCol = x - srcDestX;  // Position in source image
+            const long srcRow = y - srcDestY;  // Position in source image
+            const long dstCol = x;             // Position in destination image
+            const long dstRow = y;             // Position in destination image
 
             // Bounds check before calculating indices
             if (srcRow < 0 || srcRow >= static_cast<long>(src.info.height) || srcCol < 0
                 || srcCol >= static_cast<long>(src.info.width) || dstRow < 0 || dstRow >= static_cast<long>(info.height)
                 || dstCol < 0 || dstCol >= static_cast<long>(info.width))
             {
-                if (false) { // Set to true for debugging
-                    std::cout << "    Skipping - out of bounds\n";
-                }
                 continue;
             }
 
@@ -1641,8 +1616,9 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
             }
             else
             {
-                // Only blend the region corresponding to the pasted image
-                copyPixelsWithBlending(other, 0, 0, dstX, dstY, other.info.width, other.info.height);
+                // Copy source image positioned at dstX, dstY in destination coordinates
+                // Canvas matches the source region exactly
+                copyPixelsWithBlending(other, dstX, dstY, dstX, dstY, other.info.width, other.info.height);
             }
             return *this;
         }
