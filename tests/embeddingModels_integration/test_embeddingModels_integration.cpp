@@ -13,6 +13,7 @@
 
 #include "../common/test_utils.h"
 #include "LinuxFace/Image/image.h"
+#include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/Image/text_draw.h"
 #include "LinuxFace/face.h"
 #include "LinuxFace/imageLoader.h"
@@ -24,19 +25,18 @@
 #include "config.hpp"
 
 using namespace linuxface;
+using namespace linuxface::image_utils;
 
 /**
- * Image quality metrics for comparing original and swapped faces
+ * Extended image quality metrics for face swapping evaluation
  */
-struct QualityMetrics
+struct QualityMetrics : public ImageMetrics
 {
-    double mse;                // Mean Squared Error
-    double psnr;               // Peak Signal-to-Noise Ratio
-    double ssim;               // Structural Similarity Index
-    double lpips;              // Learned Perceptual Image Patch Similarity (approximated)
     float identity_similarity; // Identity preservation using embeddings
 
-    // Helper function to convert metrics to string for logging
+    QualityMetrics() : ImageMetrics(), identity_similarity(0.0f) {}
+
+    // Enhanced toString including identity similarity
     std::string toString() const
     {
         std::ostringstream oss;
@@ -46,172 +46,6 @@ struct QualityMetrics
         return oss.str();
     }
 };
-
-/**
- * Calculate Mean Squared Error between two images
- */
-double calculateMSE(const Image& img1, const Image& img2)
-{
-    if (img1.info.width != img2.info.width || img1.info.height != img2.info.height)
-    {
-        return -1.0; // Invalid comparison
-    }
-
-    double mse = 0.0;
-    size_t totalPixels = img1.info.width * img1.info.height;
-
-    for (size_t y = 0; y < img1.info.height; ++y)
-    {
-        for (size_t x = 0; x < img1.info.width; ++x)
-        {
-            const auto& p1 = img1(x, y);
-            const auto& p2 = img2(x, y);
-
-            double dr = static_cast<double>(p1.r) - static_cast<double>(p2.r);
-            double dg = static_cast<double>(p1.g) - static_cast<double>(p2.g);
-            double db = static_cast<double>(p1.b) - static_cast<double>(p2.b);
-
-            mse += (dr * dr + dg * dg + db * db) / 3.0;
-        }
-    }
-
-    return mse / totalPixels;
-}
-
-/**
- * Calculate Peak Signal-to-Noise Ratio
- */
-double calculatePSNR(double mse)
-{
-    if (mse <= 0.0)
-    {
-        return 100.0; // Perfect match
-    }
-    return 20.0 * std::log10(255.0 / std::sqrt(mse));
-}
-
-/**
- * Calculate Structural Similarity Index (SSIM) between two images
- */
-double calculateSSIM(const Image& img1, const Image& img2)
-{
-    if (img1.info.width != img2.info.width || img1.info.height != img2.info.height)
-    {
-        return -1.0; // Invalid comparison
-    }
-
-    const double C1 = 6.5025;  // (0.01 * 255)^2
-    const double C2 = 58.5225; // (0.03 * 255)^2
-
-    // Calculate means
-    double mu1 = 0.0, mu2 = 0.0;
-    size_t totalPixels = img1.info.width * img1.info.height;
-
-    for (size_t y = 0; y < img1.info.height; ++y)
-    {
-        for (size_t x = 0; x < img1.info.width; ++x)
-        {
-            const auto& p1 = img1(x, y);
-            const auto& p2 = img2(x, y);
-
-            // Convert to grayscale for SSIM calculation
-            double gray1 = 0.299 * p1.r + 0.587 * p1.g + 0.114 * p1.b;
-            double gray2 = 0.299 * p2.r + 0.587 * p2.g + 0.114 * p2.b;
-
-            mu1 += gray1;
-            mu2 += gray2;
-        }
-    }
-
-    mu1 /= totalPixels;
-    mu2 /= totalPixels;
-
-    // Calculate variances and covariance
-    double sigma1_sq = 0.0, sigma2_sq = 0.0, sigma12 = 0.0;
-
-    for (size_t y = 0; y < img1.info.height; ++y)
-    {
-        for (size_t x = 0; x < img1.info.width; ++x)
-        {
-            const auto& p1 = img1(x, y);
-            const auto& p2 = img2(x, y);
-
-            double gray1 = 0.299 * p1.r + 0.587 * p1.g + 0.114 * p1.b;
-            double gray2 = 0.299 * p2.r + 0.587 * p2.g + 0.114 * p2.b;
-
-            double diff1 = gray1 - mu1;
-            double diff2 = gray2 - mu2;
-
-            sigma1_sq += diff1 * diff1;
-            sigma2_sq += diff2 * diff2;
-            sigma12 += diff1 * diff2;
-        }
-    }
-
-    sigma1_sq /= (totalPixels - 1);
-    sigma2_sq /= (totalPixels - 1);
-    sigma12 /= (totalPixels - 1);
-
-    // Calculate SSIM
-    double numerator = (2 * mu1 * mu2 + C1) * (2 * sigma12 + C2);
-    double denominator = (mu1 * mu1 + mu2 * mu2 + C1) * (sigma1_sq + sigma2_sq + C2);
-
-    return numerator / denominator;
-}
-
-/**
- * Approximate LPIPS using simple perceptual features
- * This is a simplified version - real LPIPS would use deep neural networks
- */
-double calculateApproximateLPIPS(const Image& img1, const Image& img2)
-{
-    if (img1.info.width != img2.info.width || img1.info.height != img2.info.height)
-    {
-        return -1.0; // Invalid comparison
-    }
-
-    // Simple gradient-based perceptual difference
-    double totalDiff = 0.0;
-    size_t validPixels = 0;
-
-    for (size_t y = 1; y < img1.info.height - 1; ++y)
-    {
-        for (size_t x = 1; x < img1.info.width - 1; ++x)
-        {
-            // Calculate gradients in both images
-            const auto& p1_center = img1(x, y);
-            const auto& p1_right = img1(x + 1, y);
-            const auto& p1_down = img1(x, y + 1);
-
-            const auto& p2_center = img2(x, y);
-            const auto& p2_right = img2(x + 1, y);
-            const auto& p2_down = img2(x, y + 1);
-
-            // Convert to grayscale and calculate gradients
-            double g1_center = 0.299 * p1_center.r + 0.587 * p1_center.g + 0.114 * p1_center.b;
-            double g1_right = 0.299 * p1_right.r + 0.587 * p1_right.g + 0.114 * p1_right.b;
-            double g1_down = 0.299 * p1_down.r + 0.587 * p1_down.g + 0.114 * p1_down.b;
-
-            double g2_center = 0.299 * p2_center.r + 0.587 * p2_center.g + 0.114 * p2_center.b;
-            double g2_right = 0.299 * p2_right.r + 0.587 * p2_right.g + 0.114 * p2_right.b;
-            double g2_down = 0.299 * p2_down.r + 0.587 * p2_down.g + 0.114 * p2_down.b;
-
-            double grad1_x = g1_right - g1_center;
-            double grad1_y = g1_down - g1_center;
-            double grad2_x = g2_right - g2_center;
-            double grad2_y = g2_down - g2_center;
-
-            // Calculate gradient magnitude difference
-            double mag1 = std::sqrt(grad1_x * grad1_x + grad1_y * grad1_y);
-            double mag2 = std::sqrt(grad2_x * grad2_x + grad2_y * grad2_y);
-
-            totalDiff += std::abs(mag1 - mag2);
-            validPixels++;
-        }
-    }
-
-    return (validPixels > 0) ? (totalDiff / validPixels) / 255.0 : 0.0;
-}
 
 /**
  * Calculate cosine similarity between two embedding vectors
@@ -251,17 +85,16 @@ evaluateImageQuality(const Image& original, const Image& swapped, const std::vec
 {
     QualityMetrics metrics;
 
-    // Calculate MSE and PSNR
-    metrics.mse = calculateMSE(original, swapped);
-    metrics.psnr = calculatePSNR(metrics.mse);
+    // Use image_utils functions for quality metrics
+    ImageMetrics base_metrics = calculateImageMetrics(original, swapped);
+    
+    // Copy base metrics
+    metrics.mse = base_metrics.mse;
+    metrics.psnr = base_metrics.psnr;
+    metrics.ssim = base_metrics.ssim;
+    metrics.lpips = base_metrics.lpips;
 
-    // Calculate SSIM
-    metrics.ssim = calculateSSIM(original, swapped);
-
-    // Calculate approximate LPIPS
-    metrics.lpips = calculateApproximateLPIPS(original, swapped);
-
-    // Calculate identity similarity
+    // Calculate identity similarity using embeddings
     metrics.identity_similarity = calculateCosineSimilarity(original_embedding, swapped_embedding);
 
     return metrics;

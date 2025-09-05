@@ -12,6 +12,64 @@
 namespace linuxface::image_utils
 {
 
+// ========== Image Quality Metrics ==========
+
+/**
+ * Structure to hold various image quality metrics
+ */
+struct ImageMetrics
+{
+    double mse = 0.0;                    // Mean Squared Error
+    double psnr = 0.0;                   // Peak Signal-to-Noise Ratio (dB)
+    double ssim = 0.0;                   // Structural Similarity Index
+    double lpips = 0.0;                  // Learned Perceptual Image Patch Similarity
+    double identity_similarity = 0.0;    // Identity similarity score
+
+    std::string toString() const;
+};
+
+/**
+ * Calculate Mean Squared Error between two images
+ * @param img1 First image for comparison
+ * @param img2 Second image for comparison
+ * @return MSE value, or -1.0 if images have different dimensions
+ */
+double calculateMSE(const Image& img1, const Image& img2);
+
+/**
+ * Calculate Peak Signal-to-Noise Ratio from MSE
+ * @param mse Mean squared error value
+ * @return PSNR in decibels
+ */
+double calculatePSNR(double mse);
+
+/**
+ * Calculate Structural Similarity Index (SSIM) between two images
+ * @param img1 First image for comparison
+ * @param img2 Second image for comparison
+ * @return SSIM value between -1 and 1, or -1.0 if images have different dimensions
+ */
+double calculateSSIM(const Image& img1, const Image& img2);
+
+/**
+ * Calculate approximate LPIPS (Learned Perceptual Image Patch Similarity)
+ * This is a simplified version using gradient-based features
+ * @param img1 First image for comparison
+ * @param img2 Second image for comparison
+ * @return Approximate LPIPS value, or -1.0 if images have different dimensions
+ */
+double calculateApproximateLPIPS(const Image& img1, const Image& img2);
+
+/**
+ * Calculate comprehensive image metrics between two images
+ * @param img1 First image for comparison
+ * @param img2 Second image for comparison
+ * @return ImageMetrics structure with all calculated metrics
+ */
+ImageMetrics calculateImageMetrics(const Image& img1, const Image& img2);
+
+// ========== Face Alignment Templates ==========
+
 const double TEMPLATE_112[5][2] = {
     {0.34191607, 0.46157411},
     {0.65653393, 0.45983393},
