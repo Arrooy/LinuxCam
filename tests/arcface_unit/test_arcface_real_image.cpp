@@ -2,6 +2,7 @@
 #include <cmath>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <onnxruntime_cxx_api.h>
@@ -23,53 +24,37 @@ class ArcfaceRecognizerRealImageTest : public ::testing::Test
     void SetUp() override
     {
         // Load test configuration
-        std::vector<std::string> config_paths = {"../config.yaml", "config.yaml",
-                                                 "../tests/wflw_integration/test_config.yaml"};
-        bool config_loaded = false;
-
-        for (const auto& config_path : config_paths)
+        std::string config_path = TestUtils::getConfigPath();
+        if (std::ifstream(config_path).good())
         {
-            if (std::ifstream(config_path).good())
-            {
-                bool reloaded = Config::getInstance().reloadFromFile(config_path.c_str());
-                if (reloaded)
-                {
-                    config_loaded = Config::getInstance().loadConfiguration();
-                }
-                if (config_loaded)
-                {
-                    std::cout << "Loaded test configuration from: " << config_path << std::endl;
-                    break;
-                }
-            }
-        }
-        ASSERT_TRUE(config_loaded) << "Could not find test_config.yaml in expected test paths";
+            bool reloaded = Config::getInstance().reloadFromFile(config_path.c_str());
+            ASSERT_TRUE(reloaded) << "Failed to reload configuration from: " << config_path;
 
-        std::string models_folder = Config::getInstance().getModelFolderPath();
-        arcface_recognizer_ = std::make_unique<ArcfaceRecognizer>(models_folder + "arcface_w600k_r50.onnx");
+            bool config_loaded = Config::getInstance().loadConfiguration();
+            ASSERT_TRUE(config_loaded) << "Failed to load configuration from: " << config_path;
+            std::cout << "Loaded test configuration from: " << config_path << std::endl;
+        }
+        else
+        {
+            FAIL() << "Configuration file not found at: " << config_path;
+        }
+
+        // Initialize ArcfaceRecognizer using TestUtils
+        arcface_recognizer_ = std::make_unique<ArcfaceRecognizer>(TestUtils::getModelPath("arcface_w600k_r50.onnx"));
 
         // Also create SCRFD for landmark detection
-        scrfd_detector_ = std::make_unique<SCRFDetector>(models_folder + "scrfd_500m_bnkps_shape640x640.onnx");
+        scrfd_detector_ = std::make_unique<SCRFDetector>(TestUtils::getModelPath("scrfd_500m_bnkps_shape640x640.onnx"));
     }
 
-    std::unique_ptr<Image> loadRealImage(const std::string& imagePath)
+    std::unique_ptr<Image> loadRealImage(const std::string& imageName)
     {
-        ImageLoader loader(ImageLoader::LoadStrategy::IMMEDIATE);
-
-        if (!loader.loadFromFile(imagePath))
+        std::string imagePath = TestUtils::getTestImagePath(imageName);
+        auto image = ImageLoader::loadImageFromFile(imagePath);
+        if (!image)
         {
             std::cerr << "Failed to load image from: " << imagePath << std::endl;
-            return nullptr;
         }
-
-        std::unique_ptr<Image> loadedImage;
-        if (!loader.getImage(loadedImage))
-        {
-            std::cerr << "Failed to get image data from loader" << std::endl;
-            return nullptr;
-        }
-
-        return loadedImage;
+        return image;
     }
 
     std::vector<math_utils::Point<>> createManualLandmarks(int imageWidth, int imageHeight)
@@ -168,8 +153,8 @@ TEST_F(ArcfaceRecognizerRealImageTest, LoadRealImageFromFile)
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
-    ASSERT_TRUE(realImage != nullptr) << "Failed to load real image from ../tests/common/single_face.jpeg";
+    auto realImage = loadRealImage("single_face.jpeg");
+    ASSERT_TRUE(realImage != nullptr) << "Failed to load real image single_face.jpeg";
 
     // Verify image properties
     EXPECT_GT(realImage->info.width, 0);
@@ -187,7 +172,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, BasicRecognitionWithManualLandmarks)
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
@@ -212,7 +197,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, RecognitionWithSCRFDLandmarks)
     ASSERT_TRUE(arcface_recognizer_->isReady());
     ASSERT_TRUE(scrfd_detector_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     // Detect faces with SCRFD
@@ -244,7 +229,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, ConsistencyAcrossMultipleRecognitions)
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
@@ -276,7 +261,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, PerformanceBenchmark)
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
@@ -305,8 +290,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, RecognitionWithDifferentImages)
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    std::vector<std::string> test_images = {"../tests/common/single_face.jpeg", "../tests/common/single_face_2.jpg",
-                                            "../tests/common/two_face.jpeg"};
+    std::vector<std::string> test_images = {"single_face.jpeg", "single_face_2.jpg", "two_face.jpeg"};
 
     std::vector<std::vector<float>> embeddings;
 
@@ -355,7 +339,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, InvalidInputHandling)
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     // Test with empty landmarks
@@ -403,7 +387,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, SameFaceSimilarity)
     ASSERT_TRUE(arcface_recognizer_->isReady());
     ASSERT_TRUE(scrfd_detector_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     // Generate embedding with manual landmarks
@@ -453,7 +437,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, InswapperCompatibilityEmbeddingTransforma
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
@@ -496,7 +480,7 @@ TEST_F(ArcfaceRecognizerRealImageTest, InswapperCompatibilityDefaultBehavior)
 {
     ASSERT_TRUE(arcface_recognizer_->isReady());
 
-    auto realImage = loadRealImage("../tests/common/single_face.jpeg");
+    auto realImage = loadRealImage("single_face.jpeg");
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
@@ -519,4 +503,279 @@ TEST_F(ArcfaceRecognizerRealImageTest, InswapperCompatibilityDefaultBehavior)
     // They should be identical (both regular ArcFace embeddings)
     float similarity = calculateCosineSimilarity(defaultEmbedding, explicitRegularEmbedding);
     EXPECT_NEAR(similarity, 1.0f, 0.001f) << "Default and explicit false should produce identical embeddings";
+}
+
+/**
+ * @brief Comprehensive determinism test for ArcfaceRecognizer
+ * 
+ * This test validates that the same image with the same model produces 
+ * exactly identical embeddings across multiple runs. This is critical 
+ * for ensuring reproducible face recognition results in production.
+ *
+ * The test performs:
+ * - 15 consecutive embedding generations on the same input
+ * - Strict bit-level comparison of all embeddings
+ * - Performance consistency validation
+ * - Statistical analysis of any variations
+ */
+TEST_F(ArcfaceRecognizerRealImageTest, ComprehensiveDeterminismValidation)
+{
+    ASSERT_TRUE(arcface_recognizer_->isReady());
+    ASSERT_TRUE(scrfd_detector_->isReady());
+
+    // Load test image
+    auto realImage = loadRealImage("single_face.jpeg");
+    ASSERT_TRUE(realImage != nullptr) << "Failed to load test image";
+
+    // Use SCRFD for consistent landmark detection
+    std::vector<Face> faces = scrfd_detector_->detect(realImage);
+    ASSERT_GT(faces.size(), 0) << "SCRFD failed to detect faces for determinism test";
+    
+    auto landmarks = extractLandmarksFromSCRFD(faces[0]);
+    ASSERT_EQ(landmarks.size(), 5) << "Invalid landmark count from SCRFD";
+
+    std::cout << "Running determinism validation with " << landmarks.size() << " landmarks..." << std::endl;
+    std::cout << "Face bounding box: (" << faces[0].getBoundingBox().rect.x() << ", "
+              << faces[0].getBoundingBox().rect.y() << ", " 
+              << faces[0].getBoundingBox().rect.width() << ", " 
+              << faces[0].getBoundingBox().rect.height() << ")" << std::endl;
+
+    // Test parameters
+    const int NUM_ITERATIONS = 15;
+    const float EPSILON = 1e-7f; // Stricter tolerance for floating-point comparison
+    
+    std::vector<std::vector<float>> embeddings(NUM_ITERATIONS);
+    std::vector<double> processing_times(NUM_ITERATIONS);
+
+    // Warm-up run to ensure stable state
+    std::vector<float> warmup_embedding;
+    auto warmup_start = std::chrono::high_resolution_clock::now();
+    bool warmup_result = arcface_recognizer_->recognize(*realImage, landmarks, warmup_embedding);
+    auto warmup_end = std::chrono::high_resolution_clock::now();
+    ASSERT_TRUE(warmup_result) << "Warm-up recognition failed";
+    ASSERT_EQ(warmup_embedding.size(), 512) << "Invalid embedding size in warm-up";
+    
+    auto warmup_duration = std::chrono::duration_cast<std::chrono::microseconds>(warmup_end - warmup_start).count();
+    std::cout << "Warm-up completed in " << warmup_duration << " microseconds" << std::endl;
+
+    // Generate embeddings with timing
+    std::cout << "Generating " << NUM_ITERATIONS << " embeddings for determinism validation..." << std::endl;
+    for (int i = 0; i < NUM_ITERATIONS; ++i) {
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+        bool result = arcface_recognizer_->recognize(*realImage, landmarks, embeddings[i]);
+        
+        auto end_time = std::chrono::high_resolution_clock::now();
+        processing_times[i] = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+
+        ASSERT_TRUE(result) << "Recognition failed on iteration " << (i + 1);
+        ASSERT_EQ(embeddings[i].size(), 512) << "Invalid embedding size on iteration " << (i + 1);
+        ASSERT_TRUE(validateEmbedding(embeddings[i])) << "Invalid embedding normalization on iteration " << (i + 1);
+        
+        std::cout << "Iteration " << std::setw(2) << (i + 1) << ": " 
+                  << std::setw(6) << processing_times[i] << " μs" << std::endl;
+    }
+
+    // === STRICT DETERMINISM VALIDATION ===
+    
+    std::cout << "\n=== DETERMINISM ANALYSIS ===" << std::endl;
+    
+    const auto& reference_embedding = embeddings[0];
+    int identical_count = 0;
+    int nearly_identical_count = 0;
+    float max_difference = 0.0f;
+    size_t max_diff_position = 0;
+    
+    // Compare each embedding against the reference
+    for (int i = 1; i < NUM_ITERATIONS; ++i) {
+        bool is_identical = true;
+        bool is_nearly_identical = true;
+        float max_element_diff = 0.0f;
+        size_t diff_position = 0;
+        
+        // Bit-level comparison
+        for (size_t j = 0; j < 512; ++j) {
+            float diff = std::abs(reference_embedding[j] - embeddings[i][j]);
+            
+            if (diff > max_element_diff) {
+                max_element_diff = diff;
+                diff_position = j;
+            }
+            
+            if (diff > 0.0f) {
+                is_identical = false;
+            }
+            
+            if (diff > EPSILON) {
+                is_nearly_identical = false;
+            }
+        }
+        
+        if (is_identical) {
+            identical_count++;
+        } else if (is_nearly_identical) {
+            nearly_identical_count++;
+        }
+        
+        if (max_element_diff > max_difference) {
+            max_difference = max_element_diff;
+            max_diff_position = diff_position;
+        }
+        
+        // Calculate cosine similarity for additional validation
+        float similarity = calculateCosineSimilarity(reference_embedding, embeddings[i]);
+        
+        std::cout << "Iteration " << std::setw(2) << (i + 1) 
+                  << " vs Reference: Max diff = " << std::scientific << std::setprecision(2) << max_element_diff
+                  << " at pos " << std::setw(3) << diff_position
+                  << ", Similarity = " << std::fixed << std::setprecision(6) << similarity;
+        
+        if (is_identical) {
+            std::cout << " [IDENTICAL]";
+        } else if (is_nearly_identical) {
+            std::cout << " [NEARLY_IDENTICAL]";
+        } else {
+            std::cout << " [DIFFERENT]";
+        }
+        std::cout << std::endl;
+        
+        // Strict requirement: embeddings must be identical or nearly identical
+        EXPECT_TRUE(is_nearly_identical) 
+            << "Embedding " << (i + 1) << " differs significantly from reference. "
+            << "Max difference: " << max_element_diff << " at position " << diff_position;
+        
+        // Cosine similarity must be very close to 1.0
+        EXPECT_GT(similarity, 0.9999f) 
+            << "Embedding " << (i + 1) << " has poor similarity with reference: " << similarity;
+    }
+
+    // === PERFORMANCE CONSISTENCY VALIDATION ===
+    
+    std::cout << "\n=== PERFORMANCE ANALYSIS ===" << std::endl;
+    
+    // Calculate performance statistics
+    double total_time = 0.0;
+    double min_time = processing_times[0];
+    double max_time = processing_times[0];
+    
+    for (double time : processing_times) {
+        total_time += time;
+        min_time = std::min(min_time, time);
+        max_time = std::max(max_time, time);
+    }
+    
+    double avg_time = total_time / NUM_ITERATIONS;
+    double time_variance = 0.0;
+    
+    for (double time : processing_times) {
+        double diff = time - avg_time;
+        time_variance += diff * diff;
+    }
+    time_variance /= NUM_ITERATIONS;
+    double time_stddev = std::sqrt(time_variance);
+    
+    std::cout << "Processing time statistics (microseconds):" << std::endl;
+    std::cout << "  Average: " << std::fixed << std::setprecision(1) << avg_time << " μs" << std::endl;
+    std::cout << "  Min:     " << min_time << " μs" << std::endl;
+    std::cout << "  Max:     " << max_time << " μs" << std::endl;
+    std::cout << "  StdDev:  " << time_stddev << " μs" << std::endl;
+    std::cout << "  Variance: " << time_variance << " μs²" << std::endl;
+    std::cout << "  Range:   " << (max_time - min_time) << " μs" << std::endl;
+    
+    // Performance consistency validation
+    double coefficient_of_variation = time_stddev / avg_time;
+    EXPECT_LT(coefficient_of_variation, 0.3) 
+        << "Processing time is too inconsistent. CV = " << coefficient_of_variation;
+        
+    EXPECT_LT(max_time - min_time, avg_time * 0.5) 
+        << "Processing time range is too large: " << (max_time - min_time) << " μs";
+
+    // === FINAL SUMMARY ===
+    
+    std::cout << "\n=== DETERMINISM SUMMARY ===" << std::endl;
+    std::cout << "Total embeddings generated: " << NUM_ITERATIONS << std::endl;
+    std::cout << "Bit-level identical: " << identical_count << "/" << (NUM_ITERATIONS - 1) << std::endl;
+    std::cout << "Nearly identical (ε=" << EPSILON << "): " << nearly_identical_count << "/" << (NUM_ITERATIONS - 1) << std::endl;
+    std::cout << "Maximum difference found: " << std::scientific << max_difference 
+              << " at position " << max_diff_position << std::endl;
+    std::cout << "Coefficient of variation: " << std::fixed << std::setprecision(4) << coefficient_of_variation << std::endl;
+    
+    // Final assertions for determinism
+    EXPECT_GE(identical_count + nearly_identical_count, NUM_ITERATIONS - 1) 
+        << "Not all embeddings are deterministic within tolerance";
+        
+    EXPECT_LT(max_difference, 1e-4f) 
+        << "Maximum difference " << max_difference << " exceeds acceptable threshold";
+    
+    std::cout << "\n✓ DETERMINISM VALIDATION: " 
+              << (identical_count == NUM_ITERATIONS - 1 ? "PERFECT" : 
+                  (identical_count + nearly_identical_count == NUM_ITERATIONS - 1 ? "ACCEPTABLE" : "FAILED"))
+              << std::endl;
+}
+
+/**
+ * @brief Test determinism across different inswapper compatibility modes
+ * 
+ * Validates that both regular and inswapper-compatible embeddings are 
+ * deterministic when computed multiple times with the same inputs.
+ */
+TEST_F(ArcfaceRecognizerRealImageTest, DeterminismWithInswapperCompatibility)
+{
+    ASSERT_TRUE(arcface_recognizer_->isReady());
+
+    auto realImage = loadRealImage("single_face.jpeg");
+    ASSERT_TRUE(realImage != nullptr) << "Failed to load test image";
+
+    auto landmarks = createManualLandmarks(realImage->info.width, realImage->info.height);
+    
+    // Enable inswapper compatibility
+    std::string inswapperModelPath = TestUtils::getModelPath("inswapper_128.onnx");
+    bool enableResult = arcface_recognizer_->enableInswapperCompatibility(inswapperModelPath);
+    ASSERT_TRUE(enableResult) << "Failed to enable inswapper compatibility";
+
+    const int NUM_ITERATIONS = 5;
+    
+    // Test regular ArcFace embeddings for determinism
+    std::cout << "Testing determinism of regular ArcFace embeddings..." << std::endl;
+    std::vector<std::vector<float>> regular_embeddings(NUM_ITERATIONS);
+    for (int i = 0; i < NUM_ITERATIONS; ++i) {
+        bool result = arcface_recognizer_->recognize(*realImage, landmarks, regular_embeddings[i], false);
+        ASSERT_TRUE(result) << "Regular embedding generation failed on iteration " << (i + 1);
+        ASSERT_EQ(regular_embeddings[i].size(), 512);
+    }
+    
+    // Validate regular embeddings are deterministic
+    for (int i = 1; i < NUM_ITERATIONS; ++i) {
+        float similarity = calculateCosineSimilarity(regular_embeddings[0], regular_embeddings[i]);
+        EXPECT_GT(similarity, 0.9999f) << "Regular embedding determinism failed at iteration " << (i + 1);
+    }
+    
+    // Test inswapper-compatible embeddings for determinism  
+    std::cout << "Testing determinism of inswapper-compatible embeddings..." << std::endl;
+    std::vector<std::vector<float>> inswapper_embeddings(NUM_ITERATIONS);
+    for (int i = 0; i < NUM_ITERATIONS; ++i) {
+        bool result = arcface_recognizer_->recognize(*realImage, landmarks, inswapper_embeddings[i], true);
+        ASSERT_TRUE(result) << "Inswapper embedding generation failed on iteration " << (i + 1);
+        ASSERT_EQ(inswapper_embeddings[i].size(), 512);
+    }
+    
+    // Validate inswapper embeddings are deterministic
+    for (int i = 1; i < NUM_ITERATIONS; ++i) {
+        float similarity = calculateCosineSimilarity(inswapper_embeddings[0], inswapper_embeddings[i]);
+        EXPECT_GT(similarity, 0.9999f) << "Inswapper embedding determinism failed at iteration " << (i + 1);
+    }
+    
+    // Verify that regular and inswapper embeddings are consistently different
+    float cross_similarity = calculateCosineSimilarity(regular_embeddings[0], inswapper_embeddings[0]);
+    std::cout << "Cross-mode similarity: " << cross_similarity << std::endl;
+    EXPECT_LT(cross_similarity, 0.99f) << "Regular and inswapper embeddings should be consistently different";
+    
+    // Verify the difference is consistent across iterations
+    for (int i = 1; i < NUM_ITERATIONS; ++i) {
+        float iter_cross_similarity = calculateCosineSimilarity(regular_embeddings[i], inswapper_embeddings[i]);
+        EXPECT_NEAR(cross_similarity, iter_cross_similarity, 0.001f) 
+            << "Cross-mode similarity should be consistent across iterations";
+    }
+    
+    std::cout << "✓ Both regular and inswapper-compatible embeddings are deterministic" << std::endl;
 }

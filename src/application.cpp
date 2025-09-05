@@ -203,6 +203,7 @@ bool Application::initialize()
 
     // ArcFace recognizer initialization
     const std::string arcfaceModel = modelsFolder + "arcface_w600k_r50.onnx";
+    // const std::string arcfaceModel = modelsFolder + "ms1mv3_arcface_r100.onnx";
     arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcfaceModel);
 
     // InSwapper initialization

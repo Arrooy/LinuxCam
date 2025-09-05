@@ -38,20 +38,9 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         std::vector<Face> targetFaces = scrfd_->detect(targetImg);
         if (!targetFaces.empty())
         {
-            common::logInfo("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", 99,
-                            targetFaces[0].getBoundingBox().rect.x(), targetFaces[0].getBoundingBox().rect.y(),
-                            targetFaces[0].getBoundingBox().rect.width(),
-                            targetFaces[0].getBoundingBox().rect.height());
             target_img_landmarks_ = targetFaces[0].getFivePointLandmarksArcFaceOrder2D();
             if (target_img_landmarks_.size() == 5)
             {
-                // print keypoints
-                common::logInfo("Target image landmarks: ");
-                for (const auto& landmark : target_img_landmarks_)
-                {
-                    common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
-                }
-
                 // Generate inswapper-compatible embedding
                 arcface_->recognize(*targetImg, target_img_landmarks_, target_img_embedding_, true);
                 target_img_embedding_ready_ = (target_img_embedding_.size() == 512);
@@ -97,11 +86,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
                              static_cast<int>(webcamLandmarks.size()));
             return false;
         }
-        common::logInfo("Source image landmarks %zu", i++);
-        for (const auto& landmark : webcamLandmarks)
-        {
-            common::logInfo("  - (%ld, %ld)", landmark.x, landmark.y);
-        }
+
         Profiler::getInstance().stop("SwapPipeline", "detect image faces");
         Profiler::getInstance().start("SwapPipeline", "swap face");
         // Reuse swappedFace buffer for all faces

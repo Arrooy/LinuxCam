@@ -617,6 +617,26 @@ math_utils::Point<T> rotatePoint(const math_utils::Point<T>& pt, const math_util
             static_cast<T>(std::round(sinA * dx + cosA * dy + origin.y))};
 }
 
+// L2 normalization function - normalizes a vector to unit length
+template <typename T>
+inline void l2norm(std::vector<T>& vec)
+{
+    T norm = T{0};
+    for (const auto& val : vec)
+    {
+        norm += val * val;
+    }
+    norm = std::sqrt(norm);
+    
+    if (norm > T{0}) // Avoid division by zero
+    {
+        for (auto& val : vec)
+        {
+            val /= norm;
+        }
+    }
+}
+
 } // namespace linuxface::math_utils
 
 #endif // MATH_UTILS_H

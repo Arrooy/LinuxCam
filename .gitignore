@@ -32,4 +32,4 @@ media
 WFLW
 .github/chatmodes
 .github/instructions
-tests/swapPipeline_integration/results
+tests/**/results

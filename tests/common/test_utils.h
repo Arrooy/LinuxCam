@@ -7,7 +7,12 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
+#include <vector>
+
+// Include LinuxFace components for complete type definitions
+#include "LinuxFace/Image/image.h"
 
 // Forward declare dataset utilities namespace
 namespace TestUtils::Datasets { class SimpleWFLWLoader; }
@@ -94,5 +99,63 @@ std::string getModelsDir();
  * @return Absolute path to the model file
  */
 std::string getModelPath(const std::string& model_name);
+
+// ========== Model Discovery Utilities ==========
+
+/**
+ * Get all embedding model files from the models directory
+ * Filters based on known embedding model patterns:
+ * - focal-arcface* (all variants)
+ * - arcface* (all variants)
+ * - cavaface* (all variants)
+ * - CurricularFace
+ * - glint* (all variants)
+ * - ms1mv3_arcface*
+ * @return Vector of embedding model filenames (sorted)
+ */
+std::vector<std::string> getEmbeddingModelFiles();
+
+// ========== Grid Visualization Utilities ==========
+
+/**
+ * Structure representing a single cell in a grid visualization
+ */
+struct GridCell
+{
+    std::unique_ptr<linuxface::Image> image;
+    std::string label;
+    bool highlight = false;  // Whether to add a colored border
+    linuxface::Pixel highlight_color;  // Border color if highlighted
+    
+    // Default constructor
+    GridCell();
+    
+    // Move constructor and assignment
+    GridCell(GridCell&&) = default;
+    GridCell& operator=(GridCell&&) = default;
+    
+    // Disable copy to avoid issues with unique_ptr
+    GridCell(const GridCell&) = delete;
+    GridCell& operator=(const GridCell&) = delete;
+};
+
+/**
+ * Create a grid visualization from a collection of images
+ * @param cells Vector of GridCell objects containing images and labels
+ * @param grid_rows Number of rows in the grid (0 for auto-calculate)
+ * @param grid_cols Number of columns in the grid (0 for auto-calculate)
+ * @param cell_spacing Spacing between grid cells in pixels
+ * @param background_color Background color for the grid
+ * @param title Optional title to add at the top of the grid
+ * @return Unique pointer to the generated grid image
+ */
+std::unique_ptr<linuxface::Image> createGridVisualization(
+    const std::vector<GridCell>& cells,
+    int grid_rows = 0,
+    int grid_cols = 0,
+    int cell_spacing = 10,
+    const linuxface::Pixel& background_color = linuxface::Pixel(240, 240, 240),
+    const std::string& title = ""
+);
 
 } // namespace TestUtils

@@ -5,11 +5,12 @@
 
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/common.h"
+#include "LinuxFace/math_utils.h"
 #include "LinuxFace/profiler.h"
 
 using namespace linuxface;
 
-ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnxModelPath) 
+ArcfaceRecognizer::ArcfaceRecognizer(const std::string& onnxModelPath)
     : OnnxDetector(onnxModelPath), inswapper_compatible_mode_(false)
 {
     // Initialize emap matrix as empty - will be loaded when enableInswapperCompatibility is called
@@ -62,22 +63,13 @@ bool ArcfaceRecognizer::recognize(const Image& inputImg, const std::vector<math_
     auto* pdata = outputTensors[0].GetTensorMutableData<float>();
     embedding.clear();
     embedding.assign(pdata, pdata + 512);
-    float norm = 0.0f;
-    for (const auto& val : embedding)
-    {
-        norm += val * val;
-    }
-    norm = std::sqrt(norm);
-    for (auto& val : embedding)
-    {
-        val /= norm;
-    }
 
     // Apply inswapper transformation if requested and enabled
     if (inswapperCompatible && inswapper_compatible_mode_)
     {
         embedding = transformEmbeddingForInswapper(embedding);
     }
+    math_utils::l2norm(embedding);
 
     Profiler::getInstance().stop("ArcfaceRecognizer", "recognize");
     return true;
@@ -98,7 +90,7 @@ std::vector<float> ArcfaceRecognizer::transformEmbeddingForInswapper(const std::
 
     if (arcfaceEmbedding.size() != EmbeddingSize)
     {
-        common::logError("ArcfaceRecognizer: Invalid embedding size for transformation. Expected %d, got %zu", 
+        common::logError("ArcfaceRecognizer: Invalid embedding size for transformation. Expected %d, got %zu",
                          EmbeddingSize, arcfaceEmbedding.size());
         return arcfaceEmbedding;
     }
@@ -117,21 +109,6 @@ std::vector<float> ArcfaceRecognizer::transformEmbeddingForInswapper(const std::
         transformed[j] = sum;
     }
 
-    // Normalize the transformed embedding exactly like face_utils::normalize
-    float norm = 0.0f;
-    for (const auto& val : transformed)
-    {
-        norm += val * val;
-    }
-    norm = std::sqrt(norm);
-    
-    if (norm > 0.0f) // Match face_utils::normalize condition
-    {
-        for (auto& val : transformed)
-        {
-            val /= norm;
-        }
-    }
 
     return transformed;
 }
@@ -139,7 +116,7 @@ std::vector<float> ArcfaceRecognizer::transformEmbeddingForInswapper(const std::
 bool ArcfaceRecognizer::loadEmapMatrixFromOnnx(const std::string& inswapperModelPath)
 {
     std::string emapFilePath = inswapperModelPath + ".emap";
-    
+
     std::ifstream file(emapFilePath, std::ios::binary);
     if (!file.is_open())
     {
@@ -153,7 +130,7 @@ bool ArcfaceRecognizer::loadEmapMatrixFromOnnx(const std::string& inswapperModel
     emap_matrix_.resize(expectedSize);
 
     file.read(reinterpret_cast<char*>(emap_matrix_.data()), expectedSize * sizeof(float));
-    
+
     if (file.gcount() != static_cast<std::streamsize>(expectedSize * sizeof(float)))
     {
         common::logError("ArcfaceRecognizer: Failed to read complete emap matrix from file");
@@ -163,7 +140,7 @@ bool ArcfaceRecognizer::loadEmapMatrixFromOnnx(const std::string& inswapperModel
 
     file.close();
     inswapper_compatible_mode_ = true;
-    
+
     common::logInfo("ArcfaceRecognizer: Successfully loaded emap matrix for inswapper compatibility");
     return true;
 }
