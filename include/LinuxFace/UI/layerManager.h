@@ -13,6 +13,7 @@
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/Image/text_renderer.h"
+#include "LinuxFace/videoLoader.h"
 
 namespace linuxface
 {
@@ -22,6 +23,7 @@ enum class LayerType
 {
     IMAGE,
     GIF,
+    VIDEO,
     TEXT
 };
 
@@ -47,6 +49,11 @@ struct Layer
     std::shared_ptr<Gif> gif{nullptr}; // Added for GIFs
     size_t gifFrameIndex{0};           // Track current frame for GIFs
 
+    // For video layers
+    std::shared_ptr<VideoLoader> video{nullptr}; // Added for videos
+    std::shared_ptr<Image> currentVideoFrame{nullptr}; // Current video frame
+    size_t videoFrameIndex{0};           // Track current frame for videos
+
     // For text layers - store minimal info for regeneration if needed
     std::string textContent; // Store text content for potential regeneration
     int layerNumber = 0;     // Layer number for text layers
@@ -67,7 +74,7 @@ struct Layer
         float getAbsoluteY(float layerY) const { return layerY + offsetY; }
     } textOverlay;
 
-    // Helper: get layer number (delegates to image/gif if present)
+    // Helper: get layer number (delegates to image/gif/video if present)
     int getLayerNumber() const
     {
         if (type == LayerType::IMAGE && img)
@@ -78,12 +85,16 @@ struct Layer
         {
             return gif->frames()[0]->info.layer;
         }
+        if (type == LayerType::VIDEO && video && currentVideoFrame)
+        {
+            return currentVideoFrame->info.layer;
+        }
         // For text layers, return layerNumber if set, otherwise default to 0 (0-based index)
-        // For gifs with no frames, also default to 0
+        // For gifs/videos with no frames, also default to 0
         return layerNumber;
     }
 
-    // Helper: set layer number (delegates to image/gif if present)
+    // Helper: set layer number (delegates to image/gif/video if present)
     void setLayerNumber(int n)
     {
         if (type == LayerType::IMAGE && img)
@@ -93,6 +104,10 @@ struct Layer
         else if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             gif->frames()[0]->info.layer = n;
+        }
+        else if (type == LayerType::VIDEO && video && currentVideoFrame)
+        {
+            currentVideoFrame->info.layer = n;
         }
         else if (type == LayerType::TEXT)
         {
@@ -116,6 +131,10 @@ struct Layer
             // If GIF failed to decode frames, fall back to the original filename stored in the Gif wrapper
             return gif->getFilename();
         }
+        if (type == LayerType::VIDEO && video)
+        {
+            return video->getMetadata().filename;
+        }
         if (type == LayerType::TEXT)
         {
             // When text content is empty, return a simple default name used by tests/UI
@@ -124,13 +143,38 @@ struct Layer
         return "Unknown Layer " + std::to_string(id);
     }
 
-    // Update layer animation (for GIF layers)
+    // Update layer animation (for GIF and video layers)
     void updateAnimation()
     {
         if (type == LayerType::GIF && gif && !gif->frames().empty())
         {
             gifFrameIndex = (gifFrameIndex + 1) % gif->frames().size();
             dirty = true;
+        }
+        else if (type == LayerType::VIDEO && video)
+        {
+            // Get next frame from video
+            std::unique_ptr<Image> nextFrame;
+            if (video->getNextFrame(nextFrame))
+            {
+                currentVideoFrame = std::move(std::shared_ptr<Image>(nextFrame.release()));
+                videoFrameIndex++;
+                dirty = true;
+            }
+            else
+            {
+                // End of video, loop back to beginning
+                video->reset();
+                videoFrameIndex = 0;
+                // Try to get the first frame again
+                if (video->getNextFrame(nextFrame))
+                {
+                    // TODO: This is duplicated.
+                    currentVideoFrame = std::move(std::shared_ptr<Image>(nextFrame.release()));
+                    videoFrameIndex++;
+                    dirty = true;
+                }
+            }
         }
     }
 

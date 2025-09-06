@@ -270,9 +270,9 @@ endif()
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 list(REMOVE_ITEM SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
-# Temp add opencv
-find_package(OpenCV REQUIRED)
-include_directories(${OpenCV_INCLUDE_DIRS})
+# Find FFmpeg libraries
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale)
 
 # Create a static library for main code
 add_library(linuxface STATIC ${SRC_FILES})
@@ -284,6 +284,7 @@ target_include_directories(linuxface PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     "${LIBJPEG_TURBO_INSTALL_DIR}/include"
+    ${FFMPEG_INCLUDE_DIRS}
 )
 
 # Link dependencies for the library
@@ -299,7 +300,7 @@ target_link_libraries(linuxface
     yaml-cpp::yaml-cpp
     gifdec
     ${ONNXRUNTIME_LIB}
-    ${OpenCV_LIBS}
+    ${FFMPEG_LIBRARIES}
 )
 
 # Enable coverage for the main library

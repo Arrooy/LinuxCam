@@ -239,7 +239,7 @@ procrustesSimilarityFaceTransform(const Image& inputImg, const std::vector<math_
 /*
 Original: very very slow.
 */
-// Create a mask for the crop size using the Image class (no OpenCV)
+// Create a mask for the crop size using the Image class
 
 // inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
 // {

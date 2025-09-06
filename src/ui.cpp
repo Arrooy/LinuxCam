@@ -138,6 +138,7 @@ void UI::paintMainWindow()
 
             renderCollapsingHeader("Images", mediaManager_->getImageNames(), "image");
             renderCollapsingHeader("GIFs", mediaManager_->getGifNames(), "gif");
+            renderCollapsingHeader("Videos", mediaManager_->getVideoNames(), "video");
             ImGui::EndMenu();
         }
         // Add new menu for text layer
@@ -457,22 +458,22 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
                 }
                 ImGui::EndGroup();
             }
-            else if (type == "gif")
+            else if (type == "video")
             {
                 ImGui::SameLine();
                 ImGui::BeginGroup();
                 if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
                 {
-                    auto origGif = mediaManager_->getGif(item);
-                    if (origGif && !origGif->frames().empty() && layerManager_)
+                    auto origVideo = mediaManager_->getVideo(item);
+                    if (origVideo && layerManager_)
                     {
                         Layer newLayer;
                         newLayer.id = Layer::getNextId();
-                        newLayer.type = LayerType::GIF;
+                        newLayer.type = LayerType::VIDEO;
                         newLayer.name = item;
-                        newLayer.gif = origGif;
+                        newLayer.video = origVideo;
                         newLayer.setPosition(100, 100);
-                        newLayer.gifFrameIndex = 0;
+                        newLayer.videoFrameIndex = 0;
                         newLayer.dirty = true;
                         layerManager_->addLayer(newLayer);
                     }
@@ -630,15 +631,11 @@ Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& m
             lw = static_cast<float>(layer.img->info.width);
             lh = static_cast<float>(layer.img->info.height);
         }
-        else if (layer.type == LayerType::GIF && layer.gif)
+        else if (layer.type == LayerType::VIDEO && layer.video)
         {
-            // Use the first frame's dimensions for GIFs
-            if (layer.gif->frames().empty())
-            {
-                continue; // Skip empty GIFs
-            }
-            lw = static_cast<float>(layer.gif->frames()[0]->info.width);
-            lh = static_cast<float>(layer.gif->frames()[0]->info.height);
+            // Use video dimensions
+            lw = static_cast<float>(layer.video->getMetadata().width);
+            lh = static_cast<float>(layer.video->getMetadata().height);
         }
         else if (layer.type == LayerType::TEXT)
         {

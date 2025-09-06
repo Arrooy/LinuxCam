@@ -71,14 +71,9 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         return false;
     }
     bool worked = false;
-    int i = 0;
     Image swappedFace; // Reuse buffer for all faces
     for (const auto& face : scrfdFaces)
     {
-        // print bounding box coords
-        common::logInfo("SwapPipeline: Detected face %d with bounding box: (%f, %f, %f, %f)", i,
-                        face.getBoundingBox().rect.x(), face.getBoundingBox().rect.y(),
-                        face.getBoundingBox().rect.width(), face.getBoundingBox().rect.height());
         std::vector<math_utils::Point<>> webcamLandmarks = face.getFivePointLandmarksArcFaceOrder2D();
         if (webcamLandmarks.size() != 5)
         {
@@ -193,7 +188,6 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             // Alpha blend crop_mask onto temp_img using warped_mask
 
             image->alphaBlend(*warpedSwappedFace, *warpedMask);
-            image->saveToDisk("Result.ppm");
             Profiler::getInstance().stop("SwapPipeline", "Alpha blending");
         }
         Profiler::getInstance().stop("SwapPipeline", "run");

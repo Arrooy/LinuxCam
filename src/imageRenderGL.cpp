@@ -212,6 +212,9 @@ Image* ImageRenderGL::getRenderableImage(const Layer& layer)
         case LayerType::TEXT:
             return layer.img ? layer.img.get() : nullptr;
 
+        case LayerType::VIDEO:
+            return layer.currentVideoFrame ? layer.currentVideoFrame.get() : nullptr;
+
         default:
             return nullptr;
     }

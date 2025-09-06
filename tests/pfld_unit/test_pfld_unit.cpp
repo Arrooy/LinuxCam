@@ -6,7 +6,6 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
-#include <opencv2/opencv.hpp>
 #include <onnxruntime_cxx_api.h>
 #include "config.hpp"
 #include "LinuxFace/onnx/pfld.h"
@@ -185,28 +184,6 @@ TEST_F(PFLDUnitTest, DetectSimilarMethod) {
         EXPECT_LE(landmark.p.x, test_image->info.width + 100);
         EXPECT_GE(landmark.p.y, -100);
         EXPECT_LE(landmark.p.y, test_image->info.height + 100);
-    }
-}
-
-// Test detectOpenCv method  
-TEST_F(PFLDUnitTest, DetectOpenCvMethod) {
-    ASSERT_TRUE(pfld_detector_->isReady());
-    
-    auto test_image = createTestImage();
-    Face mock_face = createMockFace();
-    
-    pfld_detector_->detectOpenCv(test_image, mock_face);
-    
-    // Should have 106 landmarks
-    auto landmarks = mock_face.getLandmarks();
-    EXPECT_EQ(landmarks.size(), 106);
-    
-    // Check landmarks are reasonable
-    for (const auto& landmark : landmarks) {
-        EXPECT_GT(landmark.p.x, -200); // More lenient bounds for OpenCV method
-        EXPECT_LT(landmark.p.x, test_image->info.width + 200);
-        EXPECT_GT(landmark.p.y, -200);
-        EXPECT_LT(landmark.p.y, test_image->info.height + 200);
     }
 }
 

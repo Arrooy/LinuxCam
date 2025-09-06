@@ -9,6 +9,7 @@ using linuxface::Config;
 using linuxface::Gif;
 using linuxface::Image;
 using linuxface::MediaManager;
+using linuxface::VideoLoader;
 
 MediaManager::MediaManager(std::shared_ptr<ImageRenderGL> imageRenderGl) : imageRenderGl_(std::move(imageRenderGl))
 {
@@ -28,8 +29,13 @@ std::vector<std::string> MediaManager::getGifNames()
     return linuxface::common::getKeysFromMap(this->gifs);
 }
 
-std::shared_ptr<Image> MediaManager::getImage(const std::string& imageName)
+std::vector<std::string> MediaManager::getVideoNames()
+{
+    const std::lock_guard<std::mutex> lock(this->videoMutex_);
+    return linuxface::common::getKeysFromMap(this->videos);
+}
 
+std::shared_ptr<Image> MediaManager::getImage(const std::string& imageName)
 {
     const std::lock_guard<std::mutex> lock(this->imageMutex_);
     auto it = this->images.find(imageName);
@@ -45,6 +51,17 @@ std::shared_ptr<Gif> MediaManager::getGif(const std::string& gifName)
     const std::lock_guard<std::mutex> lock(this->gifMutex_);
     auto it = this->gifs.find(gifName);
     if (it != this->gifs.end())
+    {
+        return it->second;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<VideoLoader> MediaManager::getVideo(const std::string& videoName)
+{
+    const std::lock_guard<std::mutex> lock(this->videoMutex_);
+    auto it = this->videos.find(videoName);
+    if (it != this->videos.end())
     {
         return it->second;
     }
@@ -116,6 +133,20 @@ size_t MediaManager::loadMediaFromFolder(const std::string& folderPath)
                     linuxface::common::logError("Failed to decode GIF: %s", fullPath.c_str());
                 }
             }
+            else if (extension == ".webm" || extension == ".mp4" || extension == ".avi" || extension == ".mkv")
+            {
+                const std::shared_ptr<VideoLoader> video = std::make_shared<VideoLoader>();
+                if (video->loadFromFile(fullPath))
+                {
+                    const std::lock_guard<std::mutex> lock(videoMutex_);
+                    videos[filename] = video;
+                    processingOk = true;
+                }
+                else
+                {
+                    linuxface::common::logError("Failed to load video: %s", fullPath.c_str());
+                }
+            }
             else
             {
                 linuxface::common::logError("Unsupported file format %s in path %s", extension.c_str(),
@@ -177,4 +208,5 @@ void MediaManager::shutdown()
     }
     images.clear();
     gifs.clear();
+    videos.clear();
 }

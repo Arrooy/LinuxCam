@@ -207,7 +207,8 @@ bool Application::initialize()
     arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcfaceModel);
 
     // InSwapper initialization
-    const std::string inswapperModel = modelsFolder + "inswapper_128.onnx";
+    // const std::string inswapperModel = modelsFolder + "inswapper_128.onnx";
+    const std::string inswapperModel = modelsFolder + "inswapper_128_fp16.onnx";
     inswapper_ = std::make_shared<InSwapper>(inswapperModel);
 
     // MediaPipe Face Landmarks initialization
@@ -235,7 +236,7 @@ bool Application::initialize()
     ui_->connect(mediaManager_);
 
     // Load target faceswap image once
-    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
+    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/albert.jpeg";
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
@@ -388,7 +389,6 @@ void Application::render()
 void Application::process(std::unique_ptr<Image>& image)
 {
     auto raw = image->deepCopy();
-
     std::vector<Face> dlibFaces;
     if (faceDetector_ != nullptr)
     {
@@ -758,6 +758,11 @@ void Application::calculateCompositeBounds(const std::vector<Layer>& layers, int
             layerMaxX += static_cast<float>(frame->info.width);
             layerMaxY += static_cast<float>(frame->info.height);
         }
+        else if (layer.type == LayerType::VIDEO && layer.video)
+        {
+            layerMaxX += static_cast<float>(layer.video->getMetadata().width);
+            layerMaxY += static_cast<float>(layer.video->getMetadata().height);
+        }
 
         minX = std::min(minX, layerMinX);
         minY = std::min(minY, layerMinY);
@@ -802,6 +807,12 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
         {
             auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
             compositeImage->pasteAt(*frame, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
+                                    false);
+            compositeValid = true;
+        }
+        else if (layer.type == LayerType::VIDEO && layer.video && layer.currentVideoFrame)
+        {
+            compositeImage->pasteAt(*layer.currentVideoFrame, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
                                     false);
             compositeValid = true;
         }

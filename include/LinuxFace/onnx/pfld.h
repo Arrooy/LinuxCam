@@ -16,7 +16,6 @@ class PFLDDetector : public OnnxDetector
     void detect(const std::unique_ptr<Image>& image, Face& face);
 
     void detectSimilar(const std::unique_ptr<Image>& image, Face& face);
-    void detectOpenCv(const std::unique_ptr<Image>& image, Face& face);
   private:
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
     TensorPadding pfld_padding_;

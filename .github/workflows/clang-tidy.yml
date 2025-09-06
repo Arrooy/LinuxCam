@@ -98,7 +98,6 @@ jobs:
             libswscale-dev \
             libavutil-dev \
             libjxl-dev \
-            libopencv-dev \
             unzip
 
       - name: Install clang-tidy
