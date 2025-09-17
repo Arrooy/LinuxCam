@@ -17,6 +17,11 @@ MediaManager::MediaManager(std::shared_ptr<ImageRenderGL> imageRenderGl) : image
     loadThread_ = std::thread(&MediaManager::loadMediaFromFolder, this, folderPath);
 }
 
+MediaManager::~MediaManager()
+{
+    shutdown();
+}
+
 std::vector<std::string> MediaManager::getImageNames()
 {
     const std::lock_guard<std::mutex> lock(this->imageMutex_);

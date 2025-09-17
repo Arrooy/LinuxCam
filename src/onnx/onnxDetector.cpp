@@ -65,7 +65,7 @@ OnnxDetector::OnnxDetector(const std::string& onnxModelPath)
         {
             memory_info_ =
                 Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
-            common::logInfo("OnnxDetector: Model loaded successfully with CPU execution");
+            common::logInfo("OnnxDetector: Model loaded successfully with CPU Memory execution");
         }
     }
     catch (const Ort::Exception& e)

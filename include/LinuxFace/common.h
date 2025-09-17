@@ -15,18 +15,27 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+
 // Macro to clear a buffer
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
-
-// I did replace all static for inline to remove warnings. Dont know if its good or no...
+// TODO: rework this helper file.
 namespace linuxface::common
 {
+// Global debug flag - set during config initialization
+inline bool& getDebugEnabled()
+{
+    static bool debugEnabled = false;
+    return debugEnabled;
+}
+
+inline void setDebugEnabled(bool enabled)
+{
+    getDebugEnabled() = enabled;
+}
 inline bool fileExists(const std::string& port)
 {
-    struct stat sb
-    {
-    };
+    struct stat sb{};
     return stat(port.c_str(), &sb) == 0;
 }
 
@@ -43,7 +52,6 @@ inline const T& clamp(const T& v, const T& lo, const T& hi)
     }
     return v;
 }
-
 
 // Helper function to format the size into human-readable format
 inline const char* formatSize(unsigned long size)
@@ -88,6 +96,7 @@ inline const char* formatSize(unsigned long size)
 
 enum class LogLevel
 {
+    DEBUG,
     INFO,
     WARN,
     ERROR
@@ -104,6 +113,8 @@ inline const char* logLevelStr(LogLevel level)
 {
     switch (level)
     {
+        case LogLevel::DEBUG:
+            return "DEBUG";
         case LogLevel::INFO:
             return "INFO";
         case LogLevel::WARN:
@@ -119,6 +130,8 @@ inline const char* logColor(LogLevel level)
 {
     switch (level)
     {
+        case LogLevel::DEBUG:
+            return "\033[36m"; // Cyan
         case LogLevel::INFO:
             return "\033[32m"; // Green
         case LogLevel::WARN:
@@ -250,6 +263,19 @@ inline void logVformatted(LogLevel level, const char* format, va_list args)
     {
         logMessage(level, "log_vformatted: vasprintf failed");
     }
+}
+
+
+inline void logDebug(const char* format, ...)
+{
+    if (!getDebugEnabled())
+    {
+        return; // Skip logging when debug is disabled
+    }
+    va_list args;
+    va_start(args, format);
+    logVformatted(LogLevel::DEBUG, format, args);
+    va_end(args);
 }
 
 inline void logInfo(const char* format, ...)

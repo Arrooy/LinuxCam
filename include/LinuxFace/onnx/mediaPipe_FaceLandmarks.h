@@ -25,6 +25,10 @@ class MediaPipeFaceLandmarks : public OnnxDetector
     // Detect landmarks from a face image (expects cropped face, 192x192)
     Result detect(const std::unique_ptr<Image>& image);
 
+    // Get the model's expected input dimensions
+    int getInputWidth() const { return width_; }
+    int getInputHeight() const { return height_; }
+
     TensorPadding padding_;
 };
 

@@ -198,7 +198,7 @@ bool Application::initialize()
     // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
     const std::string rvmModel = modelsFolder + "rvm_mobilenetv3_fp32.onnx";
-    rvmDetector_ = std::make_unique<RobustVideoMatting>(rvmModel);
+    // rvmDetector_ = std::make_unique<RobustVideoMatting>(rvmModel);
 
 
     // ArcFace recognizer initialization
@@ -212,9 +212,9 @@ bool Application::initialize()
     inswapper_ = std::make_shared<InSwapper>(inswapperModel);
 
     // MediaPipe Face Landmarks initialization
-    const std::string mediapipeLandmarksModel = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
-    // std::string mediapipe_landmarks_model = models_folder + "face_landmark_barracuda.onnx";
-    // mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipe_landmarks_model);
+    // const std::string mediapipeLandmarksModel = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
+    const std::string mediapipeLandmarksModel = modelsFolder + "facemeshv2_fast.onnx";
+    mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipeLandmarksModel);
 
     // Initialize SwapPipeline after all models are loaded
     swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
@@ -398,12 +398,12 @@ void Application::process(std::unique_ptr<Image>& image)
     std::vector<Face> scrfdFaces;
     if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
     {
-        // scrfdFaces = scrfdDetector_->detect(image);
-        // for (const auto& face : scrfdFaces)
-        // {
-        //     face.paintBoundingBox(image, Pixel(200, 200, 200));
-        //     face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
-        // }
+        scrfdFaces = scrfdDetector_->detect(image);
+        for (const auto& face : scrfdFaces)
+        {
+            face.paintBoundingBox(image, Pixel(200, 200, 200));
+            face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
+        }
     }
 
 
@@ -443,8 +443,86 @@ void Application::process(std::unique_ptr<Image>& image)
     //         face.paintBoundingBox(image, Pixel(255, 0, 0));
     //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
     //     }
+    if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfdFaces.empty())
     {
-        // TODO(arroyo): Implement render logic here
+        // 1. Draw five-point landmarks used for alignment on the original image
+        auto five_pts_2d = scrfdFaces[0].getFivePointLandmarksArcFaceOrder2D();
+
+        // 2. Get MediaPipe model's expected input dimensions
+        int modelWidth = mediaPipeLandmarks_->getInputWidth();
+        int modelHeight = mediaPipeLandmarks_->getInputHeight();
+
+        // 3. Choose the appropriate template based on model dimensions
+        auto templatePoints = image_utils::TEMPLATE_192_ALT;
+        if (modelWidth == 256)
+        {
+            templatePoints = image_utils::TEMPLATE_256;
+        }
+        else
+        {
+            // For other sizes, scale the 192 template
+            double localTemplate[5][2];
+            double scaleFactor = static_cast<double>(modelWidth) / 192.0;
+            for (int i = 0; i < 5; ++i)
+            {
+                localTemplate[i][0] = image_utils::TEMPLATE_192_ALT[i][0] * scaleFactor;
+                localTemplate[i][1] = image_utils::TEMPLATE_192_ALT[i][1] * scaleFactor;
+            }
+            templatePoints = localTemplate;
+            common::logWarn("Using scaled template for model size %d, consider adding a dedicated template",
+                            modelWidth);
+        }
+
+        // 4. Affine align using model's expected dimensions
+        auto [aligned_image, affine] =
+            image_utils::similarityFaceTransform(*raw, five_pts_2d, templatePoints, modelWidth, true);
+
+        if (!aligned_image)
+        {
+            linuxface::common::logError("Failed to wrap face image for MediaPipe landmarks detection");
+            return;
+        }
+
+        auto result = mediaPipeLandmarks_->detect(aligned_image);
+
+        if (result.score > 0.5)
+        {
+            // 5. Map landmarks back to original image
+            double invM[6];
+            if (!math_utils::invertAffine(affine.data(), invM))
+            {
+                linuxface::common::logError("Failed to invert affine for MediaPipe unalignment");
+                return;
+            }
+            // TODO: Fix this code.
+            double w = 1;//aligned_image->info.width;
+            double h = 1;//aligned_image->info.height;
+            std::vector<std::pair<double, double>> aligned_pts;
+            std::vector<float> aligned_z;
+            for (const auto& landmark : result.landmarks)
+            {
+                aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
+                aligned_z.push_back(landmark[2]);
+            }
+            auto unaligned_pts = image_utils::transformPointsAffine(aligned_pts, invM);
+            for (size_t i = 0; i < unaligned_pts.size(); ++i)
+            {
+                double x = static_cast<double>(unaligned_pts[i].first);
+                double y = static_cast<double>(unaligned_pts[i].second);
+                float z = aligned_z[i];
+                if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
+                {
+                    linuxface::common::logWarn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
+                    continue;
+                }
+                image->ppx(x, y, Pixel(0, 0, 255));
+                image_utils::paintCircle(image, math_utils::Point3D(x, y, z), 1.5f, Pixel(0, 0, 255));
+            }
+        }
+        else
+        {
+            linuxface::common::logWarn("MediaPipe landmarks detection score too low: %f", result.score);
+        }
     }
 
     //     // 1. Draw five-point landmarks used for alignment on the original image
@@ -812,8 +890,8 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
         }
         else if (layer.type == LayerType::VIDEO && layer.video && layer.currentVideoFrame)
         {
-            compositeImage->pasteAt(*layer.currentVideoFrame, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
-                                    false);
+            compositeImage->pasteAt(*layer.currentVideoFrame, static_cast<long>(layer.x - minX),
+                                    static_cast<long>(layer.y - minY), false);
             compositeValid = true;
         }
     }

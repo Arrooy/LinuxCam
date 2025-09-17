@@ -253,6 +253,7 @@ class Config
             cameras_.clear();
             external_data_ = ExternalData{};
             enableGPU_ = true;
+            enableDebug_ = false;
             windowWidth_ = 0;
             windowHeight_ = 0;
             windowTitle_.clear();
@@ -278,6 +279,14 @@ class Config
         {
             enableGPU_ = config_["enable_gpu"].as<bool>();
         }
+        if(config_["enable_debug"])
+        {
+            enableDebug_ = config_["enable_debug"].as<bool>();
+        }
+
+        // Set the global debug flag for logging
+        common::setDebugEnabled(enableDebug_);
+
         return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()
                && validateAndLoadWindowConfig();
     }
@@ -290,6 +299,7 @@ class Config
 
     bool preloadExternalContent() const { return external_data_.preLoading; }
     bool isGPUEnabled() const { return enableGPU_; }
+    bool isDebugEnabled() const { return enableDebug_; }
     void getWindowSize(int& width, int& height) const
     {
         width = windowWidth_;
@@ -315,6 +325,7 @@ class Config
     ExternalData external_data_;
 
     bool enableGPU_{true};
+    bool enableDebug_{false};
 
     unsigned int windowWidth_{};
     unsigned int windowHeight_{};

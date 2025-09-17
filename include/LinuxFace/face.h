@@ -115,6 +115,8 @@ class Face
     findBestMatchingFace(std::vector<Face>& detectedFaces, const math_utils::Rect<double>& groundTruthBbox,
                          double minIouThreshold = 0.1);
 
+    bool hasLandmarks() const { return !landmarks_.empty(); }
+
   private:
     void freeFaceLandmarks();
 

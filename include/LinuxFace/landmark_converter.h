@@ -25,9 +25,10 @@ namespace linuxface
  */
 enum class LandmarkFormat
 {
-    PFLD_106, // PFLD 106-point format (indices 0-105)
-    WFLW_98,  // WFLW 98-point format (indices 0-97)
-    SCRFD_5   // SCRFD 5-point format (left_eye, right_eye, nose, left_mouth, right_mouth)
+    PFLD_106,     // PFLD 106-point format (indices 0-105)
+    WFLW_98,      // WFLW 98-point format (indices 0-97)
+    SCRFD_5,      // SCRFD 5-point format (left_eye, right_eye, nose, left_mouth, right_mouth)
+    MEDIAPIPE_468 // MediaPipe 468-point format (indices 0-467)
 };
 
 /**
@@ -77,6 +78,42 @@ class LandmarkConverter
     static std::vector<FaceLandmark> wflwToPfld(const std::vector<FaceLandmark>& wflwLandmarks);
 
     /**
+     * @brief Convert MediaPipe 468-point landmarks to PFLD 106-point format
+     *
+     * @param mediapipe_landmarks Vector of MediaPipe landmarks (should have 468 points)
+     * @return Vector of landmarks in PFLD format (106 points)
+     * @throws std::invalid_argument if input doesn't have 468 landmarks
+     */
+    static std::vector<FaceLandmark> mediapipeToPfld(const std::vector<FaceLandmark>& mediapipeLandmarks);
+
+    /**
+     * @brief Convert MediaPipe 468-point landmarks to WFLW 98-point format
+     *
+     * @param mediapipe_landmarks Vector of MediaPipe landmarks (should have 468 points)
+     * @return Vector of landmarks in WFLW format (98 points)
+     * @throws std::invalid_argument if input doesn't have 468 landmarks
+     */
+    static std::vector<FaceLandmark> mediapipeToWflw(const std::vector<FaceLandmark>& mediapipeLandmarks);
+
+    /**
+     * @brief Convert PFLD 106-point landmarks to MediaPipe 468-point format
+     *
+     * @param pfld_landmarks Vector of PFLD landmarks (should have 106 points)
+     * @return Vector of landmarks in MediaPipe format (468 points, with interpolation)
+     * @throws std::invalid_argument if input doesn't have 106 landmarks
+     */
+    static std::vector<FaceLandmark> pfldToMediapipe(const std::vector<FaceLandmark>& pfldLandmarks);
+
+    /**
+     * @brief Convert WFLW 98-point landmarks to MediaPipe 468-point format
+     *
+     * @param wflw_landmarks Vector of WFLW landmarks (should have 98 points)
+     * @return Vector of landmarks in MediaPipe format (468 points, with interpolation)
+     * @throws std::invalid_argument if input doesn't have 98 landmarks
+     */
+    static std::vector<FaceLandmark> wflwToMediapipe(const std::vector<FaceLandmark>& wflwLandmarks);
+
+    /**
      * @brief Extract key landmarks from any format for basic face operations
      *
      * @param landmarks Input landmarks in any supported format
@@ -114,6 +151,13 @@ class LandmarkConverter
      */
     static int getExpectedLandmarkCount(LandmarkFormat format);
 
+    /**
+     * @brief Get the correspondence mapping from MediaPipe to WFLW indices
+     *
+     * @return Map where key=WFLW_index, value=MediaPipe_index
+     */
+    static const std::map<int, int>& getMediapipeToWflwMapping();
+
   private:
     /**
      * @brief Get the correspondence mapping from PFLD to WFLW indices
@@ -121,6 +165,13 @@ class LandmarkConverter
      * @return Map where key=WFLW_index, value=PFLD_index
      */
     static const std::map<int, int>& getPfldToWflwMapping();
+
+    /**
+     * @brief Get the correspondence mapping from MediaPipe to PFLD indices
+     *
+     * @return Map where key=PFLD_index, value=MediaPipe_index
+     */
+    static const std::map<int, int>& getMediapipeToPfldMapping();
 
     /**
      * @brief Get the reverse correspondence mapping from WFLW to PFLD indices

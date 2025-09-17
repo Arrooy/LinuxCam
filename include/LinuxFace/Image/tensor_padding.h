@@ -85,6 +85,7 @@ struct TensorPadding
     }
     static TensorPadding fsanet() { return constant(0.3f); }
     static TensorPadding scrfd() { return zero(); }
+    static TensorPadding mediapipe() { return constant(0.25f); }
     void resetTransform() const
     {
         tensor_width = 0;

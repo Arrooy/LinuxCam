@@ -30,3 +30,4 @@ window:
     height: 480
 
 enable_gpu: true
+enable_debug: false

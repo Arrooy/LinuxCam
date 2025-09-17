@@ -19,6 +19,7 @@ class MediaManager
 {
   public:
     explicit MediaManager(std::shared_ptr<ImageRenderGL> imageRenderGl);
+    ~MediaManager();
     std::vector<std::string> getImageNames();
     std::vector<std::string> getGifNames();
     std::vector<std::string> getVideoNames();
