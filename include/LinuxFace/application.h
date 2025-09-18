@@ -47,6 +47,17 @@ class Application
                                   float& minY, float& maxX, float& maxY);
     bool createCompositeImage(std::unique_ptr<Image>& compositeImage, const std::vector<Layer>& layers, float minX,
                               float minY, unsigned int compositeWidth, unsigned int compositeHeight);
+
+    // Process MediaPipe face landmarks for a given MediaPipe model instance.
+    // - landmarks: the MediaPipeFaceLandmarks model instance to use (may be nullptr)
+    // - raw: deep copy of the original input image used for alignment
+    // - image: the image to paint results onto
+    // - scrfdFaces: detected faces from SCRFD used to select face/crop
+    // - color: pixel color used to paint landmarks
+    // Returns true if detection was executed and had a satisfactory score; false otherwise.
+    bool
+    processMediaPipeLandmarks(std::shared_ptr<MediaPipeFaceLandmarks> landmarks, std::unique_ptr<Image>& raw,
+                              std::unique_ptr<Image>& image, const std::vector<Face>& scrfdFaces, const Pixel& color);
     Window window_;
     std::unique_ptr<UI> ui_;
 
@@ -68,6 +79,7 @@ class Application
     std::unique_ptr<SwapPipeline> swapPipeline_;
 
     std::shared_ptr<MediaPipeFaceLandmarks> mediaPipeLandmarks_;
+    std::shared_ptr<MediaPipeFaceLandmarks> mediaPipeLandmarksOld_;
     std::shared_ptr<PFLDDetector> pfldDetector_;
 
     std::shared_ptr<MediaManager> mediaManager_;

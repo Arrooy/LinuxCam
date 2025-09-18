@@ -18,9 +18,12 @@ class SwapPipeline
                  std::shared_ptr<SCRFDetector> scrfd);
 
     // Call once per frame. Returns true if swap was performed.
-    bool run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& targetImg);
+    bool run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& targetImg, std::vector<Face> srcFaces = {});
 
   private:
+    bool prepareTargetEmbedding(const std::unique_ptr<Image>& targetImg);
+    bool processFace(const Face& face, std::unique_ptr<Image>& image, Image& swappedFace);
+
     std::shared_ptr<InSwapper> inswapper_;
     std::shared_ptr<ArcfaceRecognizer> arcface_;
     std::shared_ptr<SCRFDetector> scrfd_;
@@ -31,6 +34,7 @@ class SwapPipeline
     bool debug_{false};
     std::unique_ptr<Image> debug_target_image_;
     std::unique_ptr<Image> debug_target_image_aligned_;
+    std::unique_ptr<Image> crop_mask_prototype_;
 };
 
 } // namespace linuxface

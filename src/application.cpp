@@ -212,9 +212,11 @@ bool Application::initialize()
     inswapper_ = std::make_shared<InSwapper>(inswapperModel);
 
     // MediaPipe Face Landmarks initialization
-    // const std::string mediapipeLandmarksModel = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
     const std::string mediapipeLandmarksModel = modelsFolder + "facemeshv2_fast.onnx";
     mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipeLandmarksModel);
+
+    const std::string mediapipeLandmarksModelOld = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
+    mediaPipeLandmarksOld_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipeLandmarksModelOld);
 
     // Initialize SwapPipeline after all models are loaded
     swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
@@ -428,10 +430,6 @@ void Application::process(std::unique_ptr<Image>& image)
     //     image->paste(*matting, true);
     // }
 
-    // if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfd_faces.empty())
-    // {
-    //     FaceBoundingBox bbx = scrfd_faces[0].getBoundingBox();
-
     // Dlib landmark detection using dlib face
     // if (dlibShapeDetector_ && !dlib_faces.empty())
     // {
@@ -443,86 +441,12 @@ void Application::process(std::unique_ptr<Image>& image)
     //         face.paintBoundingBox(image, Pixel(255, 0, 0));
     //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
     //     }
-    if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady() && !scrfdFaces.empty())
+    // Delegate MediaPipe face landmark processing to a helper allowing model and color parameterization
+    if (!scrfdFaces.empty())
     {
-        // 1. Draw five-point landmarks used for alignment on the original image
-        auto five_pts_2d = scrfdFaces[0].getFivePointLandmarksArcFaceOrder2D();
-
-        // 2. Get MediaPipe model's expected input dimensions
-        int modelWidth = mediaPipeLandmarks_->getInputWidth();
-        int modelHeight = mediaPipeLandmarks_->getInputHeight();
-
-        // 3. Choose the appropriate template based on model dimensions
-        auto templatePoints = image_utils::TEMPLATE_192_ALT;
-        if (modelWidth == 256)
-        {
-            templatePoints = image_utils::TEMPLATE_256;
-        }
-        else
-        {
-            // For other sizes, scale the 192 template
-            double localTemplate[5][2];
-            double scaleFactor = static_cast<double>(modelWidth) / 192.0;
-            for (int i = 0; i < 5; ++i)
-            {
-                localTemplate[i][0] = image_utils::TEMPLATE_192_ALT[i][0] * scaleFactor;
-                localTemplate[i][1] = image_utils::TEMPLATE_192_ALT[i][1] * scaleFactor;
-            }
-            templatePoints = localTemplate;
-            common::logWarn("Using scaled template for model size %d, consider adding a dedicated template",
-                            modelWidth);
-        }
-
-        // 4. Affine align using model's expected dimensions
-        auto [aligned_image, affine] =
-            image_utils::similarityFaceTransform(*raw, five_pts_2d, templatePoints, modelWidth, true);
-
-        if (!aligned_image)
-        {
-            linuxface::common::logError("Failed to wrap face image for MediaPipe landmarks detection");
-            return;
-        }
-
-        auto result = mediaPipeLandmarks_->detect(aligned_image);
-
-        if (result.score > 0.5)
-        {
-            // 5. Map landmarks back to original image
-            double invM[6];
-            if (!math_utils::invertAffine(affine.data(), invM))
-            {
-                linuxface::common::logError("Failed to invert affine for MediaPipe unalignment");
-                return;
-            }
-            // TODO: Fix this code.
-            double w = 1;//aligned_image->info.width;
-            double h = 1;//aligned_image->info.height;
-            std::vector<std::pair<double, double>> aligned_pts;
-            std::vector<float> aligned_z;
-            for (const auto& landmark : result.landmarks)
-            {
-                aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
-                aligned_z.push_back(landmark[2]);
-            }
-            auto unaligned_pts = image_utils::transformPointsAffine(aligned_pts, invM);
-            for (size_t i = 0; i < unaligned_pts.size(); ++i)
-            {
-                double x = static_cast<double>(unaligned_pts[i].first);
-                double y = static_cast<double>(unaligned_pts[i].second);
-                float z = aligned_z[i];
-                if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
-                {
-                    linuxface::common::logWarn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
-                    continue;
-                }
-                image->ppx(x, y, Pixel(0, 0, 255));
-                image_utils::paintCircle(image, math_utils::Point3D(x, y, z), 1.5f, Pixel(0, 0, 255));
-            }
-        }
-        else
-        {
-            linuxface::common::logWarn("MediaPipe landmarks detection score too low: %f", result.score);
-        }
+        // Default color used historically in-place was blue (0,0,255)
+        processMediaPipeLandmarks(mediaPipeLandmarks_, raw, image, scrfdFaces, Pixel(0, 0, 255));
+        processMediaPipeLandmarks(mediaPipeLandmarksOld_, raw, image, scrfdFaces, Pixel(200, 0, 155));
     }
 
     //     // 1. Draw five-point landmarks used for alignment on the original image
@@ -896,4 +820,104 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
         }
     }
     return compositeValid;
+}
+
+bool Application::processMediaPipeLandmarks(std::shared_ptr<MediaPipeFaceLandmarks> landmarks,
+                                            std::unique_ptr<Image>& raw, std::unique_ptr<Image>& image,
+                                            const std::vector<Face>& scrfdFaces, const Pixel& color)
+{
+    if (!landmarks || !landmarks->isReady() || scrfdFaces.empty())
+    {
+        return false;
+    }
+
+    // 1. Draw five-point landmarks used for alignment on the original image
+    auto five_pts_2d = scrfdFaces[0].getFivePointLandmarksArcFaceOrder2D();
+
+    // 2. Get MediaPipe model's expected input dimensions
+    int modelWidth = landmarks->getInputWidth();
+
+    // 3. Choose the appropriate template based on model dimensions
+    auto templatePoints = image_utils::TEMPLATE_192_ALT;
+    if (modelWidth == 256)
+    {
+        templatePoints = image_utils::TEMPLATE_256;
+    }
+    else if (modelWidth != 192)
+    {
+        // For other sizes, scale the 192 template
+        double localTemplate[5][2];
+        double scaleFactor = static_cast<double>(modelWidth) / 192.0;
+        for (int i = 0; i < 5; ++i)
+        {
+            localTemplate[i][0] = image_utils::TEMPLATE_192_ALT[i][0] * scaleFactor;
+            localTemplate[i][1] = image_utils::TEMPLATE_192_ALT[i][1] * scaleFactor;
+        }
+        templatePoints = localTemplate;
+        common::logWarn("Using scaled template for model size %d, consider adding a dedicated template", modelWidth);
+    }
+
+    // 4. Affine align using model's expected dimensions
+    auto [aligned_image, affine] =
+        image_utils::similarityFaceTransform(*raw, five_pts_2d, templatePoints, modelWidth, true);
+
+    if (!aligned_image)
+    {
+        linuxface::common::logError("Failed to wrap face image for MediaPipe landmarks detection");
+        return false;
+    }
+
+    auto result = landmarks->detect(aligned_image);
+
+    if (result.score <= 0.5)
+    {
+        linuxface::common::logWarn("MediaPipe landmarks detection score too low: %f", result.score);
+        return false;
+    }
+
+    // 5. Map landmarks back to original image
+    double invM[6];
+    if (!math_utils::invertAffine(affine.data(), invM))
+    {
+        linuxface::common::logError("Failed to invert affine for MediaPipe unalignment");
+        return false;
+    }
+
+    // NOTE: aligned_image width/height usage was commented out in original code; keep legacy behaviour
+    double w = 1; // aligned_image->info.width;
+    double h = 1; // aligned_image->info.height;
+    if (modelWidth == 192)
+    {
+        w = aligned_image->info.width;
+        h = aligned_image->info.height;
+    }
+
+    std::vector<std::pair<double, double>> aligned_pts;
+    std::vector<float> aligned_z;
+    for (const auto& landmark : result.landmarks)
+    {
+        aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
+        aligned_z.push_back(landmark[2]);
+    }
+    auto unaligned_pts = image_utils::transformPointsAffine(aligned_pts, invM);
+    for (size_t i = 0; i < unaligned_pts.size(); ++i)
+    {
+        double x = static_cast<double>(unaligned_pts[i].first);
+        double y = static_cast<double>(unaligned_pts[i].second);
+        float z = aligned_z[i];
+        if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
+        {
+            linuxface::common::logWarn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
+            continue;
+        }
+        image->ppx(x, y, color);
+        image_utils::paintCircle(image, math_utils::Point3D(x, y, z), 1.5f, color);
+    }
+
+    // Mark layers dirty so textures get updated
+    if (layerManager_)
+    {
+        layerManager_->markDirty();
+    }
+    return true;
 }

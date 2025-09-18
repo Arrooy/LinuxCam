@@ -1,7 +1,7 @@
 #include "LinuxFace/onnx/mediaPipe_FaceLandmarks.h"
 
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/common.h"
@@ -21,20 +21,10 @@ Ort::Value MediaPipeFaceLandmarks::transform(const std::unique_ptr<Image>& image
     Ort::Value inputTensor =
         Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size());
     auto* tensorData = inputTensor.GetTensorMutableData<float>();
-    padding_ = TensorPadding::mediapipe();
+
     // MediaPipe preprocessing with 25% padding around the face
+    padding_ = TensorPadding::mediapipe();
     image->toTensor(tensorData, padding_, width_, height_, NormalizationType::MINMAX);
-    // auto test = image_utils::convertToRawImage<NormalizationType::MINMAX>(tensor_data, 192, 192);
-    // if(test)
-    // {
-    //     if(!test->saveToDisk("media_pipe_input_tensor.ppm"))
-    //     {
-    //         common::logInfo("MediaPipeFaceLandmarks: Not Saved test image to disk.");
-    //     }
-    // }
-    // common::logInfo("MediaPipeFaceLandmarks: Input image dimensions: %ldx%ld", image->info.width,
-    // image->info.height); common::logInfo("MediaPipeFaceLandmarks: Input tensor prepared with dimensions: %ldx%ld",
-    // input_node_dims[3], input_node_dims[2]); image->saveToDisk("media_pipe_input_image.ppm");
     return inputTensor;
 }
 
@@ -52,7 +42,8 @@ MediaPipeFaceLandmarks::Result MediaPipeFaceLandmarks::detect(const std::unique_
     auto outputTensors =
         detector_session_->Run(Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor, 1, outputNames.data(), 2);
     std::unordered_map<std::string, Ort::Value> outputs;
-    for (size_t i = 0; i < outputNames.size(); ++i) {
+    for (size_t i = 0; i < outputNames.size(); ++i)
+    {
         outputs[outputNames[i]] = std::move(outputTensors[i]);
     }
     // scores: float[1]

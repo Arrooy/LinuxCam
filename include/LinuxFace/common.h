@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
@@ -198,10 +199,23 @@ inline void logToFile(const char* msg)
 
 inline void logMessage(LogLevel level, const char* format, ...)
 {
-    // Timestamp
-    const time_t now = time(nullptr);
+    // Timestamp with milliseconds
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    time_t now_sec = tv.tv_sec;
+    int msec = static_cast<int>(tv.tv_usec / 1000);
     char timeBuf[64];
-    strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    struct tm tm_info;
+    // Use localtime_r for thread-safety
+    localtime_r(&now_sec, &tm_info);
+    if (strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &tm_info) == 0)
+    {
+        // Fallback in unlikely event of formatting failure
+        snprintf(timeBuf, sizeof(timeBuf), "%ld", now_sec);
+    }
+    // Append milliseconds
+    char timeBufMs[80];
+    snprintf(timeBufMs, sizeof(timeBufMs), "%s.%03d", timeBuf, msec);
 
     // Format user message
     char* userMsg = nullptr;
@@ -222,7 +236,7 @@ inline void logMessage(LogLevel level, const char* format, ...)
 
     // Final full log message
     char* fullMsg = nullptr;
-    if (asprintf(&fullMsg, "[%s] [%s] %s\n", timeBuf, logLevelStr(level), userMsg) == -1)
+    if (asprintf(&fullMsg, "[%s] [%s] %s\n", timeBufMs, logLevelStr(level), userMsg) == -1)
     {
         free(userMsg);
         fprintf(stderr, "log_message: asprintf failed\n");

@@ -87,7 +87,7 @@ evaluateImageQuality(const Image& original, const Image& swapped, const std::vec
 
     // Use image_utils functions for quality metrics
     ImageMetrics base_metrics = calculateImageMetrics(original, swapped);
-    
+
     // Copy base metrics
     metrics.mse = base_metrics.mse;
     metrics.psnr = base_metrics.psnr;
@@ -170,8 +170,7 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
 
     std::unique_ptr<linuxface::Image> loadSourceImage()
     {
-        std::string imagePath = "/home/arroyo/Documents/Projectes/LinuxCam/albert.jpeg";
-        // TestUtils::getTestImagePath("single_face.jpeg");
+        std::string imagePath = TestUtils::getTestImagePath("single_face.jpeg");
         auto image = ImageLoader::loadImageFromFile(imagePath);
         if (!image)
         {
@@ -182,8 +181,7 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
 
     std::unique_ptr<linuxface::Image> loadTargetImage()
     {
-        std::string imagePath = "/home/arroyo/Documents/Projectes/LinuxCam/albert.jpeg";
-        // std::string imagePath = TestUtils::getTestImagePath("single_face.jpeg");
+        std::string imagePath = TestUtils::getTestImagePath("single_face.jpeg");
         auto image = ImageLoader::loadImageFromFile(imagePath);
         if (!image)
         {
@@ -276,9 +274,12 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
         std::cout << "Creating parametric iteration grid visualization..." << std::endl;
 
         // Helper function to crop face with consistent padding
-        auto cropFaceWithPadding = [this](const std::unique_ptr<linuxface::Image>& image, const std::string& name) -> std::unique_ptr<linuxface::Image> {
+        auto cropFaceWithPadding = [this](const std::unique_ptr<linuxface::Image>& image,
+                                          const std::string& name) -> std::unique_ptr<linuxface::Image>
+        {
             std::vector<Face> faces = scrfd_->detect(image);
-            if (faces.empty()) {
+            if (faces.empty())
+            {
                 std::cerr << "Warning: No face detected in image: " << name << std::endl;
                 return nullptr;
             }
@@ -292,11 +293,9 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
             float height_padding = face_bbox.height() * padding_factor;
 
             math_utils::Rect<float> padded_bbox(
-                std::max(0.0f, face_bbox.x() - width_padding), 
-                std::max(0.0f, face_bbox.y() - height_padding),
+                std::max(0.0f, face_bbox.x() - width_padding), std::max(0.0f, face_bbox.y() - height_padding),
                 std::min(static_cast<float>(image->info.width), face_bbox.x() + face_bbox.width() + width_padding),
-                std::min(static_cast<float>(image->info.height), face_bbox.y() + face_bbox.height() + height_padding)
-            );
+                std::min(static_cast<float>(image->info.height), face_bbox.y() + face_bbox.height() + height_padding));
 
             return image->crop(padded_bbox);
         };
@@ -319,23 +318,23 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
 
         // Prepare grid cells (rows = models, columns = iterations + 1 for original)
         std::vector<TestUtils::GridCell> grid_cells;
-        
+
         // Add original image as the first column for each row
         std::cout << "Processing original source image..." << std::endl;
         auto original_cropped = cropFaceWithPadding(source_image_, "original source");
-        
+
         for (size_t model_idx = 0; model_idx < successful_models.size(); ++model_idx)
         {
             const auto& model_stats = successful_models[model_idx];
-            
+
             // Add original image for this row (first column)
             TestUtils::GridCell original_cell;
             if (original_cropped)
             {
                 original_cell.image = original_cropped->deepCopy();
-                original_cell.label = (model_idx == 0) ? "Original" : "";  // Only label the first one
+                original_cell.label = (model_idx == 0) ? "Original" : ""; // Only label the first one
                 original_cell.highlight = true;
-                original_cell.highlight_color = Pixel(0, 255, 0);  // Green border for original
+                original_cell.highlight_color = Pixel(0, 255, 0); // Green border for original
             }
             grid_cells.push_back(std::move(original_cell));
 
@@ -343,14 +342,14 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
             for (int iter = 1; iter <= iterations; ++iter)
             {
                 TestUtils::GridCell iter_cell;
-                
+
                 // Generate the filename for this model and iteration
                 std::string model_safe_name = model_stats.model_name;
                 std::replace(model_safe_name.begin(), model_safe_name.end(), '.', '_');
                 std::replace(model_safe_name.begin(), model_safe_name.end(), '-', '_');
 
-                std::string filename = "SelfSwapParametric_" + model_safe_name + 
-                                     "_iteration" + std::to_string(iter) + "_result.ppm";
+                std::string filename =
+                    "SelfSwapParametric_" + model_safe_name + "_iteration" + std::to_string(iter) + "_result.ppm";
                 std::string file_path = TestUtils::getTestResultPath("embeddingModels_integration", filename);
 
                 // Load and process the iteration result
@@ -361,14 +360,15 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
                     if (iter_cropped)
                     {
                         iter_cell.image = std::move(iter_cropped);
-                        iter_cell.label = (model_idx == 0) ? ("Iter " + std::to_string(iter)) : "";  // Only label the first row
+                        iter_cell.label =
+                            (model_idx == 0) ? ("Iter " + std::to_string(iter)) : ""; // Only label the first row
                     }
                 }
                 else
                 {
                     std::cerr << "Failed to load iteration result: " << file_path << std::endl;
                 }
-                
+
                 grid_cells.push_back(std::move(iter_cell));
             }
         }
@@ -376,41 +376,42 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
         // Add row labels (model names) by creating a separate column
         std::cout << "Adding row labels..." << std::endl;
         std::vector<TestUtils::GridCell> labeled_grid_cells;
-        
+
         for (size_t model_idx = 0; model_idx < successful_models.size(); ++model_idx)
         {
             const auto& model_stats = successful_models[model_idx];
-            
+
             // Create a label cell for the model name (at the beginning of each row)
             TestUtils::GridCell label_cell;
             // Create a small image for the label
             auto label_image = std::make_unique<linuxface::Image>(Pixel(220, 220, 220), 120, 120);
             label_image->info.format = ImageFormat::RGB;
             label_image->info.pixelSizeBytes = 3;
-            
+
             // Add model name as label
             std::string model_display_name = model_stats.model_name;
-            if (model_display_name.length() >= 5 && model_display_name.substr(model_display_name.length() - 5) == ".onnx")
+            if (model_display_name.length() >= 5
+                && model_display_name.substr(model_display_name.length() - 5) == ".onnx")
             {
                 model_display_name = model_display_name.substr(0, model_display_name.length() - 5);
             }
             std::replace(model_display_name.begin(), model_display_name.end(), '_', ' ');
             std::replace(model_display_name.begin(), model_display_name.end(), '-', ' ');
-            
+
             // Truncate if too long
             if (model_display_name.length() > 15)
             {
                 model_display_name = model_display_name.substr(0, 12) + "...";
             }
-            
+
             label_cell.image = std::move(label_image);
             label_cell.label = model_display_name;
             label_cell.highlight = true;
-            label_cell.highlight_color = Pixel(0, 0, 255);  // Blue border for model labels
+            label_cell.highlight_color = Pixel(0, 0, 255); // Blue border for model labels
             labeled_grid_cells.push_back(std::move(label_cell));
-            
+
             // Add the actual content cells for this row
-            for (int col = 0; col <= iterations; ++col)  // +1 for original
+            for (int col = 0; col <= iterations; ++col) // +1 for original
             {
                 size_t source_idx = model_idx * (iterations + 1) + col;
                 if (source_idx < grid_cells.size())
@@ -421,28 +422,29 @@ class EmbeddingModelsIntegrationTest : public ::testing::Test
         }
 
         // Create the grid visualization
-        std::string title = "Self-Swap Multiple Iterations: " + std::to_string(successful_models.size()) + 
-                           " Models × " + std::to_string(iterations) + " Iterations";
-        
-        auto grid_image = TestUtils::createGridVisualization(
-            labeled_grid_cells,
-            successful_models.size(),  // rows
-            iterations + 2,           // cols (label + original + iterations)
-            8,                        // spacing
-            Pixel(245, 245, 245),     // background
-            title
-        );
+        std::string title = "Self-Swap Multiple Iterations: " + std::to_string(successful_models.size()) + " Models × "
+                            + std::to_string(iterations) + " Iterations";
+
+        auto grid_image = TestUtils::createGridVisualization(labeled_grid_cells,
+                                                             successful_models.size(), // rows
+                                                             iterations + 2, // cols (label + original + iterations)
+                                                             8,              // spacing
+                                                             Pixel(245, 245, 245), // background
+                                                             title);
 
         if (grid_image)
         {
-            std::string grid_path = TestUtils::getTestResultPath("embeddingModels_integration", "parametric_iterations_grid.ppm");
+            std::string grid_path =
+                TestUtils::getTestResultPath("embeddingModels_integration", "parametric_iterations_grid.ppm");
             bool saved = grid_image->saveToDisk(grid_path);
 
             if (saved)
             {
                 std::cout << "✓ Parametric iteration grid saved to: " << grid_path << std::endl;
-                std::cout << "Grid dimensions: " << grid_image->info.width << "x" << grid_image->info.height << std::endl;
-                std::cout << "Grid layout: " << successful_models.size() << " models × " << (iterations + 2) << " columns (label + original + " << iterations << " iterations)" << std::endl;
+                std::cout << "Grid dimensions: " << grid_image->info.width << "x" << grid_image->info.height
+                          << std::endl;
+                std::cout << "Grid layout: " << successful_models.size() << " models × " << (iterations + 2)
+                          << " columns (label + original + " << iterations << " iterations)" << std::endl;
             }
             else
             {
@@ -709,12 +711,16 @@ TEST_F(EmbeddingModelsIntegrationTest, CreateResultsGrid)
     std::vector<std::string> models = TestUtils::getEmbeddingModelFiles();
     ASSERT_GT(models.size(), 0) << "No embedding models found";
 
-    std::cout << "Creating results grid from " << models.size() << " models plus original and target images..." << std::endl;
+    std::cout << "Creating results grid from " << models.size() << " models plus original and target images..."
+              << std::endl;
 
     // Helper function to crop face with consistent padding
-    auto cropFaceWithPadding = [this](const std::unique_ptr<linuxface::Image>& image, const std::string& name) -> std::unique_ptr<linuxface::Image> {
+    auto cropFaceWithPadding = [this](const std::unique_ptr<linuxface::Image>& image,
+                                      const std::string& name) -> std::unique_ptr<linuxface::Image>
+    {
         std::vector<Face> faces = scrfd_->detect(image);
-        if (faces.empty()) {
+        if (faces.empty())
+        {
             std::cerr << "No face detected in image: " << name << std::endl;
             return nullptr;
         }
@@ -728,11 +734,9 @@ TEST_F(EmbeddingModelsIntegrationTest, CreateResultsGrid)
         float height_padding = face_bbox.height() * padding_factor;
 
         math_utils::Rect<float> padded_bbox(
-            std::max(0.0f, face_bbox.x() - width_padding), 
-            std::max(0.0f, face_bbox.y() - height_padding),
+            std::max(0.0f, face_bbox.x() - width_padding), std::max(0.0f, face_bbox.y() - height_padding),
             std::min(static_cast<float>(image->info.width), face_bbox.x() + face_bbox.width() + width_padding),
-            std::min(static_cast<float>(image->info.height), face_bbox.y() + face_bbox.height() + height_padding)
-        );
+            std::min(static_cast<float>(image->info.height), face_bbox.y() + face_bbox.height() + height_padding));
 
         return image->crop(padded_bbox);
     };
@@ -754,7 +758,8 @@ TEST_F(EmbeddingModelsIntegrationTest, CreateResultsGrid)
         source_result.model_name = "Original Source";
         source_result.image = source_image_->deepCopy();
         source_result.cropped_face = cropFaceWithPadding(source_result.image, "original source");
-        if (source_result.cropped_face) {
+        if (source_result.cropped_face)
+        {
             results.push_back(std::move(source_result));
             std::cout << "Added original source image to grid" << std::endl;
         }
@@ -766,7 +771,8 @@ TEST_F(EmbeddingModelsIntegrationTest, CreateResultsGrid)
         target_result.model_name = "Target Image";
         target_result.image = target_image_->deepCopy();
         target_result.cropped_face = cropFaceWithPadding(target_result.image, "target image");
-        if (target_result.cropped_face) {
+        if (target_result.cropped_face)
+        {
             results.push_back(std::move(target_result));
             std::cout << "Added target image to grid" << std::endl;
         }
@@ -849,8 +855,10 @@ TEST_F(EmbeddingModelsIntegrationTest, CreateResultsGrid)
         const auto& result = results[i];
 
         // Debug output for original and target images
-        if (result.model_name == "Original Source" || result.model_name == "Target Image") {
-            std::cout << "Placing " << result.model_name << " at position (" << row << "," << col << ") - grid coordinates (" << cell_x << "," << cell_y << ")" << std::endl;
+        if (result.model_name == "Original Source" || result.model_name == "Target Image")
+        {
+            std::cout << "Placing " << result.model_name << " at position (" << row << "," << col
+                      << ") - grid coordinates (" << cell_x << "," << cell_y << ")" << std::endl;
         }
 
         // Center the cropped face within the cell
@@ -858,10 +866,13 @@ TEST_F(EmbeddingModelsIntegrationTest, CreateResultsGrid)
         int face_y = cell_y + (cell_height - text_height - static_cast<int>(result.cropped_face->info.height)) / 2;
 
         // Add colored border for original and target images before pasting
-        if (result.model_name == "Original Source" || result.model_name == "Target Image") {
-            Pixel border_color = (result.model_name == "Original Source") ? Pixel(0, 255, 0) : Pixel(255, 0, 0); // Green for source, Red for target
+        if (result.model_name == "Original Source" || result.model_name == "Target Image")
+        {
+            Pixel border_color = (result.model_name == "Original Source")
+                                     ? Pixel(0, 255, 0)
+                                     : Pixel(255, 0, 0); // Green for source, Red for target
             int border_thickness = 3;
-            
+
             // Add border to the cropped face image itself
             result.cropped_face->drawBorder(border_color, border_thickness);
         }
@@ -919,7 +930,8 @@ TEST_F(EmbeddingModelsIntegrationTest, CreateResultsGrid)
         std::cout << "✓ Results grid saved to: " << grid_path << std::endl;
         std::cout << "Grid dimensions: " << grid_width << "x" << grid_height << std::endl;
         std::cout << "Cell size: " << cell_width << "x" << cell_height << std::endl;
-        std::cout << "Total items included: " << results.size() << " (" << models.size() << " models + original & target)" << std::endl;
+        std::cout << "Total items included: " << results.size() << " (" << models.size()
+                  << " models + original & target)" << std::endl;
     }
 }
 
@@ -1261,7 +1273,7 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
 
     std::vector<ModelIterationStats> all_model_stats;
 
-    std::cout << "Testing " << models.size() << " embedding models with " << iterations 
+    std::cout << "Testing " << models.size() << " embedding models with " << iterations
               << " self-swap iterations each..." << std::endl;
 
     for (const auto& model_filename : models)
@@ -1325,8 +1337,8 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
                 std::replace(model_safe_name.begin(), model_safe_name.end(), '.', '_');
                 std::replace(model_safe_name.begin(), model_safe_name.end(), '-', '_');
 
-                std::string filename = "SelfSwapParametric_" + model_safe_name + 
-                                     "_iteration" + std::to_string(i + 1) + "_result.ppm";
+                std::string filename =
+                    "SelfSwapParametric_" + model_safe_name + "_iteration" + std::to_string(i + 1) + "_result.ppm";
                 std::string output_path = TestUtils::getTestResultPath("embeddingModels_integration", filename);
 
                 // Save result with model-specific subdirectory structure
@@ -1347,7 +1359,7 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
             if (model_stats.all_iterations_successful && !model_stats.execution_times.empty())
             {
                 successful_models++;
-                
+
                 model_stats.total_time = 0;
                 model_stats.min_time = model_stats.execution_times[0];
                 model_stats.max_time = model_stats.execution_times[0];
@@ -1375,7 +1387,8 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Exception during self-swap iterations for " << model_filename << ": " << e.what() << std::endl;
+            std::cerr << "Exception during self-swap iterations for " << model_filename << ": " << e.what()
+                      << std::endl;
             failed_models.push_back(model_filename);
             model_stats.all_iterations_successful = false;
         }
@@ -1406,9 +1419,8 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
     if (successful_models > 0)
     {
         std::cout << "\nPERFORMANCE COMPARISON:" << std::endl;
-        std::cout << std::left << std::setw(40) << "Model" << std::setw(12) << "Avg (ms)" 
-                  << std::setw(12) << "Min (ms)" << std::setw(12) << "Max (ms)" 
-                  << std::setw(12) << "Total (ms)" << std::endl;
+        std::cout << std::left << std::setw(40) << "Model" << std::setw(12) << "Avg (ms)" << std::setw(12) << "Min (ms)"
+                  << std::setw(12) << "Max (ms)" << std::setw(12) << "Total (ms)" << std::endl;
         std::cout << std::string(88, '-') << std::endl;
 
         // Sort by average time for performance ranking
@@ -1422,10 +1434,7 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
         }
 
         std::sort(successful_stats.begin(), successful_stats.end(),
-                  [](const ModelIterationStats& a, const ModelIterationStats& b)
-                  {
-                      return a.avg_time < b.avg_time;
-                  });
+                  [](const ModelIterationStats& a, const ModelIterationStats& b) { return a.avg_time < b.avg_time; });
 
         for (const auto& stats : successful_stats)
         {
@@ -1435,12 +1444,9 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
                 model_display = model_display.substr(0, 34) + "...";
             }
 
-            std::cout << std::left << std::setw(40) << model_display 
-                      << std::fixed << std::setprecision(1)
-                      << std::setw(12) << stats.avg_time
-                      << std::setw(12) << stats.min_time 
-                      << std::setw(12) << stats.max_time
-                      << std::setw(12) << stats.total_time << std::endl;
+            std::cout << std::left << std::setw(40) << model_display << std::fixed << std::setprecision(1)
+                      << std::setw(12) << stats.avg_time << std::setw(12) << stats.min_time << std::setw(12)
+                      << stats.max_time << std::setw(12) << stats.total_time << std::endl;
         }
 
         // Calculate overall statistics
@@ -1465,7 +1471,8 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
     }
 
     // Save detailed results to CSV
-    std::string csv_path = TestUtils::getTestResultPath("embeddingModels_integration", "self_swap_iterations_parametric.csv");
+    std::string csv_path =
+        TestUtils::getTestResultPath("embeddingModels_integration", "self_swap_iterations_parametric.csv");
     std::ofstream csv_file(csv_path);
     if (csv_file.is_open())
     {
@@ -1496,7 +1503,7 @@ TEST_F(EmbeddingModelsIntegrationTest, SelfSwapMultipleIterationsParametric)
 
     // Test assertions
     EXPECT_GT(successful_models, 0) << "At least one model should complete all iterations successfully";
-    
+
     // Expect at least 70% success rate across models
     double success_rate = static_cast<double>(successful_models) / models.size();
     EXPECT_GE(success_rate, 0.7) << "At least 70% of models should complete iterations successfully";
