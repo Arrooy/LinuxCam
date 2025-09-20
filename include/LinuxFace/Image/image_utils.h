@@ -19,11 +19,11 @@ namespace linuxface::image_utils
  */
 struct ImageMetrics
 {
-    double mse = 0.0;                    // Mean Squared Error
-    double psnr = 0.0;                   // Peak Signal-to-Noise Ratio (dB)
-    double ssim = 0.0;                   // Structural Similarity Index
-    double lpips = 0.0;                  // Learned Perceptual Image Patch Similarity
-    double identity_similarity = 0.0;    // Identity similarity score
+    double mse = 0.0;                 // Mean Squared Error
+    double psnr = 0.0;                // Peak Signal-to-Noise Ratio (dB)
+    double ssim = 0.0;                // Structural Similarity Index
+    double lpips = 0.0;               // Learned Perceptual Image Patch Similarity
+    double identity_similarity = 0.0; // Identity similarity score
 
     std::string toString() const;
 };
@@ -111,12 +111,20 @@ const double TEMPLATE_192_ALT[5][2] = {
     {0.6171875,  0.61328125}
 };
 
+// const double TEMPLATE_256[5][2] = {
+//     {0.37, 0.40},
+//     {0.63, 0.40},
+//     {0.50, 0.50},
+//     {0.37, 0.70},
+//     {0.63, 0.70}
+// };
+
 const double TEMPLATE_256[5][2] = {
-    {0.37, 0.40},
-    {0.63, 0.40},
-    {0.50, 0.50},
-    {0.37, 0.70},
-    {0.63, 0.70}
+    {0.36167656, 0.40387734},  // left eye
+    {0.63696719, 0.40235469},  // right eye
+    {0.50019687, 0.56044219},  // nose
+    {0.38710391, 0.72160547},  // left mouth corner
+    {0.61507734, 0.72034453}   // right mouth corner
 };
 
 const double TEMPLATE_512[5][2] = {
@@ -781,7 +789,8 @@ void bilinearScaling(const ImageView<T>& src, ImageView<K>& dst)
                                     const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
                                     scaledValue = static_cast<K>(std::clamp(alphaValue + 0.5, minVal, maxVal));
                                 }
-                                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                                const size_t dstIdx =
+                                    calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                                 dst.data[dstIdx] = scaledValue;
                                 if (needsStats)
                                 {
@@ -923,7 +932,8 @@ void areaAveragingScaling(const ImageView<T>& src, ImageView<K>& dst)
                             const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
                             scaledValue = static_cast<K>(std::clamp(alphaValue + 0.5, minVal, maxVal));
                         }
-                        const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                        const size_t dstIdx =
+                            calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                         dst.data[dstIdx] = scaledValue;
                         if (needsStats)
                         {
@@ -1530,7 +1540,8 @@ inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D
 {
     const int cx = static_cast<int>(std::round(center.x));
     const int cy = static_cast<int>(std::round(center.y));
-    const int r = static_cast<int>(std::round(radius));
+    const float r_squared = radius * radius;
+    const int r_ceil = static_cast<int>(std::ceil(radius));
     const int w = static_cast<int>(image->info.width);
     const int h = static_cast<int>(image->info.height);
 
@@ -1540,11 +1551,12 @@ inline void paintCircle(std::unique_ptr<Image>& image, const math_utils::Point3D
         image->ppx(cx, cy, color);
     }
 
-    for (int y = -r; y <= r; ++y)
+    for (int y = -r_ceil; y <= r_ceil; ++y)
     {
-        for (int x = -r; x <= r; ++x)
+        for (int x = -r_ceil; x <= r_ceil; ++x)
         {
-            if (x * x + y * y <= r * r)
+            const float dist_squared = static_cast<float>(x * x + y * y);
+            if (dist_squared <= r_squared)
             {
                 const int px = cx + x;
                 const int py = cy + y;

@@ -6,8 +6,11 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <sstream>
+#include <thread>
 
 #include "LinuxFace/Image/image_utils.h"
+#include "LinuxFace/Image/text_renderer.h"
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/depthImage.h"
@@ -48,9 +51,9 @@ alignedToOriginalCoords(double xAligned, double yAligned, double cropLeft, doubl
 
 void signalHandler(int signal)
 {
-    if (signal == SIGINT)
+    if (signal == SIGINT || signal == SIGTERM)
     {
-        linuxface::common::logWarn("Received SIGINT, exiting...");
+        linuxface::common::logWarn("Received signal %d, exiting...", signal);
         gShouldExit = true;
     }
 }
@@ -95,7 +98,9 @@ Application::~Application()
 bool Application::initialize()
 {
     std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
 
+    Profiler::getInstance().start("Initialization", "Window Setup");
     // Initialize window
     if (!window_.initialize())
     {
@@ -107,7 +112,9 @@ bool Application::initialize()
 
     // Connect window resize to layerManager texture invalidation
     this->connectWindowResize();
+    Profiler::getInstance().stop("Initialization", "Window Setup");
 
+    Profiler::getInstance().start("Initialization", "UI Setup");
     // Initialize UI with LayerManager
     ui_ = std::make_unique<UI>(layerManager_);
     if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
@@ -122,7 +129,9 @@ bool Application::initialize()
     ui_->loadingScreen();
     window_.swapBuffers();
     window_.pollEvents();
+    Profiler::getInstance().stop("Initialization", "UI Setup");
 
+    Profiler::getInstance().start("Initialization", "Camera Setup");
     cameraManager_ = std::make_shared<CameraManager>();
     cameraManager_->setLayerManager(layerManager_);
 
@@ -173,54 +182,59 @@ bool Application::initialize()
             return false;
         }
     }
+    Profiler::getInstance().stop("Initialization", "Camera Setup");
 
-    // Just here for benchmarking.
-    // faceDetector_ = std::make_unique<DlibFaceDetector>();
-    const std::string modelsFolder = Config::getInstance().getModelFolderPath();
+    // Start loading models in a background thread
+    std::thread modelLoader(
+        [this]()
+        {
+            const std::string modelsFolder = Config::getInstance().getModelFolderPath();
 
-    // DlibShapeDetector initialization (landmarks)
-    const std::string dlibShapeModel = modelsFolder + "shape_predictor_68_face_landmarks.dat";
-    // dlibShapeDetector_ = std::make_unique<DlibShapeDetector>(dlib_shape_model);
+            // DlibShapeDetector initialization (landmarks)
+            const std::string dlibShapeModel = modelsFolder + "shape_predictor_68_face_landmarks.dat";
+            // dlibShapeDetector_ = std::make_unique<DlibShapeDetector>(dlib_shape_model);
 
-    const std::string varOnnxPath = modelsFolder + "fsanet-var.onnx";
-    // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
+            const std::string varOnnxPath = modelsFolder + "fsanet-var.onnx";
+            // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
-    const std::string convOnnxPath = modelsFolder + "fsanet-1x1.onnx";
-    // fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
+            const std::string convOnnxPath = modelsFolder + "fsanet-1x1.onnx";
+            // fsanetDetectorConv_ = std::make_unique<FsanetDetector>(conv_onnx_path); // Seems like 1x1 is very bad
 
-    const std::string scrfd10gBnkpsPath = modelsFolder + "scrfd_10g_bnkps_shape640x640.onnx";
+            const std::string scrfd10gBnkpsPath = modelsFolder + "scrfd_10g_bnkps_shape640x640.onnx";
 
-    // 1ms time inference
-    const std::string scrfd500mBnkpsPath = modelsFolder + "scrfd_500m_bnkps_shape640x640.onnx";
-    scrfdDetector_ = std::make_shared<SCRFDetector>(scrfd500mBnkpsPath);
+            // 1ms time inference
+            const std::string scrfd500mBnkpsPath = modelsFolder + "scrfd_500m_bnkps_shape640x640.onnx";
+            scrfdDetector_ = std::make_shared<SCRFDetector>(scrfd500mBnkpsPath);
 
-    const std::string modnetOnnxPath = modelsFolder + "modnet.onnx";
-    // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
+            const std::string modnetOnnxPath = modelsFolder + "modnet.onnx";
+            // modnetDetector_ = std::make_unique<MODNetDetector>(modnet_onnx_path);
 
-    const std::string rvmModel = modelsFolder + "rvm_mobilenetv3_fp32.onnx";
-    // rvmDetector_ = std::make_unique<RobustVideoMatting>(rvmModel);
+            const std::string rvmModel = modelsFolder + "rvm_mobilenetv3_fp32.onnx";
+            // rvmDetector_ = std::make_unique<RobustVideoMatting>(rvmModel);
 
+            // ArcFace recognizer initialization
+            const std::string arcfaceModel = modelsFolder + "arcface_w600k_r50.onnx";
+            // const std::string arcfaceModel = modelsFolder + "ms1mv3_arcface_r100.onnx";
+            arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcfaceModel);
 
-    // ArcFace recognizer initialization
-    const std::string arcfaceModel = modelsFolder + "arcface_w600k_r50.onnx";
-    // const std::string arcfaceModel = modelsFolder + "ms1mv3_arcface_r100.onnx";
-    arcfaceRecognizer_ = std::make_shared<ArcfaceRecognizer>(arcfaceModel);
+            // InSwapper initialization
+            // const std::string inswapperModel = modelsFolder + "inswapper_128.onnx";
+            const std::string inswapperModel = modelsFolder + "inswapper_128_fp16.onnx";
+            inswapper_ = std::make_shared<InSwapper>(inswapperModel);
 
-    // InSwapper initialization
-    // const std::string inswapperModel = modelsFolder + "inswapper_128.onnx";
-    const std::string inswapperModel = modelsFolder + "inswapper_128_fp16.onnx";
-    inswapper_ = std::make_shared<InSwapper>(inswapperModel);
+            // MediaPipe Face Landmarks initialization
+            const std::string mediapipeLandmarksModel = modelsFolder + "facemeshv2_fast.onnx";
+            mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipeLandmarksModel);
 
-    // MediaPipe Face Landmarks initialization
-    const std::string mediapipeLandmarksModel = modelsFolder + "facemeshv2_fast.onnx";
-    mediaPipeLandmarks_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipeLandmarksModel);
+            const std::string mediapipeLandmarksModelOld = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
+            mediaPipeLandmarksOld_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipeLandmarksModelOld);
 
-    const std::string mediapipeLandmarksModelOld = modelsFolder + "MediaPipeFaceLandmarkDetector.onnx";
-    mediaPipeLandmarksOld_ = std::make_shared<MediaPipeFaceLandmarks>(mediapipeLandmarksModelOld);
+            // Initialize SwapPipeline after all models are loaded
+            swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
+        });
+    modelLoader.detach();
 
-    // Initialize SwapPipeline after all models are loaded
-    swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
-
+    Profiler::getInstance().start("Initialization", "Renderer Setup");
     // Pass pointer instead of reference
     ui_->connect(cameraManager_);
 
@@ -236,18 +250,17 @@ bool Application::initialize()
 
     mediaManager_ = std::make_shared<MediaManager>(imageRender_);
     ui_->connect(mediaManager_);
+    Profiler::getInstance().stop("Initialization", "Renderer Setup");
 
+    Profiler::getInstance().start("Initialization", "Target Image Loading");
     // Load target faceswap image once
-    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/albert.jpeg";
+    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
         linuxface::common::logError("Failed to load image at initialization");
     }
-
-    // PFLD Landmarks initialization
-    const std::string pfldModel = modelsFolder + "pfld-106-v3.onnx";
-    pfldDetector_ = std::make_shared<PFLDDetector>(pfldModel);
+    Profiler::getInstance().stop("Initialization", "Target Image Loading");
 
 
     // auto image =
@@ -295,28 +308,37 @@ void Application::run()
         // handle periodic cleanup automatically
         profiler_.update();
 
+        Profiler::getInstance().start("MainLoop", "Frame Processing");
         if (update())
         {
             render();
         }
+        Profiler::getInstance().stop("MainLoop", "Frame Processing");
     }
 
     cameraManager_->shutdown();
     mediaManager_->shutdown();
 
     linuxface::common::logInfo("Main loop ended");
+
+    // Print profiling summary on exit
+    profiler_.printSummary();
 }
 
 bool Application::update()
 {
+    Profiler::getInstance().start("Application", "Poll Events");
     // Poll events
     window_.pollEvents();
+    Profiler::getInstance().stop("Application", "Poll Events");
 
+    Profiler::getInstance().start("Application", "Update Camera Input");
     // Update camera inputs - this now creates/updates individual layers per camera
     if (!cameraManager_->updateInput())
     {
         return false;
     }
+    Profiler::getInstance().stop("Application", "Update Camera Input");
 
     // Composite all layers for output (if we have output cameras)
     auto& layers = layerManager_->getLayers();
@@ -336,13 +358,16 @@ bool Application::update()
         return false;
     }
 
+    Profiler::getInstance().start("Application", "Calculate Composite Bounds");
     float minX, minY, maxX, maxY;
     calculateCompositeBounds(layers, windowWidth, windowHeight, minX, minY, maxX, maxY);
     unsigned int compositeWidth = (minX < maxX) ? static_cast<unsigned int>(maxX - minX) : windowWidth;
     unsigned int compositeHeight = (minY < maxY) ? static_cast<unsigned int>(maxY - minY) : windowHeight;
     compositeWidth = std::min(compositeWidth, static_cast<unsigned int>(windowWidth));
     compositeHeight = std::min(compositeHeight, static_cast<unsigned int>(windowHeight));
+    Profiler::getInstance().stop("Application", "Calculate Composite Bounds");
 
+    Profiler::getInstance().start("Application", "Create Composite Image");
     std::unique_ptr<Image> compositeImage;
     bool compositeValid = createCompositeImage(compositeImage, layers, minX, minY, compositeWidth, compositeHeight);
 
@@ -351,46 +376,69 @@ bool Application::update()
         common::logInfo("Composite image is not valid.");
         return false;
     }
+    Profiler::getInstance().stop("Application", "Create Composite Image");
 
+    Profiler::getInstance().start("Application", "Process Image");
     process(compositeImage);
+    Profiler::getInstance().stop("Application", "Process Image");
 
+    // Flip horizontally the composite image
+    // compositeImage->flipHorizontalInPlace();
+
+    Profiler::getInstance().start("Application", "Update Camera Output");
     // Send processed composite to output cameras with cropping
     if (!cameraManager_->updateOutput(compositeImage))
     {
         linuxface::common::logError("Failed to update output cameras");
     }
+    Profiler::getInstance().stop("Application", "Update Camera Output");
 
+    Profiler::getInstance().start("Application", "UI Update");
     ui_->handleKeyboard();
     ui_->newFrame();
     ui_->paint();
+    Profiler::getInstance().stop("Application", "UI Update");
     return true;
 }
 
 void Application::render()
 {
+    Profiler::getInstance().start("Application", "Set Viewport");
     // Set viewport
     window_.setViewport();
+    Profiler::getInstance().stop("Application", "Set Viewport");
 
+    Profiler::getInstance().start("Application", "Clear Screen");
     // Clear screen
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    Profiler::getInstance().stop("Application", "Clear Screen");
 
+    Profiler::getInstance().start("Application", "Render Layers");
     // Render all layers
     int width = 0;
     int height = 0;
     window_.getFramebufferSize(width, height);
     imageRender_->renderLayers(layerManager_->getLayers(), width, height);
+    Profiler::getInstance().stop("Application", "Render Layers");
 
+    Profiler::getInstance().start("Application", "Render UI");
     // Render UI
     ui_->render();
+    Profiler::getInstance().stop("Application", "Render UI");
 
+    Profiler::getInstance().start("Application", "Swap Buffers");
     // Swap buffers
     window_.swapBuffers();
+    Profiler::getInstance().stop("Application", "Swap Buffers");
 }
 
 void Application::process(std::unique_ptr<Image>& image)
 {
+    Profiler::getInstance().start("Process", "Deep Copy Raw Image");
     auto raw = image->deepCopy();
+    Profiler::getInstance().stop("Process", "Deep Copy Raw Image");
+
     std::vector<Face> dlibFaces;
     if (faceDetector_ != nullptr)
     {
@@ -400,12 +448,17 @@ void Application::process(std::unique_ptr<Image>& image)
     std::vector<Face> scrfdFaces;
     if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
     {
+        Profiler::getInstance().start("Process", "SCRFD Face Detection");
         scrfdFaces = scrfdDetector_->detect(image);
+        Profiler::getInstance().stop("Process", "SCRFD Face Detection");
+
+        Profiler::getInstance().start("Process", "Paint Face Bounding Boxes");
         for (const auto& face : scrfdFaces)
         {
-            face.paintBoundingBox(image, Pixel(200, 200, 200));
+            face.paintBoundingBox(image, Pixel(0, 200, 200));
             face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
         }
+        Profiler::getInstance().stop("Process", "Paint Face Bounding Boxes");
     }
 
 
@@ -441,12 +494,25 @@ void Application::process(std::unique_ptr<Image>& image)
     //         face.paintBoundingBox(image, Pixel(255, 0, 0));
     //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
     //     }
+    // if (!scrfdFaces.empty())
+    // {
+    //     if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady())
+    //     {
+    //         auto resultFace = mediaPipeLandmarks_->detect(raw, scrfdFaces[0]);
+    //         if (resultFace.isValid())
+    //         {
+    //             resultFace.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 1.0f);
+    //         }
+    //     }
+    // }
+
     // Delegate MediaPipe face landmark processing to a helper allowing model and color parameterization
     if (!scrfdFaces.empty())
     {
-        // Default color used historically in-place was blue (0,0,255)
-        processMediaPipeLandmarks(mediaPipeLandmarks_, raw, image, scrfdFaces, Pixel(0, 0, 255));
+
+        Profiler::getInstance().start("Process", "MediaPipe Landmarks (Old)");
         processMediaPipeLandmarks(mediaPipeLandmarksOld_, raw, image, scrfdFaces, Pixel(200, 0, 155));
+        Profiler::getInstance().stop("Process", "MediaPipe Landmarks (Old)");
     }
 
     //     // 1. Draw five-point landmarks used for alignment on the original image
@@ -645,14 +711,11 @@ void Application::process(std::unique_ptr<Image>& image)
     // }
 
 
-    bool swap_success = false;
-    if (swapPipeline_ && target_img_)
-    {
-        swap_success = swapPipeline_->run(image, target_img_);
-        if (swap_success && layerManager_)
-        {
-        }
-    }
+    // bool swap_success = false;
+    // if (swapPipeline_ && target_img_)
+    // {
+    //     swap_success = swapPipeline_->run(image, target_img_, scrfdFaces);
+    // }
 
     // if (rvmDetector_ && rvmDetector_->isReady())
     // {
@@ -866,8 +929,14 @@ bool Application::processMediaPipeLandmarks(std::shared_ptr<MediaPipeFaceLandmar
         linuxface::common::logError("Failed to wrap face image for MediaPipe landmarks detection");
         return false;
     }
-
-    auto result = landmarks->detect(aligned_image);
+    if(modelWidth == 192)
+    {
+        aligned_image->saveToDisk("aligned_192.ppm");
+    }else if(modelWidth == 256)
+    {
+        aligned_image->saveToDisk("aligned_256.ppm");
+    }
+    auto result = landmarks->detectAligned(aligned_image);
 
     if (result.score <= 0.5)
     {
@@ -907,11 +976,21 @@ bool Application::processMediaPipeLandmarks(std::shared_ptr<MediaPipeFaceLandmar
         float z = aligned_z[i];
         if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
         {
-            linuxface::common::logWarn("MediaPipe landmark out of bounds: (%f, %f, %f)", x, y, z);
             continue;
         }
+        if (i == 1 && modelWidth == 256)
+        {
+            // Draw the landmark coordinates for index 1 as a test
+            std::ostringstream ss;
+            ss << "(" << static_cast<int>(std::round(x)) << "," << static_cast<int>(std::round(y)) << ","
+               << static_cast<int>(std::round(z)) << ")";
+            const std::string coordText = ss.str();
+            // drawTextWithBackground(Image&, x, y, text, textColor, bgColor, scale, center, padding)
+            linuxface::TextRenderer::drawTextWithBackground(*image, static_cast<int>(x) + 10, static_cast<int>(y) + 10,
+                                                            coordText, Pixel(255, 255, 255), Pixel(0, 0, 0), 2, false,
+                                                            0);
+        }
         image->ppx(x, y, color);
-        image_utils::paintCircle(image, math_utils::Point3D(x, y, z), 1.5f, color);
     }
 
     // Mark layers dirty so textures get updated

@@ -102,7 +102,7 @@ TEST_F(MediaPipeRealImageTest, BasicFunctionality) {
     auto test_image = createTestImage();
     
     // Test MediaPipe detection on synthetic image
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     // Should detect 468 landmarks
     EXPECT_EQ(result.landmarks.size(), 468);
@@ -140,7 +140,7 @@ TEST_F(MediaPipeRealImageTest, ComprehensiveRealImageTest) {
     
     // Test MediaPipe landmark detection
     auto start_time = std::chrono::high_resolution_clock::now();
-    auto result = mediapipe_detector_->detect(resized_image);
+    auto result = mediapipe_detector_->detectAligned(resized_image);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto inference_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
@@ -176,7 +176,7 @@ TEST_F(MediaPipeRealImageTest, PerformanceBounds) {
     auto test_image = createTestImage();
     
     auto start = std::chrono::high_resolution_clock::now();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     auto end = std::chrono::high_resolution_clock::now();
     
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -199,7 +199,7 @@ TEST_F(MediaPipeRealImageTest, DifferentImageSizes) {
         auto original_image = createTestImage(size.first, size.second);
         auto resized_image = original_image->scaleTo(192, 192); // MediaPipe input size
         
-        auto result = mediapipe_detector_->detect(resized_image);
+        auto result = mediapipe_detector_->detectAligned(resized_image);
         
         // Should always produce 468 landmarks regardless of original image size
         EXPECT_EQ(result.landmarks.size(), 468) 
@@ -212,7 +212,7 @@ TEST_F(MediaPipeRealImageTest, LandmarkQualityValidation) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     auto test_image = createTestImage();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     ASSERT_EQ(result.landmarks.size(), 468);
     
@@ -248,7 +248,7 @@ TEST_F(MediaPipeRealImageTest, LandmarkConsistency) {
     // Run detection multiple times
     std::vector<MediaPipeFaceLandmarks::Result> results;
     for (int i = 0; i < 3; ++i) {
-        results.push_back(mediapipe_detector_->detect(test_image));
+        results.push_back(mediapipe_detector_->detectAligned(test_image));
     }
     
     // Verify consistency between runs
@@ -280,7 +280,7 @@ TEST_F(MediaPipeRealImageTest, LandmarkConversionIntegration) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     auto test_image = createTestImage();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     ASSERT_EQ(result.landmarks.size(), 468);
     
@@ -320,7 +320,7 @@ TEST_F(MediaPipeRealImageTest, ResourceManagement) {
     for (int iteration = 0; iteration < 10; ++iteration) {
         for (auto& image : test_images) {
             auto resized = image->scaleTo(192, 192);
-            auto result = mediapipe_detector_->detect(resized);
+            auto result = mediapipe_detector_->detectAligned(resized);
             EXPECT_EQ(result.landmarks.size(), 468);
         }
     }

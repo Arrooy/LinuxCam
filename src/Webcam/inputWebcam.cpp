@@ -36,7 +36,6 @@ bool InputWebcam::setupDevice()
     }
 
     // Here we know what format we are decoding, we can create the decoder.
-    // TODO(arroyo): FIXME: Create the decoder based on the format we are using.
     ConfigBuilder configBuilder;
     configBuilder.imageFormat(selectedFormat_->format)
         .pixelFormat(TJPF_RGB)

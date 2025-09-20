@@ -137,7 +137,7 @@ TEST_F(MediaPipeUnitTest, BasicFunctionality) {
     auto test_image = createTestImage();
     
     // Basic detection should work without crashing
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     // MediaPipe should return 468 landmarks
     EXPECT_EQ(result.landmarks.size(), 468);
@@ -163,7 +163,7 @@ TEST_F(MediaPipeUnitTest, DifferentImageSizes) {
     for (const auto& size : sizes) {
         auto test_image = createTestImage(size.first, size.second);
         
-        auto result = mediapipe_detector_->detect(test_image);
+        auto result = mediapipe_detector_->detectAligned(test_image);
         
         // Should still produce 468 landmarks regardless of input size (gets resized to 192x192)
         EXPECT_EQ(result.landmarks.size(), 468) 
@@ -180,7 +180,7 @@ TEST_F(MediaPipeUnitTest, LandmarkCoordinateValidation) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     auto test_image = createTestImage();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     EXPECT_EQ(result.landmarks.size(), 468);
     
@@ -207,7 +207,7 @@ TEST_F(MediaPipeUnitTest, EmptyImage) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     std::unique_ptr<Image> null_image;
-    auto result = mediapipe_detector_->detect(null_image);
+    auto result = mediapipe_detector_->detectAligned(null_image);
     
     // Should return empty result gracefully
     EXPECT_EQ(result.landmarks.size(), 0);
@@ -219,7 +219,7 @@ TEST_F(MediaPipeUnitTest, VerySmallImage) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     auto tiny_image = createTestImage(10, 10);
-    auto result = mediapipe_detector_->detect(tiny_image);
+    auto result = mediapipe_detector_->detectAligned(tiny_image);
     
     // Should handle gracefully and still produce landmarks (gets upscaled to 192x192)
     EXPECT_EQ(result.landmarks.size(), 468);
@@ -232,7 +232,7 @@ TEST_F(MediaPipeUnitTest, MemoryManagementRepeatedCalls) {
     auto test_image = createTestImage();
     
     for (int i = 0; i < 10; ++i) {
-        auto result = mediapipe_detector_->detect(test_image);
+        auto result = mediapipe_detector_->detectAligned(test_image);
         
         // Each call should successfully produce 468 landmarks
         EXPECT_EQ(result.landmarks.size(), 468);
@@ -248,7 +248,7 @@ TEST_F(MediaPipeUnitTest, PerformanceBounds) {
     auto test_image = createTestImage();
     
     auto start = std::chrono::high_resolution_clock::now();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     auto end = std::chrono::high_resolution_clock::now();
     
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -272,7 +272,7 @@ TEST_F(MediaPipeUnitTest, IntegrationWithSCRFD) {
     // If faces detected, we could potentially crop them for MediaPipe
     // For this test, we'll just verify both detectors work
     EXPECT_NO_THROW({
-        auto result = mediapipe_detector_->detect(createTestImage(192, 192));
+        auto result = mediapipe_detector_->detectAligned(createTestImage(192, 192));
         EXPECT_EQ(result.landmarks.size(), 468);
     });
 }
@@ -284,8 +284,8 @@ TEST_F(MediaPipeUnitTest, LandmarkConsistency) {
     auto test_image = createTestImage();
     
     // Run detection multiple times on same image
-    auto result1 = mediapipe_detector_->detect(test_image);
-    auto result2 = mediapipe_detector_->detect(test_image);
+    auto result1 = mediapipe_detector_->detectAligned(test_image);
+    auto result2 = mediapipe_detector_->detectAligned(test_image);
     
     ASSERT_EQ(result1.landmarks.size(), 468);
     ASSERT_EQ(result2.landmarks.size(), 468);
@@ -322,7 +322,7 @@ TEST_F(MediaPipeUnitTest, TensorNormalization) {
     data[7] = 128;
     data[8] = 128;
     
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     // Should still work with extreme pixel values
     EXPECT_EQ(result.landmarks.size(), 468);
@@ -335,7 +335,7 @@ TEST_F(MediaPipeUnitTest, LandmarkFormatStructure) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     auto test_image = createTestImage();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     // Verify MediaPipe-specific landmark structure
     EXPECT_EQ(result.landmarks.size(), 468);
@@ -364,7 +364,7 @@ TEST_F(MediaPipeUnitTest, ScoreValidation) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     auto test_image = createTestImage();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     // Score should be a valid probability-like value
     EXPECT_TRUE(std::isfinite(result.score)) << "Score should be finite";
@@ -377,7 +377,7 @@ TEST_F(MediaPipeUnitTest, ConversionToFaceLandmarkFormat) {
     ASSERT_TRUE(mediapipe_detector_->isReady());
     
     auto test_image = createTestImage();
-    auto result = mediapipe_detector_->detect(test_image);
+    auto result = mediapipe_detector_->detectAligned(test_image);
     
     ASSERT_EQ(result.landmarks.size(), 468);
     

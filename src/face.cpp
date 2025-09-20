@@ -9,7 +9,7 @@
 using namespace linuxface;
 
 Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox)
-    : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}
+    : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}, valid_(true)
 {
     if (landmarks.size() == 5)
     {
@@ -31,7 +31,7 @@ Face::Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox)
     }
 }
 
-Face::Face(FaceBoundingBox boundingBox) : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}
+Face::Face(FaceBoundingBox boundingBox) : boundingBox_(boundingBox), pose_{0.0f, 0.0f, 0.0f}, valid_(true)
 {
 }
 
@@ -251,7 +251,7 @@ void Face::paintFaceIndex(std::unique_ptr<Image>& image, FaceIndex facepart, boo
         }
         else
         {
-            if (radius < 1.0f)
+            if (radius <= 1.0f)
             {
                 image->ppx(l.p.x, l.p.y, color);
             }

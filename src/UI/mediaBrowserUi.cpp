@@ -174,7 +174,7 @@ void MediaBrowserUI::renderImageOperationsContent()
             ImGui::SameLine();
             if (ImGui::Button("Flip Horizontal"))
             {
-                image->flipHorizontal();
+                image->flipHorizontalInPlace();
                 selected->dirty = true;
             }
             ImGui::SameLine();

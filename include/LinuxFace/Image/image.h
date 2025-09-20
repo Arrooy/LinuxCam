@@ -252,7 +252,6 @@ class Image
 
     // Image manipulation methods
     void toGrayscale();
-    void flipHorizontal();
     void flipVertical();
 
     math_utils::Point<double> rotate(double angleRad, math_utils::Point<double> center);

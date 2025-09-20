@@ -261,7 +261,7 @@ class MediaPipeFaceKeypointBenchmark : public ::testing::Test
 
             // MediaPipe landmark detection timing
             auto landmark_start = std::chrono::high_resolution_clock::now();
-            auto mediapipe_result = mediapipe_detector_->detect(cropped_face);
+            auto mediapipe_result = mediapipe_detector_->detectAligned(cropped_face);
             auto landmark_end = std::chrono::high_resolution_clock::now();
 
             double landmark_detection_time =

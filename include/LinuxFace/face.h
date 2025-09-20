@@ -17,6 +17,8 @@ struct FaceLandmark
     unsigned int i{};
     // 3D location of the landmark
     math_utils::Point3D p;
+    // Confidence of the landmark
+    float score{0.0f};
 };
 
 struct FaceBoundingBox
@@ -116,13 +118,14 @@ class Face
                          double minIouThreshold = 0.1);
 
     bool hasLandmarks() const { return !landmarks_.empty(); }
-
+    bool isValid() const { return valid_; }
   private:
     void freeFaceLandmarks();
 
     FaceBoundingBox boundingBox_;
     std::map<FaceIndex, std::vector<FaceLandmark>> landmarks_;
     FacePose pose_{};
+    bool valid_ {false};
 };
 
 } // namespace linuxface

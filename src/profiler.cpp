@@ -391,3 +391,115 @@ void Profiler::update()
         lastCleanup_ = now;
     }
 }
+
+void Profiler::printSummary() const
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+
+    if (timingData_.empty())
+    {
+        linuxface::common::logInfo("Profiler: No profiling data available");
+        return;
+    }
+
+    linuxface::common::logInfo("=== PROFILER SUMMARY ===");
+
+    // Group by source
+    std::unordered_map<std::string, std::vector<std::pair<std::string, TimerStatistics>>> sourceGroups;
+
+    for (const auto& pair : timingData_)
+    {
+        const std::string& fullKey = pair.first;
+        const auto& data = pair.second;
+
+        // Skip active timers
+        if (data.isActive)
+        {
+            continue;
+        }
+
+        // Parse source and name from key (format: "source::name")
+        size_t separatorPos = fullKey.find("::");
+        if (separatorPos == std::string::npos)
+        {
+            continue;
+        }
+
+        std::string source = fullKey.substr(0, separatorPos);
+        std::string name = fullKey.substr(separatorPos + 2);
+
+        TimerStatistics stats;
+        stats.current = data.duration;
+        stats.minimum = data.minimumDuration;
+        stats.maximum = data.maximumDuration;
+        stats.average = calculateMovingAverage(data);
+        stats.sampleCount = data.samples.size();
+        stats.lastUpdated = data.lastUpdated;
+
+        sourceGroups[source].emplace_back(name, stats);
+    }
+
+    // Print each source group
+    for (const auto& sourcePair : sourceGroups)
+    {
+        const std::string& source = sourcePair.first;
+        const auto& timers = sourcePair.second;
+
+        linuxface::common::logInfo("Source: %s", source.c_str());
+
+        // Sort timers by average duration (descending)
+        std::vector<std::pair<std::string, TimerStatistics>> sortedTimers = timers;
+        std::sort(sortedTimers.begin(), sortedTimers.end(),
+                  [](const auto& a, const auto& b) {
+                      return a.second.average > b.second.average;
+                  });
+
+        for (const auto& timerPair : sortedTimers)
+        {
+            const std::string& name = timerPair.first;
+            const TimerStatistics& stats = timerPair.second;
+
+            linuxface::common::logInfo("  %-30s | Current: %-12s | Average: %-12s | Min: %-12s | Max: %-12s | Samples: %zu",
+                                       name.c_str(),
+                                       formatDuration(stats.current).c_str(),
+                                       formatDuration(stats.average).c_str(),
+                                       formatDuration(stats.minimum).c_str(),
+                                       formatDuration(stats.maximum).c_str(),
+                                       stats.sampleCount);
+        }
+        linuxface::common::logInfo("");
+    }
+
+    linuxface::common::logInfo("=== END PROFILER SUMMARY ===");
+}
+
+void Profiler::setColorRange(const std::string& timerKey, std::chrono::microseconds greenThreshold, 
+                             std::chrono::microseconds redThreshold)
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    colorRanges_[timerKey] = ColorRange(greenThreshold, redThreshold);
+}
+
+void Profiler::setColorRange(const std::string& sourceName, const std::string& name,
+                             std::chrono::microseconds greenThreshold, std::chrono::microseconds redThreshold)
+{
+    setColorRange(makeKey(sourceName, name), greenThreshold, redThreshold);
+}
+
+Profiler::ColorRange Profiler::getColorRange(const std::string& timerKey) const
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    auto it = colorRanges_.find(timerKey);
+    if (it != colorRanges_.end())
+    {
+        return it->second;
+    }
+    // Return default color range if not configured
+    return ColorRange();
+}
+
+void Profiler::resetColorRanges()
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    colorRanges_.clear();
+}

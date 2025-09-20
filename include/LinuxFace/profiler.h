@@ -77,6 +77,11 @@ class Profiler
     void cleanupStaleData();
 
     /**
+     * Print a summary of all profiling data to the console.
+     */
+    void printSummary() const;
+
+    /**
      * Updates the profiler, handling periodic cleanup automatically.
      * Should be called regularly from the main application loop.
      */
@@ -94,6 +99,20 @@ class Profiler
         std::chrono::microseconds average{0}; // Average value in window
         size_t sampleCount{0};                // Number of samples in current window
         std::chrono::high_resolution_clock::time_point lastUpdated{};
+    };
+
+    /**
+     * Color range configuration for profiler display.
+     * Defines the thresholds for green (good) and red (bad) performance.
+     */
+    struct ColorRange
+    {
+        std::chrono::microseconds greenThreshold{1000}; // 1ms - good performance (green)
+        std::chrono::microseconds redThreshold{10000};   // 10ms - poor performance (red)
+        
+        ColorRange() = default;
+        ColorRange(std::chrono::microseconds green, std::chrono::microseconds red) 
+            : greenThreshold(green), redThreshold(red) {}
     };
 
     /**
@@ -129,6 +148,37 @@ class Profiler
      */
     void resetStatistics();
 
+    /**
+     * Configure color range for a specific timer key.
+     * @param timerKey Full timer key (format: "source::name")
+     * @param greenThreshold Duration threshold for good performance (green color)
+     * @param redThreshold Duration threshold for poor performance (red color)
+     */
+    void setColorRange(const std::string& timerKey, std::chrono::microseconds greenThreshold, 
+                       std::chrono::microseconds redThreshold);
+
+    /**
+     * Configure color range for a specific timer.
+     * @param sourceName The source name of the timer
+     * @param name The name of the timer
+     * @param greenThreshold Duration threshold for good performance (green color)
+     * @param redThreshold Duration threshold for poor performance (red color)
+     */
+    void setColorRange(const std::string& sourceName, const std::string& name,
+                       std::chrono::microseconds greenThreshold, std::chrono::microseconds redThreshold);
+
+    /**
+     * Get color range for a specific timer key.
+     * @param timerKey Full timer key (format: "source::name")
+     * @return ColorRange for the timer, or default range if not configured
+     */
+    ColorRange getColorRange(const std::string& timerKey) const;
+
+    /**
+     * Reset color ranges to defaults for all timers.
+     */
+    void resetColorRanges();
+
   private:
     Profiler() = default;
 
@@ -160,6 +210,9 @@ class Profiler
 
     std::unordered_map<std::string, TimingData> timingData_;
     mutable std::mutex mutex_;
+
+    // Color range configuration for different timer keys
+    std::unordered_map<std::string, ColorRange> colorRanges_;
 
     // Cleanup timing
     std::chrono::high_resolution_clock::time_point lastCleanup_{};

@@ -198,6 +198,7 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
     }
 
     Profiler::getInstance().stop("CameraManager", "Encode and write all output images");
+    Profiler::getInstance().start("CameraManager", "Update output preview layer");
 
     // Update preview layer with the processed image if available, otherwise use original
     if (processedOutputImage)
@@ -208,6 +209,7 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
     {
         updateOutputPreviewLayer(*image);
     }
+    Profiler::getInstance().stop("CameraManager", "Update output preview layer");
 
     return success;
 }
@@ -366,6 +368,7 @@ void CameraManager::createOutputPreviewLayer()
     {
         return; // Already exists
     }
+    common::logInfo("CameraManager::createOutputPreviewLayer - Creating output preview layer");
 
     // Determine preview dimensions based on output devices
     unsigned int previewWidth = 640;  // Default width
@@ -452,7 +455,7 @@ void CameraManager::updateOutputPreviewLayer(const Image& compositeImage)
     else
     {
         // Scale the composite image to fit the preview dimensions
-        finalImage = compositeImage.scaleTo(targetWidth, targetHeight, ScalingAlgorithm::BILINEAR);
+        finalImage = compositeImage.scaleTo(targetWidth, targetHeight, ScalingAlgorithm::FAST_BOX);
         if (finalImage)
         {
             common::logInfo("CameraManager::updateOutputPreviewLayer - Scaled composite from %lux%lu to %dx%d",

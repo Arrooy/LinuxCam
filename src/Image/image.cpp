@@ -7,11 +7,13 @@
 #include <iostream>
 #include <unistd.h>
 #include <vector>
+#include <string>
 
 #include "LinuxFace/Image/alpha_blender.h"
 #include "LinuxFace/Image/image_processor.h"
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/Image/pixel_converter.h"
+#include "LinuxFace/profiler.h"
 
 using namespace linuxface;
 
@@ -309,6 +311,22 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
                              unsigned char pixelSize, unsigned char* dstData, unsigned long dstWidth,
                              unsigned long dstHeight, ScalingAlgorithm algorithm)
 {
+    // Prepare a human readable timer name and start profiler
+    std::string algName;
+    switch (algorithm)
+    {
+        case ScalingAlgorithm::LANCZOS: algName = "LANCZOS"; break;
+        case ScalingAlgorithm::BILINEAR: algName = "BILINEAR"; break;
+        case ScalingAlgorithm::AREA_AVERAGING: algName = "AREA_AVERAGING"; break;
+        case ScalingAlgorithm::FAST_BOX: algName = "FAST_BOX"; break;
+        case ScalingAlgorithm::BICUBIC: algName = "BICUBIC"; break;
+        default: algName = "UNKNOWN"; break;
+    }
+
+    const std::string timerName = algName + ":" + std::to_string(srcWidth) + "x" + std::to_string(srcHeight)
+                                  + "->" + std::to_string(dstWidth) + "x" + std::to_string(dstHeight);
+    Profiler::getInstance().start("Image", timerName);
+
     // Use non-const T for both src and dst to match template requirements
     const image_utils::ImageView<unsigned char> srcView{const_cast<unsigned char*>(srcData), srcWidth, srcHeight,
                                                         pixelSize};
@@ -334,6 +352,7 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
             common::logError("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
             break;
     }
+    Profiler::getInstance().stop("Image", timerName);
 }
 
 // In-place scaling methods
@@ -1248,25 +1267,83 @@ void Image::toGrayscale()
     info.format = ImageFormat::GRAYSCALE;
 }
 
-void Image::flipHorizontal()
+void Image::flipHorizontalInPlace()
 {
-    if (!data_ || info.width == 0 || info.height == 0)
+    if (!data_ || info.width <= 1 || info.height == 0)
     {
         return;
     }
-    unsigned char* d = data_.get();
-    for (unsigned long y = 0; y < info.height; ++y)
+
+    unsigned char* data = data_.get();
+    const size_t rowBytes = info.width * info.pixelSizeBytes;
+
+    // Process each row and swap pixels in-place. Reversing raw bytes
+    // corrupts multi-byte pixels (e.g. RGB/RGBA) by mixing channels across
+    // pixel boundaries. We must swap pixel blocks of size info.pixelSizeBytes.
+    const size_t pxSize = static_cast<size_t>(info.pixelSizeBytes);
+    // Fast-paths for common pixel sizes
+    if (pxSize == 1)
     {
-        for (unsigned long x = 0; x < info.width / 2; ++x)
+        // Single-byte pixels: reverse the row bytes
+        for (size_t y = 0; y < info.height; ++y)
         {
-            const unsigned long idx1 = (y * info.width + x) * info.pixelSizeBytes;
-            const unsigned long idx2 = (y * info.width + (info.width - 1 - x)) * info.pixelSizeBytes;
-            for (unsigned char c = 0; c < info.pixelSizeBytes; ++c)
+            unsigned char* row = data + y * rowBytes;
+            std::reverse(row, row + rowBytes);
+        }
+        return;
+    }
+
+    if (pxSize == 2)
+    {
+        // 2-byte pixels: treat as uint16_t array
+        for (size_t y = 0; y < info.height; ++y)
+        {
+            uint16_t* row16 = reinterpret_cast<uint16_t*>(data + y * rowBytes);
+            std::reverse(row16, row16 + info.width);
+        }
+        return;
+    }
+
+    if (pxSize == 4)
+    {
+        // 4-byte pixels: treat as uint32_t array for fastest swaps
+        for (size_t y = 0; y < info.height; ++y)
+        {
+            uint32_t* row32 = reinterpret_cast<uint32_t*>(data + y * rowBytes);
+            std::reverse(row32, row32 + info.width);
+        }
+        return;
+    }
+
+    // Fallback: per-pixel memcpy swap. Keep a small stack buffer for small pixel sizes
+    const size_t STACK_TMP = 64;
+    for (size_t y = 0; y < info.height; ++y)
+    {
+        unsigned char* row = data + y * rowBytes;
+        size_t left = 0;
+        size_t right = info.width - 1;
+        while (left < right)
+        {
+            unsigned char* pL = row + left * pxSize;
+            unsigned char* pR = row + right * pxSize;
+
+            if (pxSize <= STACK_TMP)
             {
-                const unsigned char tmp = d[idx1 + c];
-                d[idx1 + c] = d[idx2 + c];
-                d[idx2 + c] = tmp;
+                unsigned char tmp[STACK_TMP];
+                std::memcpy(tmp, pL, pxSize);
+                std::memcpy(pL, pR, pxSize);
+                std::memcpy(pR, tmp, pxSize);
             }
+            else
+            {
+                std::vector<unsigned char> tmp(pxSize);
+                std::memcpy(tmp.data(), pL, pxSize);
+                std::memcpy(pL, pR, pxSize);
+                std::memcpy(pR, tmp.data(), pxSize);
+            }
+
+            ++left;
+            --right;
         }
     }
 }

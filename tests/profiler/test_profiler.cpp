@@ -602,3 +602,38 @@ TEST_F(ProfilerTest, GetStatisticsBySource)
     EXPECT_TRUE(stats.find("Timer2") != stats.end());
     EXPECT_TRUE(stats.find("Timer3") == stats.end()); // Should not include other sources
 }
+
+TEST_F(ProfilerTest, ColorRangeConfiguration)
+{
+    Profiler& profiler = Profiler::getInstance();
+    profiler.reset();
+    
+    const std::string timerKey = "TestSource::Timer1";
+    const auto greenThreshold = std::chrono::microseconds(5000);  // 5ms
+    const auto redThreshold = std::chrono::microseconds(20000);   // 20ms
+    
+    // Set custom color range
+    profiler.setColorRange(timerKey, greenThreshold, redThreshold);
+    
+    // Get color range back
+    auto colorRange = profiler.getColorRange(timerKey);
+    EXPECT_EQ(colorRange.greenThreshold, greenThreshold);
+    EXPECT_EQ(colorRange.redThreshold, redThreshold);
+    
+    // Test with source name and timer name separately
+    profiler.setColorRange("TestSource", "Timer2", greenThreshold * 2, redThreshold * 2);
+    auto colorRange2 = profiler.getColorRange("TestSource::Timer2");
+    EXPECT_EQ(colorRange2.greenThreshold, greenThreshold * 2);
+    EXPECT_EQ(colorRange2.redThreshold, redThreshold * 2);
+    
+    // Test default color range for unconfigured timer
+    auto defaultRange = profiler.getColorRange("NonExistent::Timer");
+    EXPECT_EQ(defaultRange.greenThreshold, std::chrono::microseconds(10000));  // Default 10ms
+    EXPECT_EQ(defaultRange.redThreshold, std::chrono::microseconds(40000));    // Default 40ms
+    
+    // Test reset color ranges
+    profiler.resetColorRanges();
+    auto resetRange = profiler.getColorRange(timerKey);
+    EXPECT_EQ(resetRange.greenThreshold, std::chrono::microseconds(10000));    // Should be default
+    EXPECT_EQ(resetRange.redThreshold, std::chrono::microseconds(40000));      // Should be default
+}

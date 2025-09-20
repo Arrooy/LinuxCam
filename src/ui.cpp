@@ -13,6 +13,7 @@
 using namespace linuxface;
 
 ImVec4 getProfileColorFromDuration(int64_t duration);
+ImVec4 getProfileColorFromDurationWithRange(int64_t duration, const Profiler::ColorRange& range);
 
 UI::UI(std::shared_ptr<LayerManager> layerManager) : layerManager_(std::move(layerManager))
 {
@@ -277,7 +278,7 @@ void UI::paintMainWindow()
         // Set intelligent default size based on content and screen size
         const ImGuiIO& io = ImGui::GetIO();
         const float defaultWidth = std::min(800.0f, io.DisplaySize.x * 0.8f);
-        const float defaultHeight = std::min(600.0f, io.DisplaySize.y * 0.8f);
+        const float defaultHeight = std::min(500.0f, io.DisplaySize.y * 0.8f);
         ImGui::SetNextWindowSize(ImVec2(defaultWidth, defaultHeight), ImGuiCond_FirstUseEver);
 
         if (ImGui::Begin("Profiler", &show_profiler_, ImGuiWindowFlags_None))
@@ -286,7 +287,8 @@ void UI::paintMainWindow()
             const auto frameDuration = 1.0f / io.Framerate;
             const auto frameDurationMicros =
                 static_cast<int64_t>(frameDuration * 1000000.0f); // Convert to microseconds
-            ImGui::TextColored(getProfileColorFromDuration(frameDurationMicros),
+            Profiler::ColorRange fpsRange(std::chrono::microseconds(16000), std::chrono::microseconds(25000));
+            ImGui::TextColored(getProfileColorFromDurationWithRange(frameDurationMicros, fpsRange),
                                "Application average %.3f ms/frame (%.1f FPS)", frameDuration * 1000.0f, io.Framerate);
 
             // Add reset button
@@ -301,7 +303,8 @@ void UI::paintMainWindow()
             {
                 ImGui::SetTooltip("All statistics use a moving window (last 150 samples).\n"
                                   "Min/Max values reflect the range within this window,\n"
-                                  "not all-time values. Reset clears all collected data.");
+                                  "not all-time values. Reset clears all collected data.\n"
+                                  "Color ranges define green/red thresholds for visual feedback.");
             }
 
             ImGui::Separator();
@@ -319,15 +322,17 @@ void UI::paintMainWindow()
             }
 
             std::sort(sortedStats.begin(), sortedStats.end(),
-                      [](const auto& a, const auto& b) { return a.second.current > b.second.current; });
+                      [](const auto& a, const auto& b) { return a.second.average > b.second.average; });
 
             if (!sortedStats.empty())
             {
                 // Use scrollable table with flexible columns that auto-resize to content
+                // Constrain table height to leave space for recap
+                const float tableHeight = std::min(300.0f, ImGui::GetContentRegionAvail().y - 120.0f);
                 if (ImGui::BeginTable("ProfilerStats", 4,
                                       ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable
-                                          | ImGuiTableFlags_ScrollY
-                                          | ImGuiTableFlags_SizingFixedFit)) // Auto-fit content
+                                          | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
+                                      ImVec2(0.0f, tableHeight))) // Auto-fit content
                 {
                     ImGui::TableSetupColumn("Timer", ImGuiTableColumnFlags_WidthStretch,
                                             0.0f); // Timer name gets remaining space
@@ -340,21 +345,26 @@ void UI::paintMainWindow()
                     for (const auto& pair : sortedStats)
                     {
                         const auto& stats = pair.second;
+                        const auto& timerKey = pair.first;
+
+                        // Get custom color range for this timer
+                        const auto colorRange = Profiler::getInstance().getColorRange(timerKey);
+
                         ImGui::TableNextRow();
 
                         // Timer name
                         ImGui::TableSetColumnIndex(0);
-                        ImGui::Text("%s", pair.first.c_str());
+                        ImGui::Text("%s", timerKey.c_str());
 
-                        // Current duration
+                        // Current duration with custom color range
                         ImGui::TableSetColumnIndex(1);
-                        ImGui::TextColored(getProfileColorFromDuration(stats.current.count()), "%s",
-                                           Profiler::formatDuration(stats.current).c_str());
+                        ImGui::TextColored(getProfileColorFromDurationWithRange(stats.current.count(), colorRange),
+                                           "%s", Profiler::formatDuration(stats.current).c_str());
 
-                        // Average duration
+                        // Average duration with custom color range
                         ImGui::TableSetColumnIndex(2);
-                        ImGui::TextColored(getProfileColorFromDuration(stats.average.count()), "%s",
-                                           Profiler::formatDuration(stats.average).c_str());
+                        ImGui::TextColored(getProfileColorFromDurationWithRange(stats.average.count(), colorRange),
+                                           "%s", Profiler::formatDuration(stats.average).c_str());
 
                         // Min/Max range (from moving window)
                         ImGui::TableSetColumnIndex(3);
@@ -394,6 +404,117 @@ void UI::paintMainWindow()
             {
                 ImGui::Text("No profiling data available");
             }
+            if (ImGui::CollapsingHeader("Profiler Coloring"))
+            {
+                static char sourceBuffer[128] = "";
+                static char nameBuffer[128] = "";
+                static float manualGreenMs = 10.0f;
+                static float manualRedMs = 40.0f;
+                static int selectedExistingTimer = -1;
+
+                // Get current statistics for dropdown
+                auto currentStats = Profiler::getInstance().getAllTimerStatistics();
+
+                // Create list of existing timer keys
+                std::vector<std::string> existingKeys;
+                existingKeys.reserve(currentStats.size());
+                for (const auto& pair : currentStats)
+                {
+                    existingKeys.push_back(pair.first);
+                }
+
+                // Sort keys alphabetically for better UX
+                std::sort(existingKeys.begin(), existingKeys.end());
+
+                // Dropdown for existing timers
+                if (!existingKeys.empty())
+                {
+                    ImGui::Text("Select from existing timers:");
+                    // ImGui::PushItemWidth(300);
+
+                    // Create array of const char* for ImGui::Combo
+                    std::vector<const char*> keysCStr;
+                    keysCStr.reserve(existingKeys.size());
+                    for (const auto& key : existingKeys)
+                    {
+                        keysCStr.push_back(key.c_str());
+                    }
+
+                    if (ImGui::Combo("##ExistingTimers", &selectedExistingTimer, keysCStr.data(),
+                                     static_cast<int>(keysCStr.size())))
+                    {
+                        // Timer selected from dropdown - load its current configuration
+                        if (selectedExistingTimer >= 0 && selectedExistingTimer < static_cast<int>(existingKeys.size()))
+                        {
+                            const std::string& selectedKey = existingKeys[selectedExistingTimer];
+                            auto colorRange = Profiler::getInstance().getColorRange(selectedKey);
+
+                            // Update manual configuration with selected timer's values
+                            manualGreenMs = colorRange.greenThreshold.count() / 1000.0f;
+                            manualRedMs = colorRange.redThreshold.count() / 1000.0f;
+
+                            // Parse the key to populate source/name fields
+                            size_t separatorPos = selectedKey.find("::");
+                            if (separatorPos != std::string::npos)
+                            {
+                                std::string source = selectedKey.substr(0, separatorPos);
+                                std::string name = selectedKey.substr(separatorPos + 2);
+
+                                strncpy(sourceBuffer, source.c_str(), sizeof(sourceBuffer) - 1);
+                                sourceBuffer[sizeof(sourceBuffer) - 1] = '\0';
+                                strncpy(nameBuffer, name.c_str(), sizeof(nameBuffer) - 1);
+                                nameBuffer[sizeof(nameBuffer) - 1] = '\0';
+                            }
+                        }
+                    }
+                    // ImGui::PopItemWidth();
+                }
+                if (selectedExistingTimer >= 0 && selectedExistingTimer < static_cast<int>(existingKeys.size()))
+                {
+                    ImGui::Spacing();
+
+                    // Color range inputs
+                    // ImGui::PushItemWidth(120);
+                    ImGui::InputFloat("Green Threshold (ms)", &manualGreenMs, 0.1f, 1.0f, "%.1f");
+                    ImGui::InputFloat("Red Threshold (ms)", &manualRedMs, 0.1f, 1.0f, "%.1f");
+                    // ImGui::PopItemWidth();
+
+                    ImGui::Spacing();
+                    if (ImGui::Button("Reset Color Ranges"))
+                    {
+                        Profiler::getInstance().resetColorRanges();
+                    }
+                    ImGui::SameLine();
+
+                    static float confirmationTimer = 0.0f;
+
+                    if (ImGui::Button("Apply Configuration"))
+                    {
+                        // Validate inputs
+                        manualGreenMs = std::max(0.1f, manualGreenMs);
+                        manualRedMs = std::max(manualGreenMs + 0.1f, manualRedMs);
+
+                        std::string timerKey = std::string(sourceBuffer) + "::" + std::string(nameBuffer);
+
+
+                        if (!timerKey.empty() && timerKey != "::")
+                        {
+                            auto greenMicros = std::chrono::microseconds(static_cast<int64_t>(manualGreenMs * 1000));
+                            auto redMicros = std::chrono::microseconds(static_cast<int64_t>(manualRedMs * 1000));
+
+                            Profiler::getInstance().setColorRange(sourceBuffer, nameBuffer, greenMicros, redMicros);
+                            confirmationTimer = ImGui::GetTime() + 2.0f; // Show confirmation for 2 seconds
+                        }
+                    }
+
+                    // Show timed confirmation message
+                    if (ImGui::GetTime() < confirmationTimer)
+                    {
+                        ImGui::SameLine();
+                        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Applied!");
+                    }
+                }
+            }
         }
         ImGui::End();
     }
@@ -403,7 +524,6 @@ void UI::paintMainWindow()
     {
         paintDeviceConfigurationTabs();
     }
-
 
 
     if (mediaBrowserUI_ && mediaBrowserVisible_)
@@ -491,7 +611,6 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
 
 void UI::paintDeviceConfigurationTabs()
 {
-
     ImGui::SetNextWindowPos(ImVec2(0, ImGui::GetFrameHeight()), ImGuiCond_FirstUseEver);
 
     // Calculate available space
@@ -584,25 +703,25 @@ void UI::handleKeyboard()
     }
 }
 
-// Converts an int64 duration (microSecs) to a color ranging from green to red
-ImVec4 getProfileColorFromDuration(int64_t duration)
+// Converts an int64 duration (microSecs) to a color ranging from green to red using custom thresholds
+ImVec4 getProfileColorFromDurationWithRange(int64_t duration, const Profiler::ColorRange& range)
 {
-    constexpr int64_t GreenThreshold = 10000; // 10ms
-    constexpr int64_t RedThreshold = 40000;   // 40ms
+    const int64_t greenThreshold = range.greenThreshold.count();
+    const int64_t redThreshold = range.redThreshold.count();
 
     // Clamp and normalize duration thresholds
     float t = NAN;
-    if (duration <= GreenThreshold)
+    if (duration <= greenThreshold)
     {
         t = 0.0f;
     }
-    else if (duration >= RedThreshold)
+    else if (duration >= redThreshold)
     {
         t = 1.0f;
     }
     else
     {
-        t = static_cast<float>(duration - GreenThreshold) / static_cast<float>(RedThreshold - GreenThreshold);
+        t = static_cast<float>(duration - greenThreshold) / static_cast<float>(redThreshold - greenThreshold);
     }
 
     // Interpolate green to red
@@ -612,6 +731,13 @@ ImVec4 getProfileColorFromDuration(int64_t duration)
     const float a = 1.0f;
 
     return {r, g, b, a};
+}
+
+// Converts an int64 duration (microSecs) to a color ranging from green to red using default thresholds
+ImVec4 getProfileColorFromDuration(int64_t duration)
+{
+    // Use default color range (10ms green, 40ms red)
+    return getProfileColorFromDurationWithRange(duration, Profiler::ColorRange());
 }
 
 // Helper function to find the topmost layer under mouse position
