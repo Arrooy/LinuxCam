@@ -134,7 +134,7 @@ Face MediaPipeFaceLandmarks::detect(const std::unique_ptr<Image>& image, const F
     auto templatePoints = image_utils::TEMPLATE_192_ALT;
     if (width_ == 256)
     {
-        templatePoints = image_utils::TEMPLATE_256;
+        templatePoints = image_utils::TEMPLATE_256_OPTIMIZED;
     }
     else if (width_ != 192)
     {
@@ -166,7 +166,7 @@ Face MediaPipeFaceLandmarks::detect(const std::unique_ptr<Image>& image, const F
         common::logError("Failed to wrap face image for MediaPipe landmarks detection");
         return face;
     }
-    aligned_image->saveToDisk("aligned.ppm");
+
     auto result = detectAligned(aligned_image);
     if (result.score <= 0.5)
     {

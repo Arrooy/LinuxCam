@@ -5,9 +5,9 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
+#include <string>
 #include <unistd.h>
 #include <vector>
-#include <string>
 
 #include "LinuxFace/Image/alpha_blender.h"
 #include "LinuxFace/Image/image_processor.h"
@@ -315,16 +315,28 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
     std::string algName;
     switch (algorithm)
     {
-        case ScalingAlgorithm::LANCZOS: algName = "LANCZOS"; break;
-        case ScalingAlgorithm::BILINEAR: algName = "BILINEAR"; break;
-        case ScalingAlgorithm::AREA_AVERAGING: algName = "AREA_AVERAGING"; break;
-        case ScalingAlgorithm::FAST_BOX: algName = "FAST_BOX"; break;
-        case ScalingAlgorithm::BICUBIC: algName = "BICUBIC"; break;
-        default: algName = "UNKNOWN"; break;
+        case ScalingAlgorithm::LANCZOS:
+            algName = "LANCZOS";
+            break;
+        case ScalingAlgorithm::BILINEAR:
+            algName = "BILINEAR";
+            break;
+        case ScalingAlgorithm::AREA_AVERAGING:
+            algName = "AREA_AVERAGING";
+            break;
+        case ScalingAlgorithm::FAST_BOX:
+            algName = "FAST_BOX";
+            break;
+        case ScalingAlgorithm::BICUBIC:
+            algName = "BICUBIC";
+            break;
+        default:
+            algName = "UNKNOWN";
+            break;
     }
 
-    const std::string timerName = algName + ":" + std::to_string(srcWidth) + "x" + std::to_string(srcHeight)
-                                  + "->" + std::to_string(dstWidth) + "x" + std::to_string(dstHeight);
+    const std::string timerName = algName + ":" + std::to_string(srcWidth) + "x" + std::to_string(srcHeight) + "->"
+                                  + std::to_string(dstWidth) + "x" + std::to_string(dstHeight);
     Profiler::getInstance().start("Image", timerName);
 
     // Use non-const T for both src and dst to match template requirements
@@ -1094,8 +1106,8 @@ std::vector<unsigned char> Image::convertToRGB() const
     const size_t srcStride = info.width * info.pixelSizeBytes;
     const size_t dstStride = info.width * 3;
 
-    image::ImageProcessor::convertImage(data_.get(), rgbData.data(), info.width, info.height, srcStride,
-                                       dstStride, srcFormat, image::PixelFormat::RGB);
+    image::ImageProcessor::convertImage(data_.get(), rgbData.data(), info.width, info.height, srcStride, dstStride,
+                                        srcFormat, image::PixelFormat::RGB);
 
     return rgbData;
 }
@@ -1135,7 +1147,7 @@ bool Image::convertToRGBAInplace()
     const size_t dstStride = info.width * 4;
 
     image::ImageProcessor::convertImage(data_.get(), newData.get(), info.width, info.height, srcStride, dstStride,
-                                       srcFormat, image::PixelFormat::RGBA);
+                                        srcFormat, image::PixelFormat::RGBA);
 
     // Update image properties
     data_ = std::move(newData);
@@ -1183,7 +1195,7 @@ bool Image::convertToRGBInplace()
     const size_t dstStride = info.width * 3;
 
     image::ImageProcessor::convertImage(data_.get(), newData.get(), info.width, info.height, srcStride, dstStride,
-                                       srcFormat, image::PixelFormat::RGB);
+                                        srcFormat, image::PixelFormat::RGB);
 
     // Update image properties
     data_ = std::move(newData);
@@ -1630,12 +1642,14 @@ void Image::copyPixelsWithBlending(const Image& src, long srcDestX, long srcDest
                 {
                     continue; // Skip completely transparent pixels
                 }
-                image::ImageProcessor::processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, srcAlpha != 255, srcAlpha);
+                image::ImageProcessor::processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat,
+                                                    srcAlpha != 255, srcAlpha);
             }
             else
             {
                 // Use centralized conversion for all other format combinations
-                image::ImageProcessor::processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, false, 255);
+                image::ImageProcessor::processPixel(&srcData[srcIdx], &dstData[dstIdx], srcFormat, dstFormat, false,
+                                                    255);
             }
         }
     }
@@ -1676,7 +1690,8 @@ void Image::copyPixelsOptimized(const Image& src, long srcX, long srcY, long dst
         const size_t srcRowStart = ((srcY + row) * src.info.width + srcX) * srcPixelSize;
         const size_t dstRowStart = ((dstY + row) * info.width + dstX) * dstPixelSize;
 
-        image::PixelConverter::convertRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, srcFormat, dstFormat);
+        image::PixelConverter::convertRow(srcData + srcRowStart, dstData + dstRowStart, copyWidth, srcFormat,
+                                          dstFormat);
     }
 }
 
@@ -1766,26 +1781,34 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
         return *this;
     }
 
-    // PERF: Only backup and copy the minimal affected region when expanding canvas.
-    // Avoid full buffer memset; only clear new regions if needed.
-    // This minimizes memory operations and improves performance for large images.
+    // Canvas expansion needed - backup original image and resize
     Image backup;
     if (!sameCanvasSize)
     {
         // Region-aware backup and copy is now correct and safe (see CRIT-002 resolution)
         backup.copyFrom(*this);
         const size_t newSize = newWidth * newHeight * info.pixelSizeBytes;
-        this->resize(newSize);
-        info.x = static_cast<unsigned long>(minX);
-        info.y = static_cast<unsigned long>(minY);
+        this->resize(newSize, false); // Don't preserve data since we're rewriting everything
+
+        // Update image info - keep position values at zero for expanded canvas
+        info.x = 0;
+        info.y = 0;
         info.width = newWidth;
         info.height = newHeight;
-        copyPixelsWithBlending(backup, baseLeft, baseTop, minX, minY, baseRight - baseLeft, baseBottom - baseTop);
+
+        // Copy original image to correct position in expanded canvas
+        const long backupDstX = baseLeft - minX;
+        const long backupDstY = baseTop - minY;
+        copyPixelsWithBlending(backup, backupDstX, backupDstY, 0, 0, info.width, info.height);
     }
-    // Copy the pasted image (other) to the correct region
-    copyPixelsWithBlending(other, otherLeft, otherTop, minX, minY, other.info.width, other.info.height);
+
+    // Copy the pasted image to correct position in expanded canvas
+    const long otherDstX = otherLeft - minX;
+    const long otherDstY = otherTop - minY;
+    copyPixelsWithBlending(other, otherDstX, otherDstY, 0, 0, info.width, info.height);
     return *this;
 }
+
 // TODO(arroyo): SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM
 // EDGE.
 std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, int outHeight, const double* invM,

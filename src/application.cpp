@@ -327,10 +327,8 @@ void Application::run()
 
 bool Application::update()
 {
-    Profiler::getInstance().start("Application", "Poll Events");
     // Poll events
     window_.pollEvents();
-    Profiler::getInstance().stop("Application", "Poll Events");
 
     Profiler::getInstance().start("Application", "Update Camera Input");
     // Update camera inputs - this now creates/updates individual layers per camera
@@ -358,16 +356,13 @@ bool Application::update()
         return false;
     }
 
-    Profiler::getInstance().start("Application", "Calculate Composite Bounds");
     float minX, minY, maxX, maxY;
     calculateCompositeBounds(layers, windowWidth, windowHeight, minX, minY, maxX, maxY);
     unsigned int compositeWidth = (minX < maxX) ? static_cast<unsigned int>(maxX - minX) : windowWidth;
     unsigned int compositeHeight = (minY < maxY) ? static_cast<unsigned int>(maxY - minY) : windowHeight;
     compositeWidth = std::min(compositeWidth, static_cast<unsigned int>(windowWidth));
     compositeHeight = std::min(compositeHeight, static_cast<unsigned int>(windowHeight));
-    Profiler::getInstance().stop("Application", "Calculate Composite Bounds");
 
-    Profiler::getInstance().start("Application", "Create Composite Image");
     std::unique_ptr<Image> compositeImage;
     bool compositeValid = createCompositeImage(compositeImage, layers, minX, minY, compositeWidth, compositeHeight);
 
@@ -376,11 +371,10 @@ bool Application::update()
         common::logInfo("Composite image is not valid.");
         return false;
     }
-    Profiler::getInstance().stop("Application", "Create Composite Image");
 
-    Profiler::getInstance().start("Application", "Process Image");
+    Profiler::getInstance().start("Application", "Image processing");
     process(compositeImage);
-    Profiler::getInstance().stop("Application", "Process Image");
+    Profiler::getInstance().stop("Application", "Image processing");
 
     // Flip horizontally the composite image
     // compositeImage->flipHorizontalInPlace();
@@ -403,42 +397,31 @@ bool Application::update()
 
 void Application::render()
 {
-    Profiler::getInstance().start("Application", "Set Viewport");
+    Profiler::getInstance().start("Application", "Render");
     // Set viewport
     window_.setViewport();
-    Profiler::getInstance().stop("Application", "Set Viewport");
-
-    Profiler::getInstance().start("Application", "Clear Screen");
+ 
     // Clear screen
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    Profiler::getInstance().stop("Application", "Clear Screen");
-
-    Profiler::getInstance().start("Application", "Render Layers");
+ 
     // Render all layers
     int width = 0;
     int height = 0;
     window_.getFramebufferSize(width, height);
     imageRender_->renderLayers(layerManager_->getLayers(), width, height);
-    Profiler::getInstance().stop("Application", "Render Layers");
-
-    Profiler::getInstance().start("Application", "Render UI");
     // Render UI
     ui_->render();
-    Profiler::getInstance().stop("Application", "Render UI");
 
-    Profiler::getInstance().start("Application", "Swap Buffers");
     // Swap buffers
     window_.swapBuffers();
-    Profiler::getInstance().stop("Application", "Swap Buffers");
+    Profiler::getInstance().stop("Application", "Render");
 }
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-    Profiler::getInstance().start("Process", "Deep Copy Raw Image");
     auto raw = image->deepCopy();
-    Profiler::getInstance().stop("Process", "Deep Copy Raw Image");
-
+ 
     std::vector<Face> dlibFaces;
     if (faceDetector_ != nullptr)
     {
@@ -494,6 +477,7 @@ void Application::process(std::unique_ptr<Image>& image)
     //         face.paintBoundingBox(image, Pixel(255, 0, 0));
     //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
     //     }
+
     // if (!scrfdFaces.empty())
     // {
     //     if (mediaPipeLandmarks_ && mediaPipeLandmarks_->isReady())
@@ -501,19 +485,10 @@ void Application::process(std::unique_ptr<Image>& image)
     //         auto resultFace = mediaPipeLandmarks_->detect(raw, scrfdFaces[0]);
     //         if (resultFace.isValid())
     //         {
-    //             resultFace.paintAllFaceLandmarks(image, false, Pixel(0, 255, 0), 1.0f);
+    //             resultFace.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.0f);
     //         }
     //     }
     // }
-
-    // Delegate MediaPipe face landmark processing to a helper allowing model and color parameterization
-    if (!scrfdFaces.empty())
-    {
-
-        Profiler::getInstance().start("Process", "MediaPipe Landmarks (Old)");
-        processMediaPipeLandmarks(mediaPipeLandmarksOld_, raw, image, scrfdFaces, Pixel(200, 0, 155));
-        Profiler::getInstance().stop("Process", "MediaPipe Landmarks (Old)");
-    }
 
     //     // 1. Draw five-point landmarks used for alignment on the original image
     //     auto five_pts_2d = scrfd_faces[0].getFivePointLandmarksArcFaceOrder2D();
@@ -711,11 +686,11 @@ void Application::process(std::unique_ptr<Image>& image)
     // }
 
 
-    // bool swap_success = false;
-    // if (swapPipeline_ && target_img_)
-    // {
-    //     swap_success = swapPipeline_->run(image, target_img_, scrfdFaces);
-    // }
+    bool swap_success = false;
+    if (swapPipeline_ && target_img_)
+    {
+        swap_success = swapPipeline_->run(image, target_img_, scrfdFaces);
+    }
 
     // if (rvmDetector_ && rvmDetector_->isReady())
     // {
@@ -883,120 +858,4 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
         }
     }
     return compositeValid;
-}
-
-bool Application::processMediaPipeLandmarks(std::shared_ptr<MediaPipeFaceLandmarks> landmarks,
-                                            std::unique_ptr<Image>& raw, std::unique_ptr<Image>& image,
-                                            const std::vector<Face>& scrfdFaces, const Pixel& color)
-{
-    if (!landmarks || !landmarks->isReady() || scrfdFaces.empty())
-    {
-        return false;
-    }
-
-    // 1. Draw five-point landmarks used for alignment on the original image
-    auto five_pts_2d = scrfdFaces[0].getFivePointLandmarksArcFaceOrder2D();
-
-    // 2. Get MediaPipe model's expected input dimensions
-    int modelWidth = landmarks->getInputWidth();
-
-    // 3. Choose the appropriate template based on model dimensions
-    auto templatePoints = image_utils::TEMPLATE_192_ALT;
-    if (modelWidth == 256)
-    {
-        templatePoints = image_utils::TEMPLATE_256;
-    }
-    else if (modelWidth != 192)
-    {
-        // For other sizes, scale the 192 template
-        double localTemplate[5][2];
-        double scaleFactor = static_cast<double>(modelWidth) / 192.0;
-        for (int i = 0; i < 5; ++i)
-        {
-            localTemplate[i][0] = image_utils::TEMPLATE_192_ALT[i][0] * scaleFactor;
-            localTemplate[i][1] = image_utils::TEMPLATE_192_ALT[i][1] * scaleFactor;
-        }
-        templatePoints = localTemplate;
-        common::logWarn("Using scaled template for model size %d, consider adding a dedicated template", modelWidth);
-    }
-
-    // 4. Affine align using model's expected dimensions
-    auto [aligned_image, affine] =
-        image_utils::similarityFaceTransform(*raw, five_pts_2d, templatePoints, modelWidth, true);
-
-    if (!aligned_image)
-    {
-        linuxface::common::logError("Failed to wrap face image for MediaPipe landmarks detection");
-        return false;
-    }
-    if(modelWidth == 192)
-    {
-        aligned_image->saveToDisk("aligned_192.ppm");
-    }else if(modelWidth == 256)
-    {
-        aligned_image->saveToDisk("aligned_256.ppm");
-    }
-    auto result = landmarks->detectAligned(aligned_image);
-
-    if (result.score <= 0.5)
-    {
-        linuxface::common::logWarn("MediaPipe landmarks detection score too low: %f", result.score);
-        return false;
-    }
-
-    // 5. Map landmarks back to original image
-    double invM[6];
-    if (!math_utils::invertAffine(affine.data(), invM))
-    {
-        linuxface::common::logError("Failed to invert affine for MediaPipe unalignment");
-        return false;
-    }
-
-    // NOTE: aligned_image width/height usage was commented out in original code; keep legacy behaviour
-    double w = 1; // aligned_image->info.width;
-    double h = 1; // aligned_image->info.height;
-    if (modelWidth == 192)
-    {
-        w = aligned_image->info.width;
-        h = aligned_image->info.height;
-    }
-
-    std::vector<std::pair<double, double>> aligned_pts;
-    std::vector<float> aligned_z;
-    for (const auto& landmark : result.landmarks)
-    {
-        aligned_pts.emplace_back(landmark[0] * w, landmark[1] * h);
-        aligned_z.push_back(landmark[2]);
-    }
-    auto unaligned_pts = image_utils::transformPointsAffine(aligned_pts, invM);
-    for (size_t i = 0; i < unaligned_pts.size(); ++i)
-    {
-        double x = static_cast<double>(unaligned_pts[i].first);
-        double y = static_cast<double>(unaligned_pts[i].second);
-        float z = aligned_z[i];
-        if (x < 0 || x >= image->info.width || y < 0 || y >= image->info.height)
-        {
-            continue;
-        }
-        if (i == 1 && modelWidth == 256)
-        {
-            // Draw the landmark coordinates for index 1 as a test
-            std::ostringstream ss;
-            ss << "(" << static_cast<int>(std::round(x)) << "," << static_cast<int>(std::round(y)) << ","
-               << static_cast<int>(std::round(z)) << ")";
-            const std::string coordText = ss.str();
-            // drawTextWithBackground(Image&, x, y, text, textColor, bgColor, scale, center, padding)
-            linuxface::TextRenderer::drawTextWithBackground(*image, static_cast<int>(x) + 10, static_cast<int>(y) + 10,
-                                                            coordText, Pixel(255, 255, 255), Pixel(0, 0, 0), 2, false,
-                                                            0);
-        }
-        image->ppx(x, y, color);
-    }
-
-    // Mark layers dirty so textures get updated
-    if (layerManager_)
-    {
-        layerManager_->markDirty();
-    }
-    return true;
 }

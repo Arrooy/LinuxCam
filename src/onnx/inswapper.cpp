@@ -55,7 +55,7 @@ bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<m
         common::logError(("InSwapper: Invalid landmark count. Expected 5, got " + std::to_string(dstLandmarks.size())).c_str());
         return false;
     }
-
+    // TODO: test with similarity face transform
     const int targetSize = InputWidth;
     auto [aligned, affine] =
         image_utils::affineFaceTransform(dstFace, dstLandmarks, image_utils::TEMPLATE_128, targetSize);

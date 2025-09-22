@@ -26,11 +26,11 @@ SwapPipeline::SwapPipeline(std::shared_ptr<InSwapper> inswapper, std::shared_ptr
 
 bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& targetImg, std::vector<Face> srcFaces)
 {
-    Profiler::getInstance().start("SwapPipeline", "run");
     if (!inswapper_ || !inswapper_->isReady() || !targetImg || !arcface_ || !arcface_->isReady() || !scrfd_ || !image)
     {
         return false;
     }
+    Profiler::getInstance().start("SwapPipeline", "run");
 
     if (!target_img_embedding_ready_ && !prepareTargetEmbedding(targetImg))
     {
@@ -135,7 +135,7 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
     }
 
     Profiler::getInstance().start("SwapPipeline", "Affine Warp and Crop face");
-
+    // TODO: This logic is already implemented by image_utils::similarityFaceTransform, refactor to reuse code
     std::array<double, kLandmarkCount * 2> srcPoints{};
     std::array<double, kLandmarkCount * 2> dstPoints{};
     for (std::size_t i = 0; i < kLandmarkCount; ++i)

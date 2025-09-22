@@ -127,6 +127,12 @@ const double TEMPLATE_256[5][2] = {
     {0.61507734, 0.72034453}   // right mouth corner
 };
 
+const double TEMPLATE_256_OPTIMIZED[5][2] = {
+    // Optimized coordinates that match face structure better
+    {0.35, 0.38}, {0.65, 0.38}, {0.50, 0.48}, 
+    {0.38, 0.58}, {0.62, 0.58}
+};
+
 const double TEMPLATE_512[5][2] = {
     {0.37691676, 0.46864664},
     {0.62285697, 0.46912813},
