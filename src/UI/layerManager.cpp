@@ -12,6 +12,20 @@ void LayerManager::addLayer(const Layer& layer)
     layers_.push_back(layer);
 }
 
+Layer LayerManager::addImageLayer(const std::string& name, std::unique_ptr<Image> image, float x, float y)
+{
+    Layer layer;
+    layer.type = LayerType::IMAGE;
+    layer.name = name;
+    layer.id = Layer::getNextId();
+    layer.x = x;
+    layer.y = y;
+    layer.img = std::move(std::shared_ptr<Image>(image.release()));
+    layer.dirty = true;
+    addLayer(layer);
+    return layer;
+}
+
 void LayerManager::removeLayer(size_t layerId)
 {
     layers_.erase(std::remove_if(layers_.begin(), layers_.end(), [layerId](const Layer& l) { return l.id == layerId; }),

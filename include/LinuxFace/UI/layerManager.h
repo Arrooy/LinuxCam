@@ -323,6 +323,7 @@ class LayerManager
 
     // Layer management
     void addLayer(const Layer& layer);
+    Layer addImageLayer(const std::string& name, std::unique_ptr<Image> image, float x = 0.0f, float y = 0.0f);
     void removeLayer(size_t layerId);
     void clearLayers();
     std::vector<Layer>& getLayers();

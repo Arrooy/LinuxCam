@@ -58,7 +58,8 @@ bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<m
     // TODO: test with similarity face transform
     const int targetSize = InputWidth;
     auto [aligned, affine] =
-        image_utils::affineFaceTransform(dstFace, dstLandmarks, image_utils::TEMPLATE_128, targetSize);
+        image_utils::similarityFaceTransform(dstFace, dstLandmarks, image_utils::TEMPLATE_128, targetSize);
+
     if (!aligned)
     {
         return false;

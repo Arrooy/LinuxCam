@@ -254,7 +254,8 @@ bool Application::initialize()
 
     Profiler::getInstance().start("Initialization", "Target Image Loading");
     // Load target faceswap image once
-    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
+    // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
+    const std::string targetPath = "/home/arroyo/Downloads/albert.jpeg";
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
@@ -431,17 +432,12 @@ void Application::process(std::unique_ptr<Image>& image)
     std::vector<Face> scrfdFaces;
     if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
     {
-        Profiler::getInstance().start("Process", "SCRFD Face Detection");
         scrfdFaces = scrfdDetector_->detect(image);
-        Profiler::getInstance().stop("Process", "SCRFD Face Detection");
-
-        Profiler::getInstance().start("Process", "Paint Face Bounding Boxes");
-        for (const auto& face : scrfdFaces)
-        {
-            face.paintBoundingBox(image, Pixel(0, 200, 200));
-            face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
-        }
-        Profiler::getInstance().stop("Process", "Paint Face Bounding Boxes");
+        // for (const auto& face : scrfdFaces)
+        // {
+        //     face.paintBoundingBox(image, Pixel(0, 200, 200));
+        //     face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
+        // }
     }
 
 

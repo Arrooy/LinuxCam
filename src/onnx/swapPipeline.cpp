@@ -147,7 +147,7 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
     }
 
     std::array<double, 6> affineM;
-    math_utils::estimateAffine2d(srcPoints.data(), dstPoints.data(), static_cast<int>(kLandmarkCount), affineM.data());
+    math_utils::estimateSimilarity2d(srcPoints.data(), dstPoints.data(), static_cast<int>(kLandmarkCount), affineM.data());
     std::unique_ptr<Image> warpedSwappedFace =
         swappedFace.affineWarpBilinear(affineM.data(), image->info.width, image->info.height);
     if (!warpedSwappedFace)

@@ -440,40 +440,13 @@ void CameraManager::updateOutputPreviewLayer(const Image& compositeImage)
         }
     }
 
-    // Get desired preview dimensions
-    unsigned int targetWidth = previewLayer->img->info.width;
-    unsigned int targetHeight = previewLayer->img->info.height;
-
-    std::unique_ptr<Image> finalImage;
-
-    // Check if the composite image is already the right size (preprocessed case)
-    if (compositeImage.info.width == targetWidth && compositeImage.info.height == targetHeight)
+    // Update the preview layer with the composite image
+    previewLayer->img = std::shared_ptr<Image>(compositeImage.deepCopy());
+    previewLayer->dirty = true;
+    // Preserve the layer name
+    if (previewLayer->img)
     {
-        // Use the image as-is, just copy it
-        finalImage = compositeImage.deepCopy(); // TODO: Too much deep copy in this file.
-    }
-    else
-    {
-        // Scale the composite image to fit the preview dimensions
-        finalImage = compositeImage.scaleTo(targetWidth, targetHeight, ScalingAlgorithm::FAST_BOX);
-        if (finalImage)
-        {
-            common::logInfo("CameraManager::updateOutputPreviewLayer - Scaled composite from %lux%lu to %dx%d",
-                            compositeImage.info.width, compositeImage.info.height, finalImage->info.width,
-                            finalImage->info.height);
-        }
-    }
-
-    if (finalImage)
-    {
-        // Update the preview layer with the final image
-        previewLayer->img = std::shared_ptr<Image>(finalImage.release());
-        previewLayer->dirty = true;
-        // Preserve the layer name
-        if (previewLayer->img)
-        {
-            previewLayer->img->info.layer = previewLayer->id;
-            previewLayer->img->info.filename = "Output Preview";
-        }
+        previewLayer->img->info.layer = previewLayer->id;
+        previewLayer->img->info.filename = "Output Preview";
     }
 }
