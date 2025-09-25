@@ -121,7 +121,7 @@ TEST_F(InSwapperUnitTest, BasicSwapOperation)
     auto test_landmarks = createTestLandmarks();
 
     Image output_image;
-    const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
+    const auto [swap_result, affine] = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
 
     // Basic swap should succeed
     EXPECT_TRUE(swap_result);
@@ -145,7 +145,7 @@ TEST_F(InSwapperUnitTest, InvalidEmbeddingSize)
     std::vector<float> empty_embedding;
     Image output_image;
 
-    const bool swap_result = inswapper_->swap(empty_embedding, test_landmarks, *test_image, output_image);
+    const auto [swap_result, affine] = inswapper_->swap(empty_embedding, test_landmarks, *test_image, output_image);
     // The current implementation may or may not handle this gracefully
     EXPECT_TRUE(swap_result || !swap_result); // Accept both outcomes for now
 }
@@ -161,7 +161,7 @@ TEST_F(InSwapperUnitTest, InvalidLandmarkCount)
     std::vector<math_utils::Point<>> wrong_landmarks(3); // Should be 5
     Image output_image;
 
-    const bool swap_result = inswapper_->swap(test_embedding, wrong_landmarks, *test_image, output_image);
+    const auto [swap_result, affine] = inswapper_->swap(test_embedding, wrong_landmarks, *test_image, output_image);
     EXPECT_FALSE(swap_result);
 }
 
@@ -186,7 +186,7 @@ TEST_F(InSwapperUnitTest, DifferentImageSizes)
         auto test_image = createTestImage(size.first, size.second);
         Image output_image;
 
-        const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
+        const auto [swap_result, affine] = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
         EXPECT_TRUE(swap_result) << "Failed for size " << size.first << "x" << size.second;
 
         if (swap_result)
@@ -208,19 +208,19 @@ TEST_F(InSwapperUnitTest, EdgeCaseImageSizes)
     // Very small image
     auto tiny_image = createTestImage(32, 32);
     Image output_image_small;
-    const bool swap_small = inswapper_->swap(test_embedding, test_landmarks, *tiny_image, output_image_small);
+    const auto [swap_small, affine_small] = inswapper_->swap(test_embedding, test_landmarks, *tiny_image, output_image_small);
     EXPECT_TRUE(swap_small);
 
     // Very wide image
     auto wide_image = createTestImage(1000, 100);
     Image output_image_wide;
-    const bool swap_wide = inswapper_->swap(test_embedding, test_landmarks, *wide_image, output_image_wide);
+    const auto [swap_wide, affine_wide] = inswapper_->swap(test_embedding, test_landmarks, *wide_image, output_image_wide);
     EXPECT_TRUE(swap_wide);
 
     // Very tall image
     auto tall_image = createTestImage(100, 1000);
     Image output_image_tall;
-    const bool swap_tall = inswapper_->swap(test_embedding, test_landmarks, *tall_image, output_image_tall);
+    const auto [swap_tall, affine_tall] = inswapper_->swap(test_embedding, test_landmarks, *tall_image, output_image_tall);
     EXPECT_TRUE(swap_tall);
 }
 
@@ -237,7 +237,7 @@ TEST_F(InSwapperUnitTest, NullImageInput)
     // Note: We can't actually pass a null pointer to the function as it takes a reference
     // Instead, we'll test with an uninitialized image which should be handled gracefully
     Image null_like_image;
-    const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, null_like_image, output_image);
+    const auto [swap_result, affine] = inswapper_->swap(test_embedding, test_landmarks, null_like_image, output_image);
     // The behavior depends on implementation - it may succeed or fail
     EXPECT_TRUE(swap_result || !swap_result); // Accept both outcomes
 }
@@ -254,7 +254,7 @@ TEST_F(InSwapperUnitTest, PerformanceBounds)
     Image output_image;
 
     auto start = std::chrono::high_resolution_clock::now();
-    const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
+    const auto [swap_result, affine] = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
     auto end = std::chrono::high_resolution_clock::now();
 
     EXPECT_TRUE(swap_result);
@@ -279,7 +279,7 @@ TEST_F(InSwapperUnitTest, MultipleConsecutiveOperations)
     for (int i = 0; i < num_operations; ++i)
     {
         auto test_image = createTestImage();
-        const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_images[i]);
+        const auto [swap_result, affine] = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_images[i]);
         EXPECT_TRUE(swap_result) << "Failed on operation " << i;
 
         if (swap_result)
@@ -301,7 +301,7 @@ TEST_F(InSwapperUnitTest, MemoryAllocationTest)
 
     // Test that output image is properly allocated
     Image output_image;
-    const bool swap_result = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
+    const auto [swap_result, affine] = inswapper_->swap(test_embedding, test_landmarks, *test_image, output_image);
 
     EXPECT_TRUE(swap_result);
     EXPECT_GT(output_image.size(), 0);

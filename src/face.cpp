@@ -279,7 +279,7 @@ void Face::paintPoseAxis(std::unique_ptr<Image>& image, float size, float /*thic
         const auto nose_point = landmarks_.at(NOSE)[0].p;
         tdx = static_cast<int>(nose_point.x);
         tdy = static_cast<int>(nose_point.y);
-    } 
+    }
     else
     {
         // Since Nose landmark is missing, use the center of the bounding box
@@ -417,4 +417,70 @@ Face::findBestMatchingFace(std::vector<Face>& detectedFaces, const math_utils::R
     }
 
     return result;
+}
+
+
+std::unique_ptr<Image> Face::createFaceMask(const std::unique_ptr<Image>& image) const
+{
+    const double faceMaskBlur = 0.6;
+    // Padding percentages: top, right, bottom, left
+    std::vector<int> faceMaskPadding = {0, 0, 0, 0};
+
+    // Create full-sized grayscale image with black background
+    ImageMetadata metadata;
+    metadata.format = linuxface::ImageFormat::GRAYSCALE;
+    metadata.pixelSizeBytes = 1;
+    metadata.width = image->info.width;
+    metadata.height = image->info.height;
+
+    auto fullMask = std::make_unique<Image>(metadata);
+    fullMask->black();
+
+    // Get face bounding box coordinates (using proper Rect interpretation)
+    const int faceLeft = static_cast<int>(std::round(boundingBox_.rect.l));
+    const int faceTop = static_cast<int>(std::round(boundingBox_.rect.t));
+    const int faceRight = static_cast<int>(std::round(boundingBox_.rect.r));
+    const int faceBottom = static_cast<int>(std::round(boundingBox_.rect.b));
+
+    const int faceWidth = faceRight - faceLeft;
+    const int faceHeight = faceBottom - faceTop;
+
+    // Calculate blur and padding values
+    const int blurAmount = static_cast<int>(faceWidth * 0.5 * faceMaskBlur);
+    const int blurArea = std::max(blurAmount / 2, 1);
+
+    const int paddingTop = std::max(blurArea, static_cast<int>(faceHeight * faceMaskPadding[0] / 100.0));
+    const int paddingRight = std::max(blurArea, static_cast<int>(faceWidth * faceMaskPadding[1] / 100.0));
+    const int paddingBottom = std::max(blurArea, static_cast<int>(faceHeight * faceMaskPadding[2] / 100.0));
+    const int paddingLeft = std::max(blurArea, static_cast<int>(faceWidth * faceMaskPadding[3] / 100.0));
+
+    // Apply padding by shrinking the mask region (padding reduces the white area)
+    const int imageWidth = static_cast<int>(image->info.width);
+    const int imageHeight = static_cast<int>(image->info.height);
+
+    // Calculate the actual mask region (face region minus padding)
+    const int maskLeft = std::max(0, std::max(faceLeft, faceLeft + paddingLeft));
+    const int maskTop = std::max(0, std::max(faceTop, faceTop + paddingTop));
+    const int maskRight = std::min(imageWidth, std::min(faceRight, faceRight - paddingRight));
+    const int maskBottom = std::min(imageHeight, std::min(faceBottom, faceBottom - paddingBottom));
+
+    // Only fill if we have a valid mask region
+    if (maskLeft < maskRight && maskTop < maskBottom)
+    {
+        // Fill the mask region with white (255)
+        for (int row = maskTop; row < maskBottom; ++row)
+        {
+            std::fill(fullMask->data() + row * imageWidth + maskLeft, fullMask->data() + row * imageWidth + maskRight,
+                      255);
+        }
+
+        // Apply blur to the mask region if needed
+        if (blurAmount > 0)
+        {
+            const math_utils::Rect<int> blurRegion(maskLeft, maskTop, maskRight, maskBottom);
+            image_utils::fastBoxBlur(*fullMask, blurRegion, blurAmount / 2);
+        }
+    }
+
+    return fullMask;
 }

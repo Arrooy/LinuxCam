@@ -31,7 +31,7 @@ class SwapPipeline
     std::vector<float> target_img_embedding_;
     std::vector<math_utils::Point<>> target_img_landmarks_;
     bool target_img_embedding_ready_ = false;
-    bool debug_{false};
+    bool debug_{true};
     std::unique_ptr<Image> debug_target_image_;
     std::unique_ptr<Image> debug_target_image_aligned_;
     std::unique_ptr<Image> crop_mask_prototype_;

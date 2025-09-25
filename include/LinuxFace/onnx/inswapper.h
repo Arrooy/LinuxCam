@@ -14,7 +14,7 @@ class InSwapper : public OnnxDetector
     ~InSwapper() = default;
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
-    bool swap(const std::vector<float>& srcEmbedding, const std::vector<math_utils::Point<>>& dstLandmarks,
+    std::pair<bool, std::array<double, 6>> swap(const std::vector<float>& srcEmbedding, const std::vector<math_utils::Point<>>& dstLandmarks,
               const Image& dstFace, Image& outImage);
 
   private:

@@ -144,7 +144,7 @@ TEST_F(InSwapperRealImageTest, BasicSwapWithRealImage)
     auto testLandmarks = createTestLandmarks(realImage->info.width, realImage->info.height);
 
     Image outputImage;
-    const bool swapResult = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
+    const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
 
     EXPECT_TRUE(swapResult);
     if (swapResult)
@@ -194,7 +194,7 @@ TEST_F(InSwapperRealImageTest, SwapWithDifferentLandmarks)
         }
 
         Image outputImage;
-        const bool swapResult = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
+        const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
 
         EXPECT_TRUE(swapResult) << "Failed swap with landmark offset: (" << offset.first << ", " << offset.second
                                 << ")";
@@ -222,7 +222,7 @@ TEST_F(InSwapperRealImageTest, PerformanceWithRealImage)
     auto start = std::chrono::high_resolution_clock::now();
 
     Image outputImage;
-    const bool swapResult = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
+    const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -250,7 +250,7 @@ TEST_F(InSwapperRealImageTest, MultipleOperationsWithRealImage)
 
     for (int i = 0; i < numOperations; ++i)
     {
-        const bool swapResult = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImages[i]);
+        const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImages[i]);
         EXPECT_TRUE(swapResult) << "Failed on operation " << i;
 
         if (swapResult)

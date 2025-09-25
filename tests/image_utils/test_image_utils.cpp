@@ -47,8 +47,7 @@ TEST(ImageUtilsAffineTransformTest, TransformPairsAffine)
 
 TEST(ImageUtilsMaskTest, CreateStaticBoxMaskBasic)
 {
-    std::vector<double> crop_size = {10, 10};
-    auto mask = createStaticBoxMask(crop_size);
+    auto mask = createStaticBoxMask(10,10);
     ASSERT_NE(mask, nullptr);
     EXPECT_EQ(mask->info.width, 10);
     EXPECT_EQ(mask->info.height, 10);
@@ -64,21 +63,63 @@ TEST(ImageUtilsMaskTest, CreateStaticBoxMaskBasic)
 
 TEST(ImageUtilsMaskTest, CreateStaticBoxMaskEdgeCases)
 {
-    std::vector<double> crop_size = {0, 0};
-    auto mask = createStaticBoxMask(crop_size);
+    auto mask = createStaticBoxMask(0,0);
     EXPECT_EQ(mask->info.width, 0);
     EXPECT_EQ(mask->info.height, 0);
 }
 
 TEST(ImageUtilsBlurTest, FastBoxBlurNoop)
 {
-    unsigned char src[4] = {255, 0, 255, 0};
-    unsigned char dst[4] = {0, 0, 0, 0};
-    fastBoxBlur(src, dst, 2, 2, 0); // radius 0
-    EXPECT_EQ(dst[0], 255);
-    EXPECT_EQ(dst[1], 0);
-    EXPECT_EQ(dst[2], 255);
-    EXPECT_EQ(dst[3], 0);
+    // Create a 2x2 grayscale image
+    auto image = std::make_unique<linuxface::Image>(4);
+    image->info.width = 2;
+    image->info.height = 2;
+    image->info.pixelSizeBytes = 1;
+    image->info.format = linuxface::ImageFormat::GRAYSCALE;
+    
+    // Set test data
+    image->data()[0] = 255;
+    image->data()[1] = 0;
+    image->data()[2] = 255;
+    image->data()[3] = 0;
+    
+    // Apply blur with radius 0 (should not change anything)
+    const linuxface::math_utils::Rect<int> region(0, 0, 2, 2);
+    fastBoxBlur(*image, region, 0);
+    
+    // Values should remain unchanged with radius 0
+    EXPECT_EQ(image->data()[0], 255);
+    EXPECT_EQ(image->data()[1], 0);
+    EXPECT_EQ(image->data()[2], 255);
+    EXPECT_EQ(image->data()[3], 0);
+}
+
+TEST(ImageUtilsBlurTest, FastBoxBlurWithRadius)
+{
+    // Create a 5x5 grayscale image with a cross pattern
+    auto image = std::make_unique<linuxface::Image>(25);
+    image->info.width = 5;
+    image->info.height = 5;
+    image->info.pixelSizeBytes = 1;
+    image->info.format = linuxface::ImageFormat::GRAYSCALE;
+    
+    // Initialize all to black
+    std::fill(image->data(), image->data() + 25, 0);
+    
+    // Create a white cross in the center
+    image->data()[2 * 5 + 1] = 255; // (1,2)
+    image->data()[2 * 5 + 2] = 255; // (2,2) center
+    image->data()[2 * 5 + 3] = 255; // (3,2)
+    image->data()[1 * 5 + 2] = 255; // (2,1)
+    image->data()[3 * 5 + 2] = 255; // (2,3)
+    
+    // Apply blur with radius 1
+    const linuxface::math_utils::Rect<int> region(0, 0, 5, 5);
+    fastBoxBlur(*image, region, 1);
+    
+    // After blur, values should be averaged - center should be less than 255
+    EXPECT_LT(image->data()[2 * 5 + 2], 255);
+    EXPECT_GT(image->data()[2 * 5 + 2], 0);
 }
 
 TEST(ImageUtilsMathTest, CubicHermiteBasic)
@@ -236,6 +277,243 @@ TEST(ImageUtilsResizeTest, BicubicScaling)
         nonzero += dst_data[i] > 0 ? 1 : 0;
     }
     EXPECT_GT(nonzero, 0);
+}
+
+TEST(ImageUtilsResizeTest, NearestNeighborScaling)
+{
+    using namespace linuxface::image_utils;
+    unsigned char src_data[4 * 4 * 3];
+    for (int i = 0; i < 4 * 4 * 3; ++i)
+    {
+        src_data[i] = (i * 11) % 256;
+    }
+    unsigned char dst_data[2 * 2 * 3] = {0};
+    ImageView<unsigned char> src{src_data, 4, 4, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 3};
+    nearestNeighborScaling<unsigned char, unsigned char>(src, dst);
+    EXPECT_EQ(dst.width, 2);
+    EXPECT_EQ(dst.height, 2);
+    int nonzero = 0;
+    for (int i = 0; i < 2 * 2 * 3; ++i)
+    {
+        nonzero += dst_data[i] > 0 ? 1 : 0;
+    }
+    EXPECT_GT(nonzero, 0);
+}
+
+TEST(ImageUtilsResizeTest, NearestNeighborScaling_DiscreteValuePreservation)
+{
+    using namespace linuxface::image_utils;
+    
+    // Create a 3x3 grayscale image with distinct discrete values 0-8
+    unsigned char src_data[3 * 3 * 1];
+    for (int i = 0; i < 9; ++i)
+    {
+        src_data[i] = static_cast<unsigned char>(i);
+    }
+    
+    // Scale to 6x6 (2x upscaling)
+    unsigned char dst_data[6 * 6 * 1] = {0};
+    ImageView<unsigned char> src{src_data, 3, 3, 1};
+    ImageView<unsigned char> dst{dst_data, 6, 6, 1};
+    
+    nearestNeighborScaling<unsigned char, unsigned char>(src, dst);
+    
+    EXPECT_EQ(dst.width, 6);
+    EXPECT_EQ(dst.height, 6);
+    
+    // Verify that only original discrete values (0-8) appear in the result
+    std::set<unsigned char> foundValues;
+    for (int i = 0; i < 6 * 6; ++i)
+    {
+        foundValues.insert(dst_data[i]);
+    }
+    
+    // Should only contain original values 0-8, no intermediate values
+    for (unsigned char val : foundValues)
+    {
+        EXPECT_LE(val, 8) << "Found unexpected value: " << static_cast<int>(val);
+    }
+    
+    // Should have preserved at least some of the original values
+    EXPECT_GE(foundValues.size(), 3) << "Too few unique values preserved";
+}
+
+TEST(ImageUtilsResizeTest, NearestNeighborScaling_LabelMaskDownscaling)
+{
+    using namespace linuxface::image_utils;
+    
+    // Create a 8x8 label mask with class labels 0, 1, 2, 3
+    unsigned char src_data[8 * 8 * 1];
+    for (int y = 0; y < 8; ++y)
+    {
+        for (int x = 0; x < 8; ++x)
+        {
+            // Create regions: top-left=0, top-right=1, bottom-left=2, bottom-right=3
+            unsigned char label = 0;
+            if (x >= 4 && y < 4) label = 1;      // top-right
+            else if (x < 4 && y >= 4) label = 2; // bottom-left
+            else if (x >= 4 && y >= 4) label = 3; // bottom-right
+            
+            src_data[y * 8 + x] = label;
+        }
+    }
+    
+    // Scale down to 4x4
+    unsigned char dst_data[4 * 4 * 1] = {0};
+    ImageView<unsigned char> src{src_data, 8, 8, 1};
+    ImageView<unsigned char> dst{dst_data, 4, 4, 1};
+    
+    nearestNeighborScaling<unsigned char, unsigned char>(src, dst);
+    
+    EXPECT_EQ(dst.width, 4);
+    EXPECT_EQ(dst.height, 4);
+    
+    // Verify that only valid class labels appear (0, 1, 2, 3)
+    std::set<unsigned char> foundLabels;
+    for (int i = 0; i < 4 * 4; ++i)
+    {
+        foundLabels.insert(dst_data[i]);
+        EXPECT_LE(dst_data[i], 3) << "Found invalid class label: " << static_cast<int>(dst_data[i]);
+    }
+    
+    // Should preserve all 4 class labels
+    EXPECT_EQ(foundLabels.size(), 4) << "Not all class labels were preserved";
+    EXPECT_TRUE(foundLabels.count(0)) << "Class label 0 missing";
+    EXPECT_TRUE(foundLabels.count(1)) << "Class label 1 missing";
+    EXPECT_TRUE(foundLabels.count(2)) << "Class label 2 missing";
+    EXPECT_TRUE(foundLabels.count(3)) << "Class label 3 missing";
+}
+
+TEST(ImageUtilsResizeTest, NearestNeighborScaling_WithNormalization)
+{
+    using namespace linuxface::image_utils;
+    
+    unsigned char src_data[4 * 4 * 3];
+    for (int i = 0; i < 4 * 4 * 3; ++i)
+    {
+        src_data[i] = static_cast<unsigned char>((i * 13) % 256);
+    }
+    unsigned char dst_data[2 * 2 * 3] = {0};
+    
+    ImageView<unsigned char> src{src_data, 4, 4, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 3};
+    
+    // Test with MINMAX normalization
+    nearestNeighborScaling<unsigned char, unsigned char, linuxface::NormalizationType::MINMAX>(src, dst);
+    
+    EXPECT_EQ(dst.width, 2);
+    EXPECT_EQ(dst.height, 2);
+    
+    // With normalization, values should be redistributed across full range
+    bool hasLow = false, hasHigh = false;
+    for (int i = 0; i < 2 * 2 * 3; ++i)
+    {
+        if (dst_data[i] < 100) hasLow = true;
+        if (dst_data[i] > 150) hasHigh = true;
+    }
+    EXPECT_TRUE(hasLow || hasHigh) << "Normalization should spread values across range";
+}
+
+TEST(ImageUtilsResizeTest, NearestNeighborScaling_ChannelHandling)
+{
+    using namespace linuxface::image_utils;
+    
+    // Test RGB to RGBA conversion (should add alpha channel)
+    unsigned char src_data[2 * 2 * 3] = {
+        255, 128, 64,   // RGB pixel 1
+        100, 200, 50,   // RGB pixel 2
+        0, 255, 128,    // RGB pixel 3
+        64, 32, 255     // RGB pixel 4
+    };
+    unsigned char dst_data[2 * 2 * 4] = {0};
+    
+    ImageView<unsigned char> src{src_data, 2, 2, 3};
+    ImageView<unsigned char> dst{dst_data, 2, 2, 4};
+    
+    nearestNeighborScaling<unsigned char, unsigned char>(src, dst);
+    
+    // Check that RGB values are preserved exactly and alpha is added
+    EXPECT_EQ(dst_data[0], 255); // R
+    EXPECT_EQ(dst_data[1], 128); // G
+    EXPECT_EQ(dst_data[2], 64);  // B
+    EXPECT_EQ(dst_data[3], 255); // A (should be max value)
+    
+    EXPECT_EQ(dst_data[4], 100); // R
+    EXPECT_EQ(dst_data[5], 200); // G
+    EXPECT_EQ(dst_data[6], 50);  // B
+    EXPECT_EQ(dst_data[7], 255); // A
+}
+
+TEST(ImageUtilsResizeTest, NearestNeighborScaling_EdgeCases)
+{
+    using namespace linuxface::image_utils;
+    
+    // Test 1x1 to 3x3 scaling (extreme upscaling)
+    unsigned char src_data[1 * 1 * 3] = {128, 64, 32};
+    unsigned char dst_data[3 * 3 * 3] = {0};
+    
+    ImageView<unsigned char> src{src_data, 1, 1, 3};
+    ImageView<unsigned char> dst{dst_data, 3, 3, 3};
+    
+    nearestNeighborScaling<unsigned char, unsigned char>(src, dst);
+    
+    // All pixels should have the same value as the source
+    for (int i = 0; i < 3 * 3; ++i)
+    {
+        EXPECT_EQ(dst_data[i * 3 + 0], 128); // R
+        EXPECT_EQ(dst_data[i * 3 + 1], 64);  // G
+        EXPECT_EQ(dst_data[i * 3 + 2], 32);  // B
+    }
+}
+
+TEST(ImageUtilsImageScalingTest, NearestNeighborViaImage)
+{
+    using namespace linuxface;
+    
+    // Test the full integration with Image::scale method
+    auto img = std::make_unique<Image>(4 * 4 * 3);
+    img->info.width = 4;
+    img->info.height = 4;
+    img->info.pixelSizeBytes = 3;
+    img->info.format = ImageFormat::RGB;
+    
+    // Fill with a checkerboard pattern using distinct values
+    unsigned char* data = img->data();
+    for (int y = 0; y < 4; ++y)
+    {
+        for (int x = 0; x < 4; ++x)
+        {
+            int idx = (y * 4 + x) * 3;
+            unsigned char value = static_cast<unsigned char>((x + y) % 2 == 0 ? 50 : 200);
+            data[idx + 0] = value;     // R
+            data[idx + 1] = value + 20; // G
+            data[idx + 2] = value + 40; // B
+        }
+    }
+    
+    // Scale using NEAREST_NEIGHBOR
+    auto scaled = img->scale(8, 8, ScalingAlgorithm::NEAREST_NEIGHBOR);
+    
+    ASSERT_NE(scaled, nullptr);
+    EXPECT_EQ(scaled->info.width, 8);
+    EXPECT_EQ(scaled->info.height, 8);
+    EXPECT_EQ(scaled->info.pixelSizeBytes, 3);
+    
+    // Verify that only the original discrete values appear
+    std::set<unsigned char> foundValues;
+    unsigned char* scaledData = scaled->data();
+    for (int i = 0; i < 8 * 8 * 3; ++i)
+    {
+        foundValues.insert(scaledData[i]);
+    }
+    
+    // Should only contain original checkerboard values: 50, 70, 90, 200, 220, 240
+    for (unsigned char val : foundValues)
+    {
+        bool isValid = (val == 50 || val == 70 || val == 90 || val == 200 || val == 220 || val == 240);
+        EXPECT_TRUE(isValid) << "Found unexpected interpolated value: " << static_cast<int>(val);
+    }
 }
 
 // Test template constants

@@ -124,6 +124,7 @@ enum class ScalingAlgorithm : std::uint8_t
     AREA_AVERAGING, // 7	7	8	8	7.5
     FAST_BOX,       // 2	10	2	4	4.5
     BICUBIC,        // 8	6	7	7	7.0
+    NEAREST_NEIGHBOR, // 1	10	1	2	3.5 - Preserves discrete values, ideal for label masks
 };
 
 
@@ -170,6 +171,9 @@ class Image
 
     // Plain color constructor.
     Image(Pixel color, size_t width, size_t height);
+
+    // Create image with metadata
+    Image(ImageMetadata metadata);
 
     // Move constructor and assignment
     Image(Image&& other) noexcept;

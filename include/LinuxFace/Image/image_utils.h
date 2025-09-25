@@ -120,17 +120,20 @@ const double TEMPLATE_192_ALT[5][2] = {
 // };
 
 const double TEMPLATE_256[5][2] = {
-    {0.36167656, 0.40387734},  // left eye
-    {0.63696719, 0.40235469},  // right eye
-    {0.50019687, 0.56044219},  // nose
-    {0.38710391, 0.72160547},  // left mouth corner
-    {0.61507734, 0.72034453}   // right mouth corner
+    {0.36167656, 0.40387734}, // left eye
+    {0.63696719, 0.40235469}, // right eye
+    {0.50019687, 0.56044219}, // nose
+    {0.38710391, 0.72160547}, // left mouth corner
+    {0.61507734, 0.72034453}  // right mouth corner
 };
 
 const double TEMPLATE_256_OPTIMIZED[5][2] = {
     // Optimized coordinates that match face structure better
-    {0.35, 0.38}, {0.65, 0.38}, {0.50, 0.48}, 
-    {0.38, 0.58}, {0.62, 0.58}
+    {0.35, 0.38},
+    {0.65, 0.38},
+    {0.50, 0.48},
+    {0.38, 0.58},
+    {0.62, 0.58}
 };
 
 const double TEMPLATE_512[5][2] = {
@@ -231,338 +234,92 @@ procrustesSimilarityFaceTransform(const Image& inputImg, const std::vector<math_
         { return inputImg.affineWarpBilinear(m, outWidth, outHeight, nullptr, targetFormat); }, alignToTemplate);
 }
 
-/**
- * Eliptical mask
- *  // Fill the face region in the mask
-    int mask_left = std::max(0, (int)min_x);
-    int mask_top = std::max(0, (int)min_y);
-    int mask_right = std::min(image->info.width, (int)(min_x + out_width));
-    int mask_bottom = std::min(image->info.height, (int)(min_y + out_height));
 
-    for (int y = mask_top; y < mask_bottom; ++y) {
-        for (int x = mask_left; x < mask_right; ++x) {
-            // Create a smooth circular/elliptical mask
-            double cx = min_x + out_width / 2.0;
-            double cy = min_y + out_height / 2.0;
-            double dx = (x - cx) / (out_width / 2.0);
-            double dy = (y - cy) / (out_height / 2.0);
-            double dist = sqrt(dx*dx + dy*dy);
-
-            if (dist <= 1.0) {
-                // Smooth falloff at edges
-                double alpha = dist < 0.8 ? 1.0 : (1.0 - (dist - 0.8) / 0.2);
-                full_mask->data()[y * image->info.width + x] =
-                    static_cast<unsigned char>(255 * std::max(0.0, alpha));
-            }
-        }
-    }
- */
-
-/*
-Original: very very slow.
-*/
-// Create a mask for the crop size using the Image class
-
-// inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
-// {
-//     int width = static_cast<int>(crop_size[0]);
-//     int height = static_cast<int>(crop_size[1]);
-//     double face_mask_blur = 0.4;
-//     std::vector<int> face_mask_padding = {0, 0, 0, 0};
-//     int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
-//     int blur_area = std::max(blur_amount / 2, 1);
-//     std::unique_ptr<Image> box_mask = std::make_unique<Image>(width * height);
-//     box_mask->info.width = width;
-//     box_mask->info.height = height;
-//     box_mask->info.pixelSizeBytes = 1;
-//     box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
-
-//     std::fill(box_mask->data(), box_mask->data() + width * height, 255);
-
-//     int top_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[0] / 100.0));
-//     int bottom_padding = std::max(blur_area, static_cast<int>(height * face_mask_padding[2] / 100.0));
-//     int right_padding = std::max(blur_area, static_cast<int>(width * face_mask_padding[1] / 100.0));
-//     int left_padding = std::max(blur_area, static_cast<int>(width * face_mask_padding[3] / 100.0));
-//     for (int y = 0; y < top_padding; ++y)
-//     {
-//         std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-//     }
-//     for (int y = height - bottom_padding; y < height; ++y)
-//     {
-//         std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-//     }
-//     for (int y = 0; y < height; ++y)
-//     {
-//         std::fill(box_mask->data() + y * width, box_mask->data() + y * width + left_padding, 0);
-//     }
-//     for (int y = 0; y < height; ++y)
-//     {
-//         std::fill(box_mask->data() + y * width + (width - right_padding), box_mask->data() + (y + 1) * width, 0);
-//     }
-//     if (blur_amount > 0)
-//     {
-//         std::unique_ptr<Image> blurred = box_mask->deepCopy();
-//         int radius = blur_amount / 2;
-//         for (int y = 0; y < height; ++y)
-//         {
-//             for (int x = 0; x < width; ++x)
-//             {
-//                 int sum = 0, count = 0;
-//                 for (int dy = -radius; dy <= radius; ++dy)
-//                 {
-//                     for (int dx = -radius; dx <= radius; ++dx)
-//                     {
-//                         int nx = x + dx, ny = y + dy;
-//                         if (nx >= 0 && nx < width && ny >= 0 && ny < height)
-//                         {
-//                             sum += box_mask->data()[ny * width + nx];
-//                             ++count;
-//                         }
-//                     }
-//                 }
-//                 blurred->data()[y * width + x] = static_cast<unsigned char>(sum / count);
-//             }
-//         }
-//         blurred->info.pixelSizeBytes = 1;
-//         blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
-//         return blurred;
-//     }
-//     return box_mask;
-// }
-
-/*GPT optimized.
-
-// Create a mask for the crop size using the Image class
-inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
+inline void fastBoxBlur(Image& image, const math_utils::Rect<int>& blurRegion, int radius)
 {
-    int width = static_cast<int>(crop_size[0]);
-    int height = static_cast<int>(crop_size[1]);
-    double face_mask_blur = 0.7;
-    std::vector<int> face_mask_padding = {0, 0, 0, 0}; // top, right, bottom, left
-
-    int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
-    int radius = std::max(blur_amount / 2, 1);
-
-    std::unique_ptr<Image> box_mask = std::make_unique<Image>(width * height);
-    box_mask->info.width = width;
-    box_mask->info.height = height;
-    box_mask->info.pixelSizeBytes = 1;
-    box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
-
-    std::fill(box_mask->data(), box_mask->data() + width * height, 255);
-
-    int top_padding = std::max(radius, static_cast<int>(height * face_mask_padding[0] / 100.0));
-    int bottom_padding = std::max(radius, static_cast<int>(height * face_mask_padding[2] / 100.0));
-    int right_padding = std::max(radius, static_cast<int>(width * face_mask_padding[1] / 100.0));
-    int left_padding = std::max(radius, static_cast<int>(width * face_mask_padding[3] / 100.0));
-
-    // Mask top and bottom areas to 0
-    for (int y = 0; y < top_padding; ++y)
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-    for (int y = height - bottom_padding; y < height; ++y)
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-
-    // Mask left and right sides to 0
-    for (int y = 0; y < height; ++y)
+    if (radius <= 0 || image.info.format != ImageFormat::GRAYSCALE)
     {
-        std::fill(box_mask->data() + y * width, box_mask->data() + y * width + left_padding, 0);
-        std::fill(box_mask->data() + y * width + (width - right_padding), box_mask->data() + (y + 1) * width, 0);
+        return; // Nothing to blur or unsupported format
     }
 
-    // Early return if no blur needed
-    if (blur_amount <= 0)
-    {
-        common::logWarn("Blur amount is zero, returning unblurred box mask.");
-        return box_mask;
-    }
-    std::unique_ptr<Image> blurred = box_mask->deepCopy();
-    unsigned char* src = box_mask->data();
-    unsigned char* dst = blurred->data();
+    const int imageWidth = static_cast<int>(image.info.width);
+    const int imageHeight = static_cast<int>(image.info.height);
 
-    // Generic 1D blur using sliding window
-    auto blur_1d = [](const unsigned char* src, unsigned char* dst, int length, int count, int stride, int radius) {
-        const int window = 2 * radius + 1;
-        for (int i = 0; i < count; ++i) {
+    // Clamp blur region to image bounds
+    const int regionLeft = std::max(0, blurRegion.l);
+    const int regionTop = std::max(0, blurRegion.t);
+    const int regionRight = std::min(imageWidth, blurRegion.r);
+    const int regionBottom = std::min(imageHeight, blurRegion.b);
+
+    // Validate region
+    if (regionLeft >= regionRight || regionTop >= regionBottom)
+    {
+        return; // Invalid region
+    }
+
+    unsigned char* data = image.data();
+    const int regionWidth = regionRight - regionLeft;
+    const int regionHeight = regionBottom - regionTop;
+
+    // Temporary buffer for intermediate results (avoid in-place corruption)
+    std::vector<unsigned char> tempBuffer(regionWidth * regionHeight);
+
+    // Horizontal pass - blur each row in the region
+    for (int y = regionTop; y < regionBottom; ++y)
+    {
+        const int tempRow = y - regionTop;
+        const int rowStart = y * imageWidth;
+
+        for (int x = regionLeft; x < regionRight; ++x)
+        {
             int sum = 0;
+            int count = 0;
 
-            // Initial window sum
-            for (int k = 0; k <= radius && k < length; ++k)
-                sum += src[i * stride + k];
-
-            for (int j = 0; j < length; ++j) {
-                dst[i * stride + j] = static_cast<unsigned char>(sum / window);
-
-                if (j - radius >= 0)
-                    sum -= src[i * stride + j - radius];
-
-                if (j + radius + 1 < length)
-                    sum += src[i * stride + j + radius + 1];
-            }
-        }
-    };
-
-    // Blur top and bottom rows (horizontal)
-    blur_1d(src, dst, width, top_padding, width, radius);
-    blur_1d(src + (height - bottom_padding) * width, dst + (height - bottom_padding) * width, width, bottom_padding,
-width, radius);
-
-    // Blur left and right columns (vertical)
-    for (int x = 0; x < left_padding; ++x)
-        blur_1d(src + x, dst + x, height, 1, width, radius);
-    for (int x = width - right_padding; x < width; ++x)
-        blur_1d(src + x, dst + x, height, 1, width, radius);
-
-    // Copy center (non-blurred) region from original
-    for (int y = top_padding; y < height - bottom_padding; ++y)
-    {
-        std::copy(
-            box_mask->data() + y * width + left_padding,
-            box_mask->data() + y * width + (width - right_padding),
-            blurred->data() + y * width + left_padding
-        );
-    }
-
-    blurred->info.pixelSizeBytes = 1;
-    blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
-    return blurred;
-}
-*/
-/*GPT original version with only blur on padding areas.*/
-/*
-inline std::unique_ptr<Image> create_static_box_mask(const std::vector<double>& crop_size)
-{
-    int width = static_cast<int>(crop_size[0]);
-    int height = static_cast<int>(crop_size[1]);
-    double face_mask_blur = 0.45;
-    std::vector<int> face_mask_padding = {0, 0, 20, 0}; // top, right, bottom, left
-
-    int blur_amount = static_cast<int>(width * 0.5 * face_mask_blur);
-    int radius = std::max(blur_amount / 2, 1);
-
-    std::unique_ptr<Image> box_mask = std::make_unique<Image>(width * height);
-    box_mask->info.width = width;
-    box_mask->info.height = height;
-    box_mask->info.pixelSizeBytes = 1;
-    box_mask->info.format = linuxface::ImageFormat::GRAYSCALE;
-
-    std::fill(box_mask->data(), box_mask->data() + width * height, 255);
-
-    int top_padding = std::max(radius, static_cast<int>(height * face_mask_padding[0] / 100.0));
-    int bottom_padding = std::max(radius, static_cast<int>(height * face_mask_padding[2] / 100.0));
-    int right_padding = std::max(radius, static_cast<int>(width * face_mask_padding[1] / 100.0));
-    int left_padding = std::max(radius, static_cast<int>(width * face_mask_padding[3] / 100.0));
-
-    // Fill black areas
-    for (int y = 0; y < top_padding; ++y)
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-    for (int y = height - bottom_padding; y < height; ++y)
-        std::fill(box_mask->data() + y * width, box_mask->data() + (y + 1) * width, 0);
-    for (int y = 0; y < height; ++y) {
-        std::fill(box_mask->data() + y * width, box_mask->data() + y * width + left_padding, 0);
-        std::fill(box_mask->data() + y * width + (width - right_padding), box_mask->data() + (y + 1) * width, 0);
-    }
-
-    if (blur_amount <= 0)
-        return box_mask;
-
-    std::unique_ptr<Image> blurred = box_mask->deepCopy();
-    unsigned char* src = box_mask->data();
-    unsigned char* dst = blurred->data();
-
-    // Blur only perimeter
-    for (int y = 0; y < height; ++y)
-    {
-        for (int x = 0; x < width; ++x)
-        {
-            // Skip center region
-            if (y >= top_padding && y < height - bottom_padding &&
-                x >= left_padding && x < width - right_padding)
-                continue;
-
-            int sum = 0, count = 0;
-            for (int dy = -radius; dy <= radius; ++dy)
+            // Calculate box blur sum for this pixel
+            for (int kx = -radius; kx <= radius; ++kx)
             {
-                int ny = y + dy;
-                if (ny < 0 || ny >= height) continue;
-
-                for (int dx = -radius; dx <= radius; ++dx)
-                {
-                    int nx = x + dx;
-                    if (nx < 0 || nx >= width) continue;
-
-                    sum += src[ny * width + nx];
-                    ++count;
-                }
+                const int srcX = x + kx;
+                const int clampedX = std::clamp(srcX, regionLeft, regionRight - 1);
+                sum += data[rowStart + clampedX];
+                count++;
             }
 
-            dst[y * width + x] = static_cast<unsigned char>(sum / count);
+            // Store horizontally blurred result in temp buffer
+            tempBuffer[tempRow * regionWidth + (x - regionLeft)] = static_cast<unsigned char>(sum / count);
         }
     }
 
-    blurred->info.pixelSizeBytes = 1;
-    blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
-    return blurred;
-}*/
-
-inline void fastBoxBlur(const unsigned char* src, unsigned char* dst, int width, int height, int radius)
-{
-    std::vector<unsigned char> temp(width * height, 0);
-
-    // Horizontal pass
-    for (int y = 0; y < height; ++y)
+    // Vertical pass - blur each column using temp buffer results
+    for (int x = regionLeft; x < regionRight; ++x)
     {
-        int sum = 0;
-        for (int x = -radius; x <= radius; ++x)
-        {
-            sum += src[y * width + std::clamp(x, 0, width - 1)];
-        }
-        for (int x = 0; x < width; ++x)
-        {
-            temp[y * width + x] = static_cast<unsigned char>(sum / (2 * radius + 1));
-            const int left = x - radius;
-            const int right = x + radius + 1;
-            if (left >= 0)
-            {
-                sum -= src[y * width + left];
-            }
-            if (right < width)
-            {
-                sum += src[y * width + right];
-            }
-        }
-    }
+        const int tempCol = x - regionLeft;
 
-    // Vertical pass
-    for (int x = 0; x < width; ++x)
-    {
-        int sum = 0;
-        for (int y = -radius; y <= radius; ++y)
+        for (int y = regionTop; y < regionBottom; ++y)
         {
-            sum += temp[std::clamp(y, 0, height - 1) * width + x];
-        }
-        for (int y = 0; y < height; ++y)
-        {
-            dst[y * width + x] = static_cast<unsigned char>(sum / (2 * radius + 1));
-            const int top = y - radius;
-            const int bottom = y + radius + 1;
-            if (top >= 0)
+            int sum = 0;
+            int count = 0;
+
+            // Calculate box blur sum for this pixel
+            for (int ky = -radius; ky <= radius; ++ky)
             {
-                sum -= temp[top * width + x];
+                const int srcY = y + ky;
+                const int clampedY = std::clamp(srcY, regionTop, regionBottom - 1);
+                const int tempSrcRow = clampedY - regionTop;
+                sum += tempBuffer[tempSrcRow * regionWidth + tempCol];
+                count++;
             }
-            if (bottom < height)
-            {
-                sum += temp[bottom * width + x];
-            }
+
+            // Store final blurred result back to image
+            data[y * imageWidth + x] = static_cast<unsigned char>(sum / count);
         }
     }
 }
 
-inline std::unique_ptr<Image> createStaticBoxMask(const std::vector<double>& cropSize)
+inline std::unique_ptr<Image> createStaticBoxMask(const int width, const int height)
 {
-    const int width = static_cast<int>(cropSize[0]);
-    const int height = static_cast<int>(cropSize[1]);
     const double faceMaskBlur = 0.6;
     std::vector<int> faceMaskPadding = {0, 0, 0, 0};
+
     const int blurAmount = static_cast<int>(width * 0.5 * faceMaskBlur);
     const int blurArea = std::max(blurAmount / 2, 1);
 
@@ -596,7 +353,8 @@ inline std::unique_ptr<Image> createStaticBoxMask(const std::vector<double>& cro
     if (blurAmount > 0)
     {
         std::unique_ptr<Image> blurred = boxMask->deepCopy();
-        fastBoxBlur(boxMask->data(), blurred->data(), width, height, blurAmount / 2);
+        const math_utils::Rect<int> blurRegion(0, 0, width, height);
+        fastBoxBlur(*blurred, blurRegion, blurAmount / 2);
         blurred->info.pixelSizeBytes = 1;
         blurred->info.format = linuxface::ImageFormat::GRAYSCALE;
         return blurred;
@@ -604,6 +362,7 @@ inline std::unique_ptr<Image> createStaticBoxMask(const std::vector<double>& cro
 
     return boxMask;
 }
+
 
 // Normalization traits for different types
 template <typename T>
@@ -1394,6 +1153,118 @@ void fastBoxScaling(const ImageView<T>& src, ImageView<K>& dst)
                     dst.data[dstIdx] = static_cast<K>(count > 0 ? sum / count : 0);
                 }
             }
+        }
+    }
+}
+
+// Nearest neighbor scaling - preserves discrete values
+template <typename T, typename K, NormalizationType normalizationType = NormalizationType::NONE,
+          ImageLayout outputLayout = ImageLayout::HWC>
+void nearestNeighborScaling(const ImageView<T>& src, ImageView<K>& dst)
+{
+    // Handle edge cases
+    if (src.width == 0 || src.height == 0 || dst.width == 0 || dst.height == 0)
+    {
+        common::logError("Invalid image dimensions for scaling: src(%lux%lu), dst(%lux%lu)", src.width, src.height,
+                         dst.width, dst.height);
+        return;
+    }
+
+    const double xScale = static_cast<double>(src.width) / dst.width;
+    const double yScale = static_cast<double>(src.height) / dst.height;
+
+    ImageStats<K> stats;
+    const bool needsStats = (normalizationType != NormalizationType::NONE);
+
+    for (unsigned long y = 0; y < dst.height; y++)
+    {
+        for (unsigned long x = 0; x < dst.width; x++)
+        {
+            // Calculate nearest source pixel (simple rounding for best discrete value preservation)
+            const unsigned long srcX = static_cast<unsigned long>(std::round(x * xScale));
+            const unsigned long srcY = static_cast<unsigned long>(std::round(y * yScale));
+            
+            // Clamp to valid source bounds
+            const unsigned long clampedSrcX = std::min(srcX, src.width - 1);
+            const unsigned long clampedSrcY = std::min(srcY, src.height - 1);
+
+            for (unsigned char ch = 0; ch < dst.pixelBytes; ch++)
+            {
+                // Determine source channel
+                unsigned char srcCh = ch;
+                if (srcCh >= src.pixelBytes)
+                {
+                    if (ch == 3 && dst.pixelBytes == 4 && src.pixelBytes < 4)
+                    {
+                        // Alpha channel for RGBA output when source has no alpha
+                        K alphaValue;
+                        if constexpr (std::is_floating_point_v<K>)
+                        {
+                            alphaValue = static_cast<K>(1.0);
+                        }
+                        else
+                        {
+                            const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
+                            alphaValue = static_cast<K>(maxVal);
+                        }
+                        const size_t dstIdx =
+                            calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                        dst.data[dstIdx] = alphaValue;
+                        
+                        // Collect statistics if needed
+                        if (needsStats)
+                        {
+                            stats.update(alphaValue);
+                        }
+                        continue;
+                    }
+                    else
+                    {
+                        // Duplicate last available channel (e.g., grayscale to RGB)
+                        srcCh = src.pixelBytes - 1;
+                    }
+                }
+
+                // Copy pixel value exactly (no interpolation - preserves discrete values)
+                const unsigned long srcIdx = (clampedSrcY * src.width + clampedSrcX) * src.pixelBytes + srcCh;
+                
+                K scaledValue;
+                if constexpr (std::is_floating_point_v<K>)
+                {
+                    scaledValue = static_cast<K>(src.data[srcIdx]);
+                }
+                else
+                {
+                    // Use traits for proper clamping range
+                    const auto minVal = static_cast<double>(NormalizationTraits<K>::minValue());
+                    const auto maxVal = static_cast<double>(NormalizationTraits<K>::maxValue());
+                    const double srcValue = static_cast<double>(src.data[srcIdx]);
+                    scaledValue = static_cast<K>(std::clamp(srcValue, minVal, maxVal));
+                }
+                
+                // Calculate destination index based on output layout
+                const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
+                dst.data[dstIdx] = scaledValue;
+
+                // Collect statistics if needed
+                if (needsStats)
+                {
+                    stats.update(scaledValue);
+                }
+            }
+        }
+    }
+    
+    // Step 2: Apply normalization if needed
+    if constexpr (normalizationType != NormalizationType::NONE)
+    {
+        stats.finalize();
+        Normalizer<K, normalizationType> normalizer;
+        
+        const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
+        for (size_t i = 0; i < totalPixels; i++)
+        {
+            dst.data[i] = normalizer(dst.data[i], stats);
         }
     }
 }

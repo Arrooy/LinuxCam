@@ -79,6 +79,8 @@ class Face
 
     void paintPoseAxis(std::unique_ptr<Image>& image, float size, float thickness) const;
 
+    std::unique_ptr<Image> createFaceMask(const std::unique_ptr<Image>& image) const;
+
     FaceBoundingBox getBoundingBox() const { return boundingBox_; }
     std::vector<FaceLandmark> getLandmarks() const
     {
@@ -125,7 +127,7 @@ class Face
     FaceBoundingBox boundingBox_;
     std::map<FaceIndex, std::vector<FaceLandmark>> landmarks_;
     FacePose pose_{};
-    bool valid_ {false};
+    bool valid_{false};
 };
 
 } // namespace linuxface

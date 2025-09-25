@@ -54,6 +54,17 @@ Image::Image(size_t size) : size_(size)
     }
 }
 
+Image::Image(ImageMetadata metadata)
+{
+    info = std::move(metadata);
+    size_ = info.width * info.height * info.pixelSizeBytes;
+
+    if (size_ > 0)
+    {
+        data_ = std::shared_ptr<unsigned char>(new unsigned char[size_], std::default_delete<unsigned char[]>());
+    }
+}
+
 Image::Image(unsigned char* buffer, size_t size) : size_(size)
 {
     if ((buffer != nullptr) && size > 0)
@@ -330,6 +341,9 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
         case ScalingAlgorithm::BICUBIC:
             algName = "BICUBIC";
             break;
+        case ScalingAlgorithm::NEAREST_NEIGHBOR:
+            algName = "NEAREST_NEIGHBOR";
+            break;
         default:
             algName = "UNKNOWN";
             break;
@@ -359,6 +373,9 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
             break;
         case ScalingAlgorithm::BICUBIC:
             image_utils::bicubicScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
+            break;
+        case ScalingAlgorithm::NEAREST_NEIGHBOR:
+            image_utils::nearestNeighborScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         default:
             common::logError("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));

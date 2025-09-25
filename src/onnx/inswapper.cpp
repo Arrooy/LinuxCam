@@ -34,26 +34,26 @@ Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
     return inputTensor;
 }
 
-bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<math_utils::Point<>>& dstLandmarks,
+std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<math_utils::Point<>>& dstLandmarks,
                      const Image& dstFace, Image& outImage)
 {
     Profiler::getInstance().start("InSwapper", "Swap");
     if (!ready_)
     {
-        return false;
+        return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
     }
 
     // Check for valid input parameters
     if (srcEmbedding.empty() || srcEmbedding.size() != 512)
     {
         common::logError(("InSwapper: Invalid embedding size. Expected 512, got " + std::to_string(srcEmbedding.size())).c_str());
-        return false;
+        return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
     }
 
     if (dstLandmarks.size() != 5)
     {
         common::logError(("InSwapper: Invalid landmark count. Expected 5, got " + std::to_string(dstLandmarks.size())).c_str());
-        return false;
+        return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
     }
     // TODO: test with similarity face transform
     const int targetSize = InputWidth;
@@ -62,7 +62,7 @@ bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<m
 
     if (!aligned)
     {
-        return false;
+        return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
     }
     // 2. Prepare ONNX input tensors
     auto dstTensor = transform(aligned);
@@ -88,7 +88,6 @@ bool InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<m
     const TensorPadding pad = TensorPadding::noPadding();
     outImage.fromTensor(outData, {1, 3, InputHeight, InputWidth}, InputWidth, InputHeight, pad,
                          NormalizationType::MINMAX);
-    // outImage.saveToDisk("swapped_face_raw.ppm");
     Profiler::getInstance().stop("InSwapper", "Swap");
-    return true;
+    return {true, affine};
 }
