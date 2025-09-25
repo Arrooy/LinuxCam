@@ -14,8 +14,11 @@ namespace linuxface
 {
 
 SwapPipeline::SwapPipeline(std::shared_ptr<InSwapper> inswapper, std::shared_ptr<ArcfaceRecognizer> arcface,
-                           std::shared_ptr<SCRFDetector> scrfd)
-    : inswapper_(std::move(inswapper)), arcface_(std::move(arcface)), scrfd_(std::move(scrfd))
+                           std::shared_ptr<SCRFDetector> scrfd, std::shared_ptr<FaceSegmentationDetector> faceSeg)
+    : inswapper_(std::move(inswapper))
+    , arcface_(std::move(arcface))
+    , scrfd_(std::move(scrfd))
+    , faceSeg_(std::move(faceSeg))
 {
     // Enable inswapper compatibility for better face swapping quality
     if (arcface_ && !arcface_->enableInswapperCompatibility(inswapper_->getModelPath()))
@@ -46,6 +49,15 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
             common::logWarn("SwapPipeline: No faces detected in the webcam image.");
             Profiler::getInstance().stop("SwapPipeline", "run");
             return false;
+        }
+
+        if (faceSeg_ && faceSeg_->isReady())
+        {
+            for (auto& face : srcFaces)
+            {
+                // Perform face segmentation on the first detected face for better mask creation
+                faceSeg_->detect(image, face);
+            }
         }
     }
 
@@ -131,20 +143,40 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
         return false;
     }
 
-    Profiler::getInstance().start("SwapPipeline", "Affine Warp and Crop face");
-
-    // Compute inverse of the affine transform from swap to warp back to original space
-    std::array<double, 6> inverseAffine;
-    if (!math_utils::invertAffine(affineFromSwap.data(), inverseAffine.data()))
+    Face swpface = face;
+    if (faceSeg_ && faceSeg_->isReady())
     {
-        common::logError("SwapPipeline: Failed to invert affine transform.");
-        Profiler::getInstance().stop("SwapPipeline", "Affine Warp and Crop face");
-        return false;
+        // Perform face segmentation to create a better mask for blending
+        if (faceSeg_->detect(image, swpface))
+        {
+            // Face segmentation succeeded
+            FaceSegmentationDetector::applySegmentationVisualization(swappedFace, swpface);
+        }
     }
 
-    std::unique_ptr<Image> warpedSwappedFace =
-        swappedFace.affineWarpBilinear(inverseAffine.data(), image->info.width, image->info.height);
-    if (!warpedSwappedFace)
+    // swpface has the target image segmentation mask.
+
+    // lets join mouth masks
+
+    // Use segmentation mask to create face mask
+    // Face classes: skin(1), brows(2,3), eyes(4,5), nose(10), mouth(11,12,13), neck(14)
+    const std::vector<FaceSegmentationClass> faceClasses = {FaceSegmentationClass::MOUTH};
+    auto swappedFaceMouth = FaceSegmentationDetector::createFaceShapeMask(*swpface.getSegmentationMask(), faceClasses);
+
+    // Apply edge blur to soften mask boundaries without affecting center
+    // Use much smaller blur for segmentation masks (pixel-accurate) vs bounding box masks
+    const int blurRadius = 1;
+    if (blurRadius > 0)
+    {
+        image_utils::softenMaskEdges(*swappedFaceMouth, blurRadius);
+    }
+
+    Profiler::getInstance().start("SwapPipeline", "Affine Warp and Crop face");
+
+    std::unique_ptr<Image> finalFace =
+        swappedFace.affineWarpBilinear(affineFromSwap.data(), image->info.width, image->info.height, ImageFormat::RGBA);
+
+    if (!finalFace)
     {
         common::logError("SwapPipeline: Affine warp failed.");
         Profiler::getInstance().stop("SwapPipeline", "Affine Warp and Crop face");
@@ -153,49 +185,50 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
     Profiler::getInstance().stop("SwapPipeline", "Affine Warp and Crop face");
 
     Profiler::getInstance().start("SwapPipeline", "Crop mask creation");
+
     crop_mask_prototype_ = face.createFaceMask(image);
 
-    // const auto& bbox = face.getBoundingBox();
-    // const double minX = bbox.rect.x();
-    // const double minY = bbox.rect.y();
-
-    // // Use integer sizes to avoid tiny floating point differences
-    // const int cropW = static_cast<int>(std::round(bbox.rect.width()));
-    // const int cropH = static_cast<int>(std::round(bbox.rect.height()));
-
-    // // Rebuild mask only when size changes or mask is missing
-    // if (!crop_mask_prototype_ || crop_mask_prototype_->info.width != cropW || crop_mask_prototype_->info.width !=
-    // cropH)
-    // {
-    //     crop_mask_prototype_ = image_utils::createFaceMask(image, minX, minY, cropW, cropH);
-    //     if (!crop_mask_prototype_)
-    //     {
-    //         common::logError("SwapPipeline: Failed to create crop mask.");
-    //         Profiler::getInstance().stop("SwapPipeline", "Crop mask creation");
-    //         return false;
-    //     }
-    // }
+    // TODO: execute face segmentation also in finalFace image.
+    // From the segmentation, use it to create a better crop mask.
+    // This should remove hair and improve mouth swapping.
 
     Profiler::getInstance().stop("SwapPipeline", "Crop mask creation");
 
     if (debug_)
     {
         auto output = image->deepCopy();
-        output->alphaBlend(*warpedSwappedFace, *crop_mask_prototype_);
+        output->alphaBlend(*finalFace, *crop_mask_prototype_);
         crop_mask_prototype_->convertToRGBInplace();
-        crop_mask_prototype_->drawBorder(Pixel(0, 255, 0),2);
+        crop_mask_prototype_->drawBorder(Pixel(0, 255, 0), 2);
 
         image->pasteAt(*output, image->info.width, image->info.y, true);
         image->pasteAt(*debug_target_image_, image->info.width, 0, true);
         image->pasteAt(*debug_target_image_aligned_, image->info.width, 0, true);
-        image->pasteAt(*warpedSwappedFace, 0, image->info.height, true);
+        image->pasteAt(*finalFace, 0, image->info.height, true);
         image->pasteAt(*crop_mask_prototype_, image->info.width, image->info.height, true);
     }
     else
     {
         Profiler::getInstance().start("SwapPipeline", "Alpha blending");
-        image->alphaBlend(*warpedSwappedFace, *crop_mask_prototype_);
+        image->alphaBlend(*finalFace, *crop_mask_prototype_);
         Profiler::getInstance().stop("SwapPipeline", "Alpha blending");
+
+
+        // auto h = image->info.height;
+        // image->pasteAt(*finalFace, 0, h, true);
+        // auto aux = std::make_unique<Image>(finalFace->size());
+        // aux->black();
+        // aux->info = finalFace->info;
+        // auto w = image->info.width;
+        // aux->alphaBlend(*finalFace, *crop_mask_prototype_);
+        // image->pasteAt(*aux, w, h, true);
+
+        // crop_mask_prototype_->convertToRGBInplace();
+        // crop_mask_prototype_->drawBorder(Pixel(0, 255, 0), 2);
+        // image->pasteAt(*crop_mask_prototype_, w, 0, true);
+
+        // swappedFaceMouth->convertToRGB();
+        // image->pasteAt(*swappedFaceMouth, 2 * w, h, true);
     }
 
     return true;

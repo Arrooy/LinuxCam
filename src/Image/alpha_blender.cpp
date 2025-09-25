@@ -21,13 +21,13 @@ void AlphaBlender::blendRGB(const uint8_t* src, uint8_t* dst, uint8_t alpha) noe
         return;
     }
 
-    // Standard alpha blending formula with proper rounding
-    const float srcAlpha = alpha / 255.0f;
-    const float dstAlpha = 1.0f - srcAlpha;
-
-    dst[0] = static_cast<uint8_t>(std::round(src[0] * srcAlpha + dst[0] * dstAlpha));
-    dst[1] = static_cast<uint8_t>(std::round(src[1] * srcAlpha + dst[1] * dstAlpha));
-    dst[2] = static_cast<uint8_t>(std::round(src[2] * srcAlpha + dst[2] * dstAlpha));
+    const uint32_t invAlpha = 255U - alpha;
+    dst[0] = static_cast<uint8_t>(
+        (static_cast<uint32_t>(src[0]) * alpha + static_cast<uint32_t>(dst[0]) * invAlpha + 127U) / 255U);
+    dst[1] = static_cast<uint8_t>(
+        (static_cast<uint32_t>(src[1]) * alpha + static_cast<uint32_t>(dst[1]) * invAlpha + 127U) / 255U);
+    dst[2] = static_cast<uint8_t>(
+        (static_cast<uint32_t>(src[2]) * alpha + static_cast<uint32_t>(dst[2]) * invAlpha + 127U) / 255U);
 }
 
 void AlphaBlender::blendRGBA(const uint8_t* src, uint8_t* dst) noexcept
@@ -38,7 +38,7 @@ void AlphaBlender::blendRGBA(const uint8_t* src, uint8_t* dst) noexcept
     {
         return; // Source is transparent
     }
-    if (srcAlpha == 255) // Source is opaque
+    if (srcAlpha == 255)
     {
         dst[0] = src[0];
         dst[1] = src[1];
@@ -47,26 +47,51 @@ void AlphaBlender::blendRGBA(const uint8_t* src, uint8_t* dst) noexcept
         return;
     }
 
-    // TODO: This is NOT true alpha compositing!
-    // Current implementation: Simple source-over blending with source alpha replacement
-    // True alpha compositing formula should be:
-    //   α_out = α_src + α_dst * (1 - α_src)
-    //   C_out = (C_src * α_src + C_dst * α_dst * (1 - α_src)) / α_out
-    // But we're using simplified blending: C_out = C_src * α_src + C_dst * (1 - α_src)
-    // And simply replacing destination alpha with source alpha: α_out = α_src
-    // This matches current test expectations but is mathematically incorrect for compositing.
-    const float srcA = srcAlpha / 255.0f;
-    const float dstA = 1.0f - srcA;
+    const uint8_t dstAlpha = dst[3];
+    if (dstAlpha == 0)
+    {
+        // Destination fully transparent, result is just source
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+        dst[3] = srcAlpha;
+        return;
+    }
 
-    dst[0] = static_cast<uint8_t>(std::round(src[0] * srcA + dst[0] * dstA));
-    dst[1] = static_cast<uint8_t>(std::round(src[1] * srcA + dst[1] * dstA));
-    dst[2] = static_cast<uint8_t>(std::round(src[2] * srcA + dst[2] * dstA));
-    dst[3] = srcAlpha; // Preserve source alpha (test expectation)
+    const uint32_t invSrcAlpha = 255U - srcAlpha;
+    const uint32_t outAlpha = static_cast<uint32_t>(srcAlpha)
+                              + static_cast<uint32_t>((static_cast<uint32_t>(dstAlpha) * invSrcAlpha + 127U) / 255U);
+
+    if (outAlpha == 0)
+    {
+        dst[0] = dst[1] = dst[2] = 0;
+        dst[3] = 0;
+        return;
+    }
+
+    const uint32_t srcPremulR = static_cast<uint32_t>(src[0]) * srcAlpha;
+    const uint32_t srcPremulG = static_cast<uint32_t>(src[1]) * srcAlpha;
+    const uint32_t srcPremulB = static_cast<uint32_t>(src[2]) * srcAlpha;
+
+    const uint32_t dstPremulR = static_cast<uint32_t>(dst[0]) * dstAlpha;
+    const uint32_t dstPremulG = static_cast<uint32_t>(dst[1]) * dstAlpha;
+    const uint32_t dstPremulB = static_cast<uint32_t>(dst[2]) * dstAlpha;
+
+    const uint32_t dstScale = invSrcAlpha;
+
+    const uint32_t outPremulR = srcPremulR + (dstPremulR * dstScale + 127U) / 255U;
+    const uint32_t outPremulG = srcPremulG + (dstPremulG * dstScale + 127U) / 255U;
+    const uint32_t outPremulB = srcPremulB + (dstPremulB * dstScale + 127U) / 255U;
+
+    dst[0] = static_cast<uint8_t>((outPremulR + outAlpha / 2U) / outAlpha);
+    dst[1] = static_cast<uint8_t>((outPremulG + outAlpha / 2U) / outAlpha);
+    dst[2] = static_cast<uint8_t>((outPremulB + outAlpha / 2U) / outAlpha);
+    dst[3] = static_cast<uint8_t>(std::min(outAlpha, 255U));
 }
 
 void AlphaBlender::blendRGBAToRGB(const uint8_t* src, uint8_t* dst) noexcept
 {
-    blendRGB(src, dst, src[3]); // Use alpha channel from RGBA source
+    blendRGB(src, dst, src[3]);
 }
 
 void AlphaBlender::blendRGBToRGBA(const uint8_t* src, uint8_t* dst, uint8_t alpha) noexcept
@@ -79,7 +104,7 @@ void AlphaBlender::blendRGBToRGBA(const uint8_t* src, uint8_t* dst, uint8_t alph
     // Blend color channels only, preserve destination alpha
     const uint8_t originalAlpha = dst[3];
     blendRGB(src, dst, alpha);
-    dst[3] = originalAlpha; // Restore alpha
+    dst[3] = originalAlpha;
 }
 
 void AlphaBlender::blendRow(const uint8_t* srcRow, uint8_t* dstRow, size_t pixelCount, PixelFormat srcFormat,
@@ -101,23 +126,25 @@ void AlphaBlender::blendRow(const uint8_t* srcRow, uint8_t* dstRow, size_t pixel
     {
         const float srcAlpha = globalAlpha / 255.0f;
         const float dstAlpha = 1.0f - srcAlpha;
-        
+
         // Process multiple pixels at once when possible
         size_t i = 0;
         const size_t alignedCount = pixelCount - (pixelCount % 4); // Process 4 pixels at a time
-        
+
         for (; i < alignedCount; i += 4)
         {
             // Unroll loop for better performance
             for (int j = 0; j < 4; ++j)
             {
                 const size_t idx = (i + j) * 3;
-                dstRow[idx]     = static_cast<uint8_t>(std::round(srcRow[idx]     * srcAlpha + dstRow[idx]     * dstAlpha));
-                dstRow[idx + 1] = static_cast<uint8_t>(std::round(srcRow[idx + 1] * srcAlpha + dstRow[idx + 1] * dstAlpha));
-                dstRow[idx + 2] = static_cast<uint8_t>(std::round(srcRow[idx + 2] * srcAlpha + dstRow[idx + 2] * dstAlpha));
+                dstRow[idx] = static_cast<uint8_t>(std::round(srcRow[idx] * srcAlpha + dstRow[idx] * dstAlpha));
+                dstRow[idx + 1] =
+                    static_cast<uint8_t>(std::round(srcRow[idx + 1] * srcAlpha + dstRow[idx + 1] * dstAlpha));
+                dstRow[idx + 2] =
+                    static_cast<uint8_t>(std::round(srcRow[idx + 2] * srcAlpha + dstRow[idx + 2] * dstAlpha));
             }
         }
-        
+
         // Handle remaining pixels
         for (; i < pixelCount; ++i)
         {

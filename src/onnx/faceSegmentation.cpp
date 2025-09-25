@@ -1,8 +1,10 @@
 #include "LinuxFace/onnx/faceSegmentation.h"
 
+#include <algorithm>
 #include <array>
 
 #include "LinuxFace/profiler.h"
+#include "LinuxFace/Image/image_utils.h"
 
 using namespace linuxface;
 
@@ -124,43 +126,77 @@ void FaceSegmentationDetector::generateMask(std::vector<Ort::Value>& outputTenso
     memcpy(labelMask->data(), outputData, pixelCount);
 }
 
-void FaceSegmentationDetector::applySegmentationVisualization(Image& faceImage, const Image& labelMask)
+
+void FaceSegmentationDetector::applySegmentationVisualization(Image& faceImage, const Face& face)
+{
+    if (!face.getSegmentationMask())
+    {
+        common::logWarn("FaceSegmentationDetector: No segmentation mask available for visualization");
+        return;
+    }
+
+    // Get nose position as face center (landmark index 33)
+    math_utils::Point3D nosePoint = face.getLandmarkByIndex(Face::FaceIndex::NOSE);
+    float centerX = nosePoint.x;
+    float centerY = nosePoint.y;
+
+    // If nose landmark is not available, fall back to bounding box center
+    if (centerX < 0 || centerY < 0)
+    {
+        const auto& bbox = face.getBoundingBox().rect;
+        centerX = bbox.x() + bbox.width() / 2.0f;
+        centerY = bbox.y() + bbox.height() / 2.0f;
+    }
+
+    // Apply visualization with 512x512 ROI centered on face (model input dimensions)
+    applySegmentationVisualization(faceImage, *face.getSegmentationMask(), centerX, centerY);
+}
+
+void FaceSegmentationDetector::applySegmentationVisualization(Image& faceImage, const Image& labelMask, float centerX, float centerY)
 {
     // Define colors for each face segment
     static const std::array<Pixel, 19> segmentColors = {
-        {
-         Pixel(0, 0, 0),       // BACKGROUND - black
-            Pixel(255, 220, 177), // SKIN - light peach
-            Pixel(139, 69, 19),   // L_BROW - brown
-            Pixel(160, 82, 45),   // R_BROW - saddle brown
-            Pixel(0, 100, 0),     // L_EYE - dark green
-            Pixel(0, 128, 0),     // R_EYE - green
-            Pixel(75, 0, 130),    // EYE_G - indigo (glasses)
-            Pixel(255, 192, 203), // L_EAR - pink
-            Pixel(255, 182, 193), // R_EAR - light pink
-            Pixel(255, 215, 0),   // EAR_R - gold (earring)
-            Pixel(255, 105, 180), // NOSE - hot pink
-            Pixel(220, 20, 60),   // MOUTH - crimson
-            Pixel(255, 0, 0),     // U_LIP - red
-            Pixel(178, 34, 34),   // L_LIP - firebrick
-            Pixel(210, 180, 140), // NECK - tan
-            Pixel(255, 215, 0),   // NECK_L - gold (necklace)
-            Pixel(0, 0, 255),     // CLOTH - blue
-            Pixel(165, 42, 42),   // HAIR - brown
-            Pixel(128, 0, 128)    // HAT - purple
-        }
+        Pixel(0, 0, 0),       // BACKGROUND - black
+        Pixel(255, 220, 177), // SKIN - light peach
+        Pixel(139, 69, 19),   // L_BROW - brown
+        Pixel(160, 82, 45),   // R_BROW - saddle brown
+        Pixel(0, 100, 0),     // L_EYE - dark green
+        Pixel(0, 128, 0),     // R_EYE - green
+        Pixel(75, 0, 130),    // EYE_G - indigo (glasses)
+        Pixel(255, 192, 203), // L_EAR - pink
+        Pixel(255, 182, 193), // R_EAR - light pink
+        Pixel(255, 215, 0),   // EAR_R - gold (earring)
+        Pixel(255, 105, 180), // NOSE - hot pink
+        Pixel(220, 20, 60),   // MOUTH - crimson
+        Pixel(255, 0, 0),     // U_LIP - red
+        Pixel(178, 34, 34),   // L_LIP - firebrick
+        Pixel(210, 180, 140), // NECK - tan
+        Pixel(255, 215, 0),   // NECK_L - gold (necklace)
+        Pixel(0, 0, 255),     // CLOTH - blue
+        Pixel(165, 42, 42),   // HAIR - brown
+        Pixel(128, 0, 128)    // HAT - purple
+
     };
 
-    // Apply colored overlay with transparency
+    // Apply colored overlay with transparency within the ROI centered on face
     constexpr float alpha = 0.6f; // 60% opacity for segments, 40% original image
     unsigned char* imageData = faceImage.data();
     const unsigned char* maskData = labelMask.data();
 
-    for (unsigned long y = 0; y < faceImage.info.height; ++y)
+    // Calculate ROI centered on face center with specified dimensions
+    const int halfWidth = labelMask.info.width / 2;
+    const int halfHeight = labelMask.info.height / 2;
+    const int roiLeft = std::max(0, static_cast<int>(centerX - halfWidth));
+    const int roiTop = std::max(0, static_cast<int>(centerY - halfHeight));
+    const int roiRight = std::min(static_cast<int>(faceImage.info.width), static_cast<int>(centerX + halfWidth));
+    const int roiBottom = std::min(static_cast<int>(faceImage.info.height), static_cast<int>(centerY + halfHeight));
+
+    // Only process pixels within the ROI
+    for (int y = roiTop; y < roiBottom; ++y)
     {
-        for (unsigned long x = 0; x < faceImage.info.width; ++x)
+        for (int x = roiLeft; x < roiRight; ++x)
         {
-            const size_t pixelIdx = y * faceImage.info.width + x;
+            const size_t pixelIdx = static_cast<size_t>(y) * faceImage.info.width + static_cast<size_t>(x);
             const size_t imagePixelIdx = pixelIdx * faceImage.info.pixelSizeBytes;
 
             const unsigned char segmentClass = maskData[pixelIdx];
@@ -180,4 +216,75 @@ void FaceSegmentationDetector::applySegmentationVisualization(Image& faceImage, 
             }
         }
     }
+}
+
+
+bool FaceSegmentationDetector::detect(std::unique_ptr<Image>& image, Face& face)
+{
+    // Get 5-point landmarks for face alignment
+    const auto& landmarks = face.getFivePointLandmarksArcFaceOrder2D();
+    if (landmarks.size() != 5)
+    {
+        linuxface::common::logWarn("Face segmentation skipped: Face does not have 5 landmarks");
+        return false;
+    }
+
+    // Use similarity transform to create padded face ROI
+    auto [alignedFace, affineTransform] = image_utils::similarityFaceTransform(
+        *image, landmarks, image_utils::TEMPLATE_512, InputWidth, true, ImageFormat::RGB);
+
+    if (!alignedFace)
+    {
+        linuxface::common::logWarn("Face segmentation failed: Could not create aligned face ROI");
+        return false;
+    }
+
+    std::unique_ptr<Image> labelMask;
+    auto worked = detect(alignedFace, labelMask);
+
+    if (!worked || !labelMask)
+    {
+        linuxface::common::logWarn("Face segmentation failed: No mask generated");
+        return false;
+    }
+
+    // Warp the label mask back to original image coordinates and store in face
+    auto warpedMask = labelMask->affineWarpNearestNeighbour(affineTransform.data(), image->info.width, image->info.height);
+    if (warpedMask)
+    {
+        face.setSegmentationMask(std::move(warpedMask));
+        return true;
+    }
+
+    linuxface::common::logWarn("Face segmentation: Could not warp mask back to original coordinates");
+
+    return false;
+}
+
+std::unique_ptr<Image> FaceSegmentationDetector::createFaceShapeMask(const Image& labelMask, const std::vector<FaceSegmentationClass>& faceClasses)
+{
+    // Create a grayscale mask same size as labelMask
+    ImageMetadata metadata;
+    metadata.format = ImageFormat::GRAYSCALE;
+    metadata.pixelSizeBytes = 1;
+    metadata.width = labelMask.info.width;
+    metadata.height = labelMask.info.height;
+
+    auto faceMask = std::make_unique<Image>(metadata);
+    faceMask->black();
+
+    const unsigned char* labelData = labelMask.data();
+    unsigned char* maskData = faceMask->data();
+    const size_t pixelCount = labelMask.info.width * labelMask.info.height;
+
+    for (size_t i = 0; i < pixelCount; ++i)
+    {
+        const FaceSegmentationClass label = static_cast<FaceSegmentationClass>(labelData[i]);
+        if (std::find(faceClasses.begin(), faceClasses.end(), label) != faceClasses.end())
+        {
+            maskData[i] = 255;
+        }
+    }
+
+    return faceMask;
 }

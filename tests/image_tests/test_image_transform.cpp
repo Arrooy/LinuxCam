@@ -101,7 +101,7 @@ TEST(ImageTransform, AffineWarpBilinear)
     Image img(Pixel(1, 2, 3), 2, 2);
     fillPatternRGB(img);
     double M[6] = {1, 0, 0, 0, 1, 0};
-    auto warped = img.affineWarpBilinear(M, 2, 2, nullptr);
+    auto warped = img.affineWarpBilinear(M, 2, 2);
     ASSERT_NE(warped, nullptr);
     EXPECT_EQ(warped->info.width, 2);
     EXPECT_EQ(warped->info.height, 2);
@@ -119,7 +119,7 @@ TEST(ImageTransform, AffineWarpBilinear_RGBToRGBA)
     Image img(Pixel(255, 128, 64), 4, 4);
     double M[6] = {1, 0, 0, 0, 1, 0}; // Identity matrix
 
-    auto warped = img.affineWarpBilinear(M, 4, 4, nullptr, linuxface::ImageFormat::RGBA);
+    auto warped = img.affineWarpBilinear(M, 4, 4, linuxface::ImageFormat::RGBA);
 
     ASSERT_NE(warped, nullptr);
     EXPECT_EQ(warped->info.width, 4);
@@ -156,7 +156,7 @@ TEST(ImageTransform, AffineWarpBilinear_RGBAToRGB)
 
     double M[6] = {1, 0, 0, 0, 1, 0}; // Identity matrix
 
-    auto warped = rgbaImg->affineWarpBilinear(M, 4, 4, nullptr, linuxface::ImageFormat::RGB);
+    auto warped = rgbaImg->affineWarpBilinear(M, 4, 4, linuxface::ImageFormat::RGB);
 
     ASSERT_NE(warped, nullptr);
     EXPECT_EQ(warped->info.width, 4);
@@ -194,7 +194,7 @@ TEST(ImageTransform, AffineWarpBilinear_RGBAToRGBA)
 
     double M[6] = {1, 0, 0, 0, 1, 0}; // Identity matrix
 
-    auto warped = rgbaImg->affineWarpBilinear(M, 4, 4, nullptr, linuxface::ImageFormat::RGBA);
+    auto warped = rgbaImg->affineWarpBilinear(M, 4, 4, linuxface::ImageFormat::RGBA);
 
     ASSERT_NE(warped, nullptr);
     EXPECT_EQ(warped->info.width, 4);
@@ -224,7 +224,7 @@ TEST(ImageTransform, AffineWarpBilinear_UnsupportedFormat)
 
     double M[6] = {1, 0, 0, 0, 1, 0};
 
-    auto warped = grayImg->affineWarpBilinear(M, 4, 4, nullptr, linuxface::ImageFormat::RGB);
+    auto warped = grayImg->affineWarpBilinear(M, 4, 4, linuxface::ImageFormat::RGB);
 
     // Should return nullptr for unsupported input format
     EXPECT_EQ(warped, nullptr);
@@ -235,7 +235,7 @@ TEST(ImageTransform, AffineWarpBilinear_UnsupportedTargetFormat)
     linuxface::Image img(linuxface::Pixel(255, 128, 64), 4, 4);
     double M[6] = {1, 0, 0, 0, 1, 0};
 
-    auto warped = img.affineWarpBilinear(M, 4, 4, nullptr, linuxface::ImageFormat::GRAYSCALE);
+    auto warped = img.affineWarpBilinear(M, 4, 4, linuxface::ImageFormat::GRAYSCALE);
 
     // Should return nullptr for unsupported target format
     EXPECT_EQ(warped, nullptr);

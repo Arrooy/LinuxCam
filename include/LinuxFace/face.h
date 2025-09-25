@@ -121,6 +121,14 @@ class Face
 
     bool hasLandmarks() const { return !landmarks_.empty(); }
     bool isValid() const { return valid_; }
+
+    // Segmentation mask methods
+    const bool hasSegmentationMask() const { return segmentationMask_ != nullptr; }
+    void setSegmentationMask(std::unique_ptr<Image> mask) { segmentationMask_ = std::move(mask); }
+    const std::shared_ptr<Image>& getSegmentationMask() const { return segmentationMask_; }
+
+    std::unique_ptr<Image> createFaceMaskInternal(const std::unique_ptr<Image>& image, double blurAmount, const std::vector<int>& padding) const;
+
   private:
     void freeFaceLandmarks();
 
@@ -128,6 +136,7 @@ class Face
     std::map<FaceIndex, std::vector<FaceLandmark>> landmarks_;
     FacePose pose_{};
     bool valid_{false};
+    std::shared_ptr<Image> segmentationMask_;
 };
 
 } // namespace linuxface

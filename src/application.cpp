@@ -16,8 +16,8 @@
 #include "LinuxFace/depthImage.h"
 #include "LinuxFace/dlibDetectors.h"
 #include "LinuxFace/inputWebcam.h"
-#include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/onnx/faceSegmentation.h"
+#include "LinuxFace/onnx/swapPipeline.h"
 #include "config.hpp"
 
 using linuxface::Application;
@@ -234,8 +234,12 @@ bool Application::initialize()
             const std::string faceSegmentationModel = modelsFolder + "face_parsing_18_argmax.onnx";
             faceSegmentationDetector_ = std::make_shared<FaceSegmentationDetector>(faceSegmentationModel);
 
+            const std::string pfldModel = modelsFolder + "pfld-106-v3.onnx";
+            pfldDetector_ = std::make_shared<PFLDDetector>(pfldModel);
+
             // Initialize SwapPipeline after all models are loaded
-            swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_);
+            swapPipeline_ = std::make_unique<SwapPipeline>(inswapper_, arcfaceRecognizer_, scrfdDetector_,
+                                                           faceSegmentationDetector_);
         });
     modelLoader.detach();
 
@@ -260,7 +264,10 @@ bool Application::initialize()
     Profiler::getInstance().start("Initialization", "Target Image Loading");
     // Load target faceswap image once
     // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
-    const std::string targetPath = "/home/arroyo/Downloads/albert.jpeg";
+    // const std::string targetPath = "/home/arroyo/Downloads/albert.jpeg";
+    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/olga.jpeg";
+    // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/paps.jpeg";
+
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
     if (!target_img_)
     {
@@ -406,11 +413,11 @@ void Application::render()
     Profiler::getInstance().start("Application", "Render");
     // Set viewport
     window_.setViewport();
- 
+
     // Clear screen
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
- 
+
     // Render all layers
     int width = 0;
     int height = 0;
@@ -424,63 +431,11 @@ void Application::render()
     Profiler::getInstance().stop("Application", "Render");
 }
 
-void Application::processFaceSegmentation(std::unique_ptr<Image>& image, const Face& face)
-{
-    // Face-ROI approach: Use similarity transform for optimal face scaling in 512x512 input
-    // This ensures the face occupies most of the model input for better segmentation quality
-    
-    // Get 5-point landmarks for face alignment
-    const auto& landmarks = face.getFivePointLandmarksArcFaceOrder2D();
-    if (landmarks.size() != 5)
-    {
-        linuxface::common::logWarn("Face segmentation skipped: Face does not have 5 landmarks");
-        return;
-    }
-
-    // Create padded template from TEMPLATE_512 for face segmentation with expanded coverage
-    // Apply padding to capture more hair, forehead, cheeks, and chin area
-    constexpr int targetSize = 512;
-    
-    // Use similarity transform to create padded face ROI
-    auto [alignedFace, affineTransform] = image_utils::similarityFaceTransform(
-        *image, landmarks, image_utils::TEMPLATE_512, targetSize, true, ImageFormat::RGB);
-    
-    if (!alignedFace)
-    {
-        linuxface::common::logWarn("Face segmentation failed: Could not create aligned face ROI");
-        return;
-    }
-
-    std::unique_ptr<Image> labelMask;
-    auto worked = faceSegmentationDetector_->detect(alignedFace, labelMask);
-
-    if (!worked || !labelMask)
-    {
-        linuxface::common::logWarn("Face segmentation failed: No mask generated");
-        return;
-    }
-
-    // Apply colored visualization to aligned face
-    FaceSegmentationDetector::applySegmentationVisualization(*alignedFace, *labelMask);
-
-    // Transform the processed face back to original image coordinates
-    std::array<double, 6> inverseAffine;
-    if (!math_utils::invertAffine(affineTransform.data(), inverseAffine.data()))
-    {
-        linuxface::common::logError("Face segmentation failed: Could not invert affine transform");
-        return;
-    }
-
-    // Fallback: paste using face bounding box
-    const auto& bbox = face.getBoundingBox().rect;
-    image->pasteAt(*alignedFace, 0, 0, false);
-
-}
 
 void Application::process(std::unique_ptr<Image>& image)
 {
     auto raw = image->deepCopy();
- 
+
     std::vector<Face> dlibFaces;
     if (faceDetector_ != nullptr)
     {
@@ -491,11 +446,6 @@ void Application::process(std::unique_ptr<Image>& image)
     if (scrfdDetector_ != nullptr && scrfdDetector_->isReady())
     {
         scrfdFaces = scrfdDetector_->detect(image);
-        // for (const auto& face : scrfdFaces)
-        // {
-        //     face.paintBoundingBox(image, Pixel(0, 200, 200));
-        //     face.paintAllFaceLandmarks(image, false, Pixel(0, 200, 200), 1.5f);
-        // }
     }
 
 
@@ -740,16 +690,19 @@ void Application::process(std::unique_ptr<Image>& image)
     // }
 
 
-    bool swap_success = false;
-    if (swapPipeline_ && target_img_)
-    {
-        // swap_success = swapPipeline_->run(image, target_img_, scrfdFaces);
-    }
-
     // Face Segmentation processing - Face-ROI approach for optimal model performance
     if (faceSegmentationDetector_ && faceSegmentationDetector_->isReady() && !scrfdFaces.empty())
     {
-        processFaceSegmentation(image, scrfdFaces[0]);
+        faceSegmentationDetector_->detect(image, scrfdFaces[0]);
+
+        // Apply colored visualization to aligned face
+        // FaceSegmentationDetector::applySegmentationVisualization(*image, scrfdFaces[0]);
+    }
+
+    bool swap_success = false;
+    if (swapPipeline_ && target_img_)
+    {
+        swap_success = swapPipeline_->run(image, target_img_, scrfdFaces);
     }
 
     // if (rvmDetector_ && rvmDetector_->isReady())
@@ -783,6 +736,7 @@ void Application::process(std::unique_ptr<Image>& image)
 
     //     Profiler::getInstance().stop("RVM", "App paste");
     // }
+
     // for (auto& face : scrfd_faces)
     // {
     //     if (fsanetDetectorVar_ && fsanetDetectorVar_->isReady())

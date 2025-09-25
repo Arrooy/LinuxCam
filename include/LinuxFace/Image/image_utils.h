@@ -189,13 +189,16 @@ faceTransform(const std::vector<math_utils::Point<>>& landmarks, const double te
         }
     }
     double m[6] = {0};
+    double invM[6] = {0};
     estimateTransform(src, dst, 5, m);
+    math_utils::invertAffine(m, invM);
+
     std::array<double, 6> arrM{};
     for (int i = 0; i < 6; ++i)
     {
         arrM[i] = m[i];
     }
-    return {warpFn(m, targetSize, targetSize), arrM};
+    return {warpFn(invM, targetSize, targetSize), arrM};
 }
 
 // Align or unalign face using 5 landmarks and a template (returns nullptr if not possible)
@@ -209,7 +212,7 @@ affineFaceTransform(const Image& inputImg, const std::vector<math_utils::Point<>
     return faceTransform(
         landmarks, templatePoints, targetSize, math_utils::estimateAffine2d,
         [&](const double* m, int outWidth, int outHeight)
-        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, nullptr, targetFormat); }, alignToTemplate);
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, targetFormat); }, alignToTemplate);
 }
 
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
@@ -220,7 +223,7 @@ similarityFaceTransform(const Image& inputImg, const std::vector<math_utils::Poi
     return faceTransform(
         landmarks, templatePoints, targetSize, math_utils::estimateSimilarity2d,
         [&](const double* m, int outWidth, int outHeight)
-        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, nullptr, targetFormat); }, alignToTemplate);
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, targetFormat); }, alignToTemplate);
 }
 
 inline std::pair<std::unique_ptr<Image>, std::array<double, 6>>
@@ -231,7 +234,7 @@ procrustesSimilarityFaceTransform(const Image& inputImg, const std::vector<math_
     return faceTransform(
         landmarks, templatePoints, targetSize, math_utils::estimateProcrustesSimilarity,
         [&](const double* m, int outWidth, int outHeight)
-        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, nullptr, targetFormat); }, alignToTemplate);
+        { return inputImg.affineWarpBilinear(m, outWidth, outHeight, targetFormat); }, alignToTemplate);
 }
 
 
@@ -1183,7 +1186,7 @@ void nearestNeighborScaling(const ImageView<T>& src, ImageView<K>& dst)
             // Calculate nearest source pixel (simple rounding for best discrete value preservation)
             const unsigned long srcX = static_cast<unsigned long>(std::round(x * xScale));
             const unsigned long srcY = static_cast<unsigned long>(std::round(y * yScale));
-            
+
             // Clamp to valid source bounds
             const unsigned long clampedSrcX = std::min(srcX, src.width - 1);
             const unsigned long clampedSrcY = std::min(srcY, src.height - 1);
@@ -1210,7 +1213,7 @@ void nearestNeighborScaling(const ImageView<T>& src, ImageView<K>& dst)
                         const size_t dstIdx =
                             calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                         dst.data[dstIdx] = alphaValue;
-                        
+
                         // Collect statistics if needed
                         if (needsStats)
                         {
@@ -1227,7 +1230,7 @@ void nearestNeighborScaling(const ImageView<T>& src, ImageView<K>& dst)
 
                 // Copy pixel value exactly (no interpolation - preserves discrete values)
                 const unsigned long srcIdx = (clampedSrcY * src.width + clampedSrcX) * src.pixelBytes + srcCh;
-                
+
                 K scaledValue;
                 if constexpr (std::is_floating_point_v<K>)
                 {
@@ -1241,7 +1244,7 @@ void nearestNeighborScaling(const ImageView<T>& src, ImageView<K>& dst)
                     const double srcValue = static_cast<double>(src.data[srcIdx]);
                     scaledValue = static_cast<K>(std::clamp(srcValue, minVal, maxVal));
                 }
-                
+
                 // Calculate destination index based on output layout
                 const size_t dstIdx = calculateDestIndex<outputLayout>(y, x, ch, dst.width, dst.height, dst.pixelBytes);
                 dst.data[dstIdx] = scaledValue;
@@ -1254,13 +1257,13 @@ void nearestNeighborScaling(const ImageView<T>& src, ImageView<K>& dst)
             }
         }
     }
-    
+
     // Step 2: Apply normalization if needed
     if constexpr (normalizationType != NormalizationType::NONE)
     {
         stats.finalize();
         Normalizer<K, normalizationType> normalizer;
-        
+
         const size_t totalPixels = dst.width * dst.height * dst.pixelBytes;
         for (size_t i = 0; i < totalPixels; i++)
         {
@@ -1488,7 +1491,7 @@ void chwToHwc(const T* src, T* dst, unsigned long width, unsigned long height, u
 template <NormalizationType normalizationType = NormalizationType::NONE>
 std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsigned long height)
 {
-    if (src == nullptr || width == 0 || height == 0)
+    if (!src || width == 0 || height == 0)
     {
         common::logError("Invalid parameters for converting to raw image");
         return nullptr;
@@ -1536,6 +1539,12 @@ std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsign
 
     return image;
 }
+
+void softenMaskEdges(Image& mask, int blurRadius);
+
+bool poissonBlend(const Image& src, Image& dst, const Image& mask, int maxIterations = 200,
+                  float tolerance = 0.5f, float relaxation = 1.6f);
+
 } // namespace linuxface::image_utils
 
 #endif // IMAGE_UTILS_H

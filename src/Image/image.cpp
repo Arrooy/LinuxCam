@@ -145,12 +145,19 @@ Image& Image::operator=(Image&& other) noexcept
 
 void Image::black()
 {
+    fill(0);
+}
+
+void Image::fill(int intensity)
+{
     if (data_ && size_ > 0)
     {
-        // Set all pixels to black
-        memset(data_.get(), 0, size_);
+        // Set all pixels to intensity value
+        memset(data_.get(), intensity, size_);
     }
 }
+
+
 void Image::resize(size_t newSize, bool preserveData)
 {
     if (newSize == 0)
@@ -375,7 +382,8 @@ void Image::scaleImageBuffer(const unsigned char* srcData, unsigned long srcWidt
             image_utils::bicubicScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
             break;
         case ScalingAlgorithm::NEAREST_NEIGHBOR:
-            image_utils::nearestNeighborScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView, dstView);
+            image_utils::nearestNeighborScaling<unsigned char, unsigned char, NormalizationType::NONE>(srcView,
+                                                                                                       dstView);
             break;
         default:
             common::logError("scaleImageBuffer - Unsupported scaling algorithm: %d", static_cast<int>(algorithm));
@@ -1826,10 +1834,9 @@ Image& Image::pasteImpl(const Image& other, long otherX, long otherY, bool expan
     return *this;
 }
 
-// TODO(arroyo): SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM
-// EDGE.
-std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, int outHeight, const double* invM,
-                                                 ImageFormat targetFormat) const
+// TODO(arroyo): SEEMS LIKE BOUNDS ARE WRONG, MOVE CLOSE THE FACE TO THE BOTTOM EDGE.
+std::unique_ptr<Image>
+Image::affineWarpBilinear(const double* m, int outWidth, int outHeight, ImageFormat targetFormat) const
 {
     // Validate input format support (RGB and RGBA)
     if (info.pixelSizeBytes != 3 && info.pixelSizeBytes != 4)
@@ -1850,23 +1857,6 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, 
     const int outChannels = (targetFormat == ImageFormat::RGBA) ? 4 : 3;
     const int inChannels = info.pixelSizeBytes;
 
-    // Accept optional inverse matrix for performance
-    double localInvM[6];
-    const double* useInvM = nullptr;
-    if (invM != nullptr)
-    {
-        useInvM = invM;
-    }
-    else
-    {
-        if (!math_utils::invertAffine(m, localInvM))
-        {
-            common::logError("Image::affineWarpBilinear - Invalid affine matrix provided");
-            return nullptr;
-        }
-        useInvM = localInvM;
-    }
-
     const size_t outSize = outWidth * outHeight * outChannels;
     auto outImg = std::make_unique<Image>(outSize);
     outImg->info = info;
@@ -1885,8 +1875,8 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, 
     {
         for (int x = 0; x < outWidth; ++x)
         {
-            const double srcX = useInvM[0] * x + useInvM[1] * y + useInvM[2];
-            const double srcY = useInvM[3] * x + useInvM[4] * y + useInvM[5];
+            const double srcX = m[0] * x + m[1] * y + m[2];
+            const double srcY = m[3] * x + m[4] * y + m[5];
             unsigned char* pdst = dst + (y * outWidth + x) * outChannels;
 
             const int x0 = static_cast<int>(std::floor(srcX));
@@ -1945,30 +1935,12 @@ std::unique_ptr<Image> Image::affineWarpBilinear(const double* m, int outWidth, 
     return outImg;
 }
 
-std::unique_ptr<Image>
-Image::affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight, const double* invM) const
+std::unique_ptr<Image> Image::affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight) const
 {
     if (info.pixelSizeBytes != 1)
     {
         common::logError("Image::affineWarpNearestNeighbour - Only single-channel images are supported");
         return nullptr;
-    }
-
-    // Matrix inversion optimization (MED-003): use optional invM parameter
-    double localInvM[6];
-    const double* useInvM = nullptr;
-    if (invM != nullptr)
-    {
-        useInvM = invM;
-    }
-    else
-    {
-        if (!math_utils::invertAffine(m, localInvM))
-        {
-            common::logError("Image::affineWarpNearestNeighbour - Invalid affine matrix provided");
-            return nullptr;
-        }
-        useInvM = localInvM;
     }
 
     const size_t outSize = outWidth * outHeight;
@@ -1988,8 +1960,8 @@ Image::affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight, 
     {
         for (int x = 0; x < outWidth; ++x)
         {
-            const double srcX = useInvM[0] * x + useInvM[1] * y + useInvM[2];
-            const double srcY = useInvM[3] * x + useInvM[4] * y + useInvM[5];
+            const double srcX = m[0] * x + m[1] * y + m[2];
+            const double srcY = m[3] * x + m[4] * y + m[5];
             unsigned char* pdst = dst + (y * outWidth + x);
 
             // Nearest neighbor
@@ -2040,6 +2012,15 @@ void Image::alphaBlend(const Image& src, const Image& mask)
     const int dstChannels = info.pixelSizeBytes;
     const int srcChannels = src.info.pixelSizeBytes;
 
+    // Create blender instance once for efficiency
+    linuxface::image::AlphaBlender blender;
+
+    // Convert to new format system
+    linuxface::image::PixelFormat srcFormat =
+        (srcChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
+    linuxface::image::PixelFormat dstFormat =
+        (dstChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
+
     for (int i = 0; i < npixels; ++i)
     {
         const unsigned char* srcPixel = srcData + i * srcChannels;
@@ -2052,9 +2033,15 @@ void Image::alphaBlend(const Image& src, const Image& mask)
             continue; // Keep original destination pixel unchanged
         }
 
-        // Skip blending if source pixel is black (likely from out-of-bounds transformation)
+        // For RGBA sources, check alpha first - fully transparent pixels should be skipped
+        if (srcChannels == 4 && srcPixel[3] == 0)
+        {
+            continue; // Fully transparent source pixel, keep destination unchanged
+        }
+
+        // For RGB sources, skip black pixels (likely from out-of-bounds transformation)
         // This prevents black edges from appearing when faces are rotated
-        if (srcPixel[0] == 0 && srcPixel[1] == 0 && srcPixel[2] == 0)
+        if (srcChannels == 3 && srcPixel[0] == 0 && srcPixel[1] == 0 && srcPixel[2] == 0)
         {
             continue; // Keep original destination pixel unchanged
         }
@@ -2064,17 +2051,10 @@ void Image::alphaBlend(const Image& src, const Image& mask)
         if (srcChannels == 4)
         {
             // Combine mask alpha with source alpha: result = (mask * src_alpha) / 255
-            // Use floating-point arithmetic to avoid rounding errors
-            const float combinedAlpha = static_cast<float>(maskValue) * static_cast<float>(srcPixel[3]) / 255.0f;
-            effectiveSrcAlpha = static_cast<unsigned char>(std::round(std::clamp(combinedAlpha, 0.0f, 255.0f)));
+            // Use integer math to avoid floating-point overhead in the hot loop
+            const int combinedAlpha = (static_cast<int>(maskValue) * static_cast<int>(srcPixel[3])) / 255;
+            effectiveSrcAlpha = static_cast<unsigned char>(std::clamp(combinedAlpha, 0, 255));
         }
-
-        // Use our new architecture to blend pixels
-        // Convert to our new pixel format system
-        linuxface::image::PixelFormat srcFormat =
-            (srcChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
-        linuxface::image::PixelFormat dstFormat =
-            (dstChannels == 3) ? linuxface::image::PixelFormat::RGB : linuxface::image::PixelFormat::RGBA;
 
         // Create temporary source pixel with effective alpha
         unsigned char tempSrcPixel[4];
@@ -2082,26 +2062,23 @@ void Image::alphaBlend(const Image& src, const Image& mask)
         tempSrcPixel[1] = srcPixel[1];
         tempSrcPixel[2] = srcPixel[2];
 
+        // Use AlphaBlender to blend the pixel
         if (srcChannels == 4)
         {
             tempSrcPixel[3] = effectiveSrcAlpha;
-            // Keep srcFormat as RGBA
-        }
-        else
-        {
-            // For RGB sources, use blendPixel with RGB format and alpha parameter
-            // Don't set tempSrcPixel[3] as it won't be used for RGB format
-        }
-
-        // Use AlphaBlender to blend the pixel
-        linuxface::image::AlphaBlender blender;
-        if (srcChannels == 4)
-        {
             blender.blendPixel(tempSrcPixel, dstPixel, srcFormat, dstFormat);
         }
         else
         {
+            // For RGB sources, use blendPixel with RGB format and alpha parameter
             blender.blendPixel(tempSrcPixel, dstPixel, srcFormat, dstFormat, effectiveSrcAlpha);
+        }
+
+        if (dstChannels == 4)
+        {
+            // Guard against AlphaBlender overriding the alpha channel with partial values
+            // that later render as black halos when composited on opaque targets.
+            dstPixel[3] = 255;
         }
     }
 }

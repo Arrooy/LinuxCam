@@ -281,12 +281,11 @@ class Image
     // targetFormat specifies the output format (RGB or RGBA)
     // Supports: RGB->RGB, RGBA->RGB, RGBA->RGBA transformations
     std::unique_ptr<Image>
-    affineWarpBilinear(const double* m, int outWidth, int outHeight, const double* invM = nullptr, 
-                       ImageFormat targetFormat = ImageFormat::RGB) const;
+    affineWarpBilinear(const double* m, int outWidth, int outHeight, ImageFormat targetFormat = ImageFormat::RGB) const;
 
     // Affine warp for single-channel mask
     std::unique_ptr<Image>
-    affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight, const double* invM = nullptr) const;
+    affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight) const;
 
     // Alpha blend src onto this image using mask (mask: 0=background, 255=full src)
     void alphaBlend(const Image& src, const Image& mask);
@@ -305,6 +304,7 @@ class Image
     // Set all pixels to black (useful for clearing the image)
     void black();
     bool isFullyOpaque() const;
+    void fill(int intensity);
 
     // Static utility methods
     [[nodiscard]] static linuxface::image::PixelFormat pixelSizeToFormat(unsigned char pixelSize) noexcept;

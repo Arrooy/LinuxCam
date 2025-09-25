@@ -55,7 +55,7 @@ std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>&
         common::logError(("InSwapper: Invalid landmark count. Expected 5, got " + std::to_string(dstLandmarks.size())).c_str());
         return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
     }
-    // TODO: test with similarity face transform
+
     const int targetSize = InputWidth;
     auto [aligned, affine] =
         image_utils::similarityFaceTransform(dstFace, dstLandmarks, image_utils::TEMPLATE_128, targetSize);

@@ -53,12 +53,31 @@ class FaceSegmentationDetector : public OnnxDetector
      */
     bool detect(const std::unique_ptr<Image>& image, std::unique_ptr<Image>& labelMask);
 
+    // TODO: comment.
+    bool detect(std::unique_ptr<Image>& image, Face& face);
+
     /**
      * Apply colored visualization overlay to show segmentation results
      * @param faceImage Face image to apply visualization to (modified in-place)
      * @param labelMask Segmentation label mask with class IDs
+     * @param centerX X coordinate of face center
+     * @param centerY Y coordinate of face center
+     * @param roiWidth Width of ROI to visualize around center
+     * @param roiHeight Height of ROI to visualize around center
      */
-    static void applySegmentationVisualization(Image& faceImage, const Image& labelMask);
+    static void applySegmentationVisualization(Image& faceImage, const Image& labelMask, float centerX, float centerY);
+
+    static void applySegmentationVisualization(Image& faceImage, const Face& face);
+
+    /**
+     * Create a binary grayscale mask from segmentation labels
+     * @param labelMask Segmentation label mask with class IDs
+     * @param faceClasses List of class IDs to include in the face mask (set to 255)
+     * @return Binary grayscale mask where selected classes are white
+     */
+    static std::unique_ptr<Image>
+    createFaceShapeMask(const Image& labelMask, const std::vector<FaceSegmentationClass>& faceClasses);
+
 
   private:
     static constexpr const int InputWidth = 512;

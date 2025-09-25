@@ -12,6 +12,7 @@
 #include "LinuxFace/imageRenderGL.h"
 #include "LinuxFace/onnx/MODNet.h"
 #include "LinuxFace/onnx/arcfaceRecognizer.h"
+#include "LinuxFace/onnx/faceSegmentation.h"
 #include "LinuxFace/onnx/fsanet.h"
 #include "LinuxFace/onnx/inswapper.h"
 #include "LinuxFace/onnx/mediaPipe_FaceLandmarks.h"
@@ -19,7 +20,6 @@
 #include "LinuxFace/onnx/rvm.h"
 #include "LinuxFace/onnx/scrfd.h"
 #include "LinuxFace/onnx/swapPipeline.h"
-#include "LinuxFace/onnx/faceSegmentation.h"
 #include "LinuxFace/profiler.h"
 #include "LinuxFace/ui.h"
 #include "LinuxFace/window.h"
@@ -48,10 +48,7 @@ class Application
                                   float& minY, float& maxX, float& maxY);
     bool createCompositeImage(std::unique_ptr<Image>& compositeImage, const std::vector<Layer>& layers, float minX,
                               float minY, unsigned int compositeWidth, unsigned int compositeHeight);
-    
-    // Face segmentation helper methods
-    void processFaceSegmentation(std::unique_ptr<Image>& image, const Face& face);
-    
+
     Window window_;
     std::unique_ptr<UI> ui_;
 
