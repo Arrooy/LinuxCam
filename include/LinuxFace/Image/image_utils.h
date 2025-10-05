@@ -1542,8 +1542,21 @@ std::unique_ptr<Image> convertToRawImage(float* src, unsigned long width, unsign
 
 void softenMaskEdges(Image& mask, int blurRadius);
 
-bool poissonBlend(const Image& src, Image& dst, const Image& mask, int maxIterations = 200,
-                  float tolerance = 0.5f, float relaxation = 1.6f);
+bool poissonBlend(const Image& src, Image& dst, const Image& mask, int maxIterations = 200, float tolerance = 0.5f,
+                  float relaxation = 1.6f);
+
+/**
+ * Compute distance field using linear-time Euclidean Distance Transform
+ * @param binaryMask Binary mask data (0 = background, non-zero = foreground)
+ * @param width Width of the mask
+ * @param height Height of the mask
+ * @param seedsAreInside If true, seeds are inside the mask (non-zero pixels have distance 0)
+ *                       If false, seeds are outside the mask (zero pixels have distance 0)
+ * @return Vector of distance values, one per pixel. Returns empty vector on invalid input.
+ */
+std::vector<float> computeDistanceField(const std::vector<unsigned char>& binaryMask, int width, int height, bool seedsAreInside);
+
+std::unique_ptr<Image> buildSmartFeatherMask(const Image& mask, float innerRadius, float outerRadius);
 
 } // namespace linuxface::image_utils
 

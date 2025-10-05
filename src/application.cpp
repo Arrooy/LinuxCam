@@ -265,7 +265,7 @@ bool Application::initialize()
     // Load target faceswap image once
     // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
     // const std::string targetPath = "/home/arroyo/Downloads/albert.jpeg";
-    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/olga.jpeg";
+    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/adria.jpg";
     // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/paps.jpeg";
 
     target_img_ = ImageLoader::loadImageFromFile(targetPath);
