@@ -50,11 +50,42 @@ sudo apt-get install libjxl-dev libopenblas-dev liblapack-dev
 sudo apt-get install libavdevice-dev libavfilter-dev libavformat-dev
 sudo apt-get install libavcodec-dev libswresample-dev libswscale-dev libavutil-dev
 
-# X11 libraries
-sudo apt-get install libxinerama-dev libxcursor-dev libxi-dev
+# OpenGL libraries (required for UI)
+sudo apt-get install libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libglx-dev
+
+# X11 libraries (required for GLFW and UI)
+sudo apt-get install libxinerama-dev libxcursor-dev libxi-dev libxrandr-dev
+sudo apt-get install libxext-dev libxfixes-dev libxrender-dev
 ```
 
 **CUDA & cuDNN:**
+
+For GPU acceleration, install CUDA toolkit and cuDNN libraries:
+
+```bash
+# Add NVIDIA CUDA repository
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+
+# Install CUDA Toolkit 12.6
+sudo apt install -y cuda-toolkit-12-6
+
+# Install cuDNN 9 for CUDA 12 (required for ONNX Runtime CUDA provider)
+sudo apt install -y libcudnn9-dev-cuda-12
+
+# Add CUDA to PATH and library path
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# Make environment variables permanent
+echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+
+```bash
+
+**Alternative Manual Installation:**
 
 - **CUDA 12**: [Download from NVIDIA](https://developer.nvidia.com/cuda-downloads)
 - **cuDNN 9**: [Download from NVIDIA](https://developer.nvidia.com/cudnn-downloads)
@@ -87,6 +118,68 @@ mkdir -p build && cd build
 cmake ..
 make -j$(nproc)
 ```
+
+> 💡 **Note**: The project is configured to use CUDA providers for ONNX Runtime. If you installed CUDA as described above, GPU acceleration will be automatically enabled. To run the application with CUDA support, ensure the CUDA libraries are in your path:
+>
+> ```bash
+> # Run with CUDA support
+> LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH ./LinuxFace
+> ```
+
+### CUDA Verification
+
+To verify that CUDA is properly installed and working:
+
+```bash
+# Check NVIDIA driver
+nvidia-smi
+
+# Check CUDA compiler
+nvcc --version
+
+# Verify CUDA libraries
+ls /usr/local/cuda/lib64/ | grep libcudart
+
+# Check for cuDNN
+find /usr/local/cuda -name "*cudnn*" 2>/dev/null
+```
+
+When running LinuxFace, you should see these messages indicating successful CUDA initialization:
+
+```log
+[INFO] CUDA Execution Provider available
+[INFO] OnnxDetector: CUDA provider added successfully with 2GB memory limit
+```
+
+If you see warnings about "Failed to load shared library", ensure CUDA paths are set correctly.
+
+### Troubleshooting CUDA Issues
+
+**Common CUDA/cuDNN Errors:**
+
+1. **CUDNN_FE failure / CUDNN_BACKEND_API_FAILED errors:**
+   ```bash
+   # This usually indicates cuDNN version incompatibility
+   # Try using CPU execution instead by setting environment variable:
+   export ORT_DISABLE_CUDA=1
+   
+   # Or downgrade to a compatible cuDNN version:
+   sudo apt remove libcudnn9-dev-cuda-12 libcudnn9-cuda-12
+   sudo apt install libcudnn8-dev libcudnn8=8.9.7.29-1+cuda12.2
+   ```
+
+2. **Memory allocation errors:**
+   ```bash
+   # Reduce GPU memory usage in your application or
+   # Set CUDA memory limit (done automatically in LinuxFace to 2GB)
+   ```
+
+3. **Model compatibility issues:**
+   ```bash
+   # Some ONNX models may not be compatible with newer cuDNN versions
+   # Check model documentation or try running with CPU execution
+   export ORT_DISABLE_CUDA=1
+   ```
 
 ### Virtual Webcam Setup
 

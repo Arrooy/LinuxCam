@@ -118,9 +118,9 @@ link_directories(${ONNXRUNTIME_ROOT}/lib)
 
 # Add ONNX Runtime (shared or static depending on your build)
 # If shared:
-set(ONNXRUNTIME_LIB onnxruntime)
+# set(ONNXRUNTIME_LIB onnxruntime)
 # If static and built with extra providers:
-# set(ONNXRUNTIME_LIB onnxruntime onnxruntime_providers_shared onnxruntime_providers_cuda)
+set(ONNXRUNTIME_LIB onnxruntime onnxruntime_providers_shared onnxruntime_providers_cuda)
 
 # ======================================
 
