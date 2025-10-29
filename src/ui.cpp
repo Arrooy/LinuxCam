@@ -4,9 +4,11 @@
 #include "imgui_impl_opengl3.h"
 
 #include <cmath>
+#include <functional>
 
 #include "LinuxFace/Image/text_renderer.h"
 #include "LinuxFace/UI/paintWebcam.h"
+#include "LinuxFace/application.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
 
@@ -108,7 +110,10 @@ void UI::paint()
     // ImGui::ShowDemoWindow();
 
     // Paint all UI windows
-    paintMainWindow();
+    {
+        Profiler::ScopedProfilerSpan span("UI", "paintMainWindow");
+        paintMainWindow();
+    }
     // Handle layer dragging globally (for the whole window)
     handleLayerDragging();
 }
@@ -128,7 +133,7 @@ void UI::paintMainWindow()
         {
             ImGui::MenuItem("Toggle Profiler", nullptr, &show_profiler_);
             ImGui::MenuItem("Toggle Device Configuration", nullptr, &show_device_config_);
-            ImGui::MenuItem("Toggle Media Browser", nullptr, &mediaBrowserVisible_);
+            ImGui::MenuItem("Toggle Media Settings", nullptr, &mediaBrowserVisible_);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Load media..."))
@@ -309,7 +314,103 @@ void UI::paintMainWindow()
 
             ImGui::Separator();
 
-            // Use statistics instead of just durations
+            // Reserve vertical space and split area between call tree and stats table so they can scroll independently
+            const float totalAvailY = ImGui::GetContentRegionAvail().y;
+            // Allocate roughly 40% to the call tree, but clamp to reasonable bounds
+            const float callTreeHeight = std::clamp(totalAvailY * 0.40f, 120.0f, 400.0f);
+
+            // Display hierarchical call tree inside a scrollable child region
+            if (ImGui::CollapsingHeader("Call Tree Hierarchy"))
+            {
+                ImGui::BeginChild("ProfilerCallTreeChild", ImVec2(0.0f, callTreeHeight), true,
+                                  ImGuiWindowFlags_HorizontalScrollbar);
+
+                const auto& callTree = Profiler::getInstance().getCurrentCallTree();
+
+                if (!callTree.children.empty() || callTree.name != "empty")
+                {
+                    // Helper function to render a call tree node recursively
+                    std::function<void(const Profiler::CallTreeNode&, int)> renderCallTreeNode =
+                        [&](const Profiler::CallTreeNode& node, int depth)
+                    {
+                        // Create a unique ID for this node
+                        std::string nodeId =
+                            node.name + "##" + std::to_string(depth) + "_" + std::to_string(&node - &callTree);
+
+                        // Format the display text
+                        char buffer[256];
+                        if (node.inclusive_ms > 0)
+                        {
+                            snprintf(buffer, sizeof(buffer), "%s (Inc: %.2f ms, Exc: %.2f ms)", node.name.c_str(),
+                                     node.inclusive_ms / 1000.0f, node.exclusive_ms / 1000.0f);
+                        }
+                        else
+                        {
+                            snprintf(buffer, sizeof(buffer), "%s", node.name.c_str());
+                        }
+
+                        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick
+                                                   | ImGuiTreeNodeFlags_DefaultOpen;
+                        if (node.children.empty())
+                        {
+                            flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                        }
+
+                        bool isOpen = ImGui::TreeNodeEx(nodeId.c_str(), flags, "%s", buffer);
+
+                        if (isOpen && !node.children.empty())
+                        {
+                            for (const auto& child : node.children)
+                            {
+                                renderCallTreeNode(child, depth + 1);
+                            }
+                            ImGui::TreePop();
+                        }
+                    };
+
+                    // Render the call tree starting from root
+                    renderCallTreeNode(callTree, 0);
+                }
+                else
+                {
+                    ImGui::Text("No call tree data available");
+                }
+
+                ImGui::EndChild();
+
+                ImGui::Separator();
+                if (ImGui::Button("Reset Call Tree"))
+                {
+                    Profiler::getInstance().resetCallTree();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Capture Next Loop"))
+                {
+                    if (application_)
+                    {
+                        application_->requestLoopCapture();
+                    }
+                    else
+                    {
+                        common::logWarn("Application not connected to UI - cannot capture loop");
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Build Call Tree (All)"))
+                {
+                    Profiler::getInstance().forceRebuildCallTree();
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("(?)");
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Reset: Clear all call tree data\n"
+                                      "Capture Next Loop: Profile only the next application loop iteration\n"
+                                      "Build Call Tree (All): Build tree from all accumulated events\n\n"
+                                      "Inc = Inclusive time (total time spent in function including children)\n"
+                                      "Exc = Exclusive time (time spent only in this function, excluding children)");
+                }
+            }
             auto allStats = Profiler::getInstance().getAllTimerStatistics();
 
             // Sort by current duration for display

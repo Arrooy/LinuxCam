@@ -29,7 +29,7 @@ DlibFaceDetector::DlibFaceDetector()
 
 std::vector<Face> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
 {
-    Profiler::getInstance().start("DLIB", "Face Detector");
+    Profiler::ScopedProfilerSpan span_dlib("DLIB", "Face Detector");
     const DlibImageWrapper dlibImage(image);
 
     // Detect faces
@@ -43,7 +43,6 @@ std::vector<Face> DlibFaceDetector::detect(const std::unique_ptr<Image>& image)
                                            static_cast<float>(rect.right()), static_cast<float>(rect.bottom())));
     }
 
-    Profiler::getInstance().stop("DLIB", "Face Detector");
     return faces;
 }
 

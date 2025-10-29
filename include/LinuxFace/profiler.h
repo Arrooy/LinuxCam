@@ -1,5 +1,6 @@
 #ifndef PROFILER_H
 #define PROFILER_H
+#include <atomic>
 #include <chrono>
 #include <mutex>
 #include <string>
@@ -87,7 +88,6 @@ class Profiler
      */
     void update();
 
-  public:
     /**
      * Statistical data for a timer over a time window.
      */
@@ -108,11 +108,13 @@ class Profiler
     struct ColorRange
     {
         std::chrono::microseconds greenThreshold{1000}; // 1ms - good performance (green)
-        std::chrono::microseconds redThreshold{10000};   // 10ms - poor performance (red)
-        
+        std::chrono::microseconds redThreshold{10000};  // 10ms - poor performance (red)
+
         ColorRange() = default;
-        ColorRange(std::chrono::microseconds green, std::chrono::microseconds red) 
-            : greenThreshold(green), redThreshold(red) {}
+        ColorRange(std::chrono::microseconds green, std::chrono::microseconds red)
+            : greenThreshold(green), redThreshold(red)
+        {
+        }
     };
 
     /**
@@ -154,7 +156,7 @@ class Profiler
      * @param greenThreshold Duration threshold for good performance (green color)
      * @param redThreshold Duration threshold for poor performance (red color)
      */
-    void setColorRange(const std::string& timerKey, std::chrono::microseconds greenThreshold, 
+    void setColorRange(const std::string& timerKey, std::chrono::microseconds greenThreshold,
                        std::chrono::microseconds redThreshold);
 
     /**
@@ -164,8 +166,8 @@ class Profiler
      * @param greenThreshold Duration threshold for good performance (green color)
      * @param redThreshold Duration threshold for poor performance (red color)
      */
-    void setColorRange(const std::string& sourceName, const std::string& name,
-                       std::chrono::microseconds greenThreshold, std::chrono::microseconds redThreshold);
+    void setColorRange(const std::string& sourceName, const std::string& name, std::chrono::microseconds greenThreshold,
+                       std::chrono::microseconds redThreshold);
 
     /**
      * Get color range for a specific timer key.
@@ -178,6 +180,147 @@ class Profiler
      * Reset color ranges to defaults for all timers.
      */
     void resetColorRanges();
+
+    /**
+     * Event structure for hierarchical profiling.
+     */
+    struct ProfileEvent
+    {
+        std::string name;
+        std::string event; // "start" or "end"
+        int64_t timestamp_ms;
+        uint64_t thread_id{0};
+    };
+
+    /**
+     * Node in the call tree hierarchy.
+     */
+    struct CallTreeNode
+    {
+        std::string name;
+        int64_t inclusive_ms{0};
+        int64_t exclusive_ms{0};
+        std::vector<CallTreeNode> children;
+
+        CallTreeNode() = default;
+        CallTreeNode(std::string n) : name(std::move(n)) {}
+
+        /**
+         * Convert the call tree to JSON string representation.
+         * @return JSON string of the call tree
+         */
+        std::string toJson() const;
+    };
+
+    /**
+     * Get the current call tree hierarchy from collected events.
+     * @return Const reference to the current call tree
+     */
+    const CallTreeNode& getCurrentCallTree() const;
+
+    /**
+     * Force an immediate rebuild of the call tree from collected events.
+     * This is intended for on-demand UI actions (e.g. a "Build" button).
+     * It is safe to call from the main thread; it acquires the profiler
+     * mutex and updates the cached tree.
+     */
+    void forceRebuildCallTree();
+
+    /**
+     * Reset the collected profiling events.
+     */
+    void resetCallTree();
+
+    /**
+     * Start capturing profiling events for a single-loop snapshot.
+     * Clears any previously collected events to start fresh.
+     * Call this at the beginning of the loop you want to profile.
+     */
+    void startLoopCapture();
+
+    /**
+     * End single-loop capture and build the call tree from events collected since startLoopCapture().
+     * This builds the tree and clears events, so the tree represents only the captured loop.
+     * Call this at the end of the loop you want to profile.
+     */
+    void endLoopCapture();
+
+    /**
+     * Build a hierarchical call tree from a list of profile events.
+     * @param events List of profile events in chronological order
+     * @return Root node of the call tree
+     */
+    static CallTreeNode buildProfileHierarchy(const std::vector<ProfileEvent>& events);
+
+    /**
+     * A small RAII helper for scoped profiling spans. Usage:
+     * {
+     *   ScopedProfilerSpan span("Source", "Operation");
+     *   // work
+     * }
+     * The destructor will call stop() automatically.
+     */
+    class ScopedProfilerSpan
+    {
+      public:
+        ScopedProfilerSpan(const std::string& source, const std::string& name)
+            : source_(source), name_(name), moved_(false)
+        {
+            Profiler::getInstance().start(source_, name_);
+        }
+
+        // Non-copyable
+        ScopedProfilerSpan(const ScopedProfilerSpan&) = delete;
+        ScopedProfilerSpan& operator=(const ScopedProfilerSpan&) = delete;
+
+        // Movable
+        ScopedProfilerSpan(ScopedProfilerSpan&& other) noexcept
+            : source_(std::move(other.source_)), name_(std::move(other.name_)), moved_(other.moved_)
+        {
+            other.moved_ = true;
+        }
+
+        ScopedProfilerSpan& operator=(ScopedProfilerSpan&& other) noexcept
+        {
+            if (this != &other)
+            {
+                source_ = std::move(other.source_);
+                name_ = std::move(other.name_);
+                moved_ = other.moved_;
+                other.moved_ = true;
+            }
+            return *this;
+        }
+
+        ~ScopedProfilerSpan()
+        {
+            if (!moved_)
+            {
+                try
+                {
+                    Profiler::getInstance().stop(source_, name_);
+                }
+                catch (...)
+                {
+                }
+            }
+        }
+
+        // Manually stop early
+        void stop()
+        {
+            if (!moved_)
+            {
+                Profiler::getInstance().stop(source_, name_);
+                moved_ = true;
+            }
+        }
+
+      private:
+        std::string source_;
+        std::string name_;
+        bool moved_{false};
+    };
 
   private:
     Profiler() = default;
@@ -193,7 +336,7 @@ class Profiler
         std::vector<std::chrono::microseconds> samples;
         std::chrono::microseconds minimumDuration{std::chrono::microseconds::max()};
         std::chrono::microseconds maximumDuration{0};
-        size_t sampleIndex{0};  // Current position in circular buffer
+        size_t sampleIndex{0}; // Current position in circular buffer
     };
 
     static std::string makeKey(const std::string& sourceName, const std::string& name);
@@ -219,7 +362,18 @@ class Profiler
     static constexpr std::chrono::seconds CLEANUP_INTERVAL{5}; // Check every 5 seconds
 
     // Statistics configuration
-    size_t windowSize_{150};  // Size of the moving average window
+    size_t windowSize_{150}; // Size of the moving average window
+
+    // Hierarchical profiling data
+    std::vector<ProfileEvent> collectedEvents_;
+    CallTreeNode currentCallTree_;
+    bool callTreeDirty_{true}; // Flag to track if call tree needs rebuilding
+
+    // Single-loop capture mode
+    std::atomic<bool> loopCaptureActive_{false};
+
+    // Profiler self-profiling overhead tracking (microseconds)
+    std::atomic<int64_t> profilerOverheadUs_{0};
 };
 
 inline std::string Profiler::formatDuration(int64_t micros) noexcept

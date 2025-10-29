@@ -91,9 +91,7 @@ bool InputWebcam::stop()
 
 bool InputWebcam::configureBuffers()
 {
-    struct v4l2_buffer buf
-    {
-    };
+    struct v4l2_buffer buf{};
 
     CLEAR(bufrequest_);
     bufrequest_.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -244,9 +242,7 @@ bool InputWebcam::isRunning()
 
 void InputWebcam::imageAcquisitionLoop()
 {
-    struct v4l2_buffer buf
-    {
-    };
+    struct v4l2_buffer buf{};
     unsigned int totalDiscardedHeader{0u};
     unsigned int decodingFailureCount{0u};
     unsigned int totalTimeouts{0u};
@@ -266,9 +262,7 @@ void InputWebcam::imageAcquisitionLoop()
     while (isRecording_.load())
     {
         fd_set fds;
-        struct timeval tv
-        {
-        };
+        struct timeval tv{};
         int r = 0;
 
         FD_ZERO(&fds);
@@ -276,7 +270,7 @@ void InputWebcam::imageAcquisitionLoop()
 
         tv.tv_sec = 2;
         tv.tv_usec = 0;
-        Profiler::getInstance().start(name_, "Waiting for OS camera frame");
+        Profiler::ScopedProfilerSpan span_wait(name_, "Waiting for OS camera frame");
         r = select(fd_ + 1, &fds, nullptr, nullptr, &tv);
 
         if (r == -1)
@@ -296,7 +290,7 @@ void InputWebcam::imageAcquisitionLoop()
             if (totalTimeouts > 5)
             {
                 common::logError("InputWebcam::imageAcquisitionLoop - Select timeout reached. Please unplug and plug "
-                                  "again the camera.");
+                                 "again the camera.");
                 break;
             }
             continue;
@@ -340,7 +334,7 @@ void InputWebcam::imageAcquisitionLoop()
             if (totalDiscarded > maxDiscardCount)
             {
                 common::logError("InputWebcam::imageAcquisitionLoop - Too many discarded frames (%d), exiting loop",
-                                  totalDiscarded);
+                                 totalDiscarded);
                 break;
             }
             continue;
@@ -369,9 +363,8 @@ void InputWebcam::imageAcquisitionLoop()
             continue;
         }
 
-        Profiler::getInstance().stop(name_, "Waiting for OS camera frame");
 
-        Profiler::getInstance().start(name_, "Input image decoding");
+        Profiler::ScopedProfilerSpan span_decode(name_, "Input image decoding");
 
         Image srcImage(static_cast<unsigned char*>(buffers_[buf.index].start), buf.bytesused, false);
         srcImage.info.TJPixelFormat = TJPF_RGB;
@@ -397,7 +390,7 @@ void InputWebcam::imageAcquisitionLoop()
             {
                 imageTmp.resize(rawNeededSize);
                 common::logWarn("InputWebcam::imageAcquisitionLoop - Reallocating raw image buffer to %lu - %s",
-                                 imageTmp.size(), common::formatSize(imageTmp.size()));
+                                imageTmp.size(), common::formatSize(imageTmp.size()));
             }
 
             cameraInputInfo = srcImage.info;
@@ -415,7 +408,7 @@ void InputWebcam::imageAcquisitionLoop()
             if (decodingFailureCount > 10)
             {
                 common::logError("InputWebcam::imageAcquisitionLoop - Failed to decode image after %d attempts",
-                                  decodingFailureCount);
+                                 decodingFailureCount);
                 break;
             }
 
@@ -437,7 +430,6 @@ void InputWebcam::imageAcquisitionLoop()
             latestImage_->copyFrom(imageTmp);
         }
 
-        Profiler::getInstance().stop(name_, "Input image decoding");
 
         // Others can process the image
 
@@ -452,6 +444,7 @@ void InputWebcam::imageAcquisitionLoop()
 
 bool InputWebcam::getImage(std::unique_ptr<Image>& outImage)
 {
+    Profiler::ScopedProfilerSpan span(name_, "Get new camera frame");
     // Get the most recent frame from queue, discarding older ones
     if (latestImage_)
     {
@@ -513,9 +506,9 @@ bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex
 {
     const auto& newFormat = capabilities_.formats[formatIndex].sizes[sizeIndex];
     common::logInfo("InputWebcam::reconfigureFormat - Reconfiguring device %s with format Index %d, size index %d and "
-                     "fps index %d that is %dx%d with %d fps",
-                     name_.c_str(), formatIndex, sizeIndex, fpsIndex, newFormat.width, newFormat.height,
-                     newFormat.getFps(newFormat.selectedFPS));
+                    "fps index %d that is %dx%d with %d fps",
+                    name_.c_str(), formatIndex, sizeIndex, fpsIndex, newFormat.width, newFormat.height,
+                    newFormat.getFps(newFormat.selectedFPS));
 
     // Stop current operation
     const bool wasRunning = isRunning();

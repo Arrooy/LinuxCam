@@ -54,7 +54,6 @@ void signalHandler(int signal)
 {
     if (signal == SIGINT || signal == SIGTERM)
     {
-        linuxface::common::logWarn("Received signal %d, exiting...", signal);
         gShouldExit = true;
     }
 }
@@ -101,89 +100,93 @@ bool Application::initialize()
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    Profiler::getInstance().start("Initialization", "Window Setup");
-    // Initialize window
-    if (!window_.initialize())
     {
-        linuxface::common::logError("Failed to initialize window");
-        return false;
-    }
-
-    layerManager_ = std::make_shared<LayerManager>();
-
-    // Connect window resize to layerManager texture invalidation
-    this->connectWindowResize();
-    Profiler::getInstance().stop("Initialization", "Window Setup");
-
-    Profiler::getInstance().start("Initialization", "UI Setup");
-    // Initialize UI with LayerManager
-    ui_ = std::make_unique<UI>(layerManager_);
-    if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
-    {
-        linuxface::common::logError("Failed to initialize UI");
-        return false;
-    }
-
-    // Display loading screen
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    ui_->loadingScreen();
-    window_.swapBuffers();
-    window_.pollEvents();
-    Profiler::getInstance().stop("Initialization", "UI Setup");
-
-    Profiler::getInstance().start("Initialization", "Camera Setup");
-    cameraManager_ = std::make_shared<CameraManager>();
-    cameraManager_->setLayerManager(layerManager_);
-
-    auto webcams = Config::getInstance().getWebcams();
-    for (const auto& wc : webcams)
-    {
-        std::shared_ptr<Webcam> webcam;
-
-        if (wc.is_input)
+        Profiler::ScopedProfilerSpan span("Initialization", "Window Setup");
+        // Initialize window
+        if (!window_.initialize())
         {
-            webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height, wc.buffer_count);
-        }
-        else
-        {
-            webcam = std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height, wc.subsampling);
-        }
-        if (!webcam->setupDevice())
-        {
-            linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
-            continue;
-        }
-
-        if (!webcam->start())
-        {
-            linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
-            continue;
-        }
-        webcam->setCurrentlySelected(true);
-        if (!cameraManager_->addCamera(webcam))
-        {
-            linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
-            continue;
-        }
-    }
-
-    auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
-    for (const auto& devicePath : availableDevicePaths)
-    {
-        std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
-        if (!webcam->setupDevice())
-        {
-            linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
-            continue;
-        }
-        if (!cameraManager_->addCamera(std::move(webcam)))
-        {
-            linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
+            linuxface::common::logError("Failed to initialize window");
             return false;
         }
+
+        layerManager_ = std::make_shared<LayerManager>();
+
+        // Connect window resize to layerManager texture invalidation
+        this->connectWindowResize();
     }
-    Profiler::getInstance().stop("Initialization", "Camera Setup");
+
+    {
+        Profiler::ScopedProfilerSpan span("Initialization", "UI Setup");
+        // Initialize UI with LayerManager
+        ui_ = std::make_unique<UI>(layerManager_);
+        if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
+        {
+            linuxface::common::logError("Failed to initialize UI");
+            return false;
+        }
+
+        // Display loading screen
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ui_->loadingScreen();
+        window_.swapBuffers();
+        window_.pollEvents();
+    }
+
+    {
+        Profiler::ScopedProfilerSpan span("Initialization", "Camera Setup");
+        cameraManager_ = std::make_shared<CameraManager>();
+        cameraManager_->setLayerManager(layerManager_);
+
+        auto webcams = Config::getInstance().getWebcams();
+        for (const auto& wc : webcams)
+        {
+            std::shared_ptr<Webcam> webcam;
+
+            if (wc.is_input)
+            {
+                webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height, wc.buffer_count);
+            }
+            else
+            {
+                webcam =
+                    std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height, wc.subsampling);
+            }
+            if (!webcam->setupDevice())
+            {
+                linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
+                continue;
+            }
+
+            if (!webcam->start())
+            {
+                linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
+                continue;
+            }
+            webcam->setCurrentlySelected(true);
+            if (!cameraManager_->addCamera(webcam))
+            {
+                linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
+                continue;
+            }
+        }
+
+        auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
+        for (const auto& devicePath : availableDevicePaths)
+        {
+            std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
+            if (!webcam->setupDevice())
+            {
+                linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
+                continue;
+            }
+            if (!cameraManager_->addCamera(std::move(webcam)))
+            {
+                linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
+                return false;
+            }
+        }
+    }
 
     // Start loading models in a background thread
     std::thread modelLoader(
@@ -243,37 +246,41 @@ bool Application::initialize()
         });
     modelLoader.detach();
 
-    Profiler::getInstance().start("Initialization", "Renderer Setup");
-    // Pass pointer instead of reference
-    ui_->connect(cameraManager_);
-
-    linuxface::common::logInfo("OpenGL version: %s", glGetString(GL_VERSION));
-
-    // Initialize image renderer
-    imageRender_ = std::make_shared<ImageRenderGL>();
-    if (!imageRender_ || !imageRender_->initialize())
     {
-        linuxface::common::logError("Failed to initialize image renderer");
-        return false;
+        Profiler::ScopedProfilerSpan span("Initialization", "Renderer Setup");
+        // Pass pointer instead of reference
+        ui_->connect(cameraManager_);
+        ui_->connect(shared_from_this()); // Connect Application to UI for loop capture
+
+        linuxface::common::logInfo("OpenGL version: %s", glGetString(GL_VERSION));
+
+        // Initialize image renderer
+        imageRender_ = std::make_shared<ImageRenderGL>();
+        if (!imageRender_ || !imageRender_->initialize())
+        {
+            linuxface::common::logError("Failed to initialize image renderer");
+            return false;
+        }
+
+        mediaManager_ = std::make_shared<MediaManager>(imageRender_);
+        ui_->connect(mediaManager_);
     }
 
-    mediaManager_ = std::make_shared<MediaManager>(imageRender_);
-    ui_->connect(mediaManager_);
-    Profiler::getInstance().stop("Initialization", "Renderer Setup");
-
-    Profiler::getInstance().start("Initialization", "Target Image Loading");
-    // Load target faceswap image once
-    // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
-    // const std::string targetPath = "/home/arroyo/Downloads/albert.jpeg";
-    const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/adria.jpg";
-    // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/paps.jpeg";
-
-    target_img_ = ImageLoader::loadImageFromFile(targetPath);
-    if (!target_img_)
     {
-        linuxface::common::logError("Failed to load image at initialization");
+        Profiler::ScopedProfilerSpan span("Initialization", "Target Image Loading");
+        // Load target faceswap image once
+        // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
+        // const std::string targetPath = "/home/arroyo/Downloads/albert.jpeg";
+        // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/adria.jpg";
+        // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/paps.jpeg";
+        const std::string targetPath = "/home/arroyo/Downloads/max.jpeg";
+
+        target_img_ = ImageLoader::loadImageFromFile(targetPath);
+        if (!target_img_)
+        {
+            linuxface::common::logError("Failed to load image at initialization");
+        }
     }
-    Profiler::getInstance().stop("Initialization", "Target Image Loading");
 
 
     // auto image =
@@ -318,15 +325,34 @@ void Application::run()
     // Main loop
     while (!window_.shouldClose() && !gShouldExit)
     {
+        // Check if we should capture this loop
+        bool captureThisLoop = captureNextLoop_.exchange(false);
+
+        if (captureThisLoop)
+        {
+            profiler_.startLoopCapture();
+        }
+
         // handle periodic cleanup automatically
         profiler_.update();
 
-        Profiler::getInstance().start("MainLoop", "Frame Processing");
-        if (update())
         {
-            render();
+            Profiler::ScopedProfilerSpan span("MainLoop", "Frame Processing");
+            if (update())
+            {
+                render();
+            }
         }
-        Profiler::getInstance().stop("MainLoop", "Frame Processing");
+        // End capture after this loop completes
+        if (captureThisLoop)
+        {
+            profiler_.endLoopCapture();
+        }
+    }
+
+    if (gShouldExit)
+    {
+        linuxface::common::logInfo("Exiting main loop due to signal...");
     }
 
     cameraManager_->shutdown();
@@ -343,19 +369,25 @@ bool Application::update()
     // Poll events
     window_.pollEvents();
 
-    Profiler::getInstance().start("Application", "Update Camera Input");
-    // Update camera inputs - this now creates/updates individual layers per camera
-    if (!cameraManager_->updateInput())
     {
-        return false;
+        Profiler::ScopedProfilerSpan span("Application", "Update Camera Input");
+        // Update camera inputs - this now creates/updates individual layers per camera
+        if (!cameraManager_->updateInput())
+        {
+            return false;
+        }
     }
-    Profiler::getInstance().stop("Application", "Update Camera Input");
 
     // Composite all layers for output (if we have output cameras)
     auto& layers = layerManager_->getLayers();
     if (layers.empty())
     {
-        return false;
+        // No layers to composite, but still update UI
+        Profiler::ScopedProfilerSpan span("Application", "UI Update");
+        ui_->handleKeyboard();
+        ui_->newFrame();
+        ui_->paint();
+        return true;
     }
 
     // Get window/viewport size for composite
@@ -373,8 +405,6 @@ bool Application::update()
     calculateCompositeBounds(layers, windowWidth, windowHeight, minX, minY, maxX, maxY);
     unsigned int compositeWidth = (minX < maxX) ? static_cast<unsigned int>(maxX - minX) : windowWidth;
     unsigned int compositeHeight = (minY < maxY) ? static_cast<unsigned int>(maxY - minY) : windowHeight;
-    compositeWidth = std::min(compositeWidth, static_cast<unsigned int>(windowWidth));
-    compositeHeight = std::min(compositeHeight, static_cast<unsigned int>(windowHeight));
 
     std::unique_ptr<Image> compositeImage;
     bool compositeValid = createCompositeImage(compositeImage, layers, minX, minY, compositeWidth, compositeHeight);
@@ -385,32 +415,35 @@ bool Application::update()
         return false;
     }
 
-    Profiler::getInstance().start("Application", "Image processing");
-    process(compositeImage);
-    Profiler::getInstance().stop("Application", "Image processing");
+    {
+        Profiler::ScopedProfilerSpan span("Application", "Image processing");
+        process(compositeImage);
+    }
 
     // Flip horizontally the composite image
     // compositeImage->flipHorizontalInPlace();
 
-    Profiler::getInstance().start("Application", "Update Camera Output");
-    // Send processed composite to output cameras with cropping
-    if (!cameraManager_->updateOutput(compositeImage))
     {
-        linuxface::common::logError("Failed to update output cameras");
+        Profiler::ScopedProfilerSpan span("Application", "Update Camera Output");
+        // Send processed composite to output cameras with cropping
+        if (!cameraManager_->updateOutput(compositeImage))
+        {
+            linuxface::common::logError("Failed to update output cameras");
+        }
     }
-    Profiler::getInstance().stop("Application", "Update Camera Output");
 
-    Profiler::getInstance().start("Application", "UI Update");
-    ui_->handleKeyboard();
-    ui_->newFrame();
-    ui_->paint();
-    Profiler::getInstance().stop("Application", "UI Update");
+    {
+        Profiler::ScopedProfilerSpan span("Application", "UI Update");
+        ui_->handleKeyboard();
+        ui_->newFrame();
+        ui_->paint();
+    }
     return true;
 }
 
 void Application::render()
 {
-    Profiler::getInstance().start("Application", "Render");
+    Profiler::ScopedProfilerSpan span("Application", "Render");
     // Set viewport
     window_.setViewport();
 
@@ -827,6 +860,7 @@ void Application::calculateCompositeBounds(const std::vector<Layer>& layers, int
     // If no valid layers, use window size
     if (minX == std::numeric_limits<float>::max())
     {
+        common::logWarn("No valid layers found for composite bounds calculation. Using window size.");
         minX = 0.0f;
         minY = 0.0f;
         maxX = static_cast<float>(windowWidth);

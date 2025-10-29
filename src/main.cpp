@@ -27,17 +27,17 @@ int main(int argc, char* argv[])
             return -1;
         }
 
-        Application app;
+        auto app = std::make_shared<Application>();
 
         // Initialize the application
-        if (!app.initialize())
+        if (!app->initialize())
         {
             linuxface::common::logError("Failed to initialize application");
             return -1;
         }
 
         // Run the main loop
-        app.run();
+        app->run();
 
         // Cleanup happens automatically via destructors
         linuxface::common::logInfo("Application finished successfully");

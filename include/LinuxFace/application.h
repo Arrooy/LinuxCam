@@ -27,7 +27,7 @@
 namespace linuxface
 {
 
-class Application
+class Application : public std::enable_shared_from_this<Application>
 {
   public:
     Application();
@@ -79,10 +79,17 @@ class Application
     std::unique_ptr<Image> adria_img_;
     std::unique_ptr<Image> target_img_;
 
+    // Single-loop profiler capture flag
+    std::atomic<bool> captureNextLoop_{false};
+
     // Main loop methods
     bool update();
     void process(std::unique_ptr<Image>& image);
     void render();
+
+  public:
+    // Trigger single-loop profiler capture on next frame
+    void requestLoopCapture() { captureNextLoop_ = true; }
 };
 
 } // namespace linuxface

@@ -154,7 +154,7 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         return false;
     }
 
-    Profiler::getInstance().start(name_, "Encode and write output image");
+    Profiler::ScopedProfilerSpan span(name_, "Encode and write output image");
 
     // Check if we need to scale the image
     std::unique_ptr<Image> scaledImage = nullptr;
@@ -167,7 +167,6 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         {
             common::logError("V4L2LoopbackWriter::writeFrame - Failed to scale image from %lux%lu to %lux%lu",
                              image.info.width, image.info.height, desiredWidth, desiredHeight);
-            Profiler::getInstance().stop(name_, "Encode and write output image");
             return false;
         }
         common::logInfo("V4L2LoopbackWriter::writeFrame - Scaled image from %lux%lu to %lux%lu", image.info.width,
@@ -181,7 +180,6 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
     if (!imageToEncode.convertToRGBInplace())
     {
         common::logError("V4L2LoopbackWriter::writeFrame - Failed to convert RGBA to RGB");
-        Profiler::getInstance().stop(name_, "Encode and write output image");
         return false;
     }
 
@@ -239,7 +237,6 @@ bool V4L2LoopbackWriter::writeFrame(Image& image)
         return false;
     }
 
-    Profiler::getInstance().stop(name_, "Encode and write output image");
 
     return true;
 }

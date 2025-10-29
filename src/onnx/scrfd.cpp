@@ -53,7 +53,7 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
         return {};
     }
 
-    Profiler::getInstance().start("SCRFD", "Face detection");
+    Profiler::ScopedProfilerSpan span_detect("SCRFD", "Face detection");
     std::vector<Face> faces;
     faces.reserve(3000); // Reserve once for all strides (rough estimate)
     // Convert from image to tensor.
@@ -71,8 +71,7 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
         auto outputTensors = detector_session_->Run(Ort::RunOptions{nullptr}, input_node_names_.data(), &inputTensor, 1,
                                                     output_node_names_.data(), output_node_names_str_.size());
 
-        Profiler::getInstance().stop("SCRFD", "Face detection");
-        Profiler::getInstance().start("SCRFD", "Result processing");
+        Profiler::ScopedProfilerSpan span_result("SCRFD", "Result processing");
         if (outputTensors.size() < 6)
         {
             common::logError("SCRFDetector::detect: outputTensors.size() = %d", outputTensors.size());
@@ -110,11 +109,10 @@ std::vector<Face> SCRFDetector::detect(const std::unique_ptr<Image>& image)
                                       faces);
 
         // Apply NMS to all collected faces
-        Profiler::getInstance().start("SCRFD", "NMS");
-        applyNMS(faces);
-        Profiler::getInstance().stop("SCRFD", "NMS");
-
-        Profiler::getInstance().stop("SCRFD", "Result processing");
+        {
+            Profiler::ScopedProfilerSpan span_nms("SCRFD", "NMS");
+            applyNMS(faces);
+        }
     }
     catch (const Ort::Exception& e)
     {

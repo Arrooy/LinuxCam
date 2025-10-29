@@ -24,6 +24,9 @@
 namespace linuxface
 {
 
+// Forward declarations
+class Application;
+
 // Common resolution presets
 struct Resolution
 {
@@ -64,6 +67,7 @@ class UI
         mediaManager_ = std::move(newMediaManager);
         mediaBrowserUI_ = std::make_unique<MediaBrowserUI>(mediaManager_, layerManager_);
     }
+    void connect(std::shared_ptr<Application> app) { application_ = app; }
 
     // Cleanup the UI system
     void shutdown() const;
@@ -97,6 +101,7 @@ class UI
     std::shared_ptr<CameraManager> cameraManager_;
     std::shared_ptr<MediaManager> mediaManager_;
     std::shared_ptr<LayerManager> layerManager_;
+    std::shared_ptr<Application> application_;
 
     std::unique_ptr<PaintWebcam> paintWebcam_{nullptr};
     std::unique_ptr<MediaBrowserUI> mediaBrowserUI_{nullptr};

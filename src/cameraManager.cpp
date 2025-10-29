@@ -51,6 +51,7 @@ void CameraManager::shutdown()
 
 bool CameraManager::updateInput()
 {
+    Profiler::ScopedProfilerSpan span("CameraManager", "Update all input cameras");
     if (!layerManager_)
     {
         common::logWarn("CameraManager::updateInput - LayerManager not set; nothing to do");
@@ -99,6 +100,7 @@ bool CameraManager::updateInput()
 
 void CameraManager::updateCameraLayer(const std::shared_ptr<InputWebcam>& camera, std::unique_ptr<Image> newFrame)
 {
+    Profiler::ScopedProfilerSpan span("CameraManager", "UpdateCameraLayer");
     // Find or create layer for this camera
     Layer* existingLayer = layerManager_->getLayerByCameraDevicePath(camera->getDevicePath());
 
@@ -149,8 +151,6 @@ void CameraManager::updateCameraLayer(const std::shared_ptr<InputWebcam>& camera
 
 bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
 {
-    Profiler::getInstance().start("CameraManager", "Encode and write all output images");
-
     if (!image)
     {
         common::logError("No image to encode and write to output");
@@ -160,56 +160,59 @@ bool CameraManager::updateOutput(std::unique_ptr<Image>& image)
     bool success = true;
     std::unique_ptr<Image> processedOutputImage{nullptr};
 
-    for (auto& output : outWebcam_)
     {
-        if (output->isRunning())
+        Profiler::ScopedProfilerSpan span("CameraManager", "Encode and write all output images");
+
+        for (auto& output : outWebcam_)
         {
-            // Pre-process image once for all outputs with the same dimensions
-            const unsigned long desiredWidth = output->getDesiredWidth();
-            const unsigned long desiredHeight = output->getDesiredHeight();
-
-            // Check if we can reuse the already processed image
-            if (!processedOutputImage || processedOutputImage->info.width != desiredWidth
-                || processedOutputImage->info.height != desiredHeight)
+            if (output->isRunning())
             {
-                // Create a copy of the original image for processing
-                processedOutputImage = image->deepCopy();
+                // Pre-process image once for all outputs with the same dimensions
+                const unsigned long desiredWidth = output->getDesiredWidth();
+                const unsigned long desiredHeight = output->getDesiredHeight();
 
-                // Scale if needed
-                processedOutputImage->scaleToInPlace(desiredWidth, desiredHeight, ScalingAlgorithm::BICUBIC);
-
-                // Convert RGBA to RGB for JPEG encoder compatibility
-                if (!processedOutputImage->convertToRGBInplace())
+                // Check if we can reuse the already processed image
+                if (!processedOutputImage || processedOutputImage->info.width != desiredWidth
+                    || processedOutputImage->info.height != desiredHeight)
                 {
-                    common::logError("CameraManager::updateOutput - Failed to convert RGBA to RGB");
-                    success = false;
-                    continue;
-                }
-            }
+                    // Create a copy of the original image for processing
+                    processedOutputImage = image->deepCopy();
 
-            // Use the pre-processed image
-            std::unique_ptr<Image> outputImageCopy = processedOutputImage->deepCopy();
-            if (!output->writeFrame(*outputImageCopy))
-            {
-                common::logError("Failed to write frame to output device %s", output->getDevicePath().c_str());
-                success = false;
+                    // Scale if needed
+                    processedOutputImage->scaleToInPlace(desiredWidth, desiredHeight, ScalingAlgorithm::BICUBIC);
+
+                    // Convert RGBA to RGB for JPEG encoder compatibility
+                    if (!processedOutputImage->convertToRGBInplace())
+                    {
+                        common::logError("CameraManager::updateOutput - Failed to convert RGBA to RGB");
+                        success = false;
+                        continue;
+                    }
+                }
+
+                // Use the pre-processed image
+                std::unique_ptr<Image> outputImageCopy = processedOutputImage->deepCopy();
+                if (!output->writeFrame(*outputImageCopy))
+                {
+                    common::logError("Failed to write frame to output device %s", output->getDevicePath().c_str());
+                    success = false;
+                }
             }
         }
     }
-
-    Profiler::getInstance().stop("CameraManager", "Encode and write all output images");
-    Profiler::getInstance().start("CameraManager", "Update output preview layer");
-
-    // Update preview layer with the processed image if available, otherwise use original
-    if (processedOutputImage)
     {
-        updateOutputPreviewLayer(*processedOutputImage);
+        Profiler::ScopedProfilerSpan span2("CameraManager", "Update output preview layer");
+
+        // Update preview layer with the processed image if available, otherwise use original
+        if (processedOutputImage)
+        {
+            updateOutputPreviewLayer(*processedOutputImage);
+        }
+        else
+        {
+            updateOutputPreviewLayer(*image);
+        }
     }
-    else
-    {
-        updateOutputPreviewLayer(*image);
-    }
-    Profiler::getInstance().stop("CameraManager", "Update output preview layer");
 
     return success;
 }

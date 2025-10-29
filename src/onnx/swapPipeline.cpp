@@ -36,7 +36,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
     {
         return false;
     }
-    Profiler::getInstance().start("SwapPipeline", "run");
+    Profiler::ScopedProfilerSpan span_run("SwapPipeline", "run");
 
     if (!target_img_embedding_ready_ && !prepareTargetEmbedding(targetImg))
     {
@@ -50,7 +50,6 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         if (srcFaces.empty())
         {
             common::logWarn("SwapPipeline: No faces detected in the webcam image.");
-            Profiler::getInstance().stop("SwapPipeline", "run");
             return false;
         }
 
@@ -82,12 +81,11 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
 
 bool SwapPipeline::prepareTargetEmbedding(const std::unique_ptr<Image>& targetImg)
 {
-    Profiler::getInstance().start("SwapPipeline", "get target embedding");
+    Profiler::ScopedProfilerSpan span_get_target("SwapPipeline", "get target embedding");
     const std::vector<Face> targetFaces = scrfd_->detect(targetImg);
     if (targetFaces.empty())
     {
         common::logError("SwapPipeline: No faces found in target image.");
-        Profiler::getInstance().stop("SwapPipeline", "get target embedding");
         return false;
     }
     else if (targetFaces.size() > 1)
@@ -147,34 +145,31 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
     }
 
     Face swpface = face;
-    if (faceSeg_ && faceSeg_->isReady())
+    if (!swpface.hasSegmentationMask() && faceSeg_ && faceSeg_->isReady())
     {
-        Profiler::getInstance().start("SwapPipeline", "Face segmentation");
+        Profiler::ScopedProfilerSpan span_face_seg("SwapPipeline", "Face segmentation");
         // Perform face segmentation to create a better mask for blending
         if (!faceSeg_->detect(image, swpface))
         {
             common::logWarn("SwapPipeline: Face segmentation failed, using default mask.");
         }
-        Profiler::getInstance().stop("SwapPipeline", "Face segmentation");
     }
 
     Profiler::getInstance().start("SwapPipeline", "Affine Warp and Crop face");
-
+    // TODO: reduce cost 3.5ms
     std::unique_ptr<Image> finalFace =
         swappedFace.affineWarpBilinear(affineFromSwap.data(), image->info.width, image->info.height, ImageFormat::RGBA);
 
     if (!finalFace)
     {
         common::logError("SwapPipeline: Affine warp failed.");
-        Profiler::getInstance().stop("SwapPipeline", "Affine Warp and Crop face");
         return false;
     }
     Profiler::getInstance().stop("SwapPipeline", "Affine Warp and Crop face");
 
     Profiler::getInstance().start("SwapPipeline", "Crop mask creation");
-
+    // TODO: reduce cost 3ms
     crop_mask_prototype_ = face.createFaceMask(image);
-
     Profiler::getInstance().stop("SwapPipeline", "Crop mask creation");
 
     Profiler::getInstance().start("SwapPipeline", "Smart feather mask");
@@ -185,7 +180,8 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
         const float innerFeatherRadius = maxDimension * 0.01f;
         const float outerFeatherRadius = maxDimension * 0.03f;
 
-        if (auto smartMask = image_utils::buildSmartFeatherMask(*crop_mask_prototype_, innerFeatherRadius, outerFeatherRadius))
+        if (auto smartMask =
+                image_utils::buildSmartFeatherMask(*crop_mask_prototype_, innerFeatherRadius, outerFeatherRadius))
         {
             crop_mask_prototype_ = std::move(smartMask);
         }
@@ -210,12 +206,8 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
     }
     else
     {
-        Profiler::getInstance().start("SwapPipeline", "Smart feather blend");
+        Profiler::ScopedProfilerSpan span_blend("SwapPipeline", "Smart feather blend");
         image->alphaBlend(*finalFace, *crop_mask_prototype_);
-        Profiler::getInstance().stop("SwapPipeline", "Smart feather blend");
-
-        
-        image->pasteAt(*crop_mask_prototype_, 0, image->info.height, true);
     }
 
     return true;
