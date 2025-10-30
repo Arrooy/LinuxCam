@@ -3,6 +3,7 @@
 
 #include "LinuxFace/Image/tensor_padding.h"
 #include "LinuxFace/onnx/onnxDetector.h"
+#include "LinuxFace/face.h"
 
 namespace linuxface
 {
@@ -14,8 +15,8 @@ class InSwapper : public OnnxDetector
     ~InSwapper() = default;
     Ort::Value transform(const std::unique_ptr<Image>& image) override;
 
-    std::pair<bool, std::array<double, 6>> swap(const std::vector<float>& srcEmbedding, const std::vector<math_utils::Point<>>& dstLandmarks,
-              const Image& dstFace, Image& outImage);
+    std::pair<bool, std::array<double, 6>> swap(const std::vector<float>& srcEmbedding,
+                                                 const Image& dstFace, Face& dstFaceObj, Image& outImage);
 
   private:
     static constexpr const int InputWidth = 128;

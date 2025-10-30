@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "LinuxFace/Image/image.h"
+#include "LinuxFace/face.h"
 #include "LinuxFace/imageLoader.h"
 #include "LinuxFace/math_utils.h"
 #include "LinuxFace/onnx/inswapper.h"
@@ -100,6 +101,36 @@ class InSwapperRealImageTest : public ::testing::Test
         return landmarks;
     }
 
+    Face createTestFace(int imageWidth = 640, int imageHeight = 480)
+    {
+        auto landmarks2D = createTestLandmarks(imageWidth, imageHeight);
+        
+        // Convert 2D landmarks to FaceLandmark objects with proper indices
+        // ArcFace order indices: LEYE=36, REYE=45, NOSE=33, LMOUTH=48, RMOUTH=54
+        std::vector<FaceLandmark> faceLandmarks = {
+            {36, math_utils::Point3D(static_cast<double>(landmarks2D[0].x), static_cast<double>(landmarks2D[0].y), 0.0)}, // Left eye
+            {45, math_utils::Point3D(static_cast<double>(landmarks2D[1].x), static_cast<double>(landmarks2D[1].y), 0.0)}, // Right eye
+            {33, math_utils::Point3D(static_cast<double>(landmarks2D[2].x), static_cast<double>(landmarks2D[2].y), 0.0)}, // Nose
+            {48, math_utils::Point3D(static_cast<double>(landmarks2D[3].x), static_cast<double>(landmarks2D[3].y), 0.0)}, // Left mouth
+            {54, math_utils::Point3D(static_cast<double>(landmarks2D[4].x), static_cast<double>(landmarks2D[4].y), 0.0)}  // Right mouth
+        };
+        
+        int centerX = imageWidth / 2;
+        int centerY = imageHeight / 2;
+        int faceWidth = imageWidth / 4;
+        int faceHeight = imageHeight / 3;
+        
+        FaceBoundingBox bbox;
+        bbox.rect = math_utils::Rect<float>(static_cast<float>(centerX - faceWidth/2), 
+                                            static_cast<float>(centerY - faceHeight/2), 
+                                            static_cast<float>(faceWidth), 
+                                            static_cast<float>(faceHeight));
+        bbox.score = 0.95f;
+        
+        Face face(faceLandmarks, bbox);
+        return face;
+    }
+
     std::unique_ptr<InSwapper> inswapper_;
 };
 
@@ -141,10 +172,10 @@ TEST_F(InSwapperRealImageTest, BasicSwapWithRealImage)
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto testEmbedding = createTestEmbedding();
-    auto testLandmarks = createTestLandmarks(realImage->info.width, realImage->info.height);
+    Face testFace = createTestFace(realImage->info.width, realImage->info.height);
 
     Image outputImage;
-    const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
+    const auto [swapResult, affine] = inswapper_->swap(testEmbedding, *realImage, testFace, outputImage);
 
     EXPECT_TRUE(swapResult);
     if (swapResult)
@@ -178,10 +209,10 @@ TEST_F(InSwapperRealImageTest, SwapWithDifferentLandmarks)
 
     for (const auto& offset : landmarkOffsets)
     {
-        auto testLandmarks = createTestLandmarks(realImage->info.width, realImage->info.height);
+        auto baseLandmarks = createTestLandmarks(realImage->info.width, realImage->info.height);
 
         // Apply offset to all landmarks
-        for (auto& landmark : testLandmarks)
+        for (auto& landmark : baseLandmarks)
         {
             landmark.x += offset.first;
             landmark.y += offset.second;
@@ -192,9 +223,22 @@ TEST_F(InSwapperRealImageTest, SwapWithDifferentLandmarks)
             landmark.y = std::max(static_cast<long int>(0),
                                   std::min(static_cast<long int>(realImage->info.height - 1), landmark.y));
         }
+        
+        // Create Face with modified landmarks
+        std::vector<FaceLandmark> faceLandmarks = {
+            {36, math_utils::Point3D(static_cast<double>(baseLandmarks[0].x), static_cast<double>(baseLandmarks[0].y), 0.0)},
+            {45, math_utils::Point3D(static_cast<double>(baseLandmarks[1].x), static_cast<double>(baseLandmarks[1].y), 0.0)},
+            {33, math_utils::Point3D(static_cast<double>(baseLandmarks[2].x), static_cast<double>(baseLandmarks[2].y), 0.0)},
+            {48, math_utils::Point3D(static_cast<double>(baseLandmarks[3].x), static_cast<double>(baseLandmarks[3].y), 0.0)},
+            {54, math_utils::Point3D(static_cast<double>(baseLandmarks[4].x), static_cast<double>(baseLandmarks[4].y), 0.0)}
+        };
+        FaceBoundingBox bbox;
+        bbox.rect = math_utils::Rect<float>(50.0f, 60.0f, 160.0f, 140.0f);
+        bbox.score = 0.95f;
+        Face testFace(faceLandmarks, bbox);
 
         Image outputImage;
-        const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
+        const auto [swapResult, affine] = inswapper_->swap(testEmbedding, *realImage, testFace, outputImage);
 
         EXPECT_TRUE(swapResult) << "Failed swap with landmark offset: (" << offset.first << ", " << offset.second
                                 << ")";
@@ -216,13 +260,13 @@ TEST_F(InSwapperRealImageTest, PerformanceWithRealImage)
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto testEmbedding = createTestEmbedding();
-    auto testLandmarks = createTestLandmarks(realImage->info.width, realImage->info.height);
+    Face testFace = createTestFace(realImage->info.width, realImage->info.height);
 
     // Measure performance
     auto start = std::chrono::high_resolution_clock::now();
 
     Image outputImage;
-    const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImage);
+    const auto [swapResult, affine] = inswapper_->swap(testEmbedding, *realImage, testFace, outputImage);
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -243,14 +287,14 @@ TEST_F(InSwapperRealImageTest, MultipleOperationsWithRealImage)
     ASSERT_TRUE(realImage != nullptr) << "Failed to load real image";
 
     auto testEmbedding = createTestEmbedding();
-    auto testLandmarks = createTestLandmarks(realImage->info.width, realImage->info.height);
+    Face testFace = createTestFace(realImage->info.width, realImage->info.height);
 
     const int numOperations = 3;
     std::vector<Image> outputImages(numOperations);
 
     for (int i = 0; i < numOperations; ++i)
     {
-        const auto [swapResult, affine] = inswapper_->swap(testEmbedding, testLandmarks, *realImage, outputImages[i]);
+        const auto [swapResult, affine] = inswapper_->swap(testEmbedding, *realImage, testFace, outputImages[i]);
         EXPECT_TRUE(swapResult) << "Failed on operation " << i;
 
         if (swapResult)

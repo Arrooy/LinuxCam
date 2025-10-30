@@ -229,14 +229,29 @@ bool FaceSegmentationDetector::detect(std::unique_ptr<Image>& image, Face& face)
         return false;
     }
 
-    // Use similarity transform to create padded face ROI
-    auto [alignedFace, affineTransform] = image_utils::similarityFaceTransform(
-        *image, landmarks, image_utils::TEMPLATE_512, InputWidth, true, ImageFormat::RGB);
-
-    if (!alignedFace)
+    // Check alignment cache first to avoid redundant computation
+    std::unique_ptr<Image> alignedFace;
+    std::array<double, 6> affineTransform;
+    
+    if (!face.getAlignmentFromCache(InputWidth, image_utils::TEMPLATE_512, ImageFormat::RGB, alignedFace, affineTransform,
+                                     image->info.width, image->info.height))
     {
-        linuxface::common::logWarn("Face segmentation failed: Could not create aligned face ROI");
-        return false;
+        // Cache miss - compute alignment and cache the result
+        auto [computedAlignedFace, computedAffine] = image_utils::similarityFaceTransform(
+            *image, landmarks, image_utils::TEMPLATE_512, InputWidth, true, ImageFormat::RGB);
+
+        if (!computedAlignedFace)
+        {
+            linuxface::common::logWarn("Face segmentation failed: Could not create aligned face ROI");
+            return false;
+        }
+        
+        affineTransform = computedAffine;
+        
+        // Cache the alignment for future use
+        face.cacheAlignment(computedAlignedFace->deepCopy(), affineTransform, InputWidth, image_utils::TEMPLATE_512, 
+                           ImageFormat::RGB, image->info.width, image->info.height);
+        alignedFace = std::move(computedAlignedFace);
     }
 
     std::unique_ptr<Image> labelMask;

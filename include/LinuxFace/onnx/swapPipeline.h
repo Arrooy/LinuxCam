@@ -24,7 +24,7 @@ class SwapPipeline
 
   private:
     bool prepareTargetEmbedding(const std::unique_ptr<Image>& targetImg);
-    bool processFace(const Face& face, std::unique_ptr<Image>& image, Image& swappedFace);
+    bool processFace(Face& face, std::unique_ptr<Image>& image, Image& swappedFace);
 
     std::shared_ptr<InSwapper> inswapper_;
     std::shared_ptr<ArcfaceRecognizer> arcface_;

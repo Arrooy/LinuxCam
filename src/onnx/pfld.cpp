@@ -227,15 +227,32 @@ void PFLDDetector::detectSimilar(const std::unique_ptr<Image>& image, Face& face
         common::logError("PFLDDetector: Need 5-point landmarks for alignment");
         return;
     }
-    auto [alignedFace, affine] =
-        image_utils::similarityFaceTransform(*image, fivePts2d, image_utils::TEMPLATE_192_ALT, 192, true);
-
-    if (!alignedFace)
+    
+    // Check alignment cache first to avoid redundant computation
+    std::unique_ptr<Image> alignedFace;
+    std::array<double, 6> affine;
+    
+    if (!face.getAlignmentFromCache(192, image_utils::TEMPLATE_192_ALT, ImageFormat::RGB, alignedFace, affine,
+                                     image->info.width, image->info.height))
     {
-        common::logError("PFLDDetector: Failed to warp face for alignment");
-        return;
+        // Cache miss - compute alignment and cache the result
+        auto [computedAlignedFace, computedAffine] =
+            image_utils::similarityFaceTransform(*image, fivePts2d, image_utils::TEMPLATE_192_ALT, 192, true);
+
+        if (!computedAlignedFace)
+        {
+            common::logError("PFLDDetector: Failed to warp face for alignment");
+            return;
+        }
+        
+        affine = computedAffine;
+        
+        // Cache the alignment for future use
+        face.cacheAlignment(computedAlignedFace->deepCopy(), affine, 192, image_utils::TEMPLATE_192_ALT,
+                           ImageFormat::RGB, image->info.width, image->info.height);
+        alignedFace = std::move(computedAlignedFace);
     }
-    // alignedFace->saveToDisk("aligned_face_similar.ppm");
+
     // 4. Run PFLD on aligned face
     const Ort::Value inputTensor = this->transform(alignedFace);
 

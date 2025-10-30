@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "LinuxFace/Image/image.h"
+#include "LinuxFace/face.h"
 #include "LinuxFace/math_utils.h"
 #include "LinuxFace/onnx/onnxDetector.h"
 
@@ -22,6 +23,10 @@ class ArcfaceRecognizer : public OnnxDetector
     bool recognize(const Image& inputImg, const std::vector<math_utils::Point<>>& faceLandmark5,
                    std::vector<float>& embedding, bool inswapperCompatible = false);
 
+    // Optimized version using Face object with alignment caching
+    // Automatically uses cached alignment if available, significantly reducing CPU usage
+    bool recognize(const Image& inputImg, Face& face, std::vector<float>& embedding, bool inswapperCompatible = false);
+
     // Enable inswapper compatibility mode by loading emap matrix from inswapper model
     bool enableInswapperCompatibility(const std::string& inswapperModelPath);
 
@@ -31,6 +36,10 @@ class ArcfaceRecognizer : public OnnxDetector
   private:
     // Preprocess input image using 5-point landmarks
     std::unique_ptr<Image> preprocess(const Image& inputImg, const std::vector<math_utils::Point<>>& faceLandmark5);
+    
+    // Preprocess with caching support using Face object
+    std::pair<std::unique_ptr<Image>, std::array<double, 6>> preprocessWithCache(const Image& inputImg, Face& face);
+    
     Ort::Value transform(const std::unique_ptr<Image>& imgRs) override;
 
     // Transform ArcFace embedding to inswapper-compatible space

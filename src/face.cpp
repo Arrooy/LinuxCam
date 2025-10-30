@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <utility>
 
 #include "LinuxFace/Image/image_utils.h"
@@ -43,6 +44,33 @@ Face::~Face()
     freeFaceLandmarks();
 }
 
+// Copy constructor - deliberately does not copy alignment cache
+Face::Face(const Face& other)
+    : boundingBox_(other.boundingBox_)
+    , landmarks_(other.landmarks_)
+    , pose_(other.pose_)
+    , valid_(other.valid_)
+    , segmentationMask_(other.segmentationMask_ ? std::shared_ptr<Image>(other.segmentationMask_->deepCopy().release())
+                                                : nullptr)
+{
+}
+
+// Copy assignment - deliberately does not copy alignment cache
+Face& Face::operator=(const Face& other)
+{
+    if (this != &other)
+    {
+        boundingBox_ = other.boundingBox_;
+        landmarks_ = other.landmarks_;
+        pose_ = other.pose_;
+        valid_ = other.valid_;
+        segmentationMask_ =
+            other.segmentationMask_ ? std::shared_ptr<Image>(other.segmentationMask_->deepCopy().release()) : nullptr;
+        alignmentCache_.clear(); // Clear cache on copy
+    }
+    return *this;
+}
+
 void Face::freeFaceLandmarks()
 {
     // Clear previous landmarks
@@ -74,6 +102,9 @@ void Face::loadNewFaceLandmarks(const std::vector<FaceLandmark>& landmarks)
             landmarks_[index].push_back(landmark);
         }
     }
+
+    // Landmark changes invalidate alignment cache
+    clearAlignmentCache();
 }
 
 Face::FaceIndex Face::getFacepartFromLandmarkId(unsigned long id)
@@ -438,7 +469,7 @@ std::unique_ptr<Image> Face::createFaceMask(const std::unique_ptr<Image>& image)
         const std::vector<FaceSegmentationClass> faceClasses = {
             FaceSegmentationClass::SKIN, FaceSegmentationClass::L_BROW, FaceSegmentationClass::R_BROW,
             FaceSegmentationClass::NOSE, FaceSegmentationClass::U_LIP,  FaceSegmentationClass::L_LIP,
-            FaceSegmentationClass::NECK, FaceSegmentationClass::L_EYE, FaceSegmentationClass::R_EYE};
+            FaceSegmentationClass::NECK, FaceSegmentationClass::L_EYE,  FaceSegmentationClass::R_EYE};
         auto faceMask = FaceSegmentationDetector::createFaceShapeMask(*segmentationMask_, faceClasses);
 
         // Apply edge blur to soften mask boundaries without affecting center
@@ -522,4 +553,70 @@ std::unique_ptr<Image> Face::createFaceMaskInternal(const std::unique_ptr<Image>
     }
 
     return fullMask;
+}
+
+bool Face::getAlignmentFromCache(int targetSize, const double faceTemplate[5][2], ImageFormat targetFormat,
+                                 std::unique_ptr<Image>& outAlignedImage, std::array<double, 6>& outAffineMatrix,
+                                 int sourceImageWidth, int sourceImageHeight) const
+{
+    const size_t templateHash = hashTemplate(faceTemplate);
+    const auto cacheKey = std::make_tuple(targetSize, templateHash, targetFormat, sourceImageWidth, sourceImageHeight);
+    const auto it = alignmentCache_.find(cacheKey);
+
+    if (it != alignmentCache_.end() && it->second.isValid())
+    {
+        // Deep copy the cached aligned image
+        outAlignedImage = it->second.alignedImage->deepCopy();
+        outAffineMatrix = it->second.affineMatrix;
+        return true;
+    }
+
+    return false;
+}
+
+void Face::cacheAlignment(std::unique_ptr<Image> alignedImage, const std::array<double, 6>& affineMatrix,
+                          int targetSize, const double faceTemplate[5][2], ImageFormat targetFormat,
+                          int sourceImageWidth, int sourceImageHeight)
+{
+    if (!alignedImage || targetSize <= 0)
+    {
+        return;
+    }
+
+    const size_t templateHash = hashTemplate(faceTemplate);
+
+    AlignmentCacheEntry entry;
+    entry.alignedImage = std::move(alignedImage);
+    entry.affineMatrix = affineMatrix;
+    entry.targetSize = targetSize;
+    entry.templateHash = templateHash;
+    entry.targetFormat = targetFormat;
+
+    const auto cacheKey = std::make_tuple(targetSize, templateHash, targetFormat, sourceImageWidth, sourceImageHeight);
+    alignmentCache_[cacheKey] = std::move(entry);
+}
+
+void Face::clearAlignmentCache()
+{
+    alignmentCache_.clear();
+}
+
+size_t Face::hashTemplate(const double templatePoints[5][2])
+{
+    // Simple hash combining all template coordinate values
+    size_t hash = 0;
+    constexpr size_t prime = 0x9e3779b9; // Golden ratio prime for good distribution
+
+    for (int i = 0; i < 5; ++i)
+    {
+        for (int j = 0; j < 2; ++j)
+        {
+            // Use memcpy to avoid strict-aliasing issues
+            uint64_t bits;
+            std::memcpy(&bits, &templatePoints[i][j], sizeof(double));
+            hash ^= static_cast<size_t>(bits) + prime + (hash << 6) + (hash >> 2);
+        }
+    }
+
+    return hash;
 }

@@ -29,7 +29,7 @@ class MediaPipeFaceLandmarks : public OnnxDetector
     Result detectAligned(const std::unique_ptr<Image>& image);
 
     // Detect landmarks on a full image given the target face
-    Face detect(const std::unique_ptr<Image>& image, const Face& face);
+    Face detect(const std::unique_ptr<Image>& image, Face& face);
 
     // Get the model's expected input dimensions
     int getInputWidth() const { return width_; }

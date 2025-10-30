@@ -65,7 +65,7 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
 
     Image swappedFace; // Reuse buffer for all faces
 
-    for (const auto& face : srcFaces)
+    for (auto& face : srcFaces)
     {
         if (!processFace(face, image, swappedFace))
         {
@@ -126,10 +126,10 @@ bool SwapPipeline::prepareTargetEmbedding(const std::unique_ptr<Image>& targetIm
 }
 
 
-bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, Image& swappedFace)
+bool SwapPipeline::processFace(Face& face, std::unique_ptr<Image>& image, Image& swappedFace)
 {
-    constexpr std::size_t kLandmarkCount = 5;
     const std::vector<math_utils::Point<>>& webcamLandmarks = face.getFivePointLandmarksArcFaceOrder2D();
+    constexpr std::size_t kLandmarkCount = 5;
     if (webcamLandmarks.size() != kLandmarkCount)
     {
         common::logError("SwapPipeline: Detected face does not have 5 landmarks. It has %d landmarks.",
@@ -137,19 +137,18 @@ bool SwapPipeline::processFace(const Face& face, std::unique_ptr<Image>& image, 
         return false;
     }
 
-    const auto [swapOk, affineFromSwap] = inswapper_->swap(target_img_embedding_, webcamLandmarks, *image, swappedFace);
+    const auto [swapOk, affineFromSwap] = inswapper_->swap(target_img_embedding_, *image, face, swappedFace);
     if (!swapOk)
     {
         common::logError("SwapPipeline: Face swap failed.");
         return false;
     }
 
-    Face swpface = face;
-    if (!swpface.hasSegmentationMask() && faceSeg_ && faceSeg_->isReady())
+    if (!face.hasSegmentationMask() && faceSeg_ && faceSeg_->isReady())
     {
         Profiler::ScopedProfilerSpan span_face_seg("SwapPipeline", "Face segmentation");
         // Perform face segmentation to create a better mask for blending
-        if (!faceSeg_->detect(image, swpface))
+        if (!faceSeg_->detect(image, face))
         {
             common::logWarn("SwapPipeline: Face segmentation failed, using default mask.");
         }

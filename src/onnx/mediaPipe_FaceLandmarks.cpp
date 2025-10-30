@@ -122,11 +122,11 @@ bool MediaPipeFaceLandmarks::extractLandmarks(Ort::Value landmarksTensor, std::v
     return true;
 }
 
-Face MediaPipeFaceLandmarks::detect(const std::unique_ptr<Image>& image, const Face& face)
+Face MediaPipeFaceLandmarks::detect(const std::unique_ptr<Image>& image, Face& face)
 {
-    if (!ready_ || !image || !face.isValid() || !face.hasLandmarks())
+    if (!ready_ || !image  || image->empty()|| !face.isValid() || !face.hasLandmarks())
     {
-        // return invalid face
+        common::logError("MediaPipeFaceLandmarks - Input image is empty");
         return face;
     }
 
@@ -157,14 +157,29 @@ Face MediaPipeFaceLandmarks::detect(const std::unique_ptr<Image>& image, const F
         return face;
     }
 
-    // Affine align using model's expected dimensions
-    auto [aligned_image, affine] =
-        image_utils::similarityFaceTransform(*image, landmarks5pt, templatePoints, width_, true);
-
-    if (!aligned_image)
+    // Check alignment cache first to avoid redundant computation
+    std::unique_ptr<Image> aligned_image;
+    std::array<double, 6> affine;
+    
+    if (!face.getAlignmentFromCache(width_, templatePoints, ImageFormat::RGB, aligned_image, affine,
+                                     image->info.width, image->info.height))
     {
-        common::logError("Failed to wrap face image for MediaPipe landmarks detection");
-        return face;
+        // Cache miss - compute alignment and cache the result
+        auto [computedAlignedImage, computedAffine] = 
+            image_utils::similarityFaceTransform(*image, landmarks5pt, templatePoints, width_, true);
+
+        if (!computedAlignedImage)
+        {
+            common::logError("Failed to wrap face image for MediaPipe landmarks detection");
+            return face;
+        }
+        
+        affine = computedAffine;
+        
+        // Cache the alignment for future use
+        face.cacheAlignment(computedAlignedImage->deepCopy(), affine, width_, templatePoints, 
+                           ImageFormat::RGB, image->info.width, image->info.height);
+        aligned_image = std::move(computedAlignedImage);
     }
 
     auto result = detectAligned(aligned_image);

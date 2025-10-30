@@ -1,8 +1,10 @@
 #ifndef FACE_H
 #define FACE_H
 
+#include <array>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "LinuxFace/Image/image.h"
@@ -40,6 +42,28 @@ struct FacePose
     float roll;
 };
 
+// Cache entry for aligned face images and their transformation matrices
+// Cache is automatically freed when Face object is destroyed
+struct AlignmentCacheEntry
+{
+    std::unique_ptr<Image> alignedImage;
+    std::array<double, 6> affineMatrix;
+    int targetSize{0};
+    ImageFormat targetFormat{ImageFormat::RGB};
+
+    // Template identifier (hash of template points for uniqueness)
+    size_t templateHash{0};
+
+    // Make it move-only (unique_ptr makes it non-copyable by default)
+    AlignmentCacheEntry() = default;
+    AlignmentCacheEntry(AlignmentCacheEntry&&) = default;
+    AlignmentCacheEntry& operator=(AlignmentCacheEntry&&) = default;
+    AlignmentCacheEntry(const AlignmentCacheEntry&) = delete;
+    AlignmentCacheEntry& operator=(const AlignmentCacheEntry&) = delete;
+
+    bool isValid() const { return alignedImage != nullptr && targetSize > 0; }
+};
+
 // Represents a human face. With all its landmarks. Currently suported 64
 // Interpolate all landmarks into a face.
 // Divides all landmarks into the different face parts.
@@ -65,6 +89,14 @@ class Face
     Face(std::vector<FaceLandmark> landmarks, FaceBoundingBox boundingBox);
     Face() = default;
     ~Face();
+
+    // Custom copy constructor/assignment - alignment cache is not copied
+    Face(const Face& other);
+    Face& operator=(const Face& other);
+
+    // Move semantics use defaults
+    Face(Face&&) = default;
+    Face& operator=(Face&&) = default;
 
     void loadNewFaceLandmarks(const std::vector<FaceLandmark>& landmarks);
 
@@ -127,9 +159,23 @@ class Face
     void setSegmentationMask(std::unique_ptr<Image> mask) { segmentationMask_ = std::move(mask); }
     const std::shared_ptr<Image>& getSegmentationMask() const { return segmentationMask_; }
 
-    std::unique_ptr<Image> createFaceMaskInternal(const std::unique_ptr<Image>& image, double blurAmount, const std::vector<int>& padding) const;
+    bool getAlignmentFromCache(int targetSize, const double faceTemplate[5][2], ImageFormat targetFormat,
+                               std::unique_ptr<Image>& outAlignedImage, std::array<double, 6>& outAffineMatrix,
+                               int sourceImageWidth, int sourceImageHeight) const;
+
+    void cacheAlignment(std::unique_ptr<Image> alignedImage, const std::array<double, 6>& affineMatrix, int targetSize,
+                        const double faceTemplate[5][2], ImageFormat targetFormat, int sourceImageWidth,
+                        int sourceImageHeight);
+
+    void clearAlignmentCache();
+
+    std::unique_ptr<Image> createFaceMaskInternal(const std::unique_ptr<Image>& image, double blurAmount,
+                                                  const std::vector<int>& padding) const;
 
   private:
+    // Hash function for template points to create unique cache keys
+    static size_t hashTemplate(const double templatePoints[5][2]);
+
     void freeFaceLandmarks();
 
     FaceBoundingBox boundingBox_;
@@ -137,6 +183,10 @@ class Face
     FacePose pose_{};
     bool valid_{false};
     std::shared_ptr<Image> segmentationMask_;
+
+    // Cache for aligned face images
+    // Key: (targetSize, templateHash, targetFormat, sourceWidth, sourceHeight)
+    mutable std::map<std::tuple<int, size_t, ImageFormat, int, int>, AlignmentCacheEntry> alignmentCache_;
 };
 
 } // namespace linuxface

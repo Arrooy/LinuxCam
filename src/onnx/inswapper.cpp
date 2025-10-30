@@ -34,8 +34,8 @@ Ort::Value InSwapper::transform(const std::unique_ptr<Image>& image)
     return inputTensor;
 }
 
-std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>& srcEmbedding, const std::vector<math_utils::Point<>>& dstLandmarks,
-                     const Image& dstFace, Image& outImage)
+std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>& srcEmbedding, 
+                                                        const Image& dstFace, Face& dstFaceObj, Image& outImage)
 {
     Profiler::getInstance().start("InSwapper", "Swap");
     if (!ready_)
@@ -46,24 +46,44 @@ std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>&
     // Check for valid input parameters
     if (srcEmbedding.empty() || srcEmbedding.size() != 512)
     {
-        common::logError(("InSwapper: Invalid embedding size. Expected 512, got " + std::to_string(srcEmbedding.size())).c_str());
+        common::logError("InSwapper: Invalid embedding size. Expected 512, got %zu", srcEmbedding.size());
         return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
     }
 
+    // Get landmarks from Face object
+    const auto& dstLandmarks = dstFaceObj.getFivePointLandmarksArcFaceOrder2D();
     if (dstLandmarks.size() != 5)
     {
-        common::logError(("InSwapper: Invalid landmark count. Expected 5, got " + std::to_string(dstLandmarks.size())).c_str());
+        common::logError("InSwapper: Invalid landmark count. Expected 5, got %zu", dstLandmarks.size());
         return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
     }
 
     const int targetSize = InputWidth;
-    auto [aligned, affine] =
-        image_utils::similarityFaceTransform(dstFace, dstLandmarks, image_utils::TEMPLATE_128, targetSize);
-
-    if (!aligned)
+    
+    // Check alignment cache first
+    std::unique_ptr<Image> aligned;
+    std::array<double, 6> affine;
+    
+    if (!dstFaceObj.getAlignmentFromCache(targetSize, image_utils::TEMPLATE_128, ImageFormat::RGB, aligned, affine,
+                                          dstFace.info.width, dstFace.info.height))
     {
-        return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
+        // Cache miss - compute alignment and cache it
+        auto [computedAligned, computedAffine] =
+            image_utils::similarityFaceTransform(dstFace, dstLandmarks, image_utils::TEMPLATE_128, targetSize);
+
+        if (!computedAligned)
+        {
+            return {false, {1.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
+        }
+        
+        affine = computedAffine;
+        
+        // Cache the alignment for potential future use
+        dstFaceObj.cacheAlignment(computedAligned->deepCopy(), affine, targetSize, image_utils::TEMPLATE_128,
+                                  ImageFormat::RGB, dstFace.info.width, dstFace.info.height);
+        aligned = std::move(computedAligned);
     }
+
     // 2. Prepare ONNX input tensors
     auto dstTensor = transform(aligned);
     std::vector<int64_t> embDims = {1, 512};
@@ -72,6 +92,7 @@ std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>&
     std::vector<Ort::Value> inputTensors;
     inputTensors.push_back(std::move(dstTensor));
     inputTensors.push_back(std::move(srcTensor));
+    
     // 3. Run ONNX inference
     const Ort::RunOptions runOptions;
     std::vector<const char*> inputNames = {"target", "source"};
@@ -79,6 +100,7 @@ std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>&
     auto outputTensors =
         detector_session_->Run(runOptions, inputNames.data(), inputTensors.data(), 2, outputNames.data(), 1);
     auto* outData = outputTensors[0].GetTensorMutableData<float>();
+    
     // 4. Convert output tensor to Image
     outImage.resize(InputWidth * InputHeight * 3, false);
     outImage.info.width = InputWidth;
@@ -88,6 +110,7 @@ std::pair<bool, std::array<double, 6>> InSwapper::swap(const std::vector<float>&
     const TensorPadding pad = TensorPadding::noPadding();
     outImage.fromTensor(outData, {1, 3, InputHeight, InputWidth}, InputWidth, InputHeight, pad,
                          NormalizationType::MINMAX);
+    
     Profiler::getInstance().stop("InSwapper", "Swap");
     return {true, affine};
 }

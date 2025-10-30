@@ -32,6 +32,44 @@ ArcfaceRecognizer::preprocess(const Image& inputImg, const std::vector<math_util
     return inputImg.scale(targetSize, targetSize);
 }
 
+std::pair<std::unique_ptr<Image>, std::array<double, 6>>
+ArcfaceRecognizer::preprocessWithCache(const Image& inputImg, Face& face)
+{
+    const int targetSize = 112;
+    
+    // Get 5-point landmarks for face alignment
+    const auto& landmarks = face.getFivePointLandmarksArcFaceOrder2D();
+    
+    // Check cache first
+    std::unique_ptr<Image> alignedFace;
+    std::array<double, 6> affineTransform;
+    
+    if (!face.getAlignmentFromCache(targetSize, image_utils::TEMPLATE_112, ImageFormat::RGB, alignedFace, affineTransform,
+                                     inputImg.info.width, inputImg.info.height))
+    {
+        // Cache miss - compute alignment
+        auto [computedAlignedFace, computedAffine] =
+            image_utils::affineFaceTransform(inputImg, landmarks, image_utils::TEMPLATE_112, targetSize);
+        
+        if (computedAlignedFace)
+        {
+            affineTransform = computedAffine;
+            // Store in cache for future use
+            face.cacheAlignment(computedAlignedFace->deepCopy(), affineTransform, targetSize, image_utils::TEMPLATE_112, 
+                               ImageFormat::RGB, inputImg.info.width, inputImg.info.height);
+            alignedFace = std::move(computedAlignedFace);
+        }
+        else
+        {
+            common::logError("ArcfaceRecognizer: Failed to align face, using fallback scaling.");
+            // Fallback: just scale the whole image - don't cache this fallback
+            return {inputImg.scale(targetSize, targetSize), std::array<double, 6>{1, 0, 0, 0, 1, 0}};
+        }
+    }
+    
+    return {std::move(alignedFace), affineTransform};
+}
+
 Ort::Value ArcfaceRecognizer::transform(const std::unique_ptr<Image>& imgRs)
 {
     input_node_dims[0] = 1;
@@ -72,6 +110,37 @@ bool ArcfaceRecognizer::recognize(const Image& inputImg, const std::vector<math_
     math_utils::l2norm(embedding);
 
     Profiler::getInstance().stop("ArcfaceRecognizer", "recognize");
+    return true;
+}
+
+bool ArcfaceRecognizer::recognize(const Image& inputImg, Face& face, std::vector<float>& embedding,
+                                  bool inswapperCompatible)
+{
+    Profiler::getInstance().start("ArcfaceRecognizer", "recognize_cached");
+    if (!ready_)
+    {
+        return false;
+    }
+    
+    // Use cached alignment if available, compute if not
+    auto [cropImage, affine] = preprocessWithCache(inputImg, face);
+    
+    const Ort::Value inputTensor = transform(cropImage);
+    const Ort::RunOptions runOptions;
+    auto outputTensors = detector_session_->Run(runOptions, input_node_names_.data(), &inputTensor, 1,
+                                                output_node_names_.data(), output_node_names_str_.size());
+    auto* pdata = outputTensors[0].GetTensorMutableData<float>();
+    embedding.clear();
+    embedding.assign(pdata, pdata + 512);
+
+    // Apply inswapper transformation if requested and enabled
+    if (inswapperCompatible && inswapper_compatible_mode_)
+    {
+        embedding = transformEmbeddingForInswapper(embedding);
+    }
+    math_utils::l2norm(embedding);
+
+    Profiler::getInstance().stop("ArcfaceRecognizer", "recognize_cached");
     return true;
 }
 
