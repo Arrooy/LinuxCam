@@ -47,22 +47,14 @@ class videoStreamController : public drogon::WebSocketController<videoStreamCont
     WS_PATH_LIST_END
 
   private:
-    struct ClientState
-    {
-        std::string clientId;
-        int pendingFrames{0}; // Not atomic since we're always holding connectionsMutex_
-    };
-
     std::mutex connectionsMutex_;
-    std::unordered_map<drogon::WebSocketConnectionPtr, ClientState> connections_;
+    std::unordered_map<drogon::WebSocketConnectionPtr, std::string> connections_;
 
     std::shared_ptr<wsInputDevice> inputDevice_;
     std::mutex deviceMutex_;
 
     TargetImageCallback onTargetImageReceived_;
     QualityChangedCallback onQualityChanged_;
-
-    static constexpr int MAX_PENDING_FRAMES_PER_CLIENT = 1; // Keep latency minimal
 };
 
 } // namespace web

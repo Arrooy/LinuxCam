@@ -17,16 +17,6 @@ void videoStreamController::setInputDevice(std::shared_ptr<wsInputDevice> device
 void videoStreamController::handleNewMessage(const drogon::WebSocketConnectionPtr& wsConnPtr, std::string&& message,
                                              const drogon::WebSocketMessageType& type)
 {
-    // Clear pending frame flag when client sends new frame (indicates they're ready for more)
-    {
-        std::lock_guard<std::mutex> lock(connectionsMutex_);
-        auto it = connections_.find(wsConnPtr);
-        if (it != connections_.end())
-        {
-            it->second.pendingFrames = 0;
-        }
-    }
-
     if (type == drogon::WebSocketMessageType::Binary)
     {
         // Check if this is a target image (prefixed with "TARGET_IMAGE:")
@@ -102,10 +92,7 @@ void videoStreamController::handleNewConnection(const drogon::HttpRequestPtr& re
                                                 const drogon::WebSocketConnectionPtr& wsConnPtr)
 {
     std::lock_guard<std::mutex> lock(connectionsMutex_);
-    ClientState state;
-    state.clientId = "client_" + std::to_string(connections_.size() + 1);
-    state.pendingFrames = 0;
-    connections_[wsConnPtr] = std::move(state);
+    connections_[wsConnPtr] = "client_" + std::to_string(connections_.size() + 1);
 
     common::logInfo("videoStreamController - New WebSocket connection from: %s", req->peerAddr().toIpPort().c_str());
 
@@ -118,7 +105,7 @@ void videoStreamController::handleConnectionClosed(const drogon::WebSocketConnec
     auto it = connections_.find(wsConnPtr);
     if (it != connections_.end())
     {
-        common::logInfo("videoStreamController - Connection closed: %s", it->second.clientId.c_str());
+        common::logInfo("videoStreamController - Connection closed: %s", it->second.c_str());
         connections_.erase(it);
     }
 }
@@ -127,45 +114,32 @@ void videoStreamController::sendProcessedFrame(const std::vector<uint8_t>& jpegD
 {
     if (jpegData.empty())
     {
-        return;
+        return; // Nothing to send
     }
 
     std::lock_guard<std::mutex> lock(connectionsMutex_);
 
     if (connections_.empty())
     {
-        return;
+        return; // No clients connected
     }
 
-    // Create string_view for binary data
+    // Create string_view for binary data - no copy, just pointer + size wrapper
     std::string_view binaryMessage(reinterpret_cast<const char*>(jpegData.data()), jpegData.size());
 
-    // Simple approach: Only send if no pending frames
-    // This effectively keeps only 1 frame in-flight at a time per client
-    for (auto& [conn, state] : connections_)
+    // Send to all connected clients
+    for (const auto& [conn, clientId] : connections_)
     {
-        if (!conn->connected())
+        if (conn->connected())
         {
-            continue;
-        }
-
-        // Skip if client still has pending frame
-        if (state.pendingFrames > 0)
-        {
-            state.pendingFrames = 0; // Reset - we're dropping this frame
-            continue;
-        }
-
-        try
-        {
-            conn->send(binaryMessage, drogon::WebSocketMessageType::Binary);
-            state.pendingFrames = 1; // Mark as having pending frame
-        }
-        catch (const std::exception& e)
-        {
-            common::logError("videoStreamController - Failed to send frame to %s: %s", 
-                           state.clientId.c_str(), e.what());
-            state.pendingFrames = 0;
+            try
+            {
+                conn->send(binaryMessage, drogon::WebSocketMessageType::Binary);
+            }
+            catch (const std::exception& e)
+            {
+                common::logError("videoStreamController - Failed to send frame to %s: %s", clientId.c_str(), e.what());
+            }
         }
     }
 }
