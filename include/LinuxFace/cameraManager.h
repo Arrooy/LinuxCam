@@ -19,6 +19,7 @@
 namespace linuxface
 {
 class LayerManager;
+class wsInputDevice;
 }
 
 namespace linuxface
@@ -35,6 +36,8 @@ class CameraManager
     bool addCamera(const std::shared_ptr<Webcam>& camera);
     bool removeCamera(const std::shared_ptr<Webcam>& camera);
     bool updateCamera(const std::shared_ptr<Webcam>& camera);
+    
+    void setWebSocketInput(std::shared_ptr<wsInputDevice> device);
 
     bool updateInput();
     bool updateOutput(std::unique_ptr<Image>& outputImage);
@@ -45,12 +48,13 @@ class CameraManager
     std::vector<std::string> discoverAvailableVideoDevices();
   private:
     static bool isDeviceUsable(const std::string& devicePath);
-    void updateCameraLayer(const std::shared_ptr<InputWebcam>& camera, std::unique_ptr<Image> newFrame);
+    void updateCameraLayer(const std::shared_ptr<Webcam>& camera, std::unique_ptr<Image> newFrame);
     void createOutputPreviewLayer();
     void updateOutputPreviewLayer(const Image& compositeImage);
     void updatePreviewVisibility();
     std::vector<std::shared_ptr<InputWebcam>> inWebcam_;
     std::vector<std::shared_ptr<V4L2LoopbackWriter>> outWebcam_;
+    std::shared_ptr<wsInputDevice> websocketInput_;
     std::shared_ptr<LayerManager> layerManager_{nullptr};
     // std::unordered_map<int, int> connections_;
 };

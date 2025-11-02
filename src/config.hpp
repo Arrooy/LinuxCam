@@ -17,6 +17,16 @@ struct ExternalData
     bool preLoading{false};
 };
 
+struct WebServerConfig
+{
+    std::string host{"0.0.0.0"};
+    int port{8080};
+    std::string documentRoot{"../www"};
+    int threadCount{4};
+    std::string sslCert;
+    std::string sslKey;
+};
+
 struct WebcamDevice
 {
     std::string name;
@@ -237,6 +247,43 @@ class Config
         return true;
     }
 
+    bool validateAndLoadWebServerConfig()
+    {
+        // Web server config is optional, use defaults if missing
+        if (!config_["web_server"])
+        {
+            common::logInfo("web_server section not found in config, using defaults");
+            return true;
+        }
+
+        auto webServer = config_["web_server"];
+        if (webServer["host"])
+        {
+            webServerConfig_.host = webServer["host"].as<std::string>();
+        }
+        if (webServer["port"])
+        {
+            webServerConfig_.port = webServer["port"].as<int>();
+        }
+        if (webServer["document_root"])
+        {
+            webServerConfig_.documentRoot = webServer["document_root"].as<std::string>();
+        }
+        if (webServer["thread_count"])
+        {
+            webServerConfig_.threadCount = webServer["thread_count"].as<int>();
+        }
+        if (webServer["ssl_cert"])
+        {
+            webServerConfig_.sslCert = webServer["ssl_cert"].as<std::string>();
+        }
+        if (webServer["ssl_key"])
+        {
+            webServerConfig_.sslKey = webServer["ssl_key"].as<std::string>();
+        }
+        return true;
+    }
+
   public:
     static Config& getInstance(const char* filename = "config.yaml")
     {
@@ -252,8 +299,10 @@ class Config
             // Clear existing data
             cameras_.clear();
             external_data_ = ExternalData{};
+            webServerConfig_ = WebServerConfig{};
             enableGPU_ = true;
             enableDebug_ = false;
+            websocketInputEnabled_ = false;
             windowWidth_ = 0;
             windowHeight_ = 0;
             windowTitle_.clear();
@@ -284,11 +333,24 @@ class Config
             enableDebug_ = config_["enable_debug"].as<bool>();
         }
 
+        if (config_["websocket_input_enabled"])
+        {
+            try
+            {
+                websocketInputEnabled_ = config_["websocket_input_enabled"].as<bool>();
+            }
+            catch (const YAML::Exception& e)
+            {
+                common::logError("Invalid value for websocket_input_enabled: %s", e.what());
+                websocketInputEnabled_ = false;
+            }
+        }
+
         // Set the global debug flag for logging
         common::setDebugEnabled(enableDebug_);
 
         return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()
-               && validateAndLoadWindowConfig();
+               && validateAndLoadWindowConfig() && validateAndLoadWebServerConfig();
     }
 
     // Get configuration sections
@@ -307,6 +369,8 @@ class Config
     }
 
     std::string getWindowTitle() const { return windowTitle_; }
+    WebServerConfig getWebServerConfig() const { return webServerConfig_; }
+    bool isWebSocketInputEnabled() const { return websocketInputEnabled_; }
 
     // Get a value from the config
     template <typename T>
@@ -323,6 +387,8 @@ class Config
     YAML::Node config_;
     std::vector<WebcamDevice> cameras_;
     ExternalData external_data_;
+    WebServerConfig webServerConfig_;
+    bool websocketInputEnabled_{false};
 
     bool enableGPU_{true};
     bool enableDebug_{false};

@@ -95,6 +95,7 @@ Image::Image(Pixel color, size_t width, size_t height)
     const bool hasAlpha = (color.a != 255);
     info.pixelSizeBytes = hasAlpha ? 4 : 3;
     info.format = hasAlpha ? ImageFormat::RGBA : ImageFormat::RGB;
+    info.TJPixelFormat = hasAlpha ? TJPF_RGBA : TJPF_RGB;
     info.width = width;
     info.height = height;
 

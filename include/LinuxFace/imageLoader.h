@@ -40,6 +40,9 @@ class ImageLoader
     // Load image from file
     bool loadFromFile(const std::string& filePath);
 
+    // Load image from byte vector
+    bool loadFromBytes(const std::vector<uint8_t>& imageData);
+
     // Get decoded RGB888 image
     bool getImage(std::unique_ptr<Image>& outImage);
 

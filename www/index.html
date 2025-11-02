@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>LinuxFace</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100dvh;
+            /* Dynamic viewport height - excludes browser UI */
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        /* Main processed stream - fullscreen */
+        #mainView {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+            min-height: 0;
+            /* Allow flex shrinking */
+        }
+
+        #receivedCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        #placeholderText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+            font-size: 18px;
+            padding: 20px;
+        }
+
+        #placeholderText .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        /* Local camera preview - minimized corner */
+        #localPreview {
+            position: fixed;
+            top: max(20px, env(safe-area-inset-top));
+            right: 20px;
+            width: 100px;
+            height: 133px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #1a1a1a;
+            border: 2px solid #333;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        #localPreview.hidden {
+            display: none;
+        }
+
+        #localPreview.switching {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        #localVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            /* Mirror horizontally for natural selfie view */
+            -webkit-transform: scaleX(-1);
+        }
+
+        #captureCanvas {
+            display: none;
+        }
+
+        /* Control panel at bottom */
+        #controls {
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.7));
+            padding: 16px;
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            flex-shrink: 0;
+            /* Don't shrink */
+        }
+
+        .control-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button {
+            flex: 1;
+            max-width: 400px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            touch-action: manipulation;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+            min-height: 44px;
+            /* iOS minimum tap target */
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        button:disabled {
+            background: #333;
+            color: #666;
+            box-shadow: none;
+        }
+
+        button.stop {
+            background: #f44336;
+            box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+        }
+
+        button.secondary {
+            background: #2196F3;
+            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+        }
+
+        /* Status indicator */
+        #statusBar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #aaa;
+            padding: 0;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            transition: background 0.3s ease;
+        }
+
+        .status-dot.active {
+            background: #4CAF50;
+            box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+        }
+
+        .stats {
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* Connection indicator */
+        #connectionQuality {
+            position: fixed;
+            top: max(20px, env(safe-area-inset-top));
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 6px 10px;
+            border-radius: 16px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        /* Camera switch hint */
+        #cameraSwitchHint {
+            position: fixed;
+            top: max(155px, calc(env(safe-area-inset-top) + 135px));
+            right: 20px;
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 11px;
+            font-weight: 600;
+            z-index: 101;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        #cameraSwitchHint.show {
+            opacity: 1;
+        }
+
+        /* Target photo upload button - moved to bottom right to avoid overlap */
+        #targetPhotoBtn {
+            position: fixed;
+            bottom: max(120px, calc(env(safe-area-inset-bottom) + 120px));
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(33, 150, 243, 0.95);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* Settings button */
+        #settingsBtn {
+            position: fixed;
+            bottom: max(184px, calc(env(safe-area-inset-bottom) + 184px));
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(103, 58, 183, 0.95);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        #settingsBtn:active {
+            transform: scale(0.95);
+        }
+
+        #settingsBtn svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
+            animation: rotate 4s linear infinite;
+        }
+
+        #settingsBtn:hover svg {
+            animation: rotate 1s linear infinite;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #targetPhotoBtn:active {
+            transform: scale(0.95);
+        }
+
+        #targetPhotoBtn svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
+        }
+
+        #targetPhotoBtn.uploading {
+            background: rgba(255, 152, 0, 0.95);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        #targetPhotoInput {
+            display: none;
+        }
+
+        #cameraInput {
+            display: none;
+        }
+
+        /* Photo source modal */
+        #photoSourceModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #photoSourceModal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border-radius: 20px;
+            padding: 32px 24px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .modal-header h2 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .modal-header p {
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .modal-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .modal-option {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            touch-action: manipulation;
+        }
+
+        .modal-option:active {
+            transform: scale(0.98);
+        }
+
+        .modal-option:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(33, 150, 243, 0.5);
+        }
+
+        .modal-option svg {
+            width: 32px;
+            height: 32px;
+            fill: #2196F3;
+            flex-shrink: 0;
+        }
+
+        .modal-option-text {
+            flex: 1;
+        }
+
+        .modal-option-text h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #fff;
+        }
+
+        .modal-option-text p {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .modal-cancel {
+            background: rgba(244, 67, 54, 0.1);
+            border: 2px solid rgba(244, 67, 54, 0.3);
+            color: #f44336;
+            border-radius: 12px;
+            padding: 14px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+        }
+
+        .modal-cancel:active {
+            transform: scale(0.98);
+        }
+
+        .modal-cancel:hover {
+            background: rgba(244, 67, 54, 0.15);
+            border-color: rgba(244, 67, 54, 0.5);
+        }
+
+        /* Settings modal */
+        #settingsModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+            overflow-y: auto;
+        }
+
+        #settingsModal.show {
+            display: flex;
+        }
+
+        .settings-content {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border-radius: 20px;
+            padding: 32px 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        .settings-group {
+            margin-bottom: 24px;
+        }
+
+        .settings-group:last-of-type {
+            margin-bottom: 16px;
+        }
+
+        .settings-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .settings-group .description {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 12px;
+        }
+
+        .settings-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .settings-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #673AB7;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(103, 58, 183, 0.5);
+        }
+
+        .settings-group input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #673AB7;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 8px rgba(103, 58, 183, 0.5);
+        }
+
+        .settings-value {
+            display: inline-block;
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #673AB7;
+            font-size: 14px;
+        }
+
+        .settings-group select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .settings-group select:focus {
+            outline: none;
+            border-color: rgba(103, 58, 183, 0.5);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .settings-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .settings-buttons button {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            touch-action: manipulation;
+        }
+
+        .btn-save {
+            background: #673AB7;
+            color: white;
+        }
+
+        .btn-save:active {
+            transform: scale(0.98);
+            background: #5E35B1;
+        }
+
+        .btn-cancel {
+            background: rgba(244, 67, 54, 0.1);
+            border: 2px solid rgba(244, 67, 54, 0.3);
+            color: #f44336;
+        }
+
+        .btn-cancel:active {
+            transform: scale(0.98);
+        }
+
+        .settings-note {
+            background: rgba(255, 152, 0, 0.1);
+            border: 1px solid rgba(255, 152, 0, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 12px;
+            color: #FFA726;
+        }
+
+        /* Target photo preview thumbnail - adjusted position */
+        #targetPhotoPreview {
+            position: fixed;
+            bottom: max(184px, calc(env(safe-area-inset-bottom) + 184px));
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #1a1a1a;
+            border: 2px solid rgba(76, 175, 80, 0.5);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            display: none;
+        }
+
+        #targetPhotoPreview.show {
+            display: block;
+        }
+
+        #targetPhotoPreview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .quality-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .quality-indicator.good {
+            background: #4CAF50;
+            box-shadow: 0 0 6px rgba(76, 175, 80, 0.8);
+        }
+
+        .quality-indicator.poor {
+            background: #ff9800;
+            box-shadow: 0 0 6px rgba(255, 152, 0, 0.8);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 400px) {
+            #localPreview {
+                width: 90px;
+                height: 120px;
+                top: max(16px, env(safe-area-inset-top));
+                right: 16px;
+            }
+
+            #cameraSwitchHint {
+                top: max(142px, calc(env(safe-area-inset-top) + 122px));
+                right: 16px;
+                font-size: 10px;
+                padding: 5px 10px;
+            }
+
+            #connectionQuality {
+                top: max(16px, env(safe-area-inset-top));
+                left: 16px;
+                font-size: 10px;
+                padding: 5px 8px;
+            }
+
+            #targetPhotoBtn {
+                width: 48px;
+                height: 48px;
+                bottom: max(110px, calc(env(safe-area-inset-bottom) + 110px));
+                right: 16px;
+            }
+
+            #targetPhotoBtn svg {
+                width: 24px;
+                height: 24px;
+            }
+
+            #settingsBtn {
+                width: 48px;
+                height: 48px;
+                bottom: max(166px, calc(env(safe-area-inset-bottom) + 166px));
+                right: 16px;
+            }
+
+            #settingsBtn svg {
+                width: 24px;
+                height: 24px;
+            }
+
+            #targetPhotoPreview {
+                width: 48px;
+                height: 48px;
+                bottom: max(222px, calc(env(safe-area-inset-bottom) + 222px));
+                right: 16px;
+            }
+
+            button {
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+
+            #statusBar {
+                font-size: 11px;
+                gap: 6px;
+            }
+
+            .stats {
+                font-size: 10px;
+            }
+
+            .modal-content {
+                padding: 24px 20px;
+            }
+
+            .modal-header h2 {
+                font-size: 20px;
+            }
+
+            .modal-option {
+                padding: 16px;
+            }
+
+            .modal-option svg {
+                width: 28px;
+                height: 28px;
+            }
+        }
+
+        /* Landscape mode */
+        @media (orientation: landscape) {
+            #localPreview {
+                width: 80px;
+                height: 107px;
+                top: max(12px, env(safe-area-inset-top));
+                right: 12px;
+            }
+
+            #cameraSwitchHint {
+                top: max(125px, calc(env(safe-area-inset-top) + 113px));
+                right: 12px;
+            }
+
+            #connectionQuality {
+                top: max(12px, env(safe-area-inset-top));
+                left: 12px;
+            }
+
+            #targetPhotoBtn {
+                width: 48px;
+                height: 48px;
+                bottom: max(100px, calc(env(safe-area-inset-bottom) + 100px));
+                right: 12px;
+            }
+
+            #targetPhotoBtn svg {
+                width: 24px;
+                height: 24px;
+            }
+
+            #settingsBtn {
+                width: 48px;
+                height: 48px;
+                bottom: max(156px, calc(env(safe-area-inset-bottom) + 156px));
+                right: 12px;
+            }
+
+            #settingsBtn svg {
+                width: 24px;
+                height: 24px;
+            }
+
+            #targetPhotoPreview {
+                width: 48px;
+                height: 48px;
+                bottom: max(212px, calc(env(safe-area-inset-bottom) + 212px));
+                right: 12px;
+            }
+
+            #controls {
+                padding: 12px;
+                padding-bottom: max(12px, env(safe-area-inset-bottom));
+            }
+
+            button {
+                padding: 10px 16px;
+                font-size: 14px;
+                min-height: 40px;
+            }
+        }
+
+        /* Very small screens */
+        @media (max-height: 600px) {
+            #localPreview {
+                width: 70px;
+                height: 93px;
+            }
+
+            #controls {
+                padding: 10px;
+                gap: 8px;
+            }
+
+            button {
+                padding: 10px 14px;
+                font-size: 13px;
+                min-height: 40px;
+            }
+
+            #statusBar {
+                font-size: 10px;
+            }
+
+            .stats {
+                font-size: 9px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Main fullscreen view for processed stream -->
+    <div id="mainView">
+        <canvas id="receivedCanvas"></canvas>
+        <div id="placeholderText">
+            <h1 class="icon">Remote Face</h1>
+            <p>Start camera to begin</p>
+            <p style="font-size: 10px; color: #555; margin-top: 38px;">By Adria Arroyo</p>
+        </div>
+    </div>
+
+    <!-- Minimized local camera preview -->
+    <div id="localPreview" class="hidden">
+        <video id="localVideo" autoplay playsinline muted></video>
+    </div>
+    <canvas id="captureCanvas"></canvas>
+
+    <!-- Connection quality indicator -->
+    <div id="connectionQuality">
+        <div class="quality-indicator"></div>
+        <span id="qualityText">Disconnected</span>
+    </div>
+
+    <!-- Target photo upload button -->
+    <div id="targetPhotoBtn" title="Change target face">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path
+                d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" />
+            <circle cx="12" cy="12" r="3" />
+        </svg>
+    </div>
+
+    <!-- Settings button -->
+    <div id="settingsBtn" title="Settings">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path
+                d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
+        </svg>
+    </div>
+
+    <!-- Photo source modal -->
+    <div id="photoSourceModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Select Photo Source</h2>
+                <p>Choose how to upload target face</p>
+            </div>
+            <div class="modal-options">
+                <div class="modal-option" id="galleryOption">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                    </svg>
+                    <div class="modal-option-text">
+                        <h3>Photo Gallery</h3>
+                        <p>Choose from your device</p>
+                    </div>
+                </div>
+                <div class="modal-option" id="cameraOption">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" />
+                        <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <div class="modal-option-text">
+                        <h3>Take Photo</h3>
+                        <p>Use your camera</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-cancel" id="modalCancel">Cancel</div>
+        </div>
+    </div>
+
+    <!-- Settings modal -->
+    <div id="settingsModal">
+        <div class="settings-content">
+            <div class="modal-header">
+                <h2>⚙️ Settings</h2>
+                <p>Configure video quality and resolution</p>
+            </div>
+
+            <div class="settings-group">
+                <label>
+                    JPEG Quality
+                    <span class="settings-value" id="jpegQualityValue">85%</span>
+                </label>
+                <div class="description">Image quality for both upload and download (lower = faster, higher = better
+                    quality)</div>
+                <input type="range" id="jpegQualitySlider" min="10" max="100" value="85" step="5">
+            </div>
+
+            <div class="settings-group">
+                <label>Input Resolution</label>
+                <div class="description">Camera capture resolution (higher = better quality, slower processing)</div>
+                <select id="resolutionSelect">
+                    <option value="640x480">640×480 (VGA - Fast)</option>
+                    <option value="960x540" selected>960×540 (qHD - Balanced)</option>
+                    <option value="1280x720">1280×720 (HD - Quality)</option>
+                    <option value="1920x1080">1920×1080 (Full HD - Best)</option>
+                </select>
+            </div>
+
+            <div class="settings-note">
+                ℹ️ Resolution changes will automatically restart the camera
+            </div>
+
+            <div class="settings-buttons">
+                <button class="btn-cancel" id="settingsCancelBtn">Cancel</button>
+                <button class="btn-save" id="settingsSaveBtn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file inputs -->
+    <input type="file" id="targetPhotoInput" accept="image/*">
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+
+    <!-- Target photo preview -->
+    <div id="targetPhotoPreview">
+        <img id="targetPhotoImg" src="" alt="Target">
+    </div>
+
+    <!-- Camera switch hint -->
+    <div id="cameraSwitchHint">Double-tap to flip camera</div>
+
+    <!-- Bottom control panel -->
+    <div id="controls">
+        <div id="statusBar">
+            <div class="status-item">
+                <div class="status-dot" id="cameraStatusDot"></div>
+                <span id="cameraStatus">Camera: Off</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="wsStatusDot"></div>
+                <span id="wsStatus">WS: Disconnected</span>
+            </div>
+            <div class="status-item">
+                <span id="fpsDisplay">0 FPS</span>
+            </div>
+        </div>
+
+        <div class="control-row">
+            <button id="startBtn">Start Camera</button>
+        </div>
+
+        <div class="stats">
+            Sent: <span id="framesSent">0</span> frames (<span id="dataSent">0</span> KB) •
+            Received: <span id="framesReceived">0</span> frames
+        </div>
+    </div>
+
+    <script>
+        let localStream = null;
+        let ws = null;
+        let isStreaming = false;
+        let frameInterval = null;
+
+        let framesSent = 0;
+        let dataSent = 0;
+        let framesReceived = 0;
+        let lastFrameTime = Date.now();
+        let currentFps = 0;
+        let lastReceivedTime = Date.now();
+        let currentFacingMode = 'user'; // 'user' = front, 'environment' = back
+        let lastTapTime = 0;
+        const DOUBLE_TAP_DELAY = 300; // ms
+
+        // Settings with defaults
+        let settings = {
+            jpegQuality: 85,          // JPEG quality for both client and server (1-100)
+            resolution: '960x540'     // Input resolution
+        };
+
+        // Load settings from localStorage
+        function loadSettings() {
+            const saved = localStorage.getItem('linuxface_settings');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    settings = { ...settings, ...parsed };
+
+                    // Migrate old settings format if needed
+                    if (parsed.serverQuality !== undefined) {
+                        settings.jpegQuality = parsed.serverQuality;
+                        delete settings.serverQuality;
+                        saveSettings();
+                    }
+                } catch (e) {
+                    console.error('Failed to load settings:', e);
+                }
+            }
+        }
+
+        // Save settings to localStorage
+        function saveSettings() {
+            localStorage.setItem('linuxface_settings', JSON.stringify(settings));
+        }
+
+        loadSettings();
+
+        const localVideo = document.getElementById('localVideo');
+        const localPreview = document.getElementById('localPreview');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const receivedCanvas = document.getElementById('receivedCanvas');
+        const placeholderText = document.getElementById('placeholderText');
+        const cameraSwitchHint = document.getElementById('cameraSwitchHint');
+        const captureCtx = captureCanvas.getContext('2d');
+        const receivedCtx = receivedCanvas.getContext('2d');
+
+        const startBtn = document.getElementById('startBtn');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const wsStatus = document.getElementById('wsStatus');
+        const cameraStatusDot = document.getElementById('cameraStatusDot');
+        const wsStatusDot = document.getElementById('wsStatusDot');
+        const qualityIndicator = document.querySelector('.quality-indicator');
+        const qualityText = document.getElementById('qualityText');
+        const fpsDisplay = document.getElementById('fpsDisplay');
+        const targetPhotoBtn = document.getElementById('targetPhotoBtn');
+        const targetPhotoInput = document.getElementById('targetPhotoInput');
+        const cameraInput = document.getElementById('cameraInput');
+        const targetPhotoPreview = document.getElementById('targetPhotoPreview');
+        const targetPhotoImg = document.getElementById('targetPhotoImg');
+        const photoSourceModal = document.getElementById('photoSourceModal');
+        const galleryOption = document.getElementById('galleryOption');
+        const cameraOption = document.getElementById('cameraOption');
+        const modalCancel = document.getElementById('modalCancel');
+
+        // Settings elements
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const jpegQualitySlider = document.getElementById('jpegQualitySlider');
+        const jpegQualityValue = document.getElementById('jpegQualityValue');
+        const resolutionSelect = document.getElementById('resolutionSelect');
+        const settingsSaveBtn = document.getElementById('settingsSaveBtn');
+        const settingsCancelBtn = document.getElementById('settingsCancelBtn');
+
+        // Initialize settings UI
+        jpegQualitySlider.value = settings.jpegQuality;
+        jpegQualityValue.textContent = settings.jpegQuality + '%';
+        resolutionSelect.value = settings.resolution;
+
+        // Settings button handler
+        settingsBtn.addEventListener('click', () => {
+            // Update UI with current settings
+            jpegQualitySlider.value = settings.jpegQuality;
+            jpegQualityValue.textContent = settings.jpegQuality + '%';
+            resolutionSelect.value = settings.resolution;
+
+            settingsModal.classList.add('show');
+        });
+
+        // Update slider value display
+        jpegQualitySlider.addEventListener('input', (e) => {
+            jpegQualityValue.textContent = e.target.value + '%';
+        });
+
+        // Save settings
+        settingsSaveBtn.addEventListener('click', async () => {
+            const oldResolution = settings.resolution;
+            const wasStreaming = localStream !== null;
+
+            settings.jpegQuality = parseInt(jpegQualitySlider.value);
+            settings.resolution = resolutionSelect.value;
+
+            saveSettings();
+            settingsModal.classList.remove('show');
+
+            // Send quality to backend if connected
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = `QUALITY:${settings.jpegQuality}`;
+                ws.send(message);
+                console.log('Sent quality setting to server:', settings.jpegQuality);
+            }
+
+            // Auto-restart camera if resolution changed
+            if (wasStreaming && oldResolution !== settings.resolution) {
+                console.log('Resolution changed, restarting camera...');
+                stopCamera();
+
+                // Brief delay for cleanup
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                await startCamera();
+            }
+
+            console.log('Settings saved:', settings);
+        });
+
+        // Cancel settings
+        settingsCancelBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('show');
+        });
+
+        // Close settings modal on background click
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                settingsModal.classList.remove('show');
+            }
+        });
+
+        // Show modal when target photo button clicked
+        targetPhotoBtn.addEventListener('click', () => {
+            photoSourceModal.classList.add('show');
+        });
+
+        // Gallery option - select from device
+        galleryOption.addEventListener('click', () => {
+            photoSourceModal.classList.remove('show');
+            targetPhotoInput.click();
+        });
+
+        // Camera option - take photo with camera
+        cameraOption.addEventListener('click', () => {
+            photoSourceModal.classList.remove('show');
+            cameraInput.click();
+        });
+
+        // Cancel modal
+        modalCancel.addEventListener('click', () => {
+            photoSourceModal.classList.remove('show');
+        });
+
+        // Close modal on background click
+        photoSourceModal.addEventListener('click', (e) => {
+            if (e.target === photoSourceModal) {
+                photoSourceModal.classList.remove('show');
+            }
+        });
+
+        // Handle photo upload from gallery
+        async function handlePhotoUpload(file) {
+            if (!file) return;
+
+            console.log('Target photo selected:', file.name);
+            targetPhotoBtn.classList.add('uploading');
+
+            try {
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    targetPhotoImg.src = event.target.result;
+                    targetPhotoPreview.classList.add('show');
+                };
+                reader.readAsDataURL(file);
+
+                // Send to server via WebSocket
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const arrayBuffer = await file.arrayBuffer();
+
+                    // Send with a special header to identify it as target image
+                    const header = new TextEncoder().encode('TARGET_IMAGE:');
+                    const combined = new Uint8Array(header.length + arrayBuffer.byteLength);
+                    combined.set(header, 0);
+                    combined.set(new Uint8Array(arrayBuffer), header.length);
+
+                    ws.send(combined.buffer);
+                    console.log('Target photo sent to server:', arrayBuffer.byteLength, 'bytes');
+
+                    setTimeout(() => {
+                        targetPhotoBtn.classList.remove('uploading');
+                    }, 1000);
+                } else {
+                    console.error('WebSocket not connected');
+                    alert('Please start camera first');
+                    targetPhotoBtn.classList.remove('uploading');
+                }
+            } catch (err) {
+                console.error('Error uploading target photo:', err);
+                alert('Failed to upload photo');
+                targetPhotoBtn.classList.remove('uploading');
+            }
+        }
+
+        // Target photo upload handlers
+        targetPhotoInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            await handlePhotoUpload(file);
+            e.target.value = ''; // Reset input
+        });
+
+        cameraInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            await handlePhotoUpload(file);
+            e.target.value = ''; // Reset input
+        });
+
+        // Double-tap to switch camera
+        localPreview.addEventListener('click', (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTapTime;
+
+            if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
+                // Double tap detected
+                e.preventDefault();
+                switchCamera();
+            }
+            lastTapTime = currentTime;
+        });
+
+        // Also enable double-tap on main view when camera is active
+        document.getElementById('mainView').addEventListener('click', (e) => {
+            if (!localStream) return; // Only work when camera is active
+
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTapTime;
+
+            if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
+                // Double tap detected
+                e.preventDefault();
+                switchCamera();
+            }
+            lastTapTime = currentTime;
+        });
+
+        // Show hint briefly when camera starts
+        function showCameraSwitchHint() {
+            cameraSwitchHint.classList.add('show');
+            setTimeout(() => {
+                cameraSwitchHint.classList.remove('show');
+            }, 3000);
+        }
+
+        async function switchCamera() {
+            if (!localStream) return;
+
+            console.log('Switching camera...');
+            localPreview.classList.add('switching');
+
+            // Toggle facing mode
+            currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+
+            // Stop current stream
+            localStream.getTracks().forEach(track => track.stop());
+
+            try {
+                // Parse resolution from settings
+                const [width, height] = settings.resolution.split('x').map(Number);
+
+                // Get new stream with switched camera
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: width },
+                        height: { ideal: height },
+                        facingMode: currentFacingMode
+                    },
+                    audio: false
+                });
+                localVideo.srcObject = localStream;
+
+                // Update canvas size when video is ready
+                localVideo.onloadedmetadata = () => {
+                    captureCanvas.width = localVideo.videoWidth;
+                    captureCanvas.height = localVideo.videoHeight;
+                    localPreview.classList.remove('switching');
+                };
+
+                console.log(`Switched to ${currentFacingMode} camera`);
+            } catch (err) {
+                console.error('Error switching camera:', err);
+                localPreview.classList.remove('switching');
+
+                // Try to restore previous camera
+                currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                try {
+                    const [width, height] = settings.resolution.split('x').map(Number);
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: width },
+                            height: { ideal: height },
+                            facingMode: currentFacingMode
+                        },
+                        audio: false
+                    });
+                    localVideo.srcObject = localStream;
+                } catch (restoreErr) {
+                    console.error('Failed to restore camera:', restoreErr);
+                    alert('Could not switch camera. Please restart.');
+                }
+            }
+        }
+
+        // Auto-connect WebSocket when camera starts
+        async function startCamera() {
+            try {
+                // Parse resolution from settings
+                const [width, height] = settings.resolution.split('x').map(Number);
+
+                // Request camera with configured resolution
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: width },
+                        height: { ideal: height },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
+                localVideo.srcObject = localStream;
+
+                // Update UI
+                cameraStatus.textContent = 'Camera: Active';
+                cameraStatusDot.classList.add('active');
+                localPreview.classList.remove('hidden');
+                startBtn.textContent = 'Stop Streaming';
+                startBtn.classList.add('stop');
+
+                console.log('Camera started with resolution:', settings.resolution);
+
+                // Show hint about camera switching
+                showCameraSwitchHint();
+
+                // Auto-connect WebSocket after short delay
+                setTimeout(connectWebSocket, 500);
+
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Could not access camera. Please allow camera permissions and try again.');
+            }
+        }
+
+        function stopCamera() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (ws) {
+                ws.close();
+            }
+
+            stopStreaming();
+
+            // Update UI
+            cameraStatus.textContent = 'Camera: Off';
+            cameraStatusDot.classList.remove('active');
+            localPreview.classList.add('hidden');
+            startBtn.textContent = 'Start Camera';
+            startBtn.classList.remove('stop');
+
+            console.log('Camera stopped');
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const port = window.location.port || (window.location.protocol === 'https:' ? '8443' : '8080');
+            const wsUrl = `${protocol}//${window.location.hostname}:${port}/ws/video`;
+
+            console.log('Connecting to WebSocket:', wsUrl);
+            ws = new WebSocket(wsUrl);
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                wsStatus.textContent = 'WS: Connected';
+                wsStatusDot.classList.add('active');
+                qualityIndicator.classList.add('good');
+                qualityText.textContent = 'Connected';
+
+                // Send initial quality setting
+                const message = `QUALITY:${settings.jpegQuality}`;
+                ws.send(message);
+                console.log('Sent initial quality setting to server:', settings.jpegQuality);
+
+                // Auto-start streaming once connected
+                setTimeout(startStreaming, 300);
+            };
+
+            ws.onmessage = (event) => {
+                if (typeof event.data === 'string') {
+                    console.log('Server message:', event.data);
+                } else {
+                    // Binary data - processed frame from server
+                    framesReceived++;
+                    lastReceivedTime = Date.now();
+
+                    document.getElementById('framesReceived').textContent = framesReceived;
+
+                    // Hide placeholder when we receive first frame
+                    if (framesReceived === 1) {
+                        placeholderText.style.display = 'none';
+                    }
+
+                    // Display processed image
+                    const blob = new Blob([event.data], { type: 'image/jpeg' });
+                    const img = new Image();
+                    img.onload = () => {
+                        receivedCanvas.width = img.width;
+                        receivedCanvas.height = img.height;
+                        receivedCtx.drawImage(img, 0, 0);
+                        URL.revokeObjectURL(img.src);
+                    };
+                    img.src = URL.createObjectURL(blob);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                qualityIndicator.classList.remove('good');
+                qualityIndicator.classList.add('poor');
+                qualityText.textContent = 'Connection Error';
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                wsStatus.textContent = 'WS: Disconnected';
+                wsStatusDot.classList.remove('active');
+                qualityIndicator.classList.remove('good', 'poor');
+                qualityText.textContent = 'Disconnected';
+                fpsDisplay.textContent = '--';
+
+                if (isStreaming) {
+                    stopStreaming();
+                }
+            };
+        }
+
+        function startStreaming() {
+            if (!localStream || !ws || ws.readyState !== WebSocket.OPEN) {
+                console.warn('Cannot start streaming - camera or WebSocket not ready');
+                return;
+            }
+
+            isStreaming = true;
+
+            // Set canvas size to match video
+            captureCanvas.width = localVideo.videoWidth;
+            captureCanvas.height = localVideo.videoHeight;
+
+            // Stream at ~30 FPS
+            frameInterval = setInterval(captureAndSendFrame, 33);
+            console.log('Streaming started');
+        }
+
+        function stopStreaming() {
+            isStreaming = false;
+
+            if (frameInterval) {
+                clearInterval(frameInterval);
+                frameInterval = null;
+            }
+            console.log('Streaming stopped');
+        }
+
+        async function captureAndSendFrame() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                stopStreaming();
+                return;
+            }
+
+            // Draw current video frame to canvas (mirrored for front camera)
+            captureCtx.save();
+            if (currentFacingMode === 'user') {
+                // Mirror for front-facing camera
+                captureCtx.scale(-1, 1);
+                captureCtx.drawImage(localVideo, -captureCanvas.width, 0, captureCanvas.width, captureCanvas.height);
+            } else {
+                // Normal orientation for rear camera
+                captureCtx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+            }
+            captureCtx.restore();
+
+            // Convert to JPEG and send as binary data
+            captureCanvas.toBlob(async (blob) => {
+                if (blob && ws.readyState === WebSocket.OPEN) {
+                    const arrayBuffer = await blob.arrayBuffer();
+                    ws.send(arrayBuffer);
+
+                    framesSent++;
+                    dataSent += arrayBuffer.byteLength / 1024;
+
+                    // Update FPS
+                    const now = Date.now();
+                    const delta = now - lastFrameTime;
+                    currentFps = Math.round(1000 / delta);
+                    lastFrameTime = now;
+
+                    // Update stats
+                    document.getElementById('framesSent').textContent = framesSent;
+                    document.getElementById('dataSent').textContent = dataSent.toFixed(1);
+                    fpsDisplay.textContent = `${currentFps} FPS`;
+
+                    // Update connection quality
+                    const timeSinceReceived = now - lastReceivedTime;
+                    if (timeSinceReceived > 2000) {
+                        qualityIndicator.classList.remove('good');
+                        qualityIndicator.classList.add('poor');
+                        qualityText.textContent = 'Poor Connection';
+                    } else {
+                        qualityIndicator.classList.remove('poor');
+                        qualityIndicator.classList.add('good');
+                        qualityText.textContent = 'Good';
+                    }
+                }
+            }, 'image/jpeg', settings.jpegQuality / 100); // Convert to 0.0-1.0 range for canvas
+        }
+
+        // Button handler - single toggle button
+        startBtn.onclick = () => {
+            if (!localStream) {
+                startCamera();
+            } else {
+                stopCamera();
+            }
+        };
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopCamera();
+        });
+
+        // Prevent screen sleep on mobile
+        if ('wakeLock' in navigator) {
+            let wakeLock = null;
+            const requestWakeLock = async () => {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Screen wake lock activated');
+                } catch (err) {
+                    console.log('Wake lock error:', err);
+                }
+            };
+
+            document.addEventListener('visibilitychange', () => {
+                if (wakeLock !== null && document.visibilityState === 'visible') {
+                    requestWakeLock();
+                }
+            });
+
+            startBtn.addEventListener('click', () => {
+                if (!localStream) {
+                    requestWakeLock();
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

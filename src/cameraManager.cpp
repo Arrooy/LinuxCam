@@ -12,6 +12,7 @@
 #include "LinuxFace/common.h"
 #include "LinuxFace/math_utils.h"
 #include "LinuxFace/profiler.h"
+#include "LinuxFace/web/wsInputDevice.h"
 
 using linuxface::CameraManager;
 using linuxface::Image;
@@ -34,6 +35,19 @@ void CameraManager::setLayerManager(std::shared_ptr<LayerManager> layerManager)
     updatePreviewVisibility();
 }
 
+void CameraManager::setWebSocketInput(std::shared_ptr<wsInputDevice> device)
+{
+    websocketInput_ = std::move(device);
+    if (websocketInput_)
+    {
+        common::logInfo("CameraManager::setWebSocketInput - WebSocket input device registered");
+    }
+    else
+    {
+        common::logInfo("CameraManager::setWebSocketInput - WebSocket input device cleared");
+    }
+}
+
 void CameraManager::shutdown()
 {
     for (const auto& camera : inWebcam_)
@@ -41,6 +55,12 @@ void CameraManager::shutdown()
         camera->stop();
     }
     inWebcam_.clear();
+
+    if (websocketInput_)
+    {
+        websocketInput_->stop();
+        websocketInput_.reset();
+    }
 
     for (const auto& camera : outWebcam_)
     {
@@ -60,6 +80,23 @@ bool CameraManager::updateInput()
 
     bool anyUpdated = false;
 
+    // Update WebSocket input if available
+    if (websocketInput_ && websocketInput_->isRunning())
+    {
+        std::unique_ptr<Image> newFrame;
+        if (websocketInput_->getImage(newFrame) && newFrame != nullptr)
+        {
+            if (newFrame->info.width == 0 && newFrame->info.height == 0)
+            {
+                common::logError("CameraManager::updateInput - Input image invalid size: %d x %d", newFrame->info.width,
+                                 newFrame->info.height);
+            }
+            updateCameraLayer(websocketInput_, std::move(newFrame));
+            anyUpdated = true;
+        }
+    }
+
+    // Update physical camera inputs
     for (auto& input : inWebcam_)
     {
         if (input->isRunning())
@@ -98,7 +135,7 @@ bool CameraManager::updateInput()
     return anyUpdated;
 }
 
-void CameraManager::updateCameraLayer(const std::shared_ptr<InputWebcam>& camera, std::unique_ptr<Image> newFrame)
+void CameraManager::updateCameraLayer(const std::shared_ptr<Webcam>& camera, std::unique_ptr<Image> newFrame)
 {
     Profiler::ScopedProfilerSpan span("CameraManager", "UpdateCameraLayer");
     // Find or create layer for this camera

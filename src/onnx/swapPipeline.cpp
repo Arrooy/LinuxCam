@@ -49,7 +49,6 @@ bool SwapPipeline::run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& ta
         srcFaces = scrfd_->detect(image);
         if (srcFaces.empty())
         {
-            common::logWarn("SwapPipeline: No faces detected in the webcam image.");
             return false;
         }
 

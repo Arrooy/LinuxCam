@@ -22,8 +22,10 @@ class SwapPipeline
     // Call once per frame. Returns true if swap was performed.
     bool run(std::unique_ptr<Image>& image, std::unique_ptr<Image>& targetImg, std::vector<Face> srcFaces = {});
 
-  private:
+    // Update target face embedding (can be called to change target dynamically)
     bool prepareTargetEmbedding(const std::unique_ptr<Image>& targetImg);
+
+  private:
     bool processFace(Face& face, std::unique_ptr<Image>& image, Image& swappedFace);
 
     std::shared_ptr<InSwapper> inswapper_;

@@ -2,6 +2,7 @@
 #define APP_H
 
 #include <memory>
+#include <thread>
 
 #include "LinuxFace/Image/gif.h"
 #include "LinuxFace/Image/mediaManager.h"
@@ -22,6 +23,8 @@
 #include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/profiler.h"
 #include "LinuxFace/ui.h"
+#include "LinuxFace/web/streamBroadcaster.h"
+#include "LinuxFace/web/wsInputDevice.h"
 #include "LinuxFace/window.h"
 
 namespace linuxface
@@ -79,6 +82,13 @@ class Application : public std::enable_shared_from_this<Application>
     std::unique_ptr<Image> adria_img_;
     std::unique_ptr<Image> target_img_;
 
+    // WebSocket input device for browser-based video streaming
+    std::shared_ptr<wsInputDevice> wsInputDevice_;
+    std::thread webServerThread_;
+
+    // WebSocket output broadcaster for sending processed frames
+    std::unique_ptr<web::StreamBroadcaster> streamBroadcaster_;
+
     // Single-loop profiler capture flag
     std::atomic<bool> captureNextLoop_{false};
 
@@ -86,6 +96,8 @@ class Application : public std::enable_shared_from_this<Application>
     bool update();
     void process(std::unique_ptr<Image>& image);
     void render();
+    void stopWebServer();
+    void handleTargetImageUpdate(const std::vector<uint8_t>& imageData);
 
   public:
     // Trigger single-loop profiler capture on next frame

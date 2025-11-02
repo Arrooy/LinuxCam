@@ -16,6 +16,7 @@ enum class WebcamType
 {
     UNKNOWN,
     PHYSICAL_INPUT,
+    VIRTUAL_INPUT,
     VIRTUAL_OUTPUT
 };
 

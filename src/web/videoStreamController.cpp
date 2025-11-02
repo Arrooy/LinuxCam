@@ -1,0 +1,174 @@
+#include "LinuxFace/web/videoStreamController.h"
+
+#include "LinuxFace/common.h"
+#include "LinuxFace/web/wsInputDevice.h"
+
+namespace linuxface
+{
+namespace web
+{
+
+void videoStreamController::setInputDevice(std::shared_ptr<wsInputDevice> device)
+{
+    std::lock_guard<std::mutex> lock(deviceMutex_);
+    inputDevice_ = device;
+}
+
+void videoStreamController::handleNewMessage(const drogon::WebSocketConnectionPtr& wsConnPtr, std::string&& message,
+                                             const drogon::WebSocketMessageType& type)
+{
+    // Clear pending frame flag when client sends new frame (indicates they're ready for more)
+    {
+        std::lock_guard<std::mutex> lock(connectionsMutex_);
+        auto it = connections_.find(wsConnPtr);
+        if (it != connections_.end())
+        {
+            it->second.pendingFrames = 0;
+        }
+    }
+
+    if (type == drogon::WebSocketMessageType::Binary)
+    {
+        // Check if this is a target image (prefixed with "TARGET_IMAGE:")
+        const std::string targetPrefix = "TARGET_IMAGE:";
+        if (message.size() > targetPrefix.length() && 
+            message.compare(0, targetPrefix.length(), targetPrefix) == 0)
+        {
+            // Extract image data after prefix
+            std::vector<uint8_t> imageData(message.begin() + targetPrefix.length(), message.end());
+            
+            common::logInfo("videoStreamController - Received target image: %zu bytes", imageData.size());
+            
+            // Notify application to update target image
+            if (onTargetImageReceived_)
+            {
+                onTargetImageReceived_(imageData);
+            }
+            
+            wsConnPtr->send("Target image received");
+            return;
+        }
+
+        // Regular frame data
+        std::shared_ptr<wsInputDevice> device;
+        {
+            std::lock_guard<std::mutex> lock(deviceMutex_);
+            device = inputDevice_;
+        }
+
+        if (!device)
+        {
+            common::logError("videoStreamController - No WebSocket input device configured; dropping frame");
+            return;
+        }
+        std::vector<uint8_t> frameData(message.begin(), message.end());
+        device->pushFrame(frameData);
+    }
+    else
+    {
+        // Text message - check for commands
+        const std::string qualityPrefix = "QUALITY:";
+        if (message.size() > qualityPrefix.length() && 
+            message.compare(0, qualityPrefix.length(), qualityPrefix) == 0)
+        {
+            // Parse quality value
+            try
+            {
+                int quality = std::stoi(message.substr(qualityPrefix.length()));
+                common::logInfo("videoStreamController - Received quality setting: %d", quality);
+                
+                // Notify application to update JPEG quality
+                if (onQualityChanged_)
+                {
+                    onQualityChanged_(quality);
+                }
+                
+                wsConnPtr->send("Quality updated to " + std::to_string(quality));
+            }
+            catch (const std::exception& e)
+            {
+                common::logError("videoStreamController - Failed to parse quality value: %s", e.what());
+                wsConnPtr->send("Error: Invalid quality value");
+            }
+            return;
+        }
+        
+        common::logInfo("videoStreamController - Received text message: %s", message.c_str());
+        wsConnPtr->send("Server received: " + message);
+    }
+}
+
+void videoStreamController::handleNewConnection(const drogon::HttpRequestPtr& req,
+                                                const drogon::WebSocketConnectionPtr& wsConnPtr)
+{
+    std::lock_guard<std::mutex> lock(connectionsMutex_);
+    ClientState state;
+    state.clientId = "client_" + std::to_string(connections_.size() + 1);
+    state.pendingFrames = 0;
+    connections_[wsConnPtr] = std::move(state);
+
+    common::logInfo("videoStreamController - New WebSocket connection from: %s", req->peerAddr().toIpPort().c_str());
+
+    wsConnPtr->send("Connected to LinuxFace video streaming server");
+}
+
+void videoStreamController::handleConnectionClosed(const drogon::WebSocketConnectionPtr& wsConnPtr)
+{
+    std::lock_guard<std::mutex> lock(connectionsMutex_);
+    auto it = connections_.find(wsConnPtr);
+    if (it != connections_.end())
+    {
+        common::logInfo("videoStreamController - Connection closed: %s", it->second.clientId.c_str());
+        connections_.erase(it);
+    }
+}
+
+void videoStreamController::sendProcessedFrame(const std::vector<uint8_t>& jpegData)
+{
+    if (jpegData.empty())
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(connectionsMutex_);
+
+    if (connections_.empty())
+    {
+        return;
+    }
+
+    // Create string_view for binary data
+    std::string_view binaryMessage(reinterpret_cast<const char*>(jpegData.data()), jpegData.size());
+
+    // Simple approach: Only send if no pending frames
+    // This effectively keeps only 1 frame in-flight at a time per client
+    for (auto& [conn, state] : connections_)
+    {
+        if (!conn->connected())
+        {
+            continue;
+        }
+
+        // Skip if client still has pending frame
+        if (state.pendingFrames > 0)
+        {
+            state.pendingFrames = 0; // Reset - we're dropping this frame
+            continue;
+        }
+
+        try
+        {
+            conn->send(binaryMessage, drogon::WebSocketMessageType::Binary);
+            state.pendingFrames = 1; // Mark as having pending frame
+        }
+        catch (const std::exception& e)
+        {
+            common::logError("videoStreamController - Failed to send frame to %s: %s", 
+                           state.clientId.c_str(), e.what());
+            state.pendingFrames = 0;
+        }
+    }
+}
+
+} // namespace web
+} // namespace linuxface

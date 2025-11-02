@@ -76,6 +76,10 @@ void PaintWebcam::paintDevice()
     else if (webcam_->getType() == WebcamType::VIRTUAL_OUTPUT)
     {
         paintVirtualOutput();
+    }else if (webcam_->getType() == WebcamType::VIRTUAL_INPUT)
+    {
+        // TODO: finish this
+        // paintVirtualInput();
     }
 
     ImGui::Separator();

@@ -168,6 +168,53 @@ bool ImageLoader::loadFromFile(const std::string& filePath)
     return true;
 }
 
+bool ImageLoader::loadFromBytes(const std::vector<uint8_t>& imageData)
+{
+    // Reset previous state
+    raw_data_.clear();
+    decoder_.reset();
+    decoded_image_.reset();
+    is_decoded_ = false;
+    metadata_.is_valid = false;
+    metadata_.filename = "<memory>";
+
+    // Store raw data
+    if (imageData.empty())
+    {
+        common::logError("Empty image data provided");
+        return false;
+    }
+
+    raw_data_ = imageData;
+
+    // Extract metadata
+    if (!extractMetadata())
+    {
+        common::logError("Failed to extract metadata from byte data");
+        return false;
+    }
+
+    // Create decoder based on format
+    if (!createDecoder())
+    {
+        common::logError("Failed to create decoder for format: %d", static_cast<int>(metadata_.format));
+        return false;
+    }
+
+    // Handle immediate loading strategy
+    if (strategy_ == LoadStrategy::IMMEDIATE)
+    {
+        std::unique_ptr<Image> tempImage;
+        if (!getImage(tempImage))
+        {
+            common::logError("Failed to decode image immediately");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool ImageLoader::getImage(std::unique_ptr<Image>& outImage)
 {
     if (!metadata_.is_valid)

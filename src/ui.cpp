@@ -747,7 +747,19 @@ void UI::paintDeviceConfigurationTabs()
             }
 
             // Add webcam type indicator
-            tabName += webcam->getType() == WebcamType::PHYSICAL_INPUT ? " (IN)" : " (OUT)";
+            switch (webcam->getType())
+            {
+            case WebcamType::VIRTUAL_INPUT:
+                tabName = "(Vir) " + tabName;
+                break;
+            case WebcamType::VIRTUAL_OUTPUT:
+                tabName += "(Out) " + tabName;
+                break;
+            default:
+            case WebcamType::PHYSICAL_INPUT:
+                tabName += "(Phy) " + tabName;
+                break;
+            }
 
             // Create tab without close button
             if (ImGui::BeginTabItem((tabName + "###tab" + std::to_string(tabIndex++)).c_str(), nullptr, flags))

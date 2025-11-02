@@ -267,6 +267,20 @@ if(NOT gifdec_POPULATED)
     endif()
 endif()
 
+# Fetch Drogon web framework
+FetchContent_Declare(
+    drogon
+    GIT_REPOSITORY https://github.com/drogonframework/drogon.git
+    GIT_TAG        v1.9.8
+)
+
+# Configure Drogon build options
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_ORM OFF CACHE BOOL "" FORCE)
+set(BUILD_DOC OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(drogon)
+
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 list(REMOVE_ITEM SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
@@ -301,6 +315,7 @@ target_link_libraries(linuxface
     gifdec
     ${ONNXRUNTIME_LIB}
     ${FFMPEG_LIBRARIES}
+    drogon
 )
 
 # Enable coverage for the main library
@@ -311,6 +326,7 @@ add_executable(LinuxFace src/main.cpp)
 target_include_directories(LinuxFace PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/web
     "${LIBJPEG_TURBO_INSTALL_DIR}/include"
 )
 target_link_libraries(LinuxFace PRIVATE linuxface)

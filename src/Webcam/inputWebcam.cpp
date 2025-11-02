@@ -422,7 +422,7 @@ void InputWebcam::imageAcquisitionLoop()
                                          // decoder state. We should use the decoder state
         {
             const std::lock_guard<std::mutex> lock(imageMutex_);
-            if (!latestImage_ || latestImage_->size() != imageTmp.size())
+            if (!latestImage_)
             {
                 latestImage_ = std::make_unique<Image>(imageTmp.size());
             }

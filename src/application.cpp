@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <climits>
 #include <csignal>
+#include <drogon/DrClassMap.h>
+#include <drogon/drogon.h>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -15,9 +17,11 @@
 #include "LinuxFace/common.h"
 #include "LinuxFace/depthImage.h"
 #include "LinuxFace/dlibDetectors.h"
+#include "LinuxFace/imageLoader.h"
 #include "LinuxFace/inputWebcam.h"
 #include "LinuxFace/onnx/faceSegmentation.h"
 #include "LinuxFace/onnx/swapPipeline.h"
+#include "LinuxFace/web/videoStreamController.h"
 #include "config.hpp"
 
 using linuxface::Application;
@@ -134,9 +138,118 @@ bool Application::initialize()
     }
 
     {
-        Profiler::ScopedProfilerSpan span("Initialization", "Camera Setup");
+        Profiler::ScopedProfilerSpan span("Initialization", "Input/Output setup");
         cameraManager_ = std::make_shared<CameraManager>();
         cameraManager_->setLayerManager(layerManager_);
+
+        const bool websocketEnabled = Config::getInstance().isWebSocketInputEnabled();
+
+        if (websocketEnabled)
+        {
+            // WebSocket input mode - start web server and create WebSocket input device
+            linuxface::common::logInfo("WebSocket input mode active");
+
+            auto webConfig = Config::getInstance().getWebServerConfig();
+            wsInputDevice_ = std::make_shared<wsInputDevice>(webConfig);
+
+            // Register device with the controller instance managed by Drogon
+            auto controller = drogon::DrClassMap::getSingleInstance<web::videoStreamController>();
+            if (!controller)
+            {
+                linuxface::common::logError("Failed to acquire videoStreamController instance from Drogon");
+                return false;
+            }
+            controller->setInputDevice(wsInputDevice_);
+
+            // Set callback for target image updates
+            controller->setTargetImageCallback(
+                [this](const std::vector<uint8_t>& imageData)
+                {
+                    this->handleTargetImageUpdate(imageData);
+                });
+
+            // Set callback for quality changes
+            controller->setQualityChangedCallback(
+                [this](int quality)
+                {
+                    if (streamBroadcaster_)
+                    {
+                        streamBroadcaster_->setJpegQuality(quality);
+                    }
+                });
+
+            if (!wsInputDevice_->setupDevice())
+            {
+                linuxface::common::logError("Failed to setup WebSocket input device");
+                return false;
+            }
+
+            if (!wsInputDevice_->start())
+            {
+                linuxface::common::logError("Failed to start WebSocket input device");
+                return false;
+            }
+
+            // Register with camera manager
+            cameraManager_->setWebSocketInput(wsInputDevice_);
+
+            // Start Drogon web server in background thread
+            webServerThread_ = std::thread(
+                [webConfig]()
+                {
+                    const bool useSSL = !webConfig.sslCert.empty() && !webConfig.sslKey.empty();
+                    const char* protocol = useSSL ? "HTTPS" : "HTTP";
+                    
+                    linuxface::common::logInfo("Starting WebSocket server (%s) on %s:%d", protocol,
+                                               webConfig.host.c_str(), webConfig.port);
+
+                    auto& app = drogon::app()
+                        .disableSigtermHandling()
+                        .setLogLevel(trantor::Logger::kInfo)
+                        .setDocumentRoot(webConfig.documentRoot)
+                        .setThreadNum(webConfig.threadCount)
+                        .setMaxConnectionNumPerIP(0) // Unlimited connections per IP
+                        .setClientMaxWebSocketMessageSize(10 * 1024 * 1024); // 10MB max message size
+
+                    // Configure SSL if certificates are provided
+                    if (useSSL)
+                    {
+                        linuxface::common::logInfo("Configuring SSL with cert: %s, key: %s", 
+                                                   webConfig.sslCert.c_str(), webConfig.sslKey.c_str());
+                        app.setSSLFiles(webConfig.sslCert, webConfig.sslKey)
+                           .addListener(webConfig.host, webConfig.port, true); // true = use SSL
+                    }
+                    else
+                    {
+                        app.addListener(webConfig.host, webConfig.port);
+                    }
+
+                    app.run();
+
+                    linuxface::common::logInfo("WebSocket server stopped");
+                });
+
+            linuxface::common::logInfo("WebSocket input device ready - waiting for browser connections");
+        }
+
+        // Initialize StreamBroadcaster if WebSocket is enabled
+        if (websocketEnabled)
+        {
+            web::StreamBroadcaster::Config broadcasterConfig;
+            broadcasterConfig.enabled = true;
+            broadcasterConfig.jpegQuality = 85;
+            broadcasterConfig.maxQueueSize = 2; // Drop frames if encoding can't keep up
+
+            streamBroadcaster_ = std::make_unique<web::StreamBroadcaster>(broadcasterConfig);
+            if (!streamBroadcaster_->start())
+            {
+                linuxface::common::logError("Failed to start StreamBroadcaster");
+                streamBroadcaster_.reset();
+            }
+        }
+
+        // Camera input mode - existing behavior
+        linuxface::common::logInfo("Using camera input mode");
 
         auto webcams = Config::getInstance().getWebcams();
         for (const auto& wc : webcams)
@@ -355,6 +468,8 @@ void Application::run()
         linuxface::common::logInfo("Exiting main loop due to signal...");
     }
 
+    stopWebServer();
+
     cameraManager_->shutdown();
     mediaManager_->shutdown();
 
@@ -374,7 +489,11 @@ bool Application::update()
         // Update camera inputs - this now creates/updates individual layers per camera
         if (!cameraManager_->updateInput())
         {
-            return false;
+            // TODO: Join return paths.
+            ui_->handleKeyboard();
+            ui_->newFrame();
+            ui_->paint();
+            return true;
         }
     }
 
@@ -383,7 +502,6 @@ bool Application::update()
     if (layers.empty())
     {
         // No layers to composite, but still update UI
-        Profiler::ScopedProfilerSpan span("Application", "UI Update");
         ui_->handleKeyboard();
         ui_->newFrame();
         ui_->paint();
@@ -422,6 +540,13 @@ bool Application::update()
 
     // Flip horizontally the composite image
     // compositeImage->flipHorizontalInPlace();
+
+    // Send processed frame to WebSocket clients via async broadcaster
+    if (streamBroadcaster_ && streamBroadcaster_->isRunning())
+    {
+        Profiler::ScopedProfilerSpan span("Application", "Submit WebSocket Frame");
+        streamBroadcaster_->submitFrame(compositeImage);
+    }
 
     {
         Profiler::ScopedProfilerSpan span("Application", "Update Camera Output");
@@ -462,6 +587,52 @@ void Application::render()
     // Swap buffers
     window_.swapBuffers();
     Profiler::getInstance().stop("Application", "Render");
+}
+
+
+void Application::stopWebServer()
+{
+
+    linuxface::common::logInfo("Stopping WebSocket server");
+
+    // Stop broadcaster first to prevent new frames from being queued
+    if (streamBroadcaster_)
+    {
+        streamBroadcaster_->stop();
+        
+        // Log statistics
+        auto stats = streamBroadcaster_->getStats();
+        common::logInfo("StreamBroadcaster stats - Submitted: %lu, Dropped: %lu, Encoded: %lu, Broadcast: %lu, Errors: %lu",
+                       stats.framesSubmitted, stats.framesDropped, stats.framesEncoded, 
+                       stats.framesBroadcast, stats.encodingErrors);
+        
+        streamBroadcaster_.reset();
+    }
+
+    if (wsInputDevice_)
+    {
+        wsInputDevice_->stop();
+    }
+
+    if (auto controller = drogon::DrClassMap::getSingleInstance<web::videoStreamController>())
+    {
+        controller->setInputDevice(nullptr);
+    }
+
+    if (cameraManager_)
+    {
+        cameraManager_->setWebSocketInput(nullptr);
+    }
+
+    if (webServerThread_.joinable())
+    {
+        common::logInfo("Signaling Drogon to stop...");
+        drogon::app().quit();
+        common::logInfo("Waiting for WebSocket server thread to exit...");
+        webServerThread_.join();
+    }
+
+    wsInputDevice_.reset();
 }
 
 
@@ -788,6 +959,8 @@ void Application::process(std::unique_ptr<Image>& image)
 
 void Application::shutdown()
 {
+    stopWebServer();
+
     // UI and Window destructors will handle cleanup automatically
 }
 
@@ -906,4 +1079,50 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
         }
     }
     return compositeValid;
+}
+
+void Application::handleTargetImageUpdate(const std::vector<uint8_t>& imageData)
+{
+    common::logInfo("Application - Processing target image update: %zu bytes", imageData.size());
+
+    try
+    {
+        // Use ImageLoader instance for consistent API with loadFromFile
+        ImageLoader loader(ImageLoader::LoadStrategy::LAZY);
+        if (!loader.loadFromBytes(imageData))
+        {
+            common::logError("Application - Failed to load target image from uploaded data");
+            return;
+        }
+
+        std::unique_ptr<Image> decodedImage;
+        if (!loader.getImage(decodedImage))
+        {
+            common::logError("Application - Failed to decode target image");
+            return;
+        }
+
+        common::logInfo("Application - Target image decoded successfully: %lux%lu pixels", 
+                       decodedImage->info.width, decodedImage->info.height);
+
+        // Update the target image
+        target_img_ = std::move(decodedImage);
+
+        // Prepare new target embedding for face swapping
+        if (swapPipeline_ && target_img_)
+        {
+            if (swapPipeline_->prepareTargetEmbedding(target_img_))
+            {
+                common::logInfo("Application - Target face embedding updated successfully");
+            }
+            else
+            {
+                common::logError("Application - Failed to prepare target face embedding");
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        common::logError("Application - Exception handling target image: %s", e.what());
+    }
 }
