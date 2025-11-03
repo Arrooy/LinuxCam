@@ -34,6 +34,9 @@ class wsInputDevice : public Webcam
     // Called by videoStreamController to push new frames from the browser.
     void pushFrame(const std::vector<uint8_t>& jpegData);
 
+    // Signal that resolution is about to change - clears queue and resets decoder state
+    void signalResolutionChange();
+
   private:
     void processFrameQueue();
     bool ready_{false};
@@ -44,7 +47,8 @@ class wsInputDevice : public Webcam
     std::queue<std::vector<uint8_t>> frameQueue_;
     std::mutex queueMutex_;
     std::condition_variable queueCondition_;
-    static constexpr size_t MAX_QUEUE_SIZE = 5;
+    static constexpr size_t MAX_QUEUE_SIZE = 1;
+    std::atomic<bool> needsHeaderRead_{true};  // Flag to force header re-read
 
     std::unique_ptr<Image> latestImage_;
     std::mutex imageMutex_;

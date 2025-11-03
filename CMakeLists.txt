@@ -116,11 +116,9 @@ set(ONNXRUNTIME_ROOT ${onnxruntime_SOURCE_DIR})
 include_directories(${ONNXRUNTIME_ROOT}/include)
 link_directories(${ONNXRUNTIME_ROOT}/lib)
 
-# Add ONNX Runtime (shared or static depending on your build)
-# If shared:
-# set(ONNXRUNTIME_LIB onnxruntime)
-# If static and built with extra providers:
-set(ONNXRUNTIME_LIB onnxruntime onnxruntime_providers_shared onnxruntime_providers_cuda)
+# Pre-built ONNX Runtime GPU package includes CUDA provider in the main library
+# The GPU version already has CUDAExecutionProvider compiled in
+set(ONNXRUNTIME_LIB onnxruntime)
 
 # ======================================
 
@@ -330,6 +328,13 @@ target_include_directories(LinuxFace PRIVATE
     "${LIBJPEG_TURBO_INSTALL_DIR}/include"
 )
 target_link_libraries(LinuxFace PRIVATE linuxface)
+
+# Set RPATH to find ONNX Runtime library at runtime
+set_target_properties(LinuxFace PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib"
+    INSTALL_RPATH "${ONNXRUNTIME_ROOT}/lib"
+    BUILD_RPATH_USE_ORIGIN TRUE
+)
 
 # Enable coverage for the main executable too
 enable_coverage(LinuxFace)

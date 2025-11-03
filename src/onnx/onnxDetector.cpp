@@ -94,23 +94,23 @@ OnnxDetector::OnnxDetector(const std::string& onnxModelPath)
 
 bool OnnxDetector::checkCudaAvailability()
 {
-    // Check if CUDA execution provider is available through ONNX Runtime
     auto availableProviders = Ort::GetAvailableProviders();
 
     for (const auto& provider : availableProviders)
     {
         if (provider == "CUDAExecutionProvider")
         {
-            common::logInfo("CUDA Execution Provider available");
+            common::logInfo("OnnxDetector: CUDA Execution Provider is available in ONNX Runtime");
             return true;
         }
     }
 
-    common::logInfo("CUDA Execution Provider not available");
-    common::logInfo("Available providers: ");
+    common::logWarn("OnnxDetector: CUDA Execution Provider NOT available in ONNX Runtime");
+    common::logWarn("OnnxDetector: Your ONNX Runtime was built without CUDA support");
+    common::logInfo("Available execution providers:");
     for (const auto& provider : availableProviders)
     {
-        common::logInfo("\t %s", provider.c_str());
+        common::logInfo("  - %s", provider.c_str());
     }
 
     return false;

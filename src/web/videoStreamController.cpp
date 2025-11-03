@@ -58,6 +58,8 @@ void videoStreamController::handleNewMessage(const drogon::WebSocketConnectionPt
     {
         // Text message - check for commands
         const std::string qualityPrefix = "QUALITY:";
+        const std::string resolutionChangePrefix = "RESOLUTION_CHANGE";
+        
         if (message.size() > qualityPrefix.length() && 
             message.compare(0, qualityPrefix.length(), qualityPrefix) == 0)
         {
@@ -83,6 +85,26 @@ void videoStreamController::handleNewMessage(const drogon::WebSocketConnectionPt
             return;
         }
         
+        if (message == resolutionChangePrefix)
+        {
+            // Client signaling resolution change
+            common::logInfo("videoStreamController - Resolution change signaled by client");
+            
+            std::shared_ptr<wsInputDevice> device;
+            {
+                std::lock_guard<std::mutex> lock(deviceMutex_);
+                device = inputDevice_;
+            }
+            
+            if (device)
+            {
+                device->signalResolutionChange();
+            }
+            
+            wsConnPtr->send("Resolution change acknowledged");
+            return;
+        }
+        
         common::logInfo("videoStreamController - Received text message: %s", message.c_str());
         wsConnPtr->send("Server received: " + message);
     }
@@ -92,7 +114,9 @@ void videoStreamController::handleNewConnection(const drogon::HttpRequestPtr& re
                                                 const drogon::WebSocketConnectionPtr& wsConnPtr)
 {
     std::lock_guard<std::mutex> lock(connectionsMutex_);
-    connections_[wsConnPtr] = "client_" + std::to_string(connections_.size() + 1);
+    ClientState state;
+    state.clientId = "client_" + std::to_string(connections_.size() + 1);
+    connections_[wsConnPtr] = std::move(state);
 
     common::logInfo("videoStreamController - New WebSocket connection from: %s", req->peerAddr().toIpPort().c_str());
 
@@ -105,7 +129,7 @@ void videoStreamController::handleConnectionClosed(const drogon::WebSocketConnec
     auto it = connections_.find(wsConnPtr);
     if (it != connections_.end())
     {
-        common::logInfo("videoStreamController - Connection closed: %s", it->second.c_str());
+        common::logInfo("videoStreamController - Connection closed: %s", it->second.clientId.c_str());
         connections_.erase(it);
     }
 }
@@ -114,32 +138,33 @@ void videoStreamController::sendProcessedFrame(const std::vector<uint8_t>& jpegD
 {
     if (jpegData.empty())
     {
-        return; // Nothing to send
+        return;
     }
 
     std::lock_guard<std::mutex> lock(connectionsMutex_);
 
     if (connections_.empty())
     {
-        return; // No clients connected
+        return;
     }
 
-    // Create string_view for binary data - no copy, just pointer + size wrapper
     std::string_view binaryMessage(reinterpret_cast<const char*>(jpegData.data()), jpegData.size());
 
-    // Send to all connected clients
-    for (const auto& [conn, clientId] : connections_)
+    for (auto& [conn, state] : connections_)
     {
-        if (conn->connected())
+        if (!conn->connected())
         {
-            try
-            {
-                conn->send(binaryMessage, drogon::WebSocketMessageType::Binary);
-            }
-            catch (const std::exception& e)
-            {
-                common::logError("videoStreamController - Failed to send frame to %s: %s", clientId.c_str(), e.what());
-            }
+            continue;
+        }
+
+        try
+        {
+            conn->send(binaryMessage, drogon::WebSocketMessageType::Binary);
+        }
+        catch (const std::exception& e)
+        {
+            common::logError("videoStreamController - Failed to send frame to %s: %s", 
+                           state.clientId.c_str(), e.what());
         }
     }
 }

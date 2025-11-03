@@ -208,23 +208,62 @@ bool Application::initialize()
                         .setLogLevel(trantor::Logger::kInfo)
                         .setDocumentRoot(webConfig.documentRoot)
                         .setThreadNum(webConfig.threadCount)
-                        .setMaxConnectionNumPerIP(0) // Unlimited connections per IP
-                        .setClientMaxWebSocketMessageSize(10 * 1024 * 1024); // 10MB max message size
+                        .setMaxConnectionNumPerIP(0)
+                        .setClientMaxWebSocketMessageSize(10 * 1024 * 1024);
 
-                    // Configure SSL if certificates are provided
                     if (useSSL)
                     {
-                        linuxface::common::logInfo("Configuring SSL with cert: %s, key: %s", 
-                                                   webConfig.sslCert.c_str(), webConfig.sslKey.c_str());
-                        app.setSSLFiles(webConfig.sslCert, webConfig.sslKey)
-                           .addListener(webConfig.host, webConfig.port, true); // true = use SSL
+                        std::ifstream certFile(webConfig.sslCert, std::ios::binary);
+                        std::ifstream keyFile(webConfig.sslKey, std::ios::binary);
+                        
+                        if (!certFile.good())
+                        {
+                            linuxface::common::logError("SSL certificate not found: %s", webConfig.sslCert.c_str());
+                            linuxface::common::logInfo("Falling back to HTTP mode on port %d", webConfig.port);
+                            app.addListener(webConfig.host, webConfig.port);
+                        }
+                        else if (!keyFile.good())
+                        {
+                            linuxface::common::logError("SSL private key not found: %s", webConfig.sslKey.c_str());
+                            linuxface::common::logInfo("Falling back to HTTP mode on port %d", webConfig.port);
+                            app.addListener(webConfig.host, webConfig.port);
+                        }
+                        else
+                        {
+                            linuxface::common::logInfo("Configuring SSL with cert: %s, key: %s", 
+                                                       webConfig.sslCert.c_str(), webConfig.sslKey.c_str());
+                            try
+                            {
+                                app.setSSLFiles(webConfig.sslCert, webConfig.sslKey)
+                                   .addListener(webConfig.host, webConfig.port, true);
+                            }
+                            catch (const std::runtime_error& e)
+                            {
+                                linuxface::common::logError("Failed to load SSL files: %s", e.what());
+                                linuxface::common::logInfo("Falling back to HTTP on port %d", webConfig.port);
+                                app.addListener(webConfig.host, webConfig.port);
+                            }
+                            catch (const std::exception& e)
+                            {
+                                linuxface::common::logError("SSL configuration error: %s", e.what());
+                                linuxface::common::logInfo("Falling back to HTTP on port %d", webConfig.port);
+                                app.addListener(webConfig.host, webConfig.port);
+                            }
+                        }
                     }
                     else
                     {
                         app.addListener(webConfig.host, webConfig.port);
                     }
 
-                    app.run();
+                    try
+                    {
+                        app.run();
+                    }
+                    catch (const std::exception& e)
+                    {
+                        linuxface::common::logError("WebSocket server error: %s", e.what());
+                    }
 
                     linuxface::common::logInfo("WebSocket server stopped");
                 });
@@ -249,56 +288,56 @@ bool Application::initialize()
         }
 
         // Camera input mode - existing behavior
-        linuxface::common::logInfo("Using camera input mode");
+        // linuxface::common::logInfo("Using camera input mode");
 
-        auto webcams = Config::getInstance().getWebcams();
-        for (const auto& wc : webcams)
-        {
-            std::shared_ptr<Webcam> webcam;
+        // auto webcams = Config::getInstance().getWebcams();
+        // for (const auto& wc : webcams)
+        // {
+        //     std::shared_ptr<Webcam> webcam;
 
-            if (wc.is_input)
-            {
-                webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height, wc.buffer_count);
-            }
-            else
-            {
-                webcam =
-                    std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height, wc.subsampling);
-            }
-            if (!webcam->setupDevice())
-            {
-                linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
-                continue;
-            }
+        //     if (wc.is_input)
+        //     {
+        //         webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height, wc.buffer_count);
+        //     }
+        //     else
+        //     {
+        //         webcam =
+        //             std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height, wc.subsampling);
+        //     }
+        //     if (!webcam->setupDevice())
+        //     {
+        //         linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
+        //         continue;
+        //     }
 
-            if (!webcam->start())
-            {
-                linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
-                continue;
-            }
-            webcam->setCurrentlySelected(true);
-            if (!cameraManager_->addCamera(webcam))
-            {
-                linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
-                continue;
-            }
-        }
+        //     if (!webcam->start())
+        //     {
+        //         linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
+        //         continue;
+        //     }
+        //     webcam->setCurrentlySelected(true);
+        //     if (!cameraManager_->addCamera(webcam))
+        //     {
+        //         linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
+        //         continue;
+        //     }
+        // }
 
-        auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
-        for (const auto& devicePath : availableDevicePaths)
-        {
-            std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
-            if (!webcam->setupDevice())
-            {
-                linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
-                continue;
-            }
-            if (!cameraManager_->addCamera(std::move(webcam)))
-            {
-                linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
-                return false;
-            }
-        }
+        // auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
+        // for (const auto& devicePath : availableDevicePaths)
+        // {
+        //     std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
+        //     if (!webcam->setupDevice())
+        //     {
+        //         linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
+        //         continue;
+        //     }
+        //     if (!cameraManager_->addCamera(std::move(webcam)))
+        //     {
+        //         linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
+        //         return false;
+        //     }
+        // }
     }
 
     // Start loading models in a background thread

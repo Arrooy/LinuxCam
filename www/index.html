@@ -996,10 +996,6 @@
                 <span id="cameraStatus">Camera: Off</span>
             </div>
             <div class="status-item">
-                <div class="status-dot" id="wsStatusDot"></div>
-                <span id="wsStatus">WS: Disconnected</span>
-            </div>
-            <div class="status-item">
                 <span id="fpsDisplay">0 FPS</span>
             </div>
         </div>
@@ -1025,7 +1021,11 @@
         let framesReceived = 0;
         let lastFrameTime = Date.now();
         let currentFps = 0;
-        let lastReceivedTime = Date.now();
+        
+        // Sliding window FPS calculation (last 3 seconds)
+        const FPS_WINDOW_MS = 3000;  // 3 second window
+        let receivedFrameTimestamps = [];  // Store timestamps of received frames
+        
         let currentFacingMode = 'user'; // 'user' = front, 'environment' = back
         let lastTapTime = 0;
         const DOUBLE_TAP_DELAY = 300; // ms
@@ -1074,9 +1074,7 @@
 
         const startBtn = document.getElementById('startBtn');
         const cameraStatus = document.getElementById('cameraStatus');
-        const wsStatus = document.getElementById('wsStatus');
         const cameraStatusDot = document.getElementById('cameraStatusDot');
-        const wsStatusDot = document.getElementById('wsStatusDot');
         const qualityIndicator = document.querySelector('.quality-indicator');
         const qualityText = document.getElementById('qualityText');
         const fpsDisplay = document.getElementById('fpsDisplay');
@@ -1139,7 +1137,14 @@
 
             // Auto-restart camera if resolution changed
             if (wasStreaming && oldResolution !== settings.resolution) {
-                console.log('Resolution changed, restarting camera...');
+                console.log('Resolution changed, signaling server and restarting camera...');
+                
+                // Signal server to clear queue and reset decoder
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send('RESOLUTION_CHANGE');
+                    console.log('Sent resolution change signal to server');
+                }
+                
                 stopCamera();
 
                 // Brief delay for cleanup
@@ -1415,8 +1420,6 @@
 
             ws.onopen = () => {
                 console.log('WebSocket connected');
-                wsStatus.textContent = 'WS: Connected';
-                wsStatusDot.classList.add('active');
                 qualityIndicator.classList.add('good');
                 qualityText.textContent = 'Connected';
 
@@ -1434,9 +1437,25 @@
                     console.log('Server message:', event.data);
                 } else {
                     // Binary data - processed frame from server
+                    const now = Date.now();
+                    
+                    // Add current timestamp to sliding window
+                    receivedFrameTimestamps.push(now);
+                    
+                    // Remove timestamps older than 3 seconds
+                    const cutoffTime = now - FPS_WINDOW_MS;
+                    receivedFrameTimestamps = receivedFrameTimestamps.filter(t => t > cutoffTime);
+                    
+                    // Calculate average FPS over the window
+                    if (receivedFrameTimestamps.length > 1) {
+                        const timeSpan = now - receivedFrameTimestamps[0];
+                        const avgFps = timeSpan > 0 ? Math.round((receivedFrameTimestamps.length - 1) * 1000 / timeSpan) : 0;
+                        fpsDisplay.textContent = `${avgFps} FPS`;
+                    } else {
+                        fpsDisplay.textContent = '-- FPS';
+                    }
+                    
                     framesReceived++;
-                    lastReceivedTime = Date.now();
-
                     document.getElementById('framesReceived').textContent = framesReceived;
 
                     // Hide placeholder when we receive first frame
@@ -1466,11 +1485,12 @@
 
             ws.onclose = () => {
                 console.log('WebSocket disconnected');
-                wsStatus.textContent = 'WS: Disconnected';
-                wsStatusDot.classList.remove('active');
                 qualityIndicator.classList.remove('good', 'poor');
                 qualityText.textContent = 'Disconnected';
                 fpsDisplay.textContent = '--';
+                
+                // Reset FPS tracking
+                receivedFrameTimestamps = [];
 
                 if (isStreaming) {
                     stopStreaming();
@@ -1532,24 +1552,22 @@
                     framesSent++;
                     dataSent += arrayBuffer.byteLength / 1024;
 
-                    // Update FPS
-                    const now = Date.now();
-                    const delta = now - lastFrameTime;
-                    currentFps = Math.round(1000 / delta);
-                    lastFrameTime = now;
-
-                    // Update stats
+                    // Update stats (FPS now shows received frames, not sent)
                     document.getElementById('framesSent').textContent = framesSent;
                     document.getElementById('dataSent').textContent = dataSent.toFixed(1);
-                    fpsDisplay.textContent = `${currentFps} FPS`;
 
-                    // Update connection quality
-                    const timeSinceReceived = now - lastReceivedTime;
-                    if (timeSinceReceived > 2000) {
+                    // Update connection quality based on last received frame
+                    const now = Date.now();
+                    const lastReceived = receivedFrameTimestamps.length > 0 
+                        ? receivedFrameTimestamps[receivedFrameTimestamps.length - 1] 
+                        : 0;
+                    const timeSinceReceived = now - lastReceived;
+                    
+                    if (timeSinceReceived > 2000 && lastReceived > 0) {
                         qualityIndicator.classList.remove('good');
                         qualityIndicator.classList.add('poor');
                         qualityText.textContent = 'Poor Connection';
-                    } else {
+                    } else if (lastReceived > 0) {
                         qualityIndicator.classList.remove('poor');
                         qualityIndicator.classList.add('good');
                         qualityText.textContent = 'Good';

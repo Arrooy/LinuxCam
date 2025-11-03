@@ -47,8 +47,13 @@ class videoStreamController : public drogon::WebSocketController<videoStreamCont
     WS_PATH_LIST_END
 
   private:
+    struct ClientState
+    {
+        std::string clientId;
+    };
+
     std::mutex connectionsMutex_;
-    std::unordered_map<drogon::WebSocketConnectionPtr, std::string> connections_;
+    std::unordered_map<drogon::WebSocketConnectionPtr, ClientState> connections_;
 
     std::shared_ptr<wsInputDevice> inputDevice_;
     std::mutex deviceMutex_;

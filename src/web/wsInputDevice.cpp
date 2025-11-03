@@ -107,22 +107,42 @@ void wsInputDevice::pushFrame(const std::vector<uint8_t>& jpegData)
 {
     std::lock_guard<std::mutex> lock(queueMutex_);
 
-    // Drop oldest frame if queue is full
+    // For real-time video, drop ALL queued frames and keep only the latest
     if (frameQueue_.size() >= MAX_QUEUE_SIZE)
     {
-        frameQueue_.pop();
-        common::logWarn("wsInputDevice::pushFrame - Frame queue full, dropping oldest frame");
+        size_t droppedCount = 0;
+        while (!frameQueue_.empty())
+        {
+            frameQueue_.pop();
+            droppedCount++;
+        }
+        common::logWarn("wsInputDevice::pushFrame - Frame queue full, dropped %d old frames to maintain real-time",droppedCount);
     }
 
     frameQueue_.push(jpegData);
     queueCondition_.notify_one();
 }
 
+void wsInputDevice::signalResolutionChange()
+{
+    std::lock_guard<std::mutex> lock(queueMutex_);
+    
+    // Clear all queued frames with old resolution
+    while (!frameQueue_.empty())
+    {
+        frameQueue_.pop();
+    }
+    
+    // Force header re-read on next frame
+    needsHeaderRead_.store(true);
+    
+    common::logInfo("wsInputDevice::signalResolutionChange - Queue cleared, decoder will reset on next frame");
+}
+
 void wsInputDevice::processFrameQueue()
 {
     common::logInfo("wsInputDevice::processFrameQueue - Started");
 
-    bool readImageHeader = true;
     Image imageTmp;
     ImageMetadata wsInputInfo;
 
@@ -156,7 +176,10 @@ void wsInputDevice::processFrameQueue()
         srcImage.info.TJPixelFormat = TJPF_RGB;
         srcImage.info.format = ImageFormat::JPEG;
 
-        // Decode header on first frame or after decode failure to get dimensions
+        // Check if we need to read header (first frame or after resolution change)
+        bool readImageHeader = needsHeaderRead_.load();
+        
+        // Decode header on first frame or after resolution change
         if (readImageHeader)
         {
             unsigned long rawNeededSize = 0;
@@ -176,14 +199,14 @@ void wsInputDevice::processFrameQueue()
             }
 
             wsInputInfo = srcImage.info;
-            readImageHeader = false;
+            needsHeaderRead_.store(false);
         }
 
         // Decode frame into pre-allocated buffer
         if (!decoder_->decode(srcImage, imageTmp))
         {
             common::logError("wsInputDevice::processFrameQueue - Failed to decode JPEG frame");
-            readImageHeader = true; // Force header re-read on next frame
+            needsHeaderRead_.store(true); // Force header re-read on next frame
             continue;
         }
 
