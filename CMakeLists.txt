@@ -122,6 +122,11 @@ link_directories(${ONNXRUNTIME_ROOT}/lib)
 # If static and built with extra providers:
 set(ONNXRUNTIME_LIB onnxruntime onnxruntime_providers_shared onnxruntime_providers_cuda)
 
+# Set RPATH so the executable can find ONNX Runtime libraries at runtime
+set(CMAKE_INSTALL_RPATH "${ONNXRUNTIME_ROOT}/lib")
+set(CMAKE_BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # ======================================
 
 # GLAD from https://glad.dav1d.de/
