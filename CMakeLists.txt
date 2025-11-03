@@ -3,6 +3,7 @@ project(LinuxFace)
 
 option(BUILD_TESTING "Build the tests for the project" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
+option(BUILD_V4L2LOOPBACK "Build v4l2loopback kernel module" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -173,63 +174,82 @@ target_link_libraries(imgui PUBLIC
     ${OPENGL_LIBRARIES}
 )
 
-# v4l2loopback - optional kernel module (build failures are non-fatal)
-ExternalProject_Add(
-  v4l2loopback
-  SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/v4l2loopback
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${MAKE_COMMAND} || echo "v4l2loopback build failed - continuing anyway"
-  BUILD_IN_SOURCE 1
-  INSTALL_COMMAND ""
-  LOG_CONFIGURE 1
-  LOG_BUILD 1
-  # Make failures non-fatal
-  BUILD_ALWAYS 0
-)
-
-# Function to check if v4l2loopback module file exists
-function(check_v4l2loopback_installed result)
-  execute_process(
-    COMMAND bash -c "test -f /lib/modules/$(uname -r)/kernel/drivers/media/video/v4l2loopback.ko && echo yes || echo no"
-    OUTPUT_VARIABLE _mod_exists
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  if(_mod_exists STREQUAL "yes")
-    set(${result} TRUE PARENT_SCOPE)
-  else()
-    set(${result} FALSE PARENT_SCOPE)
-  endif()
-endfunction()
-
-check_v4l2loopback_installed(IS_V4L2_INSTALLED)
-
-if(IS_V4L2_INSTALLED)
-  message(STATUS "v4l2loopback module already installed")
+# ========= v4l2loopback (Optional) =========
+# Only build if explicitly requested with -DBUILD_V4L2LOOPBACK=ON
+if(BUILD_V4L2LOOPBACK)
+    message(STATUS "v4l2loopback build enabled")
+    
+    # Create a wrapper script to handle build failures gracefully
+    file(WRITE "${CMAKE_BINARY_DIR}/build_v4l2loopback.sh"
+"#!/bin/bash
+cd ${CMAKE_SOURCE_DIR}/external/v4l2loopback
+if make; then
+    echo 'v4l2loopback built successfully'
+    exit 0
+else
+    echo 'v4l2loopback build failed - kernel headers may be missing'
+    exit 1
+fi
+")
+    
+    execute_process(COMMAND chmod +x "${CMAKE_BINARY_DIR}/build_v4l2loopback.sh")
+    
+    ExternalProject_Add(
+      v4l2loopback
+      SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/v4l2loopback
+      CONFIGURE_COMMAND ""
+      BUILD_COMMAND bash ${CMAKE_BINARY_DIR}/build_v4l2loopback.sh
+      BUILD_IN_SOURCE 1
+      INSTALL_COMMAND ""
+      LOG_CONFIGURE 1
+      LOG_BUILD 1
+      BUILD_ALWAYS 0
+    )
+    
+    # Function to check if v4l2loopback module file exists
+    function(check_v4l2loopback_installed result)
+      execute_process(
+        COMMAND bash -c "test -f /lib/modules/$(uname -r)/kernel/drivers/media/video/v4l2loopback.ko && echo yes || echo no"
+        OUTPUT_VARIABLE _mod_exists
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+      if(_mod_exists STREQUAL "yes")
+        set(${result} TRUE PARENT_SCOPE)
+      else()
+        set(${result} FALSE PARENT_SCOPE)
+      endif()
+    endfunction()
+    
+    check_v4l2loopback_installed(IS_V4L2_INSTALLED)
+    
+    if(IS_V4L2_INSTALLED)
+      message(STATUS "v4l2loopback module already installed")
+    else()
+      message(STATUS "v4l2loopback module NOT installed - use 'make install_v4l2loopback' to install")
+      
+      add_custom_target(
+        install_v4l2loopback
+        COMMAND bash ${CMAKE_BINARY_DIR}/build_v4l2loopback.sh
+        COMMAND sudo make install
+        COMMAND sudo depmod -a
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/external/v4l2loopback
+        COMMENT "Building and installing v4l2loopback kernel module (requires sudo)"
+      )
+    endif()
+    
+    add_custom_target(
+      load_loopback_module
+      COMMAND sudo modprobe v4l2loopback exclusive_caps=1 devices=1 video_nr=8 card_label="Virtual Camera"
+      COMMENT "Loading v4l2loopback kernel module"
+    )
+    
+    add_dependencies(load_loopback_module v4l2loopback)
 else()
-  message(WARNING "v4l2loopback module NOT installed")
-  message(STATUS "Virtual camera output will not work without v4l2loopback")
-  message(STATUS "To install manually: sudo make install_v4l2loopback")
-
-  add_custom_target(
-    install_v4l2loopback
-    COMMAND make || (echo "Failed to build v4l2loopback - kernel headers may be missing" && exit 0)
-    COMMAND sudo make install || (echo "Failed to install v4l2loopback" && exit 0)
-    COMMAND sudo depmod -a || true
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/external/v4l2loopback
-    COMMENT "Building and installing v4l2loopback kernel module (optional)"
-  )
+    message(STATUS "v4l2loopback build disabled (use -DBUILD_V4L2LOOPBACK=ON to enable)")
+    message(STATUS "Virtual camera output will not be available")
 endif()
 
-add_custom_target(
-  load_loopback_module
-  COMMAND sudo modprobe v4l2loopback exclusive_caps=1 devices=1 video_nr=8 card_label="Webcam del tet" || echo "Failed to load v4l2loopback - module may not be installed"
-  COMMENT "Loading v4l2loopback kernel module (optional)"
-)
-
-# Optional dependency - load module only if build succeeded
-if(TARGET v4l2loopback)
-  add_dependencies(load_loopback_module v4l2loopback)
-endif()
+# ==========================================
 
 include(FetchContent)
 
