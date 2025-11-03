@@ -37,6 +37,13 @@ static void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 
 bool Window::initialize()
 {
+    // Check if graphical display is available
+    if (!linuxface::common::isGraphicalDisplayAvailable())
+    {
+        linuxface::common::logWarn("No graphical display available (DISPLAY or WAYLAND_DISPLAY not set). Running in headless mode.");
+        return false;
+    }
+
     // Setup GLFW
     glfwSetErrorCallback(errorCallback);
 

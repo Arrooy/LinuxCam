@@ -26,33 +26,41 @@ OnnxDetector::OnnxDetector(const std::string& onnxModelPath)
         {
             // Check if CUDA libraries are available
             common::logInfo("OnnxDetector: Attempting to initialize CUDA provider...");
+            common::logInfo("OnnxDetector: Using CUDA device ID: 0");
+            common::logInfo("OnnxDetector: GPU memory: unlimited (will use all available)");
 
             OrtCUDAProviderOptions cudaOptions{};
             cudaOptions.device_id = 0;
             cudaOptions.arena_extend_strategy = 0;
-            cudaOptions.gpu_mem_limit = 3ULL * 1024 * 1024 * 1024; // Limit memory to 3Gb
+            cudaOptions.gpu_mem_limit = SIZE_MAX; // Unlimited GPU memory
             cudaOptions.do_copy_in_default_stream = 1;
+            cudaOptions.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchExhaustive;
+            cudaOptions.cudnn_conv_use_max_workspace = 1;
 
             session_options_.AppendExecutionProvider_CUDA(cudaOptions);
             has_cuda_ = true;
-            common::logInfo("OnnxDetector: CUDA provider added successfully with 2GB memory limit");
+            common::logInfo("OnnxDetector: CUDA provider added successfully with unlimited GPU memory");
         }
         catch (const Ort::Exception& e)
         {
-            common::logWarn("OnnxDetector: ONNX Runtime CUDA error: %s. Falling back to CPU.", e.what());
+            common::logError("OnnxDetector: ONNX Runtime CUDA error: %s. Falling back to CPU.", e.what());
+            common::logError("OnnxDetector: Error code: %d", e.GetOrtErrorCode());
             has_cuda_ = false;
         }
         catch (const std::exception& e)
         {
-            common::logWarn("OnnxDetector: CUDA initialization failed: %s. Falling back to CPU.", e.what());
+            common::logError("OnnxDetector: CUDA initialization failed: %s. Falling back to CPU.", e.what());
             has_cuda_ = false;
         }
         catch (...)
         {
-            common::logWarn("OnnxDetector: Unknown CUDA initialization error. Falling back to CPU.");
-
+            common::logError("OnnxDetector: Unknown CUDA initialization error. Falling back to CPU.");
             has_cuda_ = false;
         }
+    }
+    else
+    {
+        common::logInfo("OnnxDetector: GPU disabled or CUDA not available, using CPU");
     }
 
     try

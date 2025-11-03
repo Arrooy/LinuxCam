@@ -361,6 +361,26 @@ T lerp(T a, T b, T t)
     return a + t * (b - a);
 }
 
+// Check if a graphical display is available (X11 or Wayland)
+inline bool isGraphicalDisplayAvailable()
+{
+    // Check for X11 display
+    const char* display = std::getenv("DISPLAY");
+    if (display != nullptr && display[0] != '\0')
+    {
+        return true;
+    }
+
+    // Check for Wayland display
+    const char* waylandDisplay = std::getenv("WAYLAND_DISPLAY");
+    if (waylandDisplay != nullptr && waylandDisplay[0] != '\0')
+    {
+        return true;
+    }
+
+    return false;
+}
+
 } // namespace linuxface::common
 
 #endif // COMMON_H

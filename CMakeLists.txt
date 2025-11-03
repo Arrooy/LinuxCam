@@ -120,6 +120,11 @@ link_directories(${ONNXRUNTIME_ROOT}/lib)
 # The GPU version already has CUDAExecutionProvider compiled in
 set(ONNXRUNTIME_LIB onnxruntime)
 
+# Set RPATH so the executable can find ONNX Runtime libraries at runtime
+set(CMAKE_INSTALL_RPATH "${ONNXRUNTIME_ROOT}/lib")
+set(CMAKE_BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # ======================================
 
 # GLAD from https://glad.dav1d.de/
