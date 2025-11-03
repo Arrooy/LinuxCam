@@ -35,8 +35,6 @@ OnnxDetector::OnnxDetector(const std::string& onnxModelPath)
             cudaOptions.gpu_mem_limit = SIZE_MAX; // Unlimited GPU memory
             cudaOptions.do_copy_in_default_stream = 1;
             cudaOptions.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchExhaustive;
-            cudaOptions.cudnn_conv_use_max_workspace = 1;
-
             session_options_.AppendExecutionProvider_CUDA(cudaOptions);
             has_cuda_ = true;
             common::logInfo("OnnxDetector: CUDA provider added successfully with unlimited GPU memory");

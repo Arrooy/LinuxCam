@@ -173,16 +173,18 @@ target_link_libraries(imgui PUBLIC
     ${OPENGL_LIBRARIES}
 )
 
-# v4l2loopback
+# v4l2loopback - optional kernel module (build failures are non-fatal)
 ExternalProject_Add(
   v4l2loopback
   SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/v4l2loopback
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${MAKE_COMMAND} 
+  BUILD_COMMAND ${MAKE_COMMAND} || echo "v4l2loopback build failed - continuing anyway"
   BUILD_IN_SOURCE 1
   INSTALL_COMMAND ""
   LOG_CONFIGURE 1
   LOG_BUILD 1
+  # Make failures non-fatal
+  BUILD_ALWAYS 0
 )
 
 # Function to check if v4l2loopback module file exists
@@ -204,26 +206,30 @@ check_v4l2loopback_installed(IS_V4L2_INSTALLED)
 if(IS_V4L2_INSTALLED)
   message(STATUS "v4l2loopback module already installed")
 else()
-  message(STATUS "v4l2loopback module NOT installed. Install it using: sudo make install_v4l2loopback")
+  message(WARNING "v4l2loopback module NOT installed")
+  message(STATUS "Virtual camera output will not work without v4l2loopback")
+  message(STATUS "To install manually: sudo make install_v4l2loopback")
 
   add_custom_target(
     install_v4l2loopback
-    COMMAND make
-    COMMAND sudo make install
-    COMMAND sudo depmod -a
+    COMMAND make || (echo "Failed to build v4l2loopback - kernel headers may be missing" && exit 0)
+    COMMAND sudo make install || (echo "Failed to install v4l2loopback" && exit 0)
+    COMMAND sudo depmod -a || true
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/external/v4l2loopback
-    COMMENT "Building and installing v4l2loopback kernel module"
+    COMMENT "Building and installing v4l2loopback kernel module (optional)"
   )
 endif()
 
 add_custom_target(
   load_loopback_module
-  COMMAND sudo modprobe v4l2loopback exclusive_caps=1 devices=1 video_nr=8 card_label="Webcam del tet"
-  COMMENT "Loading v4l2loopback kernel module"
+  COMMAND sudo modprobe v4l2loopback exclusive_caps=1 devices=1 video_nr=8 card_label="Webcam del tet" || echo "Failed to load v4l2loopback - module may not be installed"
+  COMMENT "Loading v4l2loopback kernel module (optional)"
 )
 
-# Make sure modprobe happens after it's built
-add_dependencies(load_loopback_module v4l2loopback)
+# Optional dependency - load module only if build succeeded
+if(TARGET v4l2loopback)
+  add_dependencies(load_loopback_module v4l2loopback)
+endif()
 
 include(FetchContent)
 
