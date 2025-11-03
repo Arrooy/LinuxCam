@@ -92,6 +92,9 @@ class Application : public std::enable_shared_from_this<Application>
     // Single-loop profiler capture flag
     std::atomic<bool> captureNextLoop_{false};
 
+    // Headless mode flag (no GUI available)
+    bool headlessMode_{false};
+
     // Main loop methods
     bool update();
     void process(std::unique_ptr<Image>& image);
@@ -102,6 +105,9 @@ class Application : public std::enable_shared_from_this<Application>
   public:
     // Trigger single-loop profiler capture on next frame
     void requestLoopCapture() { captureNextLoop_ = true; }
+    
+    // Check if running in headless mode
+    bool isHeadless() const { return headlessMode_; }
 };
 
 } // namespace linuxface

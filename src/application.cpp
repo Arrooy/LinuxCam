@@ -104,21 +104,33 @@ bool Application::initialize()
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
+    // Check if graphical display is available
+    headlessMode_ = !linuxface::common::isGraphicalDisplayAvailable();
+    
+    if (headlessMode_)
+    {
+        linuxface::common::logInfo("Running in headless mode (no GUI available)");
+    }
+
+    if (!headlessMode_)
     {
         Profiler::ScopedProfilerSpan span("Initialization", "Window Setup");
         // Initialize window
         if (!window_.initialize())
         {
-            linuxface::common::logError("Failed to initialize window");
-            return false;
+            linuxface::common::logWarn("Failed to initialize window, switching to headless mode");
+            headlessMode_ = true;
         }
+        else
+        {
+            layerManager_ = std::make_shared<LayerManager>();
 
-        layerManager_ = std::make_shared<LayerManager>();
-
-        // Connect window resize to layerManager texture invalidation
-        this->connectWindowResize();
+            // Connect window resize to layerManager texture invalidation
+            this->connectWindowResize();
+        }
     }
 
+    if (!headlessMode_)
     {
         Profiler::ScopedProfilerSpan span("Initialization", "UI Setup");
         // Initialize UI with LayerManager
@@ -135,6 +147,11 @@ bool Application::initialize()
         ui_->loadingScreen();
         window_.swapBuffers();
         window_.pollEvents();
+    }
+    else
+    {
+        // In headless mode, we still need a LayerManager for the processing pipeline
+        layerManager_ = std::make_shared<LayerManager>();
     }
 
     {
@@ -359,6 +376,7 @@ bool Application::initialize()
         });
     modelLoader.detach();
 
+    if (!headlessMode_)
     {
         Profiler::ScopedProfilerSpan span("Initialization", "Renderer Setup");
         // Pass pointer instead of reference
@@ -377,6 +395,10 @@ bool Application::initialize()
 
         mediaManager_ = std::make_shared<MediaManager>(imageRender_);
         ui_->connect(mediaManager_);
+    }
+    else
+    {
+        linuxface::common::logInfo("Skipping OpenGL renderer initialization in headless mode");
     }
 
     {
@@ -436,7 +458,7 @@ void Application::run()
     linuxface::common::logInfo("Starting main loop...");
 
     // Main loop
-    while (!window_.shouldClose() && !gShouldExit)
+    while ((!headlessMode_ ? !window_.shouldClose() : true) && !gShouldExit)
     {
         // Check if we should capture this loop
         bool captureThisLoop = captureNextLoop_.exchange(false);
@@ -453,7 +475,10 @@ void Application::run()
             Profiler::ScopedProfilerSpan span("MainLoop", "Frame Processing");
             if (update())
             {
-                render();
+                if (!headlessMode_)
+                {
+                    render();
+                }
             }
         }
         // End capture after this loop completes
@@ -471,7 +496,10 @@ void Application::run()
     stopWebServer();
 
     cameraManager_->shutdown();
-    mediaManager_->shutdown();
+    if (mediaManager_)
+    {
+        mediaManager_->shutdown();
+    }
 
     linuxface::common::logInfo("Main loop ended");
 
@@ -481,8 +509,11 @@ void Application::run()
 
 bool Application::update()
 {
-    // Poll events
-    window_.pollEvents();
+    // Poll events (only if we have a window)
+    if (!headlessMode_)
+    {
+        window_.pollEvents();
+    }
 
     {
         Profiler::ScopedProfilerSpan span("Application", "Update Camera Input");
@@ -490,9 +521,12 @@ bool Application::update()
         if (!cameraManager_->updateInput())
         {
             // TODO: Join return paths.
-            ui_->handleKeyboard();
-            ui_->newFrame();
-            ui_->paint();
+            if (!headlessMode_)
+            {
+                ui_->handleKeyboard();
+                ui_->newFrame();
+                ui_->paint();
+            }
             return true;
         }
     }
@@ -501,22 +535,29 @@ bool Application::update()
     auto& layers = layerManager_->getLayers();
     if (layers.empty())
     {
-        // No layers to composite, but still update UI
-        ui_->handleKeyboard();
-        ui_->newFrame();
-        ui_->paint();
+        // No layers to composite, but still update UI if available
+        if (!headlessMode_)
+        {
+            ui_->handleKeyboard();
+            ui_->newFrame();
+            ui_->paint();
+        }
         return true;
     }
 
     // Get window/viewport size for composite
-    int windowWidth = 0;
-    int windowHeight = 0;
-    window_.getFramebufferSize(windowWidth, windowHeight);
-
-    if (windowWidth <= 0 || windowHeight <= 0)
+    int windowWidth = 640;  // Default size for headless mode
+    int windowHeight = 480;
+    
+    if (!headlessMode_)
     {
-        common::logInfo("Window FrameBuffer size is invalid. W,H - %d %d", windowWidth, windowHeight);
-        return false;
+        window_.getFramebufferSize(windowWidth, windowHeight);
+
+        if (windowWidth <= 0 || windowHeight <= 0)
+        {
+            common::logInfo("Window FrameBuffer size is invalid. W,H - %d %d", windowWidth, windowHeight);
+            return false;
+        }
     }
 
     float minX, minY, maxX, maxY;
@@ -557,6 +598,7 @@ bool Application::update()
         }
     }
 
+    if (!headlessMode_)
     {
         Profiler::ScopedProfilerSpan span("Application", "UI Update");
         ui_->handleKeyboard();
@@ -568,6 +610,12 @@ bool Application::update()
 
 void Application::render()
 {
+    if (headlessMode_)
+    {
+        // Skip rendering in headless mode
+        return;
+    }
+
     Profiler::ScopedProfilerSpan span("Application", "Render");
     // Set viewport
     window_.setViewport();
