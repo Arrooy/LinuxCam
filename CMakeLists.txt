@@ -106,7 +106,8 @@ include(FetchContent)
 
 FetchContent_Declare(
     onnxruntime
-    URL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz
+    #URL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz
+    URL https://github.com/microsoft/onnxruntime/releases/download/v1.17.3/onnxruntime-linux-x64-gpu-1.17.3.tgz
     # DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
