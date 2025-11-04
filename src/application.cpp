@@ -1027,7 +1027,7 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
     else
     {
         // Clear existing buffer instead of allocating new one
-        compositeBuffer_->clear();
+        compositeBuffer_->fill(0);
     }
     
     // Transfer ownership temporarily
