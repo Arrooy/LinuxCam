@@ -424,7 +424,7 @@ bool Application::update()
 {
     if (gShouldExit)
     {
-        return false;
+        return true;
     }
 
     // Poll events (only if we have a window)
@@ -616,7 +616,7 @@ void Application::process(std::unique_ptr<Image>& image)
 {
     if(gShouldExit)
     {
-        return false;
+        return;
     }
 
     std::vector<Face> dlibFaces;
