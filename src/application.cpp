@@ -388,7 +388,7 @@ void Application::run()
                               std::chrono::high_resolution_clock::now() - lastMemoryLog)
                               .count();
         // Periodic memory monitoring
-        if (lastMemoryLog > MEMORY_LOG_INTERVAL_MS)
+        if (durationMs > MEMORY_LOG_INTERVAL_MS)
         {
             linuxface::common::logMemoryUsage("Main Loop");
             lastMemoryLog = std::chrono::high_resolution_clock::now();
