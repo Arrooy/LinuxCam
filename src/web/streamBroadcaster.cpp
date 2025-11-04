@@ -94,6 +94,10 @@ void StreamBroadcaster::submitFrame(const std::unique_ptr<Image>& frame)
             std::lock_guard<std::mutex> statsLock(statsMutex_);
             stats_.framesDropped++;
         }
+        // Still notify worker thread even when dropping frames
+        // This ensures worker processes existing frames and doesn't get stuck waiting
+        lock.unlock();
+        queueCV_.notify_one();
         return;
     }
 
@@ -184,6 +188,7 @@ bool StreamBroadcaster::encodeAndBroadcast(const std::unique_ptr<Image>& frame)
     {
         std::lock_guard<std::mutex> lock(statsMutex_);
         stats_.encodingErrors++;
+        common::logError("StreamBroadcaster: Encoding error");
         return false;
     }
 

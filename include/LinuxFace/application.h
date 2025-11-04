@@ -100,6 +100,7 @@ class Application : public std::enable_shared_from_this<Application>
     void process(std::unique_ptr<Image>& image);
     void render();
     void stopWebServer();
+    bool initializeWebSocket();
     void handleTargetImageUpdate(const std::vector<uint8_t>& imageData);
 
   public:

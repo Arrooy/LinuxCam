@@ -38,7 +38,7 @@ class StreamBroadcaster
         bool enabled;                   // Enable/disable broadcasting
 
         Config() 
-            : maxQueueSize(2)
+            : maxQueueSize(1)
             , jpegQuality(85)
             , enabled(true)
         {}

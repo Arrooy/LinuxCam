@@ -116,7 +116,8 @@ void wsInputDevice::pushFrame(const std::vector<uint8_t>& jpegData)
             frameQueue_.pop();
             droppedCount++;
         }
-        common::logWarn("wsInputDevice::pushFrame - Frame queue full, dropped %d old frames to maintain real-time",droppedCount);
+        common::logWarn("wsInputDevice::pushFrame - Frame queue full, dropped %d old frames to maintain real-time",
+                        droppedCount);
     }
 
     frameQueue_.push(jpegData);
@@ -126,16 +127,16 @@ void wsInputDevice::pushFrame(const std::vector<uint8_t>& jpegData)
 void wsInputDevice::signalResolutionChange()
 {
     std::lock_guard<std::mutex> lock(queueMutex_);
-    
+
     // Clear all queued frames with old resolution
     while (!frameQueue_.empty())
     {
         frameQueue_.pop();
     }
-    
+
     // Force header re-read on next frame
     needsHeaderRead_.store(true);
-    
+
     common::logInfo("wsInputDevice::signalResolutionChange - Queue cleared, decoder will reset on next frame");
 }
 
@@ -178,7 +179,7 @@ void wsInputDevice::processFrameQueue()
 
         // Check if we need to read header (first frame or after resolution change)
         bool readImageHeader = needsHeaderRead_.load();
-        
+
         // Decode header on first frame or after resolution change
         if (readImageHeader)
         {

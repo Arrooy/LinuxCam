@@ -5,6 +5,7 @@
 #include <csignal>
 #include <drogon/DrClassMap.h>
 #include <drogon/drogon.h>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -106,13 +107,13 @@ bool Application::initialize()
 
     // Check if graphical display is available
     headlessMode_ = !linuxface::common::isGraphicalDisplayAvailable();
-    
+
+    layerManager_ = std::make_shared<LayerManager>();
     if (headlessMode_)
     {
         linuxface::common::logInfo("Running in headless mode (no GUI available)");
     }
-
-    if (!headlessMode_)
+    else
     {
         Profiler::ScopedProfilerSpan span("Initialization", "Window Setup");
         // Initialize window
@@ -123,35 +124,24 @@ bool Application::initialize()
         }
         else
         {
-            layerManager_ = std::make_shared<LayerManager>();
-
             // Connect window resize to layerManager texture invalidation
             this->connectWindowResize();
-        }
-    }
+            Profiler::ScopedProfilerSpan span("Initialization", "UI Setup");
+            // Initialize UI with LayerManager
+            ui_ = std::make_unique<UI>(layerManager_);
+            if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
+            {
+                linuxface::common::logError("Failed to initialize UI");
+                return false;
+            }
 
-    if (!headlessMode_)
-    {
-        Profiler::ScopedProfilerSpan span("Initialization", "UI Setup");
-        // Initialize UI with LayerManager
-        ui_ = std::make_unique<UI>(layerManager_);
-        if (!ui_->initialize(window_.getGLFWWindow(), window_.getGLSLVersion()))
-        {
-            linuxface::common::logError("Failed to initialize UI");
-            return false;
+            // Display loading screen
+            glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            ui_->loadingScreen();
+            window_.swapBuffers();
+            window_.pollEvents();
         }
-
-        // Display loading screen
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ui_->loadingScreen();
-        window_.swapBuffers();
-        window_.pollEvents();
-    }
-    else
-    {
-        // In headless mode, we still need a LayerManager for the processing pipeline
-        layerManager_ = std::make_shared<LayerManager>();
     }
 
     {
@@ -166,141 +156,10 @@ bool Application::initialize()
             // WebSocket input mode - start web server and create WebSocket input device
             linuxface::common::logInfo("WebSocket input mode active");
 
-            auto webConfig = Config::getInstance().getWebServerConfig();
-            wsInputDevice_ = std::make_shared<wsInputDevice>(webConfig);
-
-            // Register device with the controller instance managed by Drogon
-            auto controller = drogon::DrClassMap::getSingleInstance<web::videoStreamController>();
-            if (!controller)
+            if (!initializeWebSocket())
             {
-                linuxface::common::logError("Failed to acquire videoStreamController instance from Drogon");
+                linuxface::common::logError("Failed to initialize WebSocket");
                 return false;
-            }
-            controller->setInputDevice(wsInputDevice_);
-
-            // Set callback for target image updates
-            controller->setTargetImageCallback(
-                [this](const std::vector<uint8_t>& imageData)
-                {
-                    this->handleTargetImageUpdate(imageData);
-                });
-
-            // Set callback for quality changes
-            controller->setQualityChangedCallback(
-                [this](int quality)
-                {
-                    if (streamBroadcaster_)
-                    {
-                        streamBroadcaster_->setJpegQuality(quality);
-                    }
-                });
-
-            if (!wsInputDevice_->setupDevice())
-            {
-                linuxface::common::logError("Failed to setup WebSocket input device");
-                return false;
-            }
-
-            if (!wsInputDevice_->start())
-            {
-                linuxface::common::logError("Failed to start WebSocket input device");
-                return false;
-            }
-
-            // Register with camera manager
-            cameraManager_->setWebSocketInput(wsInputDevice_);
-
-            // Start Drogon web server in background thread
-            webServerThread_ = std::thread(
-                [webConfig]()
-                {
-                    const bool useSSL = !webConfig.sslCert.empty() && !webConfig.sslKey.empty();
-                    const char* protocol = useSSL ? "HTTPS" : "HTTP";
-                    
-                    linuxface::common::logInfo("Starting WebSocket server (%s) on %s:%d", protocol,
-                                               webConfig.host.c_str(), webConfig.port);
-
-                    auto& app = drogon::app()
-                        .disableSigtermHandling()
-                        .setLogLevel(trantor::Logger::kInfo)
-                        .setDocumentRoot(webConfig.documentRoot)
-                        .setThreadNum(webConfig.threadCount)
-                        .setMaxConnectionNumPerIP(0)
-                        .setClientMaxWebSocketMessageSize(10 * 1024 * 1024);
-
-                    if (useSSL)
-                    {
-                        std::ifstream certFile(webConfig.sslCert, std::ios::binary);
-                        std::ifstream keyFile(webConfig.sslKey, std::ios::binary);
-                        
-                        if (!certFile.good())
-                        {
-                            linuxface::common::logError("SSL certificate not found: %s", webConfig.sslCert.c_str());
-                            linuxface::common::logInfo("Falling back to HTTP mode on port %d", webConfig.port);
-                            app.addListener(webConfig.host, webConfig.port);
-                        }
-                        else if (!keyFile.good())
-                        {
-                            linuxface::common::logError("SSL private key not found: %s", webConfig.sslKey.c_str());
-                            linuxface::common::logInfo("Falling back to HTTP mode on port %d", webConfig.port);
-                            app.addListener(webConfig.host, webConfig.port);
-                        }
-                        else
-                        {
-                            linuxface::common::logInfo("Configuring SSL with cert: %s, key: %s", 
-                                                       webConfig.sslCert.c_str(), webConfig.sslKey.c_str());
-                            try
-                            {
-                                app.setSSLFiles(webConfig.sslCert, webConfig.sslKey)
-                                   .addListener(webConfig.host, webConfig.port, true);
-                            }
-                            catch (const std::runtime_error& e)
-                            {
-                                linuxface::common::logError("Failed to load SSL files: %s", e.what());
-                                linuxface::common::logInfo("Falling back to HTTP on port %d", webConfig.port);
-                                app.addListener(webConfig.host, webConfig.port);
-                            }
-                            catch (const std::exception& e)
-                            {
-                                linuxface::common::logError("SSL configuration error: %s", e.what());
-                                linuxface::common::logInfo("Falling back to HTTP on port %d", webConfig.port);
-                                app.addListener(webConfig.host, webConfig.port);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        app.addListener(webConfig.host, webConfig.port);
-                    }
-
-                    try
-                    {
-                        app.run();
-                    }
-                    catch (const std::exception& e)
-                    {
-                        linuxface::common::logError("WebSocket server error: %s", e.what());
-                    }
-
-                    linuxface::common::logInfo("WebSocket server stopped");
-                });
-
-            linuxface::common::logInfo("WebSocket input device ready - waiting for browser connections");
-        }
-
-        // Initialize StreamBroadcaster if WebSocket is enabled
-        if (websocketEnabled)
-        {
-            web::StreamBroadcaster::Config broadcasterConfig;
-            broadcasterConfig.enabled = true;
-            broadcasterConfig.jpegQuality = 85;
-            broadcasterConfig.maxQueueSize = 2; // Drop frames if encoding can't keep up
-
-            streamBroadcaster_ = std::make_unique<web::StreamBroadcaster>(broadcasterConfig);
-            if (!streamBroadcaster_->start())
-            {
-                linuxface::common::logError("Failed to start StreamBroadcaster");
-                streamBroadcaster_.reset();
             }
         }
 
@@ -314,12 +173,14 @@ bool Application::initialize()
 
         //     if (wc.is_input)
         //     {
-        //         webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height, wc.buffer_count);
+        //         webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height,
+        //         wc.buffer_count);
         //     }
         //     else
         //     {
         //         webcam =
-        //             std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height, wc.subsampling);
+        //             std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height,
+        //             wc.subsampling);
         //     }
         //     if (!webcam->setupDevice())
         //     {
@@ -496,6 +357,10 @@ void Application::run()
 {
     linuxface::common::logInfo("Starting main loop...");
 
+    // Memory monitoring
+    static int frameCount = 0;
+    constexpr int MEMORY_LOG_INTERVAL = 100; // Log every 100 frames (~3 seconds at 30 FPS)
+
     // Main loop
     while ((!headlessMode_ ? !window_.shouldClose() : true) && !gShouldExit)
     {
@@ -520,6 +385,13 @@ void Application::run()
                 }
             }
         }
+
+        // Periodic memory monitoring
+        if (++frameCount % MEMORY_LOG_INTERVAL == 0)
+        {
+            linuxface::common::logMemoryUsage("Main Loop");
+        }
+
         // End capture after this loop completes
         if (captureThisLoop)
         {
@@ -585,9 +457,9 @@ bool Application::update()
     }
 
     // Get window/viewport size for composite
-    int windowWidth = 640;  // Default size for headless mode
+    int windowWidth = 640; // Default size for headless mode
     int windowHeight = 480;
-    
+
     if (!headlessMode_)
     {
         window_.getFramebufferSize(windowWidth, windowHeight);
@@ -679,20 +551,20 @@ void Application::render()
 
 void Application::stopWebServer()
 {
-
     linuxface::common::logInfo("Stopping WebSocket server");
 
     // Stop broadcaster first to prevent new frames from being queued
     if (streamBroadcaster_)
     {
         streamBroadcaster_->stop();
-        
+
         // Log statistics
         auto stats = streamBroadcaster_->getStats();
-        common::logInfo("StreamBroadcaster stats - Submitted: %lu, Dropped: %lu, Encoded: %lu, Broadcast: %lu, Errors: %lu",
-                       stats.framesSubmitted, stats.framesDropped, stats.framesEncoded, 
-                       stats.framesBroadcast, stats.encodingErrors);
-        
+        common::logInfo(
+            "StreamBroadcaster stats - Submitted: %lu, Dropped: %lu, Encoded: %lu, Broadcast: %lu, Errors: %lu",
+            stats.framesSubmitted, stats.framesDropped, stats.framesEncoded, stats.framesBroadcast,
+            stats.encodingErrors);
+
         streamBroadcaster_.reset();
     }
 
@@ -1189,8 +1061,8 @@ void Application::handleTargetImageUpdate(const std::vector<uint8_t>& imageData)
             return;
         }
 
-        common::logInfo("Application - Target image decoded successfully: %lux%lu pixels", 
-                       decodedImage->info.width, decodedImage->info.height);
+        common::logInfo("Application - Target image decoded successfully: %lux%lu pixels", decodedImage->info.width,
+                        decodedImage->info.height);
 
         // Update the target image
         target_img_ = std::move(decodedImage);
@@ -1212,4 +1084,140 @@ void Application::handleTargetImageUpdate(const std::vector<uint8_t>& imageData)
     {
         common::logError("Application - Exception handling target image: %s", e.what());
     }
+}
+
+bool Application::initializeWebSocket()
+{
+    auto webConfig = Config::getInstance().getWebServerConfig();
+
+    // Create WebSocket input device
+    wsInputDevice_ = std::make_shared<wsInputDevice>(webConfig);
+
+    // Register device with the controller instance managed by Drogon
+    auto controller = drogon::DrClassMap::getSingleInstance<web::videoStreamController>();
+    if (!controller)
+    {
+        linuxface::common::logError("Failed to acquire videoStreamController instance from Drogon");
+        return false;
+    }
+    controller->setInputDevice(wsInputDevice_);
+
+    // Set callback for target image updates
+    controller->setTargetImageCallback([this](const std::vector<uint8_t>& imageData)
+                                       { this->handleTargetImageUpdate(imageData); });
+
+    // Set callback for quality changes
+    controller->setQualityChangedCallback(
+        [this](int quality)
+        {
+            if (streamBroadcaster_)
+            {
+                streamBroadcaster_->setJpegQuality(quality);
+            }
+        });
+
+    if (!wsInputDevice_->setupDevice())
+    {
+        linuxface::common::logError("Failed to setup WebSocket input device");
+        return false;
+    }
+
+    if (!wsInputDevice_->start())
+    {
+        linuxface::common::logError("Failed to start WebSocket input device");
+        return false;
+    }
+
+    // Register with camera manager
+    cameraManager_->setWebSocketInput(wsInputDevice_);
+
+    // Start Drogon web server in background thread
+    webServerThread_ = std::thread(
+        [webConfig]()
+        {
+            const bool useSSL = !webConfig.sslCert.empty() && !webConfig.sslKey.empty();
+            const char* protocol = useSSL ? "HTTPS" : "HTTP";
+
+            linuxface::common::logInfo("Starting WebSocket server (%s) on %s:%d", protocol, webConfig.host.c_str(),
+                                       webConfig.port);
+
+            auto& app = drogon::app()
+                            .disableSigtermHandling()
+                            .setLogLevel(trantor::Logger::kInfo)
+                            .setDocumentRoot(webConfig.documentRoot)
+                            .setThreadNum(webConfig.threadCount)
+                            .setMaxConnectionNumPerIP(0)
+                            .setClientMaxWebSocketMessageSize(10 * 1024 * 1024);
+
+            // Helper lambda for HTTP fallback
+            auto fallbackToHttp = [&]()
+            {
+                linuxface::common::logInfo("Falling back to HTTP mode on port %d", webConfig.port);
+                app.addListener(webConfig.host, webConfig.port);
+            };
+
+            if (useSSL)
+            {
+                std::ifstream certFile(webConfig.sslCert, std::ios::binary);
+                std::ifstream keyFile(webConfig.sslKey, std::ios::binary);
+
+                if (certFile.good() && keyFile.good())
+                {
+                    linuxface::common::logInfo("Configuring SSL with cert: %s, key: %s", webConfig.sslCert.c_str(),
+                                               webConfig.sslKey.c_str());
+                    try
+                    {
+                        app.setSSLFiles(webConfig.sslCert, webConfig.sslKey)
+                            .addListener(webConfig.host, webConfig.port, true);
+                    }
+                    catch (const std::exception& e)
+                    {
+                        linuxface::common::logError("SSL configuration error: %s", e.what());
+                        fallbackToHttp();
+                    }
+                }
+                else if (!keyFile.good())
+                {
+                    linuxface::common::logError("SSL private key not found: %s", webConfig.sslKey.c_str());
+                    fallbackToHttp();
+                }
+                else
+                {
+                    linuxface::common::logError("SSL certificate not found: %s", webConfig.sslCert.c_str());
+                    fallbackToHttp();
+                }
+            }
+            else
+            {
+                app.addListener(webConfig.host, webConfig.port);
+            }
+
+            try
+            {
+                app.run();
+            }
+            catch (const std::exception& e)
+            {
+                linuxface::common::logError("WebSocket server error: %s", e.what());
+            }
+
+            linuxface::common::logInfo("WebSocket server stopped");
+        });
+
+    // Initialize StreamBroadcaster
+    web::StreamBroadcaster::Config broadcasterConfig;
+    broadcasterConfig.enabled = true;
+    broadcasterConfig.jpegQuality = 65;
+    broadcasterConfig.maxQueueSize = 1;
+
+    streamBroadcaster_ = std::make_unique<web::StreamBroadcaster>(broadcasterConfig);
+    if (!streamBroadcaster_->start())
+    {
+        linuxface::common::logError("Failed to start StreamBroadcaster");
+        streamBroadcaster_.reset();
+        return false;
+    }
+
+    linuxface::common::logInfo("WebSocket input device ready - waiting for browser connections");
+    return true;
 }

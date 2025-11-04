@@ -9,7 +9,9 @@
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -379,6 +381,37 @@ inline bool isGraphicalDisplayAvailable()
     }
 
     return false;
+}
+
+// Get current memory usage in MB
+inline double getMemoryUsageMB()
+{
+    std::ifstream file("/proc/self/status");
+    std::string line;
+    
+    while (std::getline(file, line))
+    {
+        if (line.substr(0, 6) == "VmRSS:")
+        {
+            std::istringstream iss(line);
+            std::string label, value, unit;
+            iss >> label >> value >> unit;
+            
+            double kb = std::stod(value);
+            return kb / 1024.0; // Convert KB to MB
+        }
+    }
+    return -1.0; // Error case
+}
+
+// Log memory usage with a custom message
+inline void logMemoryUsage(const char* context)
+{
+    double memMB = getMemoryUsageMB();
+    if (memMB > 0)
+    {
+        logInfo("Memory Usage [%s]: %.1f MB", context, memMB);
+    }
 }
 
 } // namespace linuxface::common
