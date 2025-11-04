@@ -31,6 +31,7 @@ window:
     title: "LinuxFace"
     width: 640
     height: 480
+    headless: true
 
 web_server:
     host: "0.0.0.0"

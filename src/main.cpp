@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
 {
     try
     {
-        linuxface::common::initLogger("a0.0.0");
+        linuxface::common::initLogger("a0.0.0", true);
         std::string configFileLocation{"../config.yaml"};
         if (argc > 1)
         {

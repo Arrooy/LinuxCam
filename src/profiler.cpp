@@ -67,13 +67,21 @@ void Profiler::start(const std::string& sourceName, const std::string& name)
     data.startTime = std::chrono::high_resolution_clock::now();
     data.isActive = true;
 
-    // Collect hierarchical profiling event
+    // Collect hierarchical profiling event using FIFO queue
     auto now = std::chrono::high_resolution_clock::now();
-    auto timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    auto timestampMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 
     // Record thread id so we can rebuild a per-thread nested call tree
     uint64_t tid = static_cast<uint64_t>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
-    collectedEvents_.push_back({key, "start", timestamp_ms, tid});
+    
+    // Add to FIFO queue with fixed size
+    collectedEvents_.push_back({key, "start", timestampMs, tid});
+    
+    // Maintain fixed queue size by removing oldest events
+    if (collectedEvents_.size() > MaxCollectedEvents)
+    {
+        collectedEvents_.pop_front();
+    }
 
     // Track profiler overhead (avoid recursion by direct timing)
     auto profilerEndTime = std::chrono::high_resolution_clock::now();
@@ -101,11 +109,19 @@ void Profiler::stop(const std::string& sourceName, const std::string& name)
         // Update statistics
         updateStatistics(it->second, duration);
 
-        // Collect hierarchical profiling event
-        auto timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        // Collect hierarchical profiling event using FIFO queue
+        auto timestampMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 
         uint64_t tid = static_cast<uint64_t>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
-        collectedEvents_.push_back({key, "end", timestamp_ms, tid});
+        
+        // Add to FIFO queue with fixed size
+        collectedEvents_.push_back({key, "end", timestampMs, tid});
+        
+        // Maintain fixed queue size by removing oldest events
+        if (collectedEvents_.size() > MaxCollectedEvents)
+        {
+            collectedEvents_.pop_front();
+        }
 
         // Mark call tree as dirty - will be rebuilt on next access
         callTreeDirty_ = true;
@@ -479,7 +495,7 @@ void Profiler::update()
     }
 
     // Check if cleanup interval has elapsed
-    if (now - lastCleanup_ >= CLEANUP_INTERVAL)
+    if (now - lastCleanup_ >= CleanupInterval)
     {
         cleanupStaleData();
         lastCleanup_ = now;
@@ -707,7 +723,7 @@ static void mergeNodeInto(Profiler::CallTreeNode& parent, Profiler::CallTreeNode
 }
 
 linuxface::Profiler::CallTreeNode
-linuxface::Profiler::buildProfileHierarchy(const std::vector<linuxface::Profiler::ProfileEvent>& events)
+linuxface::Profiler::buildProfileHierarchy(const std::deque<linuxface::Profiler::ProfileEvent>& events)
 {
     Profiler::CallTreeNode root("Call Tree");
 
@@ -778,9 +794,9 @@ linuxface::Profiler::buildProfileHierarchy(const std::vector<linuxface::Profiler
                 StackFrame finished = std::move(stack.back());
                 stack.pop_back();
 
-                int64_t inclusive_us = (ev.timestamp_ms - finished.start_ms) * 1000;
-                finished.node.inclusive_ms = inclusive_us;
-                finished.node.exclusive_ms = inclusive_us;
+                int64_t inclusiveUs = (ev.timestamp_ms - finished.start_ms) * 1000;
+                finished.node.inclusive_ms = inclusiveUs;
+                finished.node.exclusive_ms = inclusiveUs;
 
                 if (!stack.empty())
                 {

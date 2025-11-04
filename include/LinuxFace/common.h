@@ -204,16 +204,16 @@ inline void logMessage(LogLevel level, const char* format, ...)
     // Timestamp with milliseconds
     struct timeval tv;
     gettimeofday(&tv, nullptr);
-    time_t now_sec = tv.tv_sec;
+    time_t nowSec = tv.tv_sec;
     int msec = static_cast<int>(tv.tv_usec / 1000);
     char timeBuf[64];
-    struct tm tm_info;
+    struct tm tmInfo;
     // Use localtime_r for thread-safety
-    localtime_r(&now_sec, &tm_info);
-    if (strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &tm_info) == 0)
+    localtime_r(&nowSec, &tmInfo);
+    if (strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &tmInfo) == 0)
     {
         // Fallback in unlikely event of formatting failure
-        snprintf(timeBuf, sizeof(timeBuf), "%ld", now_sec);
+        snprintf(timeBuf, sizeof(timeBuf), "%ld", nowSec);
     }
     // Append milliseconds
     char timeBufMs[80];

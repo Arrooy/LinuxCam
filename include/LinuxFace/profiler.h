@@ -2,6 +2,7 @@
 #define PROFILER_H
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -250,7 +251,7 @@ class Profiler
      * @param events List of profile events in chronological order
      * @return Root node of the call tree
      */
-    static CallTreeNode buildProfileHierarchy(const std::vector<ProfileEvent>& events);
+    static CallTreeNode buildProfileHierarchy(const std::deque<ProfileEvent>& events);
 
     /**
      * A small RAII helper for scoped profiling spans. Usage:
@@ -359,13 +360,14 @@ class Profiler
 
     // Cleanup timing
     std::chrono::high_resolution_clock::time_point lastCleanup_{};
-    static constexpr std::chrono::seconds CLEANUP_INTERVAL{5}; // Check every 5 seconds
+    static constexpr std::chrono::seconds CleanupInterval{5}; // Check every 5 seconds
 
     // Statistics configuration
     size_t windowSize_{150}; // Size of the moving average window
 
-    // Hierarchical profiling data
-    std::vector<ProfileEvent> collectedEvents_;
+    // Hierarchical profiling data - FIFO queue with fixed size
+    std::deque<ProfileEvent> collectedEvents_;
+    static constexpr size_t MaxCollectedEvents = 750; // Fixed queue size
     CallTreeNode currentCallTree_;
     bool callTreeDirty_{true}; // Flag to track if call tree needs rebuilding
 

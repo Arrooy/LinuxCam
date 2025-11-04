@@ -49,7 +49,7 @@ class Application : public std::enable_shared_from_this<Application>
     void connectWindowResize();
     void calculateCompositeBounds(const std::vector<Layer>& layers, int windowWidth, int windowHeight, float& minX,
                                   float& minY, float& maxX, float& maxY);
-    bool createCompositeImage(std::unique_ptr<Image>& compositeImage, const std::vector<Layer>& layers, float minX,
+    bool createCompositeImage(const std::vector<Layer>& layers, float minX,
                               float minY, unsigned int compositeWidth, unsigned int compositeHeight);
 
     Window window_;

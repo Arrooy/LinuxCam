@@ -224,6 +224,21 @@ class Config
         }
 
         auto window = config_["window"];
+        
+        // Parse headless mode first (defaults to false)
+        headless_ = window["headless"] ? window["headless"].as<bool>() : false;
+        
+        if (headless_)
+        {
+            // In headless mode, window properties are optional
+            windowTitle_ = window["title"] ? window["title"].as<std::string>() : "LinuxFace (Headless)";
+            windowWidth_ = window["width"] ? window["width"].as<int>() : 0;
+            windowHeight_ = window["height"] ? window["height"].as<int>() : 0;
+            common::logInfo("Running in headless mode - no GUI window will be created");
+            return true;
+        }
+        
+        // For non-headless mode, all window properties are required
         if (!window["title"])
         {
             common::logError("Missing title field in window section");
@@ -306,6 +321,7 @@ class Config
             windowWidth_ = 0;
             windowHeight_ = 0;
             windowTitle_.clear();
+            headless_ = false;
             config_ = YAML::LoadFile(filename);
             return true;
         }
@@ -369,6 +385,7 @@ class Config
     }
 
     std::string getWindowTitle() const { return windowTitle_; }
+    bool isHeadless() const { return headless_; }
     WebServerConfig getWebServerConfig() const { return webServerConfig_; }
     bool isWebSocketInputEnabled() const { return websocketInputEnabled_; }
 
@@ -396,6 +413,7 @@ class Config
     unsigned int windowWidth_{};
     unsigned int windowHeight_{};
     std::string windowTitle_;
+    bool headless_{false};
 
     // Helper function to ensure path ends with exactly one "/"
     static std::string normalizePath(const std::string& path)

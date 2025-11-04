@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <deque>
 
 #include "LinuxFace/profiler.h"
 
@@ -17,7 +18,7 @@ static Profiler::ProfileEvent ev(const std::string& name, const std::string& typ
 
 TEST(ProfilerCallTreeBuilder, NestedTimers)
 {
-    std::vector<Profiler::ProfileEvent> events;
+    std::deque<Profiler::ProfileEvent> events;
     // A starts at 0
     events.push_back(ev("MainLoop::FrameProcessing", "start", 0));
     // B inside A
@@ -38,7 +39,7 @@ TEST(ProfilerCallTreeBuilder, NestedTimers)
 
 TEST(ProfilerCallTreeBuilder, ConcurrentSameThreadNonNested)
 {
-    std::vector<Profiler::ProfileEvent> events;
+    std::deque<Profiler::ProfileEvent> events;
     // Two timers on same thread but not nested
     events.push_back(ev("A::task1", "start", 0));
     events.push_back(ev("A::task1", "end", 2));
@@ -58,7 +59,7 @@ TEST(ProfilerCallTreeBuilder, ConcurrentSameThreadNonNested)
 
 TEST(ProfilerCallTreeBuilder, CrossThreadStartEnd)
 {
-    std::vector<Profiler::ProfileEvent> events;
+    std::deque<Profiler::ProfileEvent> events;
     // Start on thread 1, end on thread 2
     events.push_back(ev("X::async", "start", 0, 1));
     events.push_back(ev("X::async", "end", 5, 2));
@@ -72,7 +73,7 @@ TEST(ProfilerCallTreeBuilder, CrossThreadStartEnd)
 
 TEST(ProfilerCallTreeBuilder, ZeroDurationFiltering)
 {
-    std::vector<Profiler::ProfileEvent> events;
+    std::deque<Profiler::ProfileEvent> events;
 
     // Complete operation 1
     events.push_back(ev("A::task1", "start", 0));
@@ -112,7 +113,7 @@ TEST(ProfilerCallTreeBuilder, ZeroDurationFiltering)
 
 TEST(ProfilerCallTreeBuilder, NestedZeroDurationFiltering)
 {
-    std::vector<Profiler::ProfileEvent> events;
+    std::deque<Profiler::ProfileEvent> events;
 
     // Parent with complete duration
     events.push_back(ev("Parent::A", "start", 0));
@@ -139,7 +140,7 @@ TEST(ProfilerCallTreeBuilder, NestedZeroDurationFiltering)
 
 TEST(ProfilerCallTreeBuilder, AllZeroDurationNodes)
 {
-    std::vector<Profiler::ProfileEvent> events;
+    std::deque<Profiler::ProfileEvent> events;
 
     // All incomplete operations (start without matching end)
     events.push_back(ev("A::task1", "start", 0));
@@ -156,7 +157,7 @@ TEST(ProfilerCallTreeBuilder, AllZeroDurationNodes)
 
 TEST(ProfilerCallTreeBuilder, MismatchedStartEnd)
 {
-    std::vector<Profiler::ProfileEvent> events;
+    std::deque<Profiler::ProfileEvent> events;
 
     // Start event
     events.push_back(ev("A::task1", "start", 0));

@@ -105,8 +105,10 @@ bool Application::initialize()
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Check if graphical display is available
-    headlessMode_ = !linuxface::common::isGraphicalDisplayAvailable();
+    // Check if headless mode is forced via config or if no graphical display is available
+    bool configHeadless = Config::getInstance().isHeadless();
+    bool noDisplay = !linuxface::common::isGraphicalDisplayAvailable();
+    headlessMode_ = configHeadless || noDisplay;
 
     layerManager_ = std::make_shared<LayerManager>();
     if (headlessMode_)
@@ -358,8 +360,8 @@ void Application::run()
     linuxface::common::logInfo("Starting main loop...");
 
     // Memory monitoring
-    static int frameCount = 0;
-    constexpr int MEMORY_LOG_INTERVAL = 5000; // Log every 100 frames (~3 seconds at 30 FPS)
+    auto lastMemoryLog = std::chrono::high_resolution_clock::now();
+    constexpr int MEMORY_LOG_INTERVAL_MS = 1500;
 
     // Main loop
     while ((!headlessMode_ ? !window_.shouldClose() : true) && !gShouldExit)
@@ -379,17 +381,17 @@ void Application::run()
             Profiler::ScopedProfilerSpan span("MainLoop", "Frame Processing");
             if (update())
             {
-                if (!headlessMode_)
-                {
-                    render();
-                }
+                render();
             }
         }
-
+        auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::high_resolution_clock::now() - lastMemoryLog)
+                              .count();
         // Periodic memory monitoring
-        if (++frameCount % MEMORY_LOG_INTERVAL == 0)
+        if (lastMemoryLog > MEMORY_LOG_INTERVAL_MS)
         {
             linuxface::common::logMemoryUsage("Main Loop");
+            lastMemoryLog = std::chrono::high_resolution_clock::now();
         }
 
         // End capture after this loop completes
@@ -420,6 +422,11 @@ void Application::run()
 
 bool Application::update()
 {
+    if (gShouldExit)
+    {
+        return false;
+    }
+
     // Poll events (only if we have a window)
     if (!headlessMode_)
     {
@@ -476,8 +483,7 @@ bool Application::update()
     unsigned int compositeWidth = (minX < maxX) ? static_cast<unsigned int>(maxX - minX) : windowWidth;
     unsigned int compositeHeight = (minY < maxY) ? static_cast<unsigned int>(maxY - minY) : windowHeight;
 
-    std::unique_ptr<Image> compositeImage;
-    bool compositeValid = createCompositeImage(compositeImage, layers, minX, minY, compositeWidth, compositeHeight);
+    bool compositeValid = createCompositeImage(layers, minX, minY, compositeWidth, compositeHeight);
 
     if (!compositeValid)
     {
@@ -487,28 +493,34 @@ bool Application::update()
 
     {
         Profiler::ScopedProfilerSpan span("Application", "Image processing");
-        process(compositeImage);
+        process(compositeBuffer_);
+    }
+
+    // Before updating output, check if we have to leave. 
+    if(gShouldExit)
+    {
+        return false;
     }
 
     // Flip horizontally the composite image
-    // compositeImage->flipHorizontalInPlace();
+    // compositeBuffer_->flipHorizontalInPlace();
 
     // Send processed frame to WebSocket clients via async broadcaster
+    // Only process if there are active WebSocket connections
     if (streamBroadcaster_ && streamBroadcaster_->isRunning())
     {
-        // Check if there are active WebSocket connections before processing
         auto controller = drogon::DrClassMap::getSingleInstance<web::videoStreamController>();
         if (controller && controller->hasActiveConnections())
         {
             Profiler::ScopedProfilerSpan span("Application", "Submit WebSocket Frame");
-            streamBroadcaster_->submitFrame(compositeImage);
+            streamBroadcaster_->submitFrame(compositeBuffer_);
         }
     }
 
     {
         Profiler::ScopedProfilerSpan span("Application", "Update Camera Output");
         // Send processed composite to output cameras with cropping
-        if (!cameraManager_->updateOutput(compositeImage))
+        if (!cameraManager_->updateOutput(compositeBuffer_))
         {
             linuxface::common::logError("Failed to update output cameras");
         }
@@ -521,10 +533,6 @@ bool Application::update()
         ui_->newFrame();
         ui_->paint();
     }
-    
-    // Return the composite buffer for reuse
-    compositeBuffer_ = std::move(compositeImage);
-    
     return true;
 }
 
@@ -606,7 +614,10 @@ void Application::stopWebServer()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-    auto raw = image->deepCopy();
+    if(gShouldExit)
+    {
+        return false;
+    }
 
     std::vector<Face> dlibFaces;
     if (faceDetector_ != nullptr)
@@ -1009,12 +1020,11 @@ void Application::calculateCompositeBounds(const std::vector<Layer>& layers, int
     }
 }
 
-bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, const std::vector<Layer>& layers,
-                                       float minX, float minY, unsigned int compositeWidth,
-                                       unsigned int compositeHeight)
+bool Application::createCompositeImage(const std::vector<Layer>& layers, float minX, float minY,
+                                       unsigned int compositeWidth, unsigned int compositeHeight)
 {
     bool compositeValid{false};
-    
+
     // Reuse existing buffer if dimensions match, otherwise create new one
     if (!compositeBuffer_ || lastCompositeWidth_ != compositeWidth || lastCompositeHeight_ != compositeHeight)
     {
@@ -1029,9 +1039,6 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
         // Clear existing buffer instead of allocating new one
         compositeBuffer_->fill(0);
     }
-    
-    // Transfer ownership temporarily
-    compositeImage = std::move(compositeBuffer_);
 
     // Composite all layers onto the canvas
     for (const auto& layer : layers)
@@ -1044,21 +1051,21 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
 
         if (layer.type == LayerType::IMAGE && layer.img)
         {
-            compositeImage->pasteAt(*layer.img, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
-                                    false);
+            compositeBuffer_->pasteAt(*layer.img, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
+                                      false);
             compositeValid = true;
         }
         else if (layer.type == LayerType::GIF && layer.gif && !layer.gif->frames().empty())
         {
             auto& frame = layer.gif->frames()[layer.gifFrameIndex % layer.gif->frames().size()];
-            compositeImage->pasteAt(*frame, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
-                                    false);
+            compositeBuffer_->pasteAt(*frame, static_cast<long>(layer.x - minX), static_cast<long>(layer.y - minY),
+                                      false);
             compositeValid = true;
         }
         else if (layer.type == LayerType::VIDEO && layer.video && layer.currentVideoFrame)
         {
-            compositeImage->pasteAt(*layer.currentVideoFrame, static_cast<long>(layer.x - minX),
-                                    static_cast<long>(layer.y - minY), false);
+            compositeBuffer_->pasteAt(*layer.currentVideoFrame, static_cast<long>(layer.x - minX),
+                                      static_cast<long>(layer.y - minY), false);
             compositeValid = true;
         }
     }
