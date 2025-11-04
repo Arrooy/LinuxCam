@@ -82,6 +82,11 @@ class Application : public std::enable_shared_from_this<Application>
     std::unique_ptr<Image> adria_img_;
     std::unique_ptr<Image> target_img_;
 
+    // Reusable composite buffer to avoid allocations every frame
+    std::unique_ptr<Image> compositeBuffer_;
+    unsigned int lastCompositeWidth_{0};
+    unsigned int lastCompositeHeight_{0};
+
     // WebSocket input device for browser-based video streaming
     std::shared_ptr<wsInputDevice> wsInputDevice_;
     std::thread webServerThread_;

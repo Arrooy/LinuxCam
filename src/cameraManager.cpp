@@ -156,7 +156,7 @@ void CameraManager::updateCameraLayer(const std::shared_ptr<Webcam>& camera, std
             }
         }
 
-        existingLayer->img = std::shared_ptr<Image>(newFrame.release());
+        existingLayer->img = std::shared_ptr<Image>(std::move(newFrame));
         existingLayer->dirty = true;
         // Preserve existing layer position - don't reset x,y coordinates
     }
@@ -170,7 +170,7 @@ void CameraManager::updateCameraLayer(const std::shared_ptr<Webcam>& camera, std
         newLayer.cameraDevicePath = camera->getDevicePath();
         newLayer.selected = false;
         newLayer.resizeScale = 1.0f;
-        newLayer.img = std::shared_ptr<Image>(newFrame.release());
+        newLayer.img = std::shared_ptr<Image>(std::move(newFrame));
         newLayer.dirty = true;
 
         if (newLayer.img)

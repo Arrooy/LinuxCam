@@ -34,6 +34,9 @@ class videoStreamController : public drogon::WebSocketController<videoStreamCont
     // Send processed frame to all connected clients
     void sendProcessedFrame(const std::vector<uint8_t>& jpegData);
 
+    // Check if there are any active WebSocket connections
+    bool hasActiveConnections();
+
     // Set callback for when target image is received
     using TargetImageCallback = std::function<void(const std::vector<uint8_t>&)>;
     void setTargetImageCallback(TargetImageCallback callback) { onTargetImageReceived_ = callback; }

@@ -359,7 +359,7 @@ void Application::run()
 
     // Memory monitoring
     static int frameCount = 0;
-    constexpr int MEMORY_LOG_INTERVAL = 100; // Log every 100 frames (~3 seconds at 30 FPS)
+    constexpr int MEMORY_LOG_INTERVAL = 5000; // Log every 100 frames (~3 seconds at 30 FPS)
 
     // Main loop
     while ((!headlessMode_ ? !window_.shouldClose() : true) && !gShouldExit)
@@ -496,8 +496,13 @@ bool Application::update()
     // Send processed frame to WebSocket clients via async broadcaster
     if (streamBroadcaster_ && streamBroadcaster_->isRunning())
     {
-        Profiler::ScopedProfilerSpan span("Application", "Submit WebSocket Frame");
-        streamBroadcaster_->submitFrame(compositeImage);
+        // Check if there are active WebSocket connections before processing
+        auto controller = drogon::DrClassMap::getSingleInstance<web::videoStreamController>();
+        if (controller && controller->hasActiveConnections())
+        {
+            Profiler::ScopedProfilerSpan span("Application", "Submit WebSocket Frame");
+            streamBroadcaster_->submitFrame(compositeImage);
+        }
     }
 
     {
@@ -516,6 +521,10 @@ bool Application::update()
         ui_->newFrame();
         ui_->paint();
     }
+    
+    // Return the composite buffer for reuse
+    compositeBuffer_ = std::move(compositeImage);
+    
     return true;
 }
 
@@ -1005,8 +1014,24 @@ bool Application::createCompositeImage(std::unique_ptr<Image>& compositeImage, c
                                        unsigned int compositeHeight)
 {
     bool compositeValid{false};
-    const Pixel transparentPixel{0, 0, 0, 0};
-    compositeImage = std::make_unique<Image>(transparentPixel, compositeWidth, compositeHeight);
+    
+    // Reuse existing buffer if dimensions match, otherwise create new one
+    if (!compositeBuffer_ || lastCompositeWidth_ != compositeWidth || lastCompositeHeight_ != compositeHeight)
+    {
+        const Pixel transparentPixel{0, 0, 0, 0};
+        compositeBuffer_ = std::make_unique<Image>(transparentPixel, compositeWidth, compositeHeight);
+        lastCompositeWidth_ = compositeWidth;
+        lastCompositeHeight_ = compositeHeight;
+        linuxface::common::logInfo("Created new composite buffer: %dx%d", compositeWidth, compositeHeight);
+    }
+    else
+    {
+        // Clear existing buffer instead of allocating new one
+        compositeBuffer_->clear();
+    }
+    
+    // Transfer ownership temporarily
+    compositeImage = std::move(compositeBuffer_);
 
     // Composite all layers onto the canvas
     for (const auto& layer : layers)

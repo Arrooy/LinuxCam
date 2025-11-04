@@ -157,5 +157,19 @@ void videoStreamController::sendProcessedFrame(const std::vector<uint8_t>& jpegD
     }
 }
 
+bool videoStreamController::hasActiveConnections()
+{
+    std::lock_guard<std::mutex> lock(connectionsMutex_);
+    for (auto& [conn, state] : connections_)
+    {
+        if (conn->connected())
+        {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 } // namespace web
 } // namespace linuxface

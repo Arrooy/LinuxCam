@@ -298,6 +298,9 @@ class Image
 
     // Converts RGB to RGBA in-place
     bool convertToRGBAInplace();
+    
+    // Clear image buffer to zeros (for reusing buffers)
+    void clear();
 
     void drawBorder(const Pixel& color, int thickness = 1);
 
