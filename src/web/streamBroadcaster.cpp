@@ -222,13 +222,19 @@ bool StreamBroadcaster::encodeAndBroadcast(const std::unique_ptr<Image>& frame)
 
     {
         std::lock_guard<std::mutex> lock(statsMutex_);
-        stats_.framesBroadcast++;
+        stats_.framesSent++;
     }
 
     return true;
 }
 
-StreamBroadcaster::Stats StreamBroadcaster::getStats() const
+bool StreamBroadcaster::hasActiveConnections() const
+{
+    auto controller = drogon::DrClassMap::getSingleInstance<videoStreamController>();
+    return controller && controller->hasActiveConnections();
+}
+
+IStreamTransport::Stats StreamBroadcaster::getStats() const
 {
     std::lock_guard<std::mutex> lock(statsMutex_);
     return stats_;

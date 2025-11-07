@@ -389,6 +389,20 @@ set(BUILD_DOC OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(drogon)
 
+# Fetch libdatachannel for WebRTC support
+FetchContent_Declare(
+    libdatachannel
+    GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
+    GIT_TAG        v0.23.2
+)
+
+# Configure libdatachannel build options
+set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
+set(NO_TESTS ON CACHE BOOL "" FORCE)
+set(NO_WEBSOCKET ON CACHE BOOL "" FORCE)  # We only need WebRTC, not WebSocket from this lib
+
+FetchContent_MakeAvailable(libdatachannel)
+
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
 list(REMOVE_ITEM SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
@@ -424,6 +438,7 @@ target_link_libraries(linuxface
     ${ONNXRUNTIME_LIB}
     ${FFMPEG_LIBRARIES}
     drogon
+    datachannel-static
 )
 
 # Enable coverage for the main library

@@ -22,7 +22,9 @@
 #include "LinuxFace/inputWebcam.h"
 #include "LinuxFace/onnx/faceSegmentation.h"
 #include "LinuxFace/onnx/swapPipeline.h"
+#include "LinuxFace/web/streamBroadcaster.h"
 #include "LinuxFace/web/videoStreamController.h"
+#include "LinuxFace/web/webrtcTransport.h"
 #include "config.hpp"
 
 using linuxface::Application;
@@ -166,58 +168,58 @@ bool Application::initialize()
         }
 
         // Camera input mode - existing behavior
-        // linuxface::common::logInfo("Using camera input mode");
+        linuxface::common::logInfo("Using camera input mode");
 
-        // auto webcams = Config::getInstance().getWebcams();
-        // for (const auto& wc : webcams)
-        // {
-        //     std::shared_ptr<Webcam> webcam;
+        auto webcams = Config::getInstance().getWebcams();
+        for (const auto& wc : webcams)
+        {
+            std::shared_ptr<Webcam> webcam;
 
-        //     if (wc.is_input)
-        //     {
-        //         webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height,
-        //         wc.buffer_count);
-        //     }
-        //     else
-        //     {
-        //         webcam =
-        //             std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height,
-        //             wc.subsampling);
-        //     }
-        //     if (!webcam->setupDevice())
-        //     {
-        //         linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
-        //         continue;
-        //     }
+            if (wc.is_input)
+            {
+                webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height,
+                wc.buffer_count);
+            }
+            else
+            {
+                webcam =
+                    std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height,
+                    wc.subsampling);
+            }
+            if (!webcam->setupDevice())
+            {
+                linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
+                continue;
+            }
 
-        //     if (!webcam->start())
-        //     {
-        //         linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
-        //         continue;
-        //     }
-        //     webcam->setCurrentlySelected(true);
-        //     if (!cameraManager_->addCamera(webcam))
-        //     {
-        //         linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
-        //         continue;
-        //     }
-        // }
+            if (!webcam->start())
+            {
+                linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
+                continue;
+            }
+            webcam->setCurrentlySelected(true);
+            if (!cameraManager_->addCamera(webcam))
+            {
+                linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
+                continue;
+            }
+        }
 
-        // auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
-        // for (const auto& devicePath : availableDevicePaths)
-        // {
-        //     std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
-        //     if (!webcam->setupDevice())
-        //     {
-        //         linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
-        //         continue;
-        //     }
-        //     if (!cameraManager_->addCamera(std::move(webcam)))
-        //     {
-        //         linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
-        //         return false;
-        //     }
-        // }
+        auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
+        for (const auto& devicePath : availableDevicePaths)
+        {
+            std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
+            if (!webcam->setupDevice())
+            {
+                linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
+                continue;
+            }
+            if (!cameraManager_->addCamera(std::move(webcam)))
+            {
+                linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
+                return false;
+            }
+        }
     }
 
     // Start loading models in a background thread
@@ -507,13 +509,16 @@ bool Application::update()
 
     // Send processed frame to WebSocket clients via async broadcaster
     // Only process if there are active WebSocket connections
-    if (streamBroadcaster_ && streamBroadcaster_->isRunning())
+    if (!streamTransports_.empty())
     {
-        auto controller = drogon::DrClassMap::getSingleInstance<web::videoStreamController>();
-        if (controller && controller->hasActiveConnections())
+        Profiler::ScopedProfilerSpan span("Application", "Submit Stream Frames");
+        
+        for (auto& transport : streamTransports_)
         {
-            Profiler::ScopedProfilerSpan span("Application", "Submit WebSocket Frame");
-            streamBroadcaster_->submitFrame(compositeBuffer_);
+            if (transport && transport->isRunning() && transport->hasActiveConnections())
+            {
+                transport->submitFrame(compositeBuffer_);
+            }
         }
     }
 
@@ -568,22 +573,23 @@ void Application::render()
 
 void Application::stopWebServer()
 {
-    linuxface::common::logInfo("Stopping WebSocket server");
+    linuxface::common::logInfo("Stopping WebSocket server and stream transports");
 
-    // Stop broadcaster first to prevent new frames from being queued
-    if (streamBroadcaster_)
+    // Stop all stream transports
+    for (auto& transport : streamTransports_)
     {
-        streamBroadcaster_->stop();
+        if (transport)
+        {
+            transport->stop();
 
-        // Log statistics
-        auto stats = streamBroadcaster_->getStats();
-        common::logInfo(
-            "StreamBroadcaster stats - Submitted: %lu, Dropped: %lu, Encoded: %lu, Broadcast: %lu, Errors: %lu",
-            stats.framesSubmitted, stats.framesDropped, stats.framesEncoded, stats.framesBroadcast,
-            stats.encodingErrors);
-
-        streamBroadcaster_.reset();
+            // Log statistics
+            auto stats = transport->getStats();
+            common::logInfo("%s stats - Submitted: %lu, Dropped: %lu, Encoded: %lu, Sent: %lu, Errors: %lu",
+                            transport->getName(), stats.framesSubmitted, stats.framesDropped, stats.framesEncoded,
+                            stats.framesSent, stats.encodingErrors);
+        }
     }
+    streamTransports_.clear();
 
     if (wsInputDevice_)
     {
@@ -1142,9 +1148,17 @@ bool Application::initializeWebSocket()
     controller->setQualityChangedCallback(
         [this](int quality)
         {
-            if (streamBroadcaster_)
+            // Update JPEG transport quality if it exists
+            for (auto& transport : streamTransports_)
             {
-                streamBroadcaster_->setJpegQuality(quality);
+                if (transport && transport->getName() == std::string("JPEG/WebSocket"))
+                {
+                    auto jpegTransport = std::dynamic_pointer_cast<web::StreamBroadcaster>(transport);
+                    if (jpegTransport)
+                    {
+                        jpegTransport->setJpegQuality(quality);
+                    }
+                }
             }
         });
 
@@ -1163,7 +1177,53 @@ bool Application::initializeWebSocket()
     // Register with camera manager
     cameraManager_->setWebSocketInput(wsInputDevice_);
 
-    // Start Drogon web server in background thread
+    // Get streaming configuration
+    auto streamingConfig = Config::getInstance().getStreamingConfig();
+
+    // Initialize JPEG/WebSocket transport if enabled
+    if (streamingConfig.enableJpegWebSocket)
+    {
+        web::StreamBroadcaster::Config broadcasterConfig;
+        broadcasterConfig.enabled = true;
+        broadcasterConfig.jpegQuality = streamingConfig.jpegQuality;
+        broadcasterConfig.maxQueueSize = streamingConfig.jpegMaxQueueSize;
+
+        auto jpegTransport = std::make_shared<web::StreamBroadcaster>(broadcasterConfig);
+        if (jpegTransport->start())
+        {
+            streamTransports_.push_back(jpegTransport);
+            common::logInfo("JPEG/WebSocket transport started (quality: %d)", streamingConfig.jpegQuality);
+        }
+        else
+        {
+            common::logError("Failed to start JPEG/WebSocket transport");
+        }
+    }
+
+    // Initialize WebRTC transport if enabled
+    if (streamingConfig.enableWebRTC)
+    {
+        auto webrtcTransport = std::make_shared<web::WebRTCTransport>(streamingConfig);
+        if (webrtcTransport->start())
+        {
+            streamTransports_.push_back(webrtcTransport);
+            
+            // Register WebRTC transport with controller for signaling
+            controller->setWebRTCTransport(webrtcTransport);
+            
+            common::logInfo("WebRTC/H.264 transport started (bitrate: %d kbps, fps: %d)", 
+                            streamingConfig.webrtcBitrate / 1000, streamingConfig.webrtcFramerate);
+        }
+        else
+        {
+            common::logError("Failed to start WebRTC transport");
+        }
+    }
+
+    if (streamTransports_.empty())
+    {
+        common::logWarn("No streaming transports enabled");
+    }
     webServerThread_ = std::thread(
         [webConfig]()
         {
@@ -1236,20 +1296,6 @@ bool Application::initializeWebSocket()
             linuxface::common::logInfo("WebSocket server stopped");
         });
 
-    // Initialize StreamBroadcaster
-    web::StreamBroadcaster::Config broadcasterConfig;
-    broadcasterConfig.enabled = true;
-    broadcasterConfig.jpegQuality = 65;
-    broadcasterConfig.maxQueueSize = 1;
-
-    streamBroadcaster_ = std::make_unique<web::StreamBroadcaster>(broadcasterConfig);
-    if (!streamBroadcaster_->start())
-    {
-        linuxface::common::logError("Failed to start StreamBroadcaster");
-        streamBroadcaster_.reset();
-        return false;
-    }
-
-    linuxface::common::logInfo("WebSocket input device ready - waiting for browser connections");
+    linuxface::common::logInfo("WebSocket/WebRTC server ready - waiting for browser connections");
     return true;
 }

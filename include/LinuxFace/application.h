@@ -23,7 +23,7 @@
 #include "LinuxFace/onnx/swapPipeline.h"
 #include "LinuxFace/profiler.h"
 #include "LinuxFace/ui.h"
-#include "LinuxFace/web/streamBroadcaster.h"
+#include "LinuxFace/web/IStreamTransport.h"
 #include "LinuxFace/web/wsInputDevice.h"
 #include "LinuxFace/window.h"
 
@@ -91,8 +91,8 @@ class Application : public std::enable_shared_from_this<Application>
     std::shared_ptr<wsInputDevice> wsInputDevice_;
     std::thread webServerThread_;
 
-    // WebSocket output broadcaster for sending processed frames
-    std::unique_ptr<web::StreamBroadcaster> streamBroadcaster_;
+    // Stream transports - support multiple simultaneously
+    std::vector<std::shared_ptr<web::IStreamTransport>> streamTransports_;
 
     // Single-loop profiler capture flag
     std::atomic<bool> captureNextLoop_{false};

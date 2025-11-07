@@ -10,6 +10,7 @@
 
 #include "LinuxFace/Image/image.h"
 #include "LinuxFace/codecFactory.h"
+#include "LinuxFace/web/IStreamTransport.h"
 
 namespace linuxface
 {
@@ -28,7 +29,7 @@ class videoStreamController;
  * - Rate limiting and frame dropping under load
  * - Decouples WebSocket broadcast from main render loop
  */
-class StreamBroadcaster
+class StreamBroadcaster : public IStreamTransport
 {
   public:
     struct Config
@@ -51,52 +52,19 @@ class StreamBroadcaster
     StreamBroadcaster(const StreamBroadcaster&) = delete;
     StreamBroadcaster& operator=(const StreamBroadcaster&) = delete;
 
-    /**
-     * Submit a frame for encoding and broadcast
-     * Non-blocking - drops frame if queue is full
-     */
-    void submitFrame(const std::unique_ptr<Image>& frame);
-
-    /**
-     * Start the background encoding/broadcast thread
-     */
-    bool start();
-
-    /**
-     * Stop the background thread and clear queue
-     */
-    void stop();
-
-    /**
-     * Check if broadcaster is running
-     */
-    bool isRunning() const { return running_; }
+    // IStreamTransport interface implementation
+    bool start() override;
+    void stop() override;
+    bool isRunning() const override { return running_; }
+    void submitFrame(const std::unique_ptr<Image>& frame) override;
+    bool hasActiveConnections() const override;
+    const char* getName() const override { return "JPEG/WebSocket"; }
+    IStreamTransport::Stats getStats() const override;
 
     /**
      * Update JPEG quality dynamically
      */
     void setJpegQuality(int quality);
-
-    /**
-     * Get statistics for monitoring
-     */
-    struct Stats
-    {
-        uint64_t framesSubmitted;
-        uint64_t framesDropped;
-        uint64_t framesEncoded;
-        uint64_t framesBroadcast;
-        uint64_t encodingErrors;
-
-        Stats()
-            : framesSubmitted(0)
-            , framesDropped(0)
-            , framesEncoded(0)
-            , framesBroadcast(0)
-            , encodingErrors(0)
-        {}
-    };
-    Stats getStats() const;
 
   private:
     void workerThread();
@@ -122,7 +90,7 @@ class StreamBroadcaster
 
     // Statistics
     mutable std::mutex statsMutex_;
-    Stats stats_;
+    IStreamTransport::Stats stats_;
 };
 
 } // namespace web

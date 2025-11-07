@@ -41,5 +41,28 @@ web_server:
     ssl_cert: "../ssl/cert.pem"
     ssl_key: "../ssl/key.pem"
 
+# Streaming configuration - both modes can run simultaneously
+streaming:
+    enable_jpeg_websocket: true
+    enable_webrtc: true
+    
+    # JPEG/WebSocket streaming settings
+    jpeg:
+        quality: 65
+        max_queue_size: 1
+    
+    # WebRTC streaming settings  
+    webrtc:
+        codec: "H264"           # H264, VP8, or VP9
+        bitrate: 2000000        # bits per second (2 Mbps)
+        framerate: 30
+        preset: "ultrafast"     # FFmpeg preset: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+        
+        # TODO: Replace with private STUN/TURN servers for production
+        # Using Google's public STUN servers for now
+        stun_servers:
+            - "stun:stun.l.google.com:19302"
+            - "stun:stun1.l.google.com:19302"
+
 enable_gpu: true
 enable_debug: false

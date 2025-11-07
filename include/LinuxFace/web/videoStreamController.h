@@ -11,11 +11,14 @@
 namespace linuxface
 {
 
-// Forward declaration
+// Forward declarations
 class wsInputDevice;
 
 namespace web
 {
+
+// Forward declaration for WebRTC transport
+class WebRTCTransport;
 
 class videoStreamController : public drogon::WebSocketController<videoStreamController>
 {
@@ -31,7 +34,10 @@ class videoStreamController : public drogon::WebSocketController<videoStreamCont
     // Set the input device to push frames to
     void setInputDevice(std::shared_ptr<wsInputDevice> device);
 
-    // Send processed frame to all connected clients
+    // Set WebRTC transport for signaling
+    void setWebRTCTransport(std::shared_ptr<WebRTCTransport> transport);
+
+    // Send processed frame to all connected clients (JPEG/WebSocket)
     void sendProcessedFrame(const std::vector<uint8_t>& jpegData);
 
     // Check if there are any active WebSocket connections
@@ -55,11 +61,16 @@ class videoStreamController : public drogon::WebSocketController<videoStreamCont
         std::string clientId;
     };
 
+    void handleWebRTCSignaling(const drogon::WebSocketConnectionPtr& wsConnPtr, const std::string& message);
+
     std::mutex connectionsMutex_;
     std::unordered_map<drogon::WebSocketConnectionPtr, ClientState> connections_;
 
     std::shared_ptr<wsInputDevice> inputDevice_;
     std::mutex deviceMutex_;
+
+    std::shared_ptr<WebRTCTransport> webrtcTransport_;
+    std::mutex webrtcMutex_;
 
     TargetImageCallback onTargetImageReceived_;
     QualityChangedCallback onQualityChanged_;

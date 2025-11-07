@@ -27,6 +27,23 @@ struct WebServerConfig
     std::string sslKey;
 };
 
+struct StreamingConfig
+{
+    bool enableJpegWebSocket{true};
+    bool enableWebRTC{false};
+    
+    // JPEG settings
+    int jpegQuality{65};
+    unsigned int jpegMaxQueueSize{1};
+    
+    // WebRTC settings
+    std::string webrtcCodec{"H264"};
+    int webrtcBitrate{2000000};
+    int webrtcFramerate{30};
+    std::string webrtcPreset{"ultrafast"};
+    std::vector<std::string> stunServers;
+};
+
 struct WebcamDevice
 {
     std::string name;
@@ -299,6 +316,70 @@ class Config
         return true;
     }
 
+    bool validateAndLoadStreamingConfig()
+    {
+        // Streaming config is optional, use defaults if missing
+        if (!config_["streaming"])
+        {
+            common::logInfo("streaming section not found in config, using defaults");
+            return true;
+        }
+
+        auto streaming = config_["streaming"];
+        
+        if (streaming["enable_jpeg_websocket"])
+        {
+            streamingConfig_.enableJpegWebSocket = streaming["enable_jpeg_websocket"].as<bool>();
+        }
+        
+        if (streaming["enable_webrtc"])
+        {
+            streamingConfig_.enableWebRTC = streaming["enable_webrtc"].as<bool>();
+        }
+        
+        // JPEG settings
+        if (streaming["jpeg"])
+        {
+            auto jpeg = streaming["jpeg"];
+            if (jpeg["quality"])
+            {
+                streamingConfig_.jpegQuality = jpeg["quality"].as<int>();
+            }
+            if (jpeg["max_queue_size"])
+            {
+                streamingConfig_.jpegMaxQueueSize = jpeg["max_queue_size"].as<unsigned int>();
+            }
+        }
+        
+        // WebRTC settings
+        if (streaming["webrtc"])
+        {
+            auto webrtc = streaming["webrtc"];
+            if (webrtc["codec"])
+            {
+                streamingConfig_.webrtcCodec = webrtc["codec"].as<std::string>();
+            }
+            if (webrtc["bitrate"])
+            {
+                streamingConfig_.webrtcBitrate = webrtc["bitrate"].as<int>();
+            }
+            if (webrtc["framerate"])
+            {
+                streamingConfig_.webrtcFramerate = webrtc["framerate"].as<int>();
+            }
+            if (webrtc["preset"])
+            {
+                streamingConfig_.webrtcPreset = webrtc["preset"].as<std::string>();
+            }
+            if (webrtc["stun_servers"])
+            {
+                streamingConfig_.stunServers = webrtc["stun_servers"].as<std::vector<std::string>>();
+            }
+        }
+        
+        return true;
+    }
+
   public:
     static Config& getInstance(const char* filename = "config.yaml")
     {
@@ -315,6 +396,7 @@ class Config
             cameras_.clear();
             external_data_ = ExternalData{};
             webServerConfig_ = WebServerConfig{};
+            streamingConfig_ = StreamingConfig{};
             enableGPU_ = true;
             enableDebug_ = false;
             websocketInputEnabled_ = false;
@@ -366,7 +448,7 @@ class Config
         common::setDebugEnabled(enableDebug_);
 
         return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()
-               && validateAndLoadWindowConfig() && validateAndLoadWebServerConfig();
+               && validateAndLoadWindowConfig() && validateAndLoadWebServerConfig() && validateAndLoadStreamingConfig();
     }
 
     // Get configuration sections
@@ -387,6 +469,7 @@ class Config
     std::string getWindowTitle() const { return windowTitle_; }
     bool isHeadless() const { return headless_; }
     WebServerConfig getWebServerConfig() const { return webServerConfig_; }
+    StreamingConfig getStreamingConfig() const { return streamingConfig_; }
     bool isWebSocketInputEnabled() const { return websocketInputEnabled_; }
 
     // Get a value from the config
@@ -405,6 +488,7 @@ class Config
     std::vector<WebcamDevice> cameras_;
     ExternalData external_data_;
     WebServerConfig webServerConfig_;
+    StreamingConfig streamingConfig_;
     bool websocketInputEnabled_{false};
 
     bool enableGPU_{true};
