@@ -1,0 +1,121 @@
+# Production docker-compose using multi-stage Dockerfile
+services:
+  linuxface:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime  # Use the runtime stage for production
+      args:
+        BUILD_TYPE: Release
+        ENABLE_TESTING: "OFF"
+        ENABLE_CUDA: "ON"
+        DEV_TOOLS: "OFF"  # No dev tools in production
+        # Proxy configuration for build-time
+        HTTP_PROXY: ${HTTP_PROXY:-http://proxy.bcn.rd.hpicorp.net:8080}
+        HTTPS_PROXY: ${HTTPS_PROXY:-http://proxy.bcn.rd.hpicorp.net:8080}
+        NO_PROXY: ${NO_PROXY:-127.0.0.1,localhost,15.,.hpicorp.net,.hpicloud.net}
+        http_proxy: ${http_proxy:-http://proxy.bcn.rd.hpicorp.net:8080}
+        https_proxy: ${https_proxy:-http://proxy.bcn.rd.hpicorp.net:8080}
+        no_proxy: ${no_proxy:-127.0.0.1,localhost,15.,.hpicorp.net,.hpicloud.net}
+        # Uncomment and set GDRIVE_CREDENTIALS to download models during build
+        # GDRIVE_CREDENTIALS: ${GDRIVE_CREDENTIALS}
+    image: linuxcam:latest
+    container_name: linuxface
+
+    # Use NVIDIA runtime for GPU access
+    runtime: nvidia
+
+    # Environment variables
+    environment:
+      # NVIDIA GPU configuration
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+      # Application configuration
+      - DISPLAY=${DISPLAY:-:0}
+      # Uncomment to disable GPU (fallback to CPU)
+      # - ORT_DISABLE_CUDA=1
+
+    # Allow access to any video device via cgroup rules
+    # This automatically works with any number of cameras
+    device_cgroup_rules:
+      - 'c 81:* rmw'  # Video devices (character device 81)
+      - 'c 226:* rmw' # DRI devices for GPU
+
+    # Volumes
+    volumes:
+      # Configuration file
+      - ./config.yaml:/app/config.yaml:ro
+      # Media files (images, gifs, etc.)
+      - ./media:/app/media:ro
+      # ONNX models (mount if not built into image)
+      - ./models:/app/models:ro
+      # SSL certificates
+      - ./ssl:/app/ssl:ro
+      # Web assets
+      - ./www:/app/www:ro
+      # Uploads directory (writable)
+      - ./uploads:/app/uploads:rw
+      # X11 socket for GUI (optional, remove if running headless)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Mount /dev for camera access (gives access to all video devices)
+      - /dev:/dev:rw
+
+    # Port mappings
+    ports:
+      # Web server (HTTPS)
+      - "8443:8443"
+
+    # Networking
+    network_mode: bridge
+
+    # Resource limits (adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]
+          memory: 2G
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-kf", "https://localhost:8443/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Capabilities
+    cap_add:
+      - SYS_ADMIN
+
+    # IPC mode for shared memory
+    ipc: host
+
+# Optional: Define networks
+networks:
+  default:
+    name: linuxface_network
+    driver: bridge
+
+# Optional: Define volumes
+volumes:
+  uploads:
+    driver: local

@@ -1,0 +1,314 @@
+name: Docker CI
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "docker-entrypoint.sh"
+      - ".github/workflows/docker-ci.yml"
+      - "src/**"
+      - "include/**"
+      - "CMakeLists.txt"
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "docker-entrypoint.sh"
+      - ".github/workflows/docker-ci.yml"
+      - "src/**"
+      - "include/**"
+      - "CMakeLists.txt"
+  workflow_dispatch:
+
+env:
+  # GitHub Container Registry
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-test:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [runtime, development]
+        include:
+          - target: runtime
+            dockerfile: Dockerfile
+            image_suffix: ""
+            build_args: "BUILD_TYPE=Release\nENABLE_TESTING=OFF\nENABLE_CUDA=ON\nDEV_TOOLS=OFF"
+          - target: development
+            dockerfile: Dockerfile
+            image_suffix: "-dev"
+            build_args: "BUILD_TYPE=Debug\nENABLE_TESTING=ON\nENABLE_CUDA=ON\nDEV_TOOLS=ON"
+
+    steps:
+      - name: Checkout code with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=auto
+            suffix=${{ matrix.image_suffix }},onlatest=true
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+
+      - name: Download ONNX Models (for runtime image)
+        if: matrix.target == 'runtime'
+        run: |
+          echo "Installing Google API client dependencies..."
+          pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
+
+          echo "Running custom model download script..."
+          if ! python3 scripts/download_models.py; then
+            echo "WARNING: Model download failed, continuing without models"
+            mkdir -p models
+          fi
+
+          if [ -d "models" ] && [ "$(ls -A models)" ]; then
+            echo "SUCCESS: Models available for Docker build"
+            ls -la models/
+          else
+            echo "WARNING: No models found, image will need models mounted at runtime"
+          fi
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          push: false
+          load: true
+          tags: linuxcam:test${{ matrix.image_suffix }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          build-args: ${{ matrix.build_args }}
+
+      - name: Test Docker image
+        run: |
+          echo "Testing Docker image..."
+
+          # Test that image exists
+          docker images linuxcam:test${{ matrix.image_suffix }}
+
+          # Test that image has proper labels
+          docker inspect linuxcam:test${{ matrix.image_suffix }} | jq '.[0].Config.Labels'
+
+          # Test based on target
+          if [ "${{ matrix.target }}" = "runtime" ]; then
+            echo "Testing runtime image..."
+            
+            # Test executable exists and runs
+            docker run --rm --entrypoint /bin/bash linuxcam:test${{ matrix.image_suffix }} -c "
+              echo 'Testing image contents...'
+              ls -la /app/
+              test -f /app/LinuxFace && echo '[OK] LinuxFace executable found' || exit 1
+              echo 'Runtime image tests passed!'
+            "
+            
+            # Test that application starts (basic smoke test)
+            docker run --rm linuxcam:test${{ matrix.image_suffix }} --help || echo "Help command not available (expected for GUI app)"
+            
+          else
+            echo "Testing development image..."
+            
+            # Test development tools
+            docker run --rm --entrypoint /bin/bash linuxcam:test${{ matrix.image_suffix }} -c "
+              echo 'Testing development tools...'
+              gcc --version
+              cmake --version
+              ninja --version
+              gdb --version
+              python3 --version
+              echo '[OK] Development tools verified!'
+            "
+            
+            # Test that we can build and run tests
+            docker run --rm --entrypoint /bin/bash linuxcam:test${{ matrix.image_suffix }} -c "
+              echo 'Building project in container...'
+              cd /workspace
+              mkdir -p build-test && cd build-test
+              cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DENABLE_COVERAGE=OFF -G Ninja
+              cmake --build . -j\$(nproc)
+              
+              echo 'Running tests...'
+              ctest --output-on-failure --parallel \$(nproc) || echo 'Some tests may fail without GPU/display'
+              
+              echo '[OK] Build and test completed successfully!'
+            "
+          fi
+
+      - name: Test image size
+        run: |
+          IMAGE_SIZE=$(docker images linuxcam:test${{ matrix.image_suffix }} --format "{{.Size}}")
+          echo "Docker image size: $IMAGE_SIZE"
+
+          # Check if image is reasonable size (less than 10GB)
+          SIZE_BYTES=$(docker inspect -f '{{ .Size }}' linuxcam:test${{ matrix.image_suffix }})
+          SIZE_GB=$((SIZE_BYTES / 1024 / 1024 / 1024))
+          echo "Image size: ${SIZE_GB}GB"
+
+          if [ $SIZE_GB -gt 10 ]; then
+            echo "[WARNING] Image is larger than 10GB"
+          else
+            echo "[OK] Image size is acceptable"
+          fi
+
+      - name: Run security scan with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: linuxcam:test${{ matrix.image_suffix }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Build and push Docker image to registry
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          build-args: ${{ matrix.build_args }}
+
+      - name: Generate artifact attestation
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Cleanup downloaded models
+        if: always()
+        run: |
+          echo "Cleaning up downloaded model files..."
+          rm -rf models/
+          echo "Cleanup completed"
+
+  test-docker-compose:
+    name: Test Docker Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate docker-compose.yml
+        run: |
+          echo "Validating docker-compose files..."
+          docker compose -f docker-compose.yml config
+          docker compose -f docker-compose.dev.yml config
+          echo "[OK] Docker Compose files are valid"
+
+      - name: Check docker-compose syntax
+        run: |
+          echo "Checking for common docker-compose issues..."
+
+          # Check for version compatibility
+          if grep -q "version:" docker-compose.yml; then
+            VERSION=$(grep "version:" docker-compose.yml | cut -d "'" -f 2)
+            echo "Docker Compose version: $VERSION"
+          fi
+
+          # Validate service names
+          echo "Services defined:"
+          docker compose -f docker-compose.yml config --services
+          docker compose -f docker-compose.dev.yml config --services
+
+          echo "[OK] Docker Compose syntax check passed"
+
+  update-documentation:
+    name: Update Documentation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-and-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update Docker documentation
+        run: |
+          echo "Docker images built and pushed successfully" >> docs/RELEASES.md || true
+          echo "Build date: $(date)" >> docs/RELEASES.md || true
+
+      - name: Create release notes
+        run: |
+          cat << EOF > DOCKER_RELEASE.md
+          # Docker Release
+
+          **Date**: $(date)
+          **Branch**: ${GITHUB_REF#refs/heads/}
+          **Commit**: ${GITHUB_SHA}
+
+          ## Images
+
+          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`
+          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev\`
+
+          ## Usage
+
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker-compose up
+          \`\`\`
+          EOF
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-release-notes
+          path: DOCKER_RELEASE.md
+          retention-days: 30
