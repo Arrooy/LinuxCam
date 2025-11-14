@@ -36,6 +36,18 @@ inline void setDebugEnabled(bool enabled)
 {
     getDebugEnabled() = enabled;
 }
+
+// Debug verbosity levels: 0=off, 1=important only, 2=all
+inline int& getDebugVerbosity()
+{
+    static int verbosity = 0;
+    return verbosity;
+}
+
+inline void setDebugVerbosity(int level)
+{
+    getDebugVerbosity() = level;
+}
 inline bool fileExists(const std::string& port)
 {
     struct stat sb{};
@@ -134,7 +146,7 @@ inline const char* logColor(LogLevel level)
     switch (level)
     {
         case LogLevel::DEBUG:
-            return "\033[36m"; // Cyan
+            return "\033[34m"; // Blue
         case LogLevel::INFO:
             return "\033[32m"; // Green
         case LogLevel::WARN:
@@ -294,6 +306,19 @@ inline void logDebug(const char* format, ...)
     va_end(args);
 }
 
+// High-frequency debug logs (only logged at verbosity level 2)
+inline void logDebugVerbose(const char* format, ...)
+{
+    if (!getDebugEnabled() || getDebugVerbosity() < 2)
+    {
+        return;
+    }
+    va_list args;
+    va_start(args, format);
+    logVformatted(LogLevel::DEBUG, format, args);
+    va_end(args);
+}
+
 inline void logInfo(const char* format, ...)
 {
     va_list args;
@@ -388,7 +413,7 @@ inline double getMemoryUsageMB()
 {
     std::ifstream file("/proc/self/status");
     std::string line;
-    
+
     while (std::getline(file, line))
     {
         if (line.substr(0, 6) == "VmRSS:")
@@ -396,7 +421,7 @@ inline double getMemoryUsageMB()
             std::istringstream iss(line);
             std::string label, value, unit;
             iss >> label >> value >> unit;
-            
+
             double kb = std::stod(value);
             return kb / 1024.0; // Convert KB to MB
         }
@@ -407,11 +432,13 @@ inline double getMemoryUsageMB()
 // Log memory usage with a custom message
 inline void logMemoryUsage(const char* context)
 {
+    static double lastmemoryUsageMB = 0;
     double memMB = getMemoryUsageMB();
-    if (memMB > 0)
+    if (memMB > 0 && memMB != lastmemoryUsageMB)
     {
         logInfo("Memory Usage [%s]: %.1f MB", context, memMB);
     }
+    lastmemoryUsageMB = memMB;
 }
 
 } // namespace linuxface::common

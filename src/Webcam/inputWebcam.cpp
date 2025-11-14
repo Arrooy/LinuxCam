@@ -62,10 +62,15 @@ bool InputWebcam::setupDevice()
 
 bool InputWebcam::start()
 {
+    // If device was released, re-setup before starting
     if (!ready_)
     {
-        common::logError("InputWebcam::start - Device not ready");
-        return false;
+        common::logInfo("InputWebcam::start - Device not ready, attempting to setup");
+        if (!setupDevice())
+        {
+            common::logError("InputWebcam::start - Failed to setup device");
+            return false;
+        }
     }
 
     if (!startRecording())
@@ -81,12 +86,16 @@ bool InputWebcam::stop()
 {
     if (!ready_)
     {
-        common::logError("InputWebcam::stop - Device not ready");
-        return false;
+        common::logInfo("InputWebcam::stop - Device not ready, nothing to stop");
+        return true;
     }
 
     stopRecording();
-    return queueAllBuffersAgain(bufrequest_.count, bufrequest_.type);
+    
+    // Release hardware resources to allow other programs to use the device
+    releaseDevice();
+    
+    return true;
 }
 
 bool InputWebcam::configureBuffers()
@@ -468,18 +477,7 @@ void InputWebcam::cleanup()
         stopRecording();
     }
 
-    cleanupBuffers();
-
-    if (fd_ >= 0)
-    {
-        close(fd_);
-        fd_ = -1;
-    }
-
-    if (decoder_ != nullptr)
-    {
-        decoder_.reset();
-    }
+    releaseDevice();
 }
 
 
@@ -500,6 +498,42 @@ void InputWebcam::cleanupBuffers()
         free(buffers_);
         buffers_ = nullptr;
     }
+}
+
+void InputWebcam::releaseDevice()
+{
+    common::logInfo("InputWebcam::releaseDevice - Releasing device %s to allow other programs to use it", 
+                    device_path_.c_str());
+    
+    // Clean up buffers (unmaps memory)
+    // NOTE: VIDIOC_STREAMOFF already dequeued buffers, so no need to requeue
+    cleanupBuffers();
+    
+    if (fd_ >= 0)
+    {
+        close(fd_);
+        fd_ = -1;
+    }
+    
+    // Reset decoder but keep configuration
+    if (decoder_ != nullptr)
+    {
+        decoder_.reset();
+    }
+    
+    // Clear the latest image
+    {
+        const std::lock_guard<std::mutex> lock(imageMutex_);
+        if (latestImage_)
+        {
+            latestImage_.reset();
+        }
+    }
+    
+    // Mark device as not ready (will need re-setup)
+    ready_ = false;
+    
+    common::logInfo("InputWebcam::releaseDevice - Device %s released successfully", device_path_.c_str());
 }
 
 bool InputWebcam::reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex)

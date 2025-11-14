@@ -91,6 +91,11 @@ bool CameraManager::updateInput()
                 common::logError("CameraManager::updateInput - Input image invalid size: %d x %d", newFrame->info.width,
                                  newFrame->info.height);
             }
+            else
+            {
+                common::logDebug("CameraManager::updateInput - Got WebSocket frame: %dx%d", 
+                                newFrame->info.width, newFrame->info.height);
+            }
             updateCameraLayer(websocketInput_, std::move(newFrame));
             anyUpdated = true;
         }
@@ -116,7 +121,8 @@ bool CameraManager::updateInput()
 
             if (newFrame == nullptr)
             {
-                common::logError("CameraManager::updateInput - Input image is null");
+                common::logError("CameraManager::updateInput - Input image is null from device: %s",
+                                input->getDevicePath().c_str());
                 continue;
             }
 
@@ -181,8 +187,8 @@ void CameraManager::updateCameraLayer(const std::shared_ptr<Webcam>& camera, std
 
         layerManager_->addLayer(newLayer);
 
-        common::logInfo("CameraManager::updateCameraLayer - Created layer '%s' for device: %s", newLayer.name.c_str(),
-                        newLayer.cameraDevicePath.c_str());
+        common::logInfo("CameraManager::updateCameraLayer - Created layer '%s' (id: %zu) at position (%.1f, %.1f) for device: %s", 
+                        newLayer.name.c_str(), newLayer.id, newLayer.x, newLayer.y, newLayer.cameraDevicePath.c_str());
     }
 }
 

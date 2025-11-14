@@ -31,24 +31,30 @@ class wsInputDevice : public Webcam
 
     bool getImage(std::unique_ptr<Image>& outImage);
 
-    // Called by videoStreamController to push new frames from the browser.
+    // Called by videoStreamController to push JPEG frames from WebSocket
     void pushFrame(const std::vector<uint8_t>& jpegData);
+
+    // Called by WebRTC to push decoded RGB Image directly with move semantics (zero-copy)
+    void pushRGBFrame(Image&& rgbImage);
 
     // Signal that resolution is about to change - clears queue and resets decoder state
     void signalResolutionChange();
 
   private:
     void processFrameQueue();
+    void storeRGBImage(Image&& rgbImage); // Move-only for zero-copy (both paths use move)
+
     bool ready_{false};
 
     WebServerConfig webServerConfig_;
     std::atomic<bool> running_{false};
 
+    // Queue for JPEG frames from WebSocket
     std::queue<std::vector<uint8_t>> frameQueue_;
     std::mutex queueMutex_;
     std::condition_variable queueCondition_;
     static constexpr size_t MAX_QUEUE_SIZE = 1;
-    std::atomic<bool> needsHeaderRead_{true};  // Flag to force header re-read
+    std::atomic<bool> needsHeaderRead_{true}; // Flag to force header re-read
 
     std::unique_ptr<Image> latestImage_;
     std::mutex imageMutex_;

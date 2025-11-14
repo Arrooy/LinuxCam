@@ -45,6 +45,18 @@ void videoStreamController::handleNewMessage(const drogon::WebSocketConnectionPt
         }
 
         // Regular frame data (most common case)
+        // This indicates client is using JPEG mode
+        {
+            std::lock_guard<std::mutex> lock(connectionsMutex_);
+            auto it = connections_.find(wsConnPtr);
+            if (it != connections_.end() && it->second.mode == StreamingMode::Unknown)
+            {
+                it->second.mode = StreamingMode::JPEG;
+                common::logInfo("videoStreamController - Client %s detected using JPEG mode", 
+                              it->second.clientId.c_str());
+            }
+        }
+
         std::shared_ptr<wsInputDevice> device;
         {
             std::lock_guard<std::mutex> lock(deviceMutex_);
@@ -56,7 +68,7 @@ void videoStreamController::handleNewMessage(const drogon::WebSocketConnectionPt
             common::logError("videoStreamController - No WebSocket input device configured; dropping frame");
             return;
         }
-        
+
         std::vector<uint8_t> frameData(message.begin(), message.end());
         device->pushFrame(frameData);
         return;
@@ -73,9 +85,21 @@ void videoStreamController::handleNewMessage(const drogon::WebSocketConnectionPt
     switch (message[0])
     {
         case 'W': // WEBRTC:
-            if (message.size() > 8 && message.compare(0, 8, "WEBRTC:") == 0)
+            if (message.size() > 7 && message.compare(0, 7, "WEBRTC:") == 0)
             {
-                handleWebRTCSignaling(wsConnPtr, message.substr(8));
+                // WebRTC signaling indicates client is using WebRTC mode
+                {
+                    std::lock_guard<std::mutex> lock(connectionsMutex_);
+                    auto it = connections_.find(wsConnPtr);
+                    if (it != connections_.end() && it->second.mode == StreamingMode::Unknown)
+                    {
+                        it->second.mode = StreamingMode::WebRTC;
+                        common::logInfo("videoStreamController - Client %s detected using WebRTC mode", 
+                                      it->second.clientId.c_str());
+                    }
+                }
+                
+                handleWebRTCSignaling(wsConnPtr, message.substr(7));
                 return;
             }
             break;
@@ -145,19 +169,19 @@ void videoStreamController::handleConnectionClosed(const drogon::WebSocketConnec
     if (it != connections_.end())
     {
         common::logInfo("videoStreamController - Connection closed: %s", it->second.clientId.c_str());
-        
+
         // Clean up WebRTC peer connection if exists
         std::shared_ptr<WebRTCTransport> transport;
         {
             std::lock_guard<std::mutex> webrtcLock(webrtcMutex_);
             transport = webrtcTransport_;
         }
-        
+
         if (transport)
         {
             transport->removePeerConnection(it->second.clientId);
         }
-        
+
         connections_.erase(it);
     }
 }
@@ -178,6 +202,8 @@ void videoStreamController::sendProcessedFrame(const std::vector<uint8_t>& jpegD
 
     std::string_view binaryMessage(reinterpret_cast<const char*>(jpegData.data()), jpegData.size());
 
+    // Only send to connections using JPEG mode
+    int sentCount = 0;
     for (auto& [conn, state] : connections_)
     {
         if (!conn->connected())
@@ -185,14 +211,33 @@ void videoStreamController::sendProcessedFrame(const std::vector<uint8_t>& jpegD
             continue;
         }
 
+        // Only send JPEG to clients that are in JPEG mode
+        // Skip Unknown mode (waiting for first message) and WebRTC mode
+        if (state.mode != StreamingMode::JPEG)
+        {
+            continue;
+        }
+
         try
         {
             conn->send(binaryMessage, drogon::WebSocketMessageType::Binary);
+            sentCount++;
         }
         catch (const std::exception& e)
         {
             common::logError("videoStreamController - Failed to send frame to %s: %s", state.clientId.c_str(),
                              e.what());
+        }
+    }
+
+    // Debug log (can be removed after testing)
+    if (sentCount > 0)
+    {
+        static int frameCount = 0;
+        if (++frameCount % 100 == 0)
+        {
+            common::logDebug("videoStreamController - Sent JPEG frame to %d JPEG-mode clients (total connections: %zu)", 
+                           sentCount, connections_.size());
         }
     }
 }
@@ -207,12 +252,12 @@ bool videoStreamController::hasActiveConnections()
             return true;
         }
     }
-    
+
     return false;
 }
 
 void videoStreamController::handleWebRTCSignaling(const drogon::WebSocketConnectionPtr& wsConnPtr,
-                                                   const std::string& message)
+                                                  const std::string& message)
 {
     std::shared_ptr<WebRTCTransport> transport;
     {
@@ -252,30 +297,21 @@ void videoStreamController::handleWebRTCSignaling(const drogon::WebSocketConnect
         response["type"] = type + "_response";
         response["peerId"] = peerId;
 
-        if (type == "offer_request")
+        if (type == "browser_offer")
         {
-            // Client requesting an offer
-            std::string localSdp = transport->createPeerConnection(peerId);
-            if (localSdp.empty())
+            // Browser sends offer (includes DataChannel), server creates answer
+            response["type"] = "server_answer";
+            std::string offerSdp = root["sdp"].asString();
+            std::string answerSdp = transport->processOfferAndCreateAnswer(peerId, offerSdp);
+            if (answerSdp.empty())
             {
                 response["success"] = false;
-                response["error"] = "Failed to create peer connection";
+                response["error"] = "Failed to process offer and create answer";
             }
             else
             {
                 response["success"] = true;
-                response["sdp"] = localSdp;
-            }
-        }
-        else if (type == "answer")
-        {
-            // Client sending answer
-            std::string sdp = root["sdp"].asString();
-            bool success = transport->processAnswer(peerId, sdp);
-            response["success"] = success;
-            if (!success)
-            {
-                response["error"] = "Failed to process answer";
+                response["sdp"] = answerSdp;
             }
         }
         else if (type == "ice_candidate")

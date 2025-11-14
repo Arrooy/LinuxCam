@@ -102,11 +102,16 @@ void PaintWebcam::paintDevice()
     {
         ImGui::SameLine();
         ImGui::Separator();
-        // Enable capturing
+        // Select/deselect device for processing
         bool selected = webcam_->isCurrentlySelected();
         if (ImGui::Checkbox("Selected Device?", &selected))
         {
             webcam_->setCurrentlySelected(selected);
+        }
+        
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("When unchecked, device keeps running but frames are not processed.\nUncheck 'Active Device' to fully release the hardware.");
         }
     }
 }

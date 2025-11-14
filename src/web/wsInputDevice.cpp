@@ -91,18 +91,19 @@ bool wsInputDevice::isRunning()
 bool wsInputDevice::getImage(std::unique_ptr<Image>& outImage)
 {
     Profiler::ScopedProfilerSpan span("WebSocket Input", "Get new frame");
-    // Get the most recent frame from queue, discarding older ones
+    // Consume the most recent frame
     std::lock_guard<std::mutex> lock(imageMutex_);
     if (latestImage_)
     {
-        outImage = latestImage_->deepCopy();
+        outImage = std::move(latestImage_);
+        latestImage_.reset(); // Clear so next call returns false until new frame arrives
         return true;
     }
 
     return false;
 }
 
-// Drogon produces images and pushes them here
+// WebSocket path: receives JPEG frames
 void wsInputDevice::pushFrame(const std::vector<uint8_t>& jpegData)
 {
     std::lock_guard<std::mutex> lock(queueMutex_);
@@ -124,6 +125,34 @@ void wsInputDevice::pushFrame(const std::vector<uint8_t>& jpegData)
     queueCondition_.notify_one();
 }
 
+// WebRTC path: receives decoded RGB frames with move semantics (zero-copy)
+void wsInputDevice::pushRGBFrame(Image&& rgbImage)
+{
+    if (!running_.load())
+    {
+        common::logWarn("wsInputDevice::pushRGBFrame - Device not running, frame dropped");
+        return;
+    }
+
+    // Validate image format
+    if (rgbImage.info.format != ImageFormat::RAW && rgbImage.info.format != ImageFormat::RGB)
+    {
+        common::logError("wsInputDevice::pushRGBFrame - Invalid image format: %s (expected RAW or RGB)",
+                         fromImageFormatToString(rgbImage.info.format).c_str());
+        return;
+    }
+
+    if (rgbImage.info.pixelSizeBytes != 3)
+    {
+        common::logError("wsInputDevice::pushRGBFrame - Invalid pixel size: %d (expected 3 for RGB)",
+                         rgbImage.info.pixelSizeBytes);
+        return;
+    }
+
+    // Store RGB image with move semantics (zero-copy)
+    storeRGBImage(std::move(rgbImage));
+}
+
 void wsInputDevice::signalResolutionChange()
 {
     std::lock_guard<std::mutex> lock(queueMutex_);
@@ -138,6 +167,20 @@ void wsInputDevice::signalResolutionChange()
     needsHeaderRead_.store(true);
 
     common::logInfo("wsInputDevice::signalResolutionChange - Queue cleared, decoder will reset on next frame");
+}
+
+// Move-only RGB image storage (zero-copy for both WebSocket and WebRTC paths)
+void wsInputDevice::storeRGBImage(Image&& rgbImage)
+{
+    Profiler::ScopedProfilerSpan span("WebSocket Input", "Store RGB image (move)");
+
+    std::lock_guard<std::mutex> imageLock(imageMutex_);
+
+    // Move image directly (zero-copy transfer)
+    latestImage_ = std::make_unique<Image>(std::move(rgbImage));
+
+    common::logDebugVerbose("wsInputDevice::storeRGBImage - Moved RGB buffer: %dx%d (%zu bytes)",
+                            latestImage_->info.width, latestImage_->info.height, latestImage_->size());
 }
 
 void wsInputDevice::processFrameQueue()
@@ -214,15 +257,8 @@ void wsInputDevice::processFrameQueue()
         // Restore metadata after decode
         imageTmp.info = wsInputInfo;
 
-        // Store as latest image
-        {
-            std::lock_guard<std::mutex> imageLock(imageMutex_);
-            if (!latestImage_)
-            {
-                latestImage_ = std::make_unique<Image>(imageTmp.size());
-            }
-            latestImage_->copyFrom(imageTmp);
-        }
+        // Move image to storage (zero-copy, buffer will be reallocated on next iteration if needed)
+        storeRGBImage(std::move(imageTmp));
     }
 
     common::logInfo("wsInputDevice::processFrameQueue - Stopped");

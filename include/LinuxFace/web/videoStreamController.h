@@ -56,9 +56,17 @@ class videoStreamController : public drogon::WebSocketController<videoStreamCont
     WS_PATH_LIST_END
 
   private:
+    enum class StreamingMode
+    {
+        Unknown,    // Not yet determined
+        JPEG,       // JPEG/WebSocket mode
+        WebRTC      // WebRTC/H.264 mode
+    };
+
     struct ClientState
     {
         std::string clientId;
+        StreamingMode mode = StreamingMode::Unknown;
     };
 
     void handleWebRTCSignaling(const drogon::WebSocketConnectionPtr& wsConnPtr, const std::string& message);

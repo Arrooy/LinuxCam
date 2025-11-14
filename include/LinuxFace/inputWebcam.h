@@ -27,6 +27,7 @@ class InputWebcam : public Webcam
     bool reconfigureFormat(int formatIndex, int sizeIndex, int fpsIndex);
 
   private:
+    void releaseDevice();
     bool startRecording();
     void stopRecording();
     bool startStreaming();

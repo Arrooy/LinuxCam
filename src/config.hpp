@@ -41,6 +41,7 @@ struct StreamingConfig
     int webrtcBitrate{2000000};
     int webrtcFramerate{30};
     std::string webrtcPreset{"ultrafast"};
+    bool enableAdaptiveBitrate{false};
     std::vector<std::string> stunServers;
 };
 
@@ -327,14 +328,30 @@ class Config
 
         auto streaming = config_["streaming"];
         
-        if (streaming["enable_jpeg_websocket"])
+        // Parse supported modes (server capabilities)
+        if (streaming["supported_modes"])
         {
-            streamingConfig_.enableJpegWebSocket = streaming["enable_jpeg_websocket"].as<bool>();
+            auto modes = streaming["supported_modes"];
+            if (modes["jpeg_websocket"])
+            {
+                streamingConfig_.enableJpegWebSocket = modes["jpeg_websocket"].as<bool>();
+            }
+            if (modes["webrtc"])
+            {
+                streamingConfig_.enableWebRTC = modes["webrtc"].as<bool>();
+            }
         }
-        
-        if (streaming["enable_webrtc"])
+        // Fallback: support old config format for backward compatibility
+        else
         {
-            streamingConfig_.enableWebRTC = streaming["enable_webrtc"].as<bool>();
+            if (streaming["enable_jpeg_websocket"])
+            {
+                streamingConfig_.enableJpegWebSocket = streaming["enable_jpeg_websocket"].as<bool>();
+            }
+            if (streaming["enable_webrtc"])
+            {
+                streamingConfig_.enableWebRTC = streaming["enable_webrtc"].as<bool>();
+            }
         }
         
         // JPEG settings
@@ -370,6 +387,10 @@ class Config
             if (webrtc["preset"])
             {
                 streamingConfig_.webrtcPreset = webrtc["preset"].as<std::string>();
+            }
+            if (webrtc["enable_adaptive_bitrate"])
+            {
+                streamingConfig_.enableAdaptiveBitrate = webrtc["enable_adaptive_bitrate"].as<bool>();
             }
             if (webrtc["stun_servers"])
             {
@@ -446,6 +467,7 @@ class Config
 
         // Set the global debug flag for logging
         common::setDebugEnabled(enableDebug_);
+        common::logDebug("Debug logging enabled via configuration");
 
         return validateAndLoadInputCameras() && validateAndLoadOutputCameras() && validateAndLoadExternalImages()
                && validateAndLoadWindowConfig() && validateAndLoadWebServerConfig() && validateAndLoadStreamingConfig();

@@ -19,7 +19,7 @@ output_cameras:
       width: 640
       height: 480
       jpeg_quality: 90
-      subsampling: "444"  # Options: 444, 422, 420, gray, 440, 411
+      subsampling: "444" # Options: 444, 422, 420, gray, 440, 411
 
 external_data:
     media_folder_path: "../media"
@@ -41,23 +41,30 @@ web_server:
     ssl_cert: "../ssl/cert.pem"
     ssl_key: "../ssl/key.pem"
 
-# Streaming configuration - both modes can run simultaneously
+# Streaming configuration - define which modes the server supports
+# Client will choose one mode, server adapts to client's selection per connection
 streaming:
-    enable_jpeg_websocket: true
-    enable_webrtc: true
-    
-    # JPEG/WebSocket streaming settings
+    # Supported modes (server capabilities)
+    supported_modes:
+        jpeg_websocket: true   # Enable JPEG/WebSocket streaming support
+        webrtc: true           # Enable WebRTC H.264 streaming support
+
+    # JPEG/WebSocket streaming settings (used when client selects 'jpeg' mode)
     jpeg:
         quality: 65
         max_queue_size: 1
-    
-    # WebRTC streaming settings  
+
+    # WebRTC streaming settings (used when client selects 'webrtc' mode)
     webrtc:
-        codec: "H264"           # H264, VP8, or VP9
-        bitrate: 2000000        # bits per second (2 Mbps)
+        codec: "H264" # H264, VP8, or VP9
+        bitrate: 4000000 # bits per second (8 Mbps)
         framerate: 30
-        preset: "ultrafast"     # FFmpeg preset: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
-        
+        # FFmpeg preset: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+        preset: "fast" # FFmpeg preset: balance between quality and speed
+
+        # Adaptive bitrate (experimental): automatically adjust bitrate based on network conditions
+        enable_adaptive_bitrate: true
+
         # TODO: Replace with private STUN/TURN servers for production
         # Using Google's public STUN servers for now
         stun_servers:

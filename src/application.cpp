@@ -166,58 +166,59 @@ bool Application::initialize()
                 return false;
             }
         }
-
-        // Camera input mode - existing behavior
-        linuxface::common::logInfo("Using camera input mode");
-
-        auto webcams = Config::getInstance().getWebcams();
-        for (const auto& wc : webcams)
+        if (!headlessMode_)
         {
-            std::shared_ptr<Webcam> webcam;
+            // Camera input mode - existing behavior
+            linuxface::common::logInfo("Using camera input mode");
 
-            if (wc.is_input)
+            auto webcams = Config::getInstance().getWebcams();
+            for (const auto& wc : webcams)
             {
-                webcam = std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height,
-                wc.buffer_count);
-            }
-            else
-            {
-                webcam =
-                    std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height,
-                    wc.subsampling);
-            }
-            if (!webcam->setupDevice())
-            {
-                linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
-                continue;
+                std::shared_ptr<Webcam> webcam;
+
+                if (wc.is_input)
+                {
+                    webcam =
+                        std::make_shared<InputWebcam>(wc.name, wc.device_path, wc.width, wc.height, wc.buffer_count);
+                }
+                else
+                {
+                    webcam = std::make_shared<V4L2LoopbackWriter>(wc.name, wc.device_path, wc.width, wc.height,
+                                                                  wc.subsampling);
+                }
+                if (!webcam->setupDevice())
+                {
+                    linuxface::common::logError("Failed to setup webcam: %s", wc.name.c_str());
+                    continue;
+                }
+
+                if (!webcam->start())
+                {
+                    linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
+                    continue;
+                }
+                webcam->setCurrentlySelected(true);
+                if (!cameraManager_->addCamera(webcam))
+                {
+                    linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
+                    continue;
+                }
             }
 
-            if (!webcam->start())
+            auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
+            for (const auto& devicePath : availableDevicePaths)
             {
-                linuxface::common::logError("Failed to start webcam: %s", wc.name.c_str());
-                continue;
-            }
-            webcam->setCurrentlySelected(true);
-            if (!cameraManager_->addCamera(webcam))
-            {
-                linuxface::common::logError("Failed to add webcam: %s", wc.name.c_str());
-                continue;
-            }
-        }
-
-        auto availableDevicePaths = cameraManager_->discoverAvailableVideoDevices();
-        for (const auto& devicePath : availableDevicePaths)
-        {
-            std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
-            if (!webcam->setupDevice())
-            {
-                linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
-                continue;
-            }
-            if (!cameraManager_->addCamera(std::move(webcam)))
-            {
-                linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
-                return false;
+                std::shared_ptr<InputWebcam> webcam = std::make_shared<InputWebcam>("", devicePath, 0, 0, 2);
+                if (!webcam->setupDevice())
+                {
+                    linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
+                    continue;
+                }
+                if (!cameraManager_->addCamera(std::move(webcam)))
+                {
+                    linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
+                    return false;
+                }
             }
         }
     }
@@ -435,12 +436,14 @@ bool Application::update()
         window_.pollEvents();
     }
 
+    bool hasNewCameraData = false;
     {
         Profiler::ScopedProfilerSpan span("Application", "Update Camera Input");
         // Update camera inputs - this now creates/updates individual layers per camera
-        if (!cameraManager_->updateInput())
+        hasNewCameraData = cameraManager_->updateInput();
+        if (!hasNewCameraData)
         {
-            // TODO: Join return paths.
+            // No new camera data - skip processing and just update UI
             if (!headlessMode_)
             {
                 ui_->handleKeyboard();
@@ -498,8 +501,8 @@ bool Application::update()
         process(compositeBuffer_);
     }
 
-    // Before updating output, check if we have to leave. 
-    if(gShouldExit)
+    // Before updating output, check if we have to leave.
+    if (gShouldExit)
     {
         return false;
     }
@@ -512,7 +515,7 @@ bool Application::update()
     if (!streamTransports_.empty())
     {
         Profiler::ScopedProfilerSpan span("Application", "Submit Stream Frames");
-        
+
         for (auto& transport : streamTransports_)
         {
             if (transport && transport->isRunning() && transport->hasActiveConnections())
@@ -620,7 +623,8 @@ void Application::stopWebServer()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-    if(gShouldExit)
+    return;
+    if (gShouldExit)
     {
         return;
     }
@@ -1204,14 +1208,18 @@ bool Application::initializeWebSocket()
     if (streamingConfig.enableWebRTC)
     {
         auto webrtcTransport = std::make_shared<web::WebRTCTransport>(streamingConfig);
+
+        // Set input device so WebRTC can receive camera frames via data channel
+        webrtcTransport->setInputDevice(wsInputDevice_);
+
         if (webrtcTransport->start())
         {
             streamTransports_.push_back(webrtcTransport);
-            
+
             // Register WebRTC transport with controller for signaling
             controller->setWebRTCTransport(webrtcTransport);
-            
-            common::logInfo("WebRTC/H.264 transport started (bitrate: %d kbps, fps: %d)", 
+
+            common::logInfo("WebRTC/H.264 transport started (bitrate: %d kbps, fps: %d)",
                             streamingConfig.webrtcBitrate / 1000, streamingConfig.webrtcFramerate);
         }
         else
