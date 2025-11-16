@@ -1100,7 +1100,7 @@
         // Server timeout detection
         let lastServerResponseTime = Date.now();
         let serverTimeoutInterval = null;
-        const SERVER_TIMEOUT_MS = 3000; // 3 seconds
+        const SERVER_TIMEOUT_MS = 10000; // 10 seconds - allows time for WebRTC negotiation
 
         // Sliding window FPS calculation (last 3 seconds)
         const FPS_WINDOW_MS = 3000;  // 3 second window
