@@ -14,6 +14,8 @@
 #include "LinuxFace/Image/image_utils.h"
 #include "LinuxFace/Image/pixel_converter.h"
 #include "LinuxFace/profiler.h"
+#include "LinuxFace/codec.h"
+#include "LinuxFace/codecFactory.h"
 
 using namespace linuxface;
 
@@ -1095,6 +1097,108 @@ bool Image::saveToDisk(const std::string& destPath) const
                      fromImageFormatToString(info.format).c_str());
     close(file);
     return false;
+}
+
+bool Image::saveAsJPEG(const std::string& destPath, int quality) const
+{
+    // Ensure we have RGB data to encode
+    if (!data_ || size_ == 0u)
+    {
+        common::logError("Image::saveAsJPEG - No data to save");
+        return false;
+    }
+
+    // Convert to RGB if needed
+    std::unique_ptr<Image> rgbImage;
+    const Image* imageToEncode = this;
+
+    if (info.format == ImageFormat::RGBA || info.pixelSizeBytes == 4)
+    {
+        // Convert RGBA to RGB
+        rgbImage = std::make_unique<Image>(info.width * info.height * 3);
+        rgbImage->info.width = info.width;
+        rgbImage->info.height = info.height;
+        rgbImage->info.pixelSizeBytes = 3;
+        rgbImage->info.format = ImageFormat::RGB;
+        rgbImage->info.TJPixelFormat = TJPF_RGB;
+
+        const unsigned char* rgba = data_.get();
+        unsigned char* rgb = rgbImage->data();
+        const size_t pixelCount = info.width * info.height;
+
+        for (size_t i = 0; i < pixelCount; ++i)
+        {
+            rgb[i * 3 + 0] = rgba[i * 4 + 0];
+            rgb[i * 3 + 1] = rgba[i * 4 + 1];
+            rgb[i * 3 + 2] = rgba[i * 4 + 2];
+        }
+        imageToEncode = rgbImage.get();
+    }
+    else if (info.format == ImageFormat::GRAYSCALE || info.pixelSizeBytes == 1)
+    {
+        // Convert grayscale to RGB
+        std::vector<unsigned char> rgbData = convertToRGB();
+        rgbImage = std::make_unique<Image>(rgbData.size());
+        std::memcpy(rgbImage->data(), rgbData.data(), rgbData.size());
+        rgbImage->info.width = info.width;
+        rgbImage->info.height = info.height;
+        rgbImage->info.pixelSizeBytes = 3;
+        rgbImage->info.format = ImageFormat::RGB;
+        rgbImage->info.TJPixelFormat = TJPF_RGB;
+        imageToEncode = rgbImage.get();
+    }
+    else if (info.format != ImageFormat::RGB && info.pixelSizeBytes != 3)
+    {
+        common::logError("Image::saveAsJPEG - Unsupported format: %s", fromImageFormatToString(info.format).c_str());
+        return false;
+    }
+
+    // Create JPEG encoder
+    ConfigBuilder config;
+    config.imageFormat(ImageFormat::JPEG)
+        .width(static_cast<int>(imageToEncode->info.width))
+        .height(static_cast<int>(imageToEncode->info.height))
+        .quality(quality)
+        .pixelFormat(TJPF_RGB)
+        .chrominanceSubsampling(TJSAMP_420);
+
+    auto encoder = CodecFactory::create<Encoder>(config);
+    if (!encoder)
+    {
+        common::logError("Image::saveAsJPEG - Failed to create JPEG encoder");
+        return false;
+    }
+
+    // Encode to JPEG
+    Image encodedImage(encoder->encodeSizeInBytes());
+    unsigned long compressedSize = 0;
+
+    if (!encoder->encode(*imageToEncode, encodedImage, compressedSize))
+    {
+        common::logError("Image::saveAsJPEG - Failed to encode image");
+        return false;
+    }
+
+    // Write to disk
+    const int file = open(destPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0660);
+    if (file < 0)
+    {
+        common::logError("Image::saveAsJPEG - Error opening file for writing: %s", destPath.c_str());
+        common::errnoLog("Image::saveAsJPEG - Error opening file for writing");
+        return false;
+    }
+
+    if (!common::longWrite(file, encodedImage.data(), compressedSize))
+    {
+        common::logError("Image::saveAsJPEG - Error writing JPEG data");
+        close(file);
+        return false;
+    }
+
+    close(file);
+    common::logInfo("Image::saveAsJPEG - Saved JPEG to %s (%lu bytes, quality: %d)", destPath.c_str(), compressedSize,
+                    quality);
+    return true;
 }
 
 std::vector<unsigned char> Image::convertToRGB() const

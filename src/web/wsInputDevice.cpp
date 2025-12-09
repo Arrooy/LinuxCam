@@ -107,7 +107,7 @@ bool wsInputDevice::getImage(std::unique_ptr<Image>& outImage)
 void wsInputDevice::pushFrame(const std::vector<uint8_t>& jpegData)
 {
     std::lock_guard<std::mutex> lock(queueMutex_);
-
+    // TODO: REMOVE QUEUE
     // For real-time video, drop ALL queued frames and keep only the latest
     if (frameQueue_.size() >= MAX_QUEUE_SIZE)
     {
@@ -187,7 +187,9 @@ void wsInputDevice::processFrameQueue()
 {
     common::logInfo("wsInputDevice::processFrameQueue - Started");
 
-    Image imageTmp;
+    // Initialize double buffers for zero-copy operation
+    decodeBuffers_[0] = std::make_unique<Image>();
+    decodeBuffers_[1] = std::make_unique<Image>();
     ImageMetadata wsInputInfo;
 
     while (running_.load())
@@ -215,10 +217,24 @@ void wsInputDevice::processFrameQueue()
         // Decode JPEG frame
         Profiler::ScopedProfilerSpan span("WebSocket Input", "Decode JPEG frame");
 
+        // Validate JPEG magic bytes (0xFF 0xD8)
+        if (jpegData.size() < 2 || jpegData[0] != 0xFF || jpegData[1] != 0xD8)
+        {
+            common::logError("wsInputDevice::processFrameQueue - Invalid JPEG data: size=%zu, magic bytes=%02X %02X "
+                             "(expected FF D8)",
+                             jpegData.size(), jpegData.size() >= 1 ? jpegData[0] : 0,
+                             jpegData.size() >= 2 ? jpegData[1] : 0);
+            needsHeaderRead_.store(true);
+            continue;
+        }
+
         // Create source image from JPEG data (wraps the buffer, doesn't copy)
         Image srcImage(const_cast<unsigned char*>(jpegData.data()), jpegData.size(), false);
         srcImage.info.TJPixelFormat = TJPF_RGB;
         srcImage.info.format = ImageFormat::JPEG;
+
+        // Get current decode buffer (will be swapped after successful decode)
+        Image* decodeBuffer = decodeBuffers_[currentDecodeBuffer_].get();
 
         // Check if we need to read header (first frame or after resolution change)
         bool readImageHeader = needsHeaderRead_.load();
@@ -230,35 +246,58 @@ void wsInputDevice::processFrameQueue()
 
             if (!decoder_->decodeHeader(srcImage, rawNeededSize))
             {
-                common::logError("wsInputDevice::processFrameQueue - Failed to decode JPEG header");
+                common::logError("wsInputDevice::processFrameQueue - Failed to decode JPEG header from %zu byte frame",
+                                 jpegData.size());
                 continue;
             }
 
-            // Allocate decode buffer if needed or resize if dimensions changed
-            if (imageTmp.size() != rawNeededSize)
+            // Allocate/resize both decode buffers if needed
+            if (decodeBuffer->size() != rawNeededSize)
             {
-                imageTmp.resize(rawNeededSize);
-                common::logInfo("wsInputDevice - Allocated decode buffer: %dx%d (%lu bytes)", srcImage.info.width,
+                decodeBuffers_[0]->resize(rawNeededSize);
+                decodeBuffers_[1]->resize(rawNeededSize);
+                common::logInfo("wsInputDevice - Allocated decode buffers: %dx%d (%lu bytes each)", srcImage.info.width,
                                 srcImage.info.height, rawNeededSize);
             }
 
             wsInputInfo = srcImage.info;
             needsHeaderRead_.store(false);
         }
+        else
+        {
+            // Restore cached dimensions for subsequent frames
+            srcImage.info.width = wsInputInfo.width;
+            srcImage.info.height = wsInputInfo.height;
+            srcImage.info.TJSampleFormat = wsInputInfo.TJSampleFormat;
+            srcImage.info.TJColorSpace = wsInputInfo.TJColorSpace;
+        }
 
-        // Decode frame into pre-allocated buffer
-        if (!decoder_->decode(srcImage, imageTmp))
+        // Decode frame into current buffer
+        if (!decoder_->decode(srcImage, *decodeBuffer))
         {
             common::logError("wsInputDevice::processFrameQueue - Failed to decode JPEG frame");
-            needsHeaderRead_.store(true); // Force header re-read on next frame
+            needsHeaderRead_.store(true);
             continue;
         }
 
         // Restore metadata after decode
-        imageTmp.info = wsInputInfo;
+        decodeBuffer->info = wsInputInfo;
 
-        // Move image to storage (zero-copy, buffer will be reallocated on next iteration if needed)
-        storeRGBImage(std::move(imageTmp));
+        // Swap buffers: move current buffer to storage, switch to other buffer for next frame
+        {
+            std::lock_guard<std::mutex> imageLock(imageMutex_);
+            latestImage_ = std::move(decodeBuffers_[currentDecodeBuffer_]);
+
+            // Allocate new buffer in the slot we just emptied
+            decodeBuffers_[currentDecodeBuffer_] = std::make_unique<Image>(wsInputInfo.width * wsInputInfo.height * 3);
+            decodeBuffers_[currentDecodeBuffer_]->info = wsInputInfo;
+
+            // Switch to other buffer for next decode
+            currentDecodeBuffer_ = 1 - currentDecodeBuffer_;
+        }
+
+        common::logDebugVerbose("wsInputDevice::processFrameQueue - Decoded frame: %dx%d", wsInputInfo.width,
+                                wsInputInfo.height);
     }
 
     common::logInfo("wsInputDevice::processFrameQueue - Stopped");

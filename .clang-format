@@ -29,8 +29,8 @@ AlignArrayOfStructures: Left
 Cpp11BracedListStyle: true
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: false
-AlwaysBreakAfterDefinitionReturnType: None # new
-AlwaysBreakTemplateDeclarations: Yes # new
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakTemplateDeclarations: Yes
 AllowShortBlocksOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: InlineOnly
@@ -81,7 +81,7 @@ FixNamespaceComments: true
 InsertBraces: true
 QualifierAlignment: Custom
 QualifierOrder: [inline, static, const, type, volatile]
-ConstructorInitializerAllOnOneLineOrOnePerLine: true # new
-BreakConstructorInitializersBeforeComma: true # new
-IndentPPDirectives: AfterHash # new
-SpaceAfterTemplateKeyword: true # new
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+BreakConstructorInitializersBeforeComma: true
+IndentPPDirectives: AfterHash
+SpaceAfterTemplateKeyword: true

@@ -214,6 +214,12 @@ bool Application::initialize()
                     linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
                     continue;
                 }
+                // Stop the device after reading its settings. Now we know capabilities but we dont own the device.
+                if (!webcam->stop())
+                {
+                    linuxface::common::logError("Failed to setup webcam: %s", devicePath.c_str());
+                    continue;
+                }
                 if (!cameraManager_->addCamera(std::move(webcam)))
                 {
                     linuxface::common::logError("Failed to add webcam: %s", devicePath.c_str());
@@ -623,7 +629,7 @@ void Application::stopWebServer()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-    return;
+    return; // TODO: Re-enable face processing when needed
     if (gShouldExit)
     {
         return;
@@ -1034,7 +1040,6 @@ bool Application::createCompositeImage(const std::vector<Layer>& layers, float m
                                        unsigned int compositeWidth, unsigned int compositeHeight)
 {
     bool compositeValid{false};
-
     // Reuse existing buffer if dimensions match, otherwise create new one
     if (!compositeBuffer_ || lastCompositeWidth_ != compositeWidth || lastCompositeHeight_ != compositeHeight)
     {

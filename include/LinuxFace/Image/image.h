@@ -7,8 +7,8 @@
 #include <onnxruntime_cxx_api.h>
 #include <turbojpeg.h>
 
-#include "LinuxFace/Image/tensor_padding.h"
 #include "LinuxFace/Image/pixel_format.h"
+#include "LinuxFace/Image/tensor_padding.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/math_utils.h"
 
@@ -29,8 +29,9 @@ enum class ImageFormat : std::uint8_t
     GRAYSCALE,   // Single channel grayscale
     DEPTH_FLOAT, // Floating point depth data
     PNG,
-    BMP, // Bitmap format
-    PPM, // Portable Pixmap
+    BMP,  // Bitmap format
+    PPM,  // Portable Pixmap
+    H264, // H.264 video codec
 };
 
 enum class ImageLayout : std::uint8_t
@@ -63,6 +64,8 @@ inline std::string fromImageFormatToString(const ImageFormat& format)
             return "GRAYSCALE";
         case ImageFormat::DEPTH_FLOAT:
             return "DEPTH_FLOAT";
+        case ImageFormat::H264:
+            return "H264";
         default:
             return "UNKNOWN";
     }
@@ -119,11 +122,11 @@ enum class NormalizationType : std::uint8_t
 enum class ScalingAlgorithm : std::uint8_t
 {
     //              Quality Speed Anti-aliasing / Downscale Sharpness Consistency / Artifact-free Overall Score
-    LANCZOS,        // 9	3	9	8	7.25
-    BILINEAR,       // 5	8	5	6	6.0
-    AREA_AVERAGING, // 7	7	8	8	7.5
-    FAST_BOX,       // 2	10	2	4	4.5
-    BICUBIC,        // 8	6	7	7	7.0
+    LANCZOS,          // 9	3	9	8	7.25
+    BILINEAR,         // 5	8	5	6	6.0
+    AREA_AVERAGING,   // 7	7	8	8	7.5
+    FAST_BOX,         // 2	10	2	4	4.5
+    BICUBIC,          // 8	6	7	7	7.0
     NEAREST_NEIGHBOR, // 1	10	1	2	3.5 - Preserves discrete values, ideal for label masks
 };
 
@@ -253,6 +256,7 @@ class Image
     // Image operations
     [[nodiscard]] std::unique_ptr<Image> crop(const math_utils::Rect<float>& rect) const;
     bool saveToDisk(const std::string& destPath) const;
+    bool saveAsJPEG(const std::string& destPath, int quality = 90) const;
 
     // Image manipulation methods
     void toGrayscale();
@@ -284,8 +288,7 @@ class Image
     affineWarpBilinear(const double* m, int outWidth, int outHeight, ImageFormat targetFormat = ImageFormat::RGB) const;
 
     // Affine warp for single-channel mask
-    std::unique_ptr<Image>
-    affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight) const;
+    std::unique_ptr<Image> affineWarpNearestNeighbour(const double* m, int outWidth, int outHeight) const;
 
     // Alpha blend src onto this image using mask (mask: 0=background, 255=full src)
     void alphaBlend(const Image& src, const Image& mask);
@@ -298,7 +301,7 @@ class Image
 
     // Converts RGB to RGBA in-place
     bool convertToRGBAInplace();
-    
+
     // Clear image buffer to zeros (for reusing buffers)
     void clear();
 
@@ -318,13 +321,13 @@ class Image
                              size_t copyHeight);
     /**
      * Copy pixels from source image to destination with alpha blending support.
-     * 
+     *
      * COORDINATE SYSTEM CONVENTION:
      * All coordinates are in DESTINATION IMAGE coordinate space.
-     * 
+     *
      * @param src - Source image to copy from
      * @param srcDestX, srcDestY - Position in DESTINATION coordinates where source image top-left should be placed
-     * @param canvasX, canvasY - Top-left corner of canvas region in DESTINATION coordinates  
+     * @param canvasX, canvasY - Top-left corner of canvas region in DESTINATION coordinates
      * @param canvasWidth, canvasHeight - Size of canvas region to copy to
      */
     void copyPixelsWithBlending(const Image& src, long srcDestX, long srcDestY, long canvasX, long canvasY,

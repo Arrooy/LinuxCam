@@ -50,6 +50,8 @@ std::unique_ptr<T> CodecFactory::createDecoder(ImageFormat format, const linuxfa
             return std::unique_ptr<T>(new linuxface::UYVY422Decoder(config));
         case ImageFormat::YUYV422:
             return std::unique_ptr<T>(new linuxface::YUYV422Decoder(config));
+        case ImageFormat::H264:
+            return std::unique_ptr<T>(new linuxface::H264Decoder(config));
         // Add more decoders as needed
         default:
             return nullptr;
@@ -65,6 +67,8 @@ std::unique_ptr<T> CodecFactory::createEncoder(ImageFormat format, const linuxfa
             return std::unique_ptr<T>(new linuxface::RAWEncoder(config));
         case ImageFormat::JPEG:
             return std::unique_ptr<T>(new linuxface::JPEGEncoder(config));
+        case ImageFormat::H264:
+            return std::unique_ptr<T>(new linuxface::H264Encoder(config));
         // Add more encoders as needed
         default:
             return nullptr;

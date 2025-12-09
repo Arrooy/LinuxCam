@@ -60,6 +60,17 @@ class IStreamTransport
         uint64_t framesEncoded{0};
         uint64_t framesSent{0};
         uint64_t encodingErrors{0};
+        // Decoder/transport counters
+        uint64_t h264AvccToAnnexBConversionsAttempted{0};
+        uint64_t h264AvccToAnnexBConversionsSucceeded{0};
+        uint64_t h264AvccToAnnexBConversionsFailed{0};
+        uint64_t h264DecodeAttempts{0};
+        uint64_t h264DecodeSuccesses{0};
+        uint64_t h264DecodeFailures{0};
+        uint64_t h264DecodeEagain{0};
+        uint64_t h264DesktopFallbacks{0};
+        uint64_t h264MobileReassemblies{0};
+        uint64_t h264BufferOverflows{0};
     };
 
     /**

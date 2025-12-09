@@ -59,6 +59,10 @@ class wsInputDevice : public Webcam
     std::unique_ptr<Image> latestImage_;
     std::mutex imageMutex_;
 
+    // Double-buffering for zero-copy JPEG decode
+    std::unique_ptr<Image> decodeBuffers_[2];
+    int currentDecodeBuffer_{0};
+
     std::unique_ptr<Decoder> decoder_;
     std::thread processingThread_;
 };

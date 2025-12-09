@@ -51,8 +51,9 @@ class JPEGDecoder : public Decoder
 
     bool decode(const Image& srcImage, Image& outImage) override
     {
-        const int tjStat = tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), outImage.data(), 0, 0, 0,
-                                         srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
+        const int tjStat =
+            tjDecompress2(d_handle_, srcImage.data(), srcImage.size(), outImage.data(), srcImage.info.width, 0,
+                          srcImage.info.height, srcImage.info.TJPixelFormat, TJFLAG_NOREALLOC);
 
         if (tjStat != 0)
         {
@@ -839,6 +840,46 @@ class YUYV422Decoder : public YUV422
         return b;
     }
 };
+class H264Encoder : public Encoder
+{
+  public:
+    explicit H264Encoder(const ConfigBuilder& config);
+    ~H264Encoder() override;
+
+    // Disable copy/move
+    H264Encoder(const H264Encoder&) = delete;
+    H264Encoder(H264Encoder&&) = delete;
+    H264Encoder& operator=(const H264Encoder&) = delete;
+    H264Encoder& operator=(H264Encoder&&) = delete;
+
+    bool encode(const Image& srcImage, Image& outImage, unsigned long& compressedSize) override;
+    unsigned long encodeSizeInBytes() override;
+
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+class H264Decoder : public Decoder
+{
+  public:
+    explicit H264Decoder(const ConfigBuilder& config);
+    ~H264Decoder() override;
+
+    // Disable copy/move
+    H264Decoder(const H264Decoder&) = delete;
+    H264Decoder(H264Decoder&&) = delete;
+    H264Decoder& operator=(const H264Decoder&) = delete;
+    H264Decoder& operator=(H264Decoder&&) = delete;
+
+    bool decode(const Image& srcImage, Image& outImage) override;
+    bool decodeHeader(Image& srcImage, unsigned long& rawNeededSize) override;
+
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 class PPMDecoder : public Decoder
 {
   public:

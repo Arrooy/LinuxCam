@@ -1,14 +1,9 @@
 input_cameras:
-    - name: "Logitech"
-      path: "/dev/video0"
-      width: 1280
-      height: 720
-      buffer_count: 2
-    # - name: "Old"
-    #   path: "/dev/video0"
-    #   width: 1500
-    #   height: 1000
-    #   buffer_count: 4
+    # - name: "Logitech"
+    #   path: "/dev/video4"
+    #   width: 1280
+    #   height: 720
+    #   buffer_count: 2
 
 # Enable to also ingest frames over WebSocket
 websocket_input_enabled: true
@@ -31,7 +26,7 @@ window:
     title: "LinuxFace"
     width: 640
     height: 480
-    headless: true
+    headless: false
 
 web_server:
     host: "0.0.0.0"
@@ -57,13 +52,14 @@ streaming:
     # WebRTC streaming settings (used when client selects 'webrtc' mode)
     webrtc:
         codec: "H264" # H264, VP8, or VP9
-        bitrate: 4000000 # bits per second (8 Mbps)
+        bitrate: 5000000 # bits per second (5 Mbps - matches browser→server bitrate for 720p)
         framerate: 30
         # FFmpeg preset: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
         preset: "fast" # FFmpeg preset: balance between quality and speed
 
         # Adaptive bitrate (experimental): automatically adjust bitrate based on network conditions
-        enable_adaptive_bitrate: true
+        # DISABLED: Does  not work well with bidirectional video. WebRTC should handle it well.
+        enable_adaptive_bitrate: false
 
         # TODO: Replace with private STUN/TURN servers for production
         # Using Google's public STUN servers for now

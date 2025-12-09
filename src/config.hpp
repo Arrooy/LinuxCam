@@ -31,11 +31,11 @@ struct StreamingConfig
 {
     bool enableJpegWebSocket{true};
     bool enableWebRTC{false};
-    
+
     // JPEG settings
     int jpegQuality{65};
     unsigned int jpegMaxQueueSize{1};
-    
+
     // WebRTC settings
     std::string webrtcCodec{"H264"};
     int webrtcBitrate{2000000};
@@ -74,12 +74,13 @@ class Config
 
     bool validateAndLoadInputCameras()
     {
-    if (!this->config_["input_cameras"] || !this->config_["input_cameras"].IsSequence() || this->config_["input_cameras"].size() == 0)
+        if (!this->config_["input_cameras"] || !this->config_["input_cameras"].IsSequence()
+            || this->config_["input_cameras"].size() == 0)
         {
-            common::logError("Missing or empty input_camera section in config");
-            return false;
+            common::logWarn("Missing or empty input_camera section in config");
+            return true;
         }
-    auto inputs = this->config_["input_cameras"];
+        auto inputs = this->config_["input_cameras"];
         for (const auto& input : inputs)
         {
             if (!validateInputCameraFields(input))
@@ -108,25 +109,25 @@ class Config
 
     void loadInputCameraData(const YAML::Node& input)
     {
-    WebcamDevice inputCamera;
-    inputCamera.is_input = true;
-    inputCamera.name = input["name"].as<std::string>();
-    inputCamera.device_path = input["path"].as<std::string>();
-    inputCamera.width = input["width"].as<unsigned int>();
-    inputCamera.height = input["height"].as<unsigned int>();
-    inputCamera.buffer_count = input["buffer_count"].as<unsigned int>();
-    this->cameras_.push_back(inputCamera);
+        WebcamDevice inputCamera;
+        inputCamera.is_input = true;
+        inputCamera.name = input["name"].as<std::string>();
+        inputCamera.device_path = input["path"].as<std::string>();
+        inputCamera.width = input["width"].as<unsigned int>();
+        inputCamera.height = input["height"].as<unsigned int>();
+        inputCamera.buffer_count = input["buffer_count"].as<unsigned int>();
+        this->cameras_.push_back(inputCamera);
     }
 
     bool validateAndLoadOutputCameras()
     {
-    if (!this->config_["output_cameras"])
+        if (!this->config_["output_cameras"])
         {
             common::logError("Missing output_camera section in config");
             return false;
         }
 
-    auto outputs = this->config_["output_cameras"];
+        auto outputs = this->config_["output_cameras"];
         for (const auto& output : outputs)
         {
             if (!validateOutputCameraFields(output))
@@ -155,7 +156,7 @@ class Config
 
     bool loadOutputCameraData(const YAML::Node& output)
     {
-    WebcamDevice outputCamera;
+        WebcamDevice outputCamera;
         outputCamera.is_input = false;
         outputCamera.name = output["name"].as<std::string>();
         outputCamera.device_path = output["path"].as<std::string>();
@@ -242,10 +243,10 @@ class Config
         }
 
         auto window = config_["window"];
-        
+
         // Parse headless mode first (defaults to false)
         headless_ = window["headless"] ? window["headless"].as<bool>() : false;
-        
+
         if (headless_)
         {
             // In headless mode, window properties are optional
@@ -255,7 +256,7 @@ class Config
             common::logInfo("Running in headless mode - no GUI window will be created");
             return true;
         }
-        
+
         // For non-headless mode, all window properties are required
         if (!window["title"])
         {
@@ -327,7 +328,7 @@ class Config
         }
 
         auto streaming = config_["streaming"];
-        
+
         // Parse supported modes (server capabilities)
         if (streaming["supported_modes"])
         {
@@ -353,7 +354,7 @@ class Config
                 streamingConfig_.enableWebRTC = streaming["enable_webrtc"].as<bool>();
             }
         }
-        
+
         // JPEG settings
         if (streaming["jpeg"])
         {
@@ -367,7 +368,7 @@ class Config
                 streamingConfig_.jpegMaxQueueSize = jpeg["max_queue_size"].as<unsigned int>();
             }
         }
-        
+
         // WebRTC settings
         if (streaming["webrtc"])
         {
@@ -397,7 +398,7 @@ class Config
                 streamingConfig_.stunServers = webrtc["stun_servers"].as<std::vector<std::string>>();
             }
         }
-        
+
         return true;
     }
 
@@ -447,7 +448,7 @@ class Config
         {
             enableGPU_ = config_["enable_gpu"].as<bool>();
         }
-        if(config_["enable_debug"])
+        if (config_["enable_debug"])
         {
             enableDebug_ = config_["enable_debug"].as<bool>();
         }
