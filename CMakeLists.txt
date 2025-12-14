@@ -138,7 +138,6 @@ include(FetchContent)
 FetchContent_Declare(dlib
     GIT_REPOSITORY https://github.com/davisking/dlib.git
     GIT_TAG        v19.24.8
-    # DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(dlib)
 
@@ -158,44 +157,33 @@ ExternalProject_Add(libjpeg-turbo
     INSTALL_DIR ${LIBJPEG_TURBO_INSTALL_DIR}
 )
 
-# Manually define an imported target for libjpeg
-add_library(libjpeg STATIC IMPORTED)
-set_target_properties(libjpeg PROPERTIES
-    IMPORTED_LOCATION "${LIBJPEG_TURBO_INSTALL_DIR}/lib/libjpeg.a"
-)
+# Create the include directory immediately so clangd can find it
+file(MAKE_DIRECTORY "${LIBJPEG_TURBO_INSTALL_DIR}/include")
 
-add_library(turbojpeg STATIC IMPORTED)
-set_target_properties(turbojpeg PROPERTIES
-    IMPORTED_LOCATION "${LIBJPEG_TURBO_INSTALL_DIR}/lib/libturbojpeg.a"
-)
+# Create INTERFACE libraries for clangd - these expose the include paths at configure time
+add_library(libjpeg INTERFACE)
+target_include_directories(libjpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/include")
+target_link_libraries(libjpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/lib/libjpeg.a")
 
-add_custom_target(libjpeg_include_dir ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${LIBJPEG_TURBO_INSTALL_DIR}/include
-    DEPENDS libjpeg-turbo
-)
-
-add_dependencies(libjpeg libjpeg_include_dir)
-add_dependencies(turbojpeg libjpeg_include_dir)
+add_library(turbojpeg INTERFACE)
+target_include_directories(turbojpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/include")
+target_link_libraries(turbojpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/lib/libturbojpeg.a")
 
 # ========= ONNX Runtime Setup =========
-include(FetchContent)
-
 FetchContent_Declare(
     onnxruntime
     URL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz
-    # DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_MakeAvailable(onnxruntime)
 
 set(ONNXRUNTIME_ROOT ${onnxruntime_SOURCE_DIR})
 
-include_directories(${ONNXRUNTIME_ROOT}/include)
-link_directories(${ONNXRUNTIME_ROOT}/lib)
-
-# Pre-built ONNX Runtime GPU package includes CUDA provider in the main library
-# The GPU version already has CUDAExecutionProvider compiled in
-set(ONNXRUNTIME_LIB onnxruntime)
+# Create an interface library for ONNX Runtime to properly expose includes
+add_library(onnxruntime_lib INTERFACE)
+target_include_directories(onnxruntime_lib INTERFACE ${ONNXRUNTIME_ROOT}/include)
+target_link_directories(onnxruntime_lib INTERFACE ${ONNXRUNTIME_ROOT}/lib)
+target_link_libraries(onnxruntime_lib INTERFACE onnxruntime)
 
 # Set RPATH so the executable can find ONNX Runtime libraries at runtime
 set(CMAKE_INSTALL_RPATH "${ONNXRUNTIME_ROOT}/lib")
@@ -327,13 +315,10 @@ endif()
 
 # ==========================================
 
-include(FetchContent)
-
 FetchContent_Declare(
   yaml-cpp
   GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
   GIT_TAG        2f86d13775d119edbb69af52e5f566fd65c6953b
-  # DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
@@ -345,8 +330,6 @@ if(ENABLE_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     )
     target_compile_options(yaml-cpp PRIVATE -O2)  # Override the debug flags
 endif()
-
-include(FetchContent)
 
 # Fetch gifdec from GitHub
 FetchContent_Declare(
@@ -416,7 +399,6 @@ target_include_directories(linuxface PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
-    "${LIBJPEG_TURBO_INSTALL_DIR}/include"
     ${FFMPEG_INCLUDE_DIRS}
 )
 
@@ -432,11 +414,14 @@ target_link_libraries(linuxface
     glad
     yaml-cpp::yaml-cpp
     gifdec
-    ${ONNXRUNTIME_LIB}
+    onnxruntime_lib
     ${FFMPEG_LIBRARIES}
     drogon
     datachannel-static
 )
+
+# Add build dependency on the external project
+add_dependencies(linuxface libjpeg-turbo)
 
 # Enable coverage for the main library
 enable_coverage(linuxface)
@@ -450,7 +435,6 @@ target_include_directories(LinuxFace PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/web
-    "${LIBJPEG_TURBO_INSTALL_DIR}/include"
 )
 target_link_libraries(LinuxFace PRIVATE linuxface)
 
@@ -466,9 +450,6 @@ enable_coverage(LinuxFace)
 
 # Enable sanitizers for the main executable too
 enable_sanitizers(LinuxFace)
-
-# Ensure include directory is set *after* it exists
-add_dependencies(LinuxFace libjpeg_include_dir)
 
 target_compile_options(LinuxFace PRIVATE
     -Wall
@@ -516,7 +497,6 @@ if(BUILD_TESTING)
     target_include_directories(linuxface_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        "${LIBJPEG_TURBO_INSTALL_DIR}/include"
         ${CMAKE_BINARY_DIR}  # For generated test_config.h
     )
 
