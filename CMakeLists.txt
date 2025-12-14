@@ -130,10 +130,7 @@ if(NOT NASM_EXECUTABLE)
     message(FATAL_ERROR "NASM not found! Please install NASM before proceeding. libjpeg-turbo requires it.\nIf Ubuntu, consider running:\nsudo apt install nasm")
 endif()
 
-add_compile_options(-Wall)
-
-# Suppress warnings from external dependencies
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-compare")
+add_compile_options(-march=native)
 
 include(FetchContent)
 
@@ -472,6 +469,22 @@ enable_sanitizers(LinuxFace)
 
 # Ensure include directory is set *after* it exists
 add_dependencies(LinuxFace libjpeg_include_dir)
+
+target_compile_options(LinuxFace PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wshadow
+    -Wnon-virtual-dtor
+    -Woverloaded-virtual
+    -Wnull-dereference
+    -Wconversion
+    -Wsign-conversion
+    -Wold-style-cast
+    -Wdouble-promotion
+)
+
+# -Werror
 
 # Tests executable links to the library
 if(BUILD_TESTING)

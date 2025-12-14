@@ -33,3 +33,5 @@ WFLW
 .github/chatmodes
 .github/instructions
 tests/**/results
+.cache/
+

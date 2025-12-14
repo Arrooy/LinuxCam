@@ -15,9 +15,8 @@ extern "C"
 #include <libavutil/log.h>
 }
 
-namespace linuxface
-{
-namespace web
+
+namespace linuxface::web
 {
 
 namespace
@@ -2682,5 +2681,5 @@ void WebRTCTransport::updateEncoderBitrate(int newBitrate)
                     newBitrate / 1000000.0);
 }
 
-} // namespace web
-} // namespace linuxface
+} // namespace linuxface::web
+
