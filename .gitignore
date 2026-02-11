@@ -4,8 +4,6 @@ DeletedItems
 build*
 help
 help/*
-dlib/*
-dlib
 staticLibs/*
 staticLibsHeaders/*
 MakeFile

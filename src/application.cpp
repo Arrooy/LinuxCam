@@ -17,7 +17,6 @@
 #include "LinuxFace/UI/layerManager.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/depthImage.h"
-#include "LinuxFace/dlibDetectors.h"
 #include "LinuxFace/imageLoader.h"
 #include "LinuxFace/inputWebcam.h"
 #include "LinuxFace/onnx/faceSegmentation.h"
@@ -69,7 +68,6 @@ Application::Application()
     : ui_(nullptr)
     , profiler_(Profiler::getInstance())
     , faceDetector_(nullptr)
-    , dlibShapeDetector_(nullptr)
     , fsanetDetectorVar_(nullptr)
     , fsanetDetectorConv_(nullptr)
     , modnetDetector_(nullptr)
@@ -235,10 +233,6 @@ bool Application::initialize()
         {
             const std::string modelsFolder = Config::getInstance().getModelFolderPath();
 
-            // DlibShapeDetector initialization (landmarks)
-            const std::string dlibShapeModel = modelsFolder + "shape_predictor_68_face_landmarks.dat";
-            // dlibShapeDetector_ = std::make_unique<DlibShapeDetector>(dlib_shape_model);
-
             const std::string varOnnxPath = modelsFolder + "fsanet-var.onnx";
             // fsanetDetectorVar_ = std::make_unique<FsanetDetector>(var_onnx_path);
 
@@ -315,11 +309,11 @@ bool Application::initialize()
     {
         Profiler::ScopedProfilerSpan span("Initialization", "Target Image Loading");
         // Load target faceswap image once
-        // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/tests/common/single_face.jpeg";
+        const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/image.jpeg";
         // const std::string targetPath = "/home/arroyo/Downloads/albert.jpeg";
         // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/adria.jpg";
         // const std::string targetPath = "/home/arroyo/Documents/Projectes/LinuxCam/paps.jpeg";
-        const std::string targetPath = "/home/arroyo/Downloads/max.jpeg";
+        // const std::string targetPath = "/home/arroyo/Downloads/max.jpeg";
 
         target_img_ = ImageLoader::loadImageFromFile(targetPath);
         if (!target_img_)
@@ -629,16 +623,10 @@ void Application::stopWebServer()
 
 void Application::process(std::unique_ptr<Image>& image)
 {
-    return; // TODO: Re-enable face processing when needed
+    // return; // TODO: Re-enable face processing when needed
     if (gShouldExit)
     {
         return;
-    }
-
-    std::vector<Face> dlibFaces;
-    if (faceDetector_ != nullptr)
-    {
-        // dlib_faces = faceDetector_->detect(image);
     }
 
     std::vector<Face> scrfdFaces;
@@ -669,17 +657,6 @@ void Application::process(std::unique_ptr<Image>& image)
     //     image->paste(*matting, true);
     // }
 
-    // Dlib landmark detection using dlib face
-    // if (dlibShapeDetector_ && !dlib_faces.empty())
-    // {
-    //     std::vector<math_utils::Rect<float>> rects;
-    //     rects.push_back(dlib_faces[0].getBoundingBox().rect);
-    //     auto dlib_landmark_faces = dlibShapeDetector_->detect(image, rects);
-    //     for (const auto& face : dlib_landmark_faces)
-    //     {
-    //         face.paintBoundingBox(image, Pixel(255, 0, 0));
-    //         face.paintAllFaceLandmarks(image, false, Pixel(255, 0, 0), 1.5f);
-    //     }
 
     // if (!scrfdFaces.empty())
     // {

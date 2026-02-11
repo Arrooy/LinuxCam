@@ -16,10 +16,6 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(USE_AVX_INSTRUCTIONS ON CACHE BOOL "Use AVX instructions for Dlib")
-set(DLIB_NO_GUI_SUPPORT OFF CACHE BOOL "Disable GUI support for Dlib")
-set(DLIB_USE_CUDA ON CACHE BOOL "Use CUDA for Dlib")
-
 # Suppress NVCC deprecated GPU target warnings
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wno-deprecated-gpu-targets")
 
@@ -134,45 +130,24 @@ add_compile_options(-march=native)
 
 include(FetchContent)
 
-# Fetch dlib
-FetchContent_Declare(dlib
-    GIT_REPOSITORY https://github.com/davisking/dlib.git
-    GIT_TAG        v19.24.8
-)
-FetchContent_MakeAvailable(dlib)
-
 include(ExternalProject)
-set(LIBJPEG_TURBO_INSTALL_DIR "${CMAKE_BINARY_DIR}/libjpeg-turbo-install")
+# Use system JPEG libraries (compatible with ffmpeg's libjpeg.so.8)
+find_package(JPEG REQUIRED)
+find_library(TURBOJPEG_LIBRARY NAMES turbojpeg REQUIRED)
+find_path(TURBOJPEG_INCLUDE_DIR NAMES turbojpeg.h REQUIRED)
 
-# Add libjpeg-turbo as an ExternalProject
-ExternalProject_Add(libjpeg-turbo
-    GIT_REPOSITORY https://github.com/libjpeg-turbo/libjpeg-turbo.git
-    GIT_TAG        3.1.0
-    CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${LIBJPEG_TURBO_INSTALL_DIR}
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-        -DWITH_SIMD=ON
-        -DREQUIRE_SIMD=TRUE
-    PREFIX ${CMAKE_BINARY_DIR}/libjpeg-turbo
-    INSTALL_DIR ${LIBJPEG_TURBO_INSTALL_DIR}
-)
-
-# Create the include directory immediately so clangd can find it
-file(MAKE_DIRECTORY "${LIBJPEG_TURBO_INSTALL_DIR}/include")
-
-# Create INTERFACE libraries for clangd - these expose the include paths at configure time
 add_library(libjpeg INTERFACE)
-target_include_directories(libjpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/include")
-target_link_libraries(libjpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/lib/libjpeg.a")
+target_include_directories(libjpeg INTERFACE ${JPEG_INCLUDE_DIR})
+target_link_libraries(libjpeg INTERFACE ${JPEG_LIBRARIES})
 
 add_library(turbojpeg INTERFACE)
-target_include_directories(turbojpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/include")
-target_link_libraries(turbojpeg INTERFACE "${LIBJPEG_TURBO_INSTALL_DIR}/lib/libturbojpeg.a")
+target_include_directories(turbojpeg INTERFACE ${TURBOJPEG_INCLUDE_DIR} ${JPEG_INCLUDE_DIR})
+target_link_libraries(turbojpeg INTERFACE ${TURBOJPEG_LIBRARY})
 
 # ========= ONNX Runtime Setup =========
 FetchContent_Declare(
     onnxruntime
-    URL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz
+    URL https://github.com/microsoft/onnxruntime/releases/download/v1.24.1/onnxruntime-linux-x64-gpu_cuda13-1.24.1.tgz
 )
 
 FetchContent_MakeAvailable(onnxruntime)
@@ -404,7 +379,6 @@ target_include_directories(linuxface PRIVATE
 
 # Link dependencies for the library
 target_link_libraries(linuxface
-    dlib::dlib
     libjpeg
     turbojpeg
     imgui
@@ -419,9 +393,6 @@ target_link_libraries(linuxface
     drogon
     datachannel-static
 )
-
-# Add build dependency on the external project
-add_dependencies(linuxface libjpeg-turbo)
 
 # Enable coverage for the main library
 enable_coverage(linuxface)

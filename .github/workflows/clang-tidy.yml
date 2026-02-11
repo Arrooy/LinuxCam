@@ -154,9 +154,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DBUILD_TESTING=ON \
             -DENABLE_COVERAGE=OFF \
-            -DUSE_AVX_INSTRUCTIONS=OFF \
-            -DDLIB_NO_GUI_SUPPORT=ON \
-            -DDLIB_USE_CUDA=OFF \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \

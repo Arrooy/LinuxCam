@@ -62,7 +62,6 @@ class Application : public std::enable_shared_from_this<Application>
     Profiler& profiler_;
 
     std::unique_ptr<FaceDetector> faceDetector_;
-    std::unique_ptr<ShapeDetector> dlibShapeDetector_;
     std::unique_ptr<FsanetDetector> fsanetDetectorVar_;
     std::unique_ptr<FsanetDetector> fsanetDetectorConv_;
     std::shared_ptr<SCRFDetector> scrfdDetector_;
