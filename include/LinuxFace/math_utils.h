@@ -165,9 +165,10 @@ std::vector<Point<long>> DDA(const T& x1, const T& y1, const T& x2, const T& y2)
     return result;
 }
 
-inline double distance(int a, int b, int c, int d)
+template <typename T>
+inline T distance(T x1, T y1, T x2, T y2)
 {
-    return sqrt(pow(c - a, 2) + pow(d - b, 2));
+    return std::sqrt(std::pow(x2 - x1, 2) + std::pow(y2 - y1, 2));
 }
 
 // Calculate Intersection over Union (IoU) between two rectangles

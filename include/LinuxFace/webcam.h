@@ -7,8 +7,8 @@
 #include <tuple>
 #include <turbojpeg.h>
 #include <vector>
-
-#include "LinuxFace/codecFactory.h"
+#include "LinuxFace/common.h"
+#include "LinuxFace/Image/image.h"
 namespace linuxface
 {
 

@@ -4,13 +4,22 @@
 #include "imgui_impl_opengl3.h"
 
 #include <cmath>
+#include <fstream>
 #include <functional>
+#include <glad/glad.h>
+#include <mutex>
+#include <thread>
 
 #include "LinuxFace/Image/text_renderer.h"
 #include "LinuxFace/UI/paintWebcam.h"
 #include "LinuxFace/application.h"
 #include "LinuxFace/common.h"
 #include "LinuxFace/profiler.h"
+
+// Web search client
+#include "LinuxFace/Image/urlImageDownloader.h"
+#include "LinuxFace/webscraping/pexelsAPI.h"
+#include "config.hpp"
 
 using namespace linuxface;
 
@@ -85,13 +94,17 @@ void UI::loadingScreen()
     render();
 }
 
-void UI::shutdown() const
+void UI::shutdown()
 {
     if (!ready_)
     {
         common::logError("UI is not initialized, cannot shutdown.");
         return;
     }
+
+    // Clean up any GL textures created for Pexels thumbnails
+    cleanupPexelsTextures();
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -147,6 +160,138 @@ void UI::paintMainWindow()
             renderCollapsingHeader("Videos", mediaManager_->getVideoNames(), "video");
             ImGui::EndMenu();
         }
+
+        // Pexels search menu (text box + search button)
+        if (ImGui::BeginMenu("Search Images"))
+        {
+            static char search_buf[128] = "";
+            static int numResults = 6;
+
+            ImGui::InputText("Query", search_buf, sizeof(search_buf));
+
+            // Select desired Pexels source variant (default: Original)
+            static int selectedPexelsSrc = static_cast<int>(PexelsSrc::ORIGINAL);
+            const auto& srcItems = PexelsSrcHelper::names();
+
+            ImGui::Separator();
+            ImGui::PushItemWidth(140);
+            ImGui::Combo("Source", &selectedPexelsSrc, srcItems.data(), static_cast<int>(srcItems.size()));
+            ImGui::PopItemWidth();
+            ImGui::Separator();
+            if (ImGui::Button("Search") && search_buf[0] != '\0')
+            {
+                try
+                {
+                    const std::string apiKey = Config::getInstance().getEnv("PEXELS_API_KEY", "");
+                    if (apiKey.empty())
+                    {
+                        common::logWarn("PEXELS_API_KEY not set — cannot perform search");
+                    }
+                    else
+                    {
+                        // Perform search (quick, network IO) and then download thumbnails asynchronously
+                        PexelsAPI client(apiKey);
+                        auto results = client.search(std::string(search_buf), numResults);
+
+                        // Clear previous results and show results window
+                        {
+                            const std::lock_guard<std::mutex> lock(pexelsMutex_);
+                            pexelsResults_.clear();
+                            showPexelsResults_ = true;
+                            pexelsLoading_ = true;
+                        }
+
+                        // Background thread: download each image and store full + scaled thumb
+                        int selectedPexelsSrcLocal =
+                            selectedPexelsSrc; // copy static into automatic storage for capture
+                        std::thread(
+                            [this, results, selectedPexelsSrcLocal]() mutable
+                            {
+                                UrlImageDownloader downloader; // reuse decoder internally
+                                const PexelsSrc desiredSrc = static_cast<PexelsSrc>(selectedPexelsSrcLocal);
+                                for (const auto& r : results)
+                                {
+                                    try
+                                    {
+                                        // Choose URL for the requested variant
+                                        std::string srcUrl = r.getUrlFor(desiredSrc);
+                                        if (srcUrl.empty())
+                                        {
+                                            common::logWarn(
+                                                "Pexels: requested variant not available for this photo, skipping");
+                                            continue;
+                                        }
+
+                                        std::unique_ptr<Image> downloaded;
+                                        if (!downloader.downloadToImage(srcUrl, downloaded, 8))
+                                        {
+                                            common::logWarn("Pexels: failed to download %s", srcUrl.c_str());
+                                            continue;
+                                        }
+
+                                        // Create shared_ptr for storage
+                                        // Keep full-size image (move unique_ptr into a shared_ptr via shared_ptr
+                                        // constructor)
+                                        std::shared_ptr<Image> full = std::move(downloaded->deepCopy());
+
+                                        // Create thumbnail preserving aspect ratio (fit into pexelThumbW_ x pexelThumbH_)
+                                        std::shared_ptr<Image> thumb;
+                                        if (downloaded && downloaded->info.width > 0 && downloaded->info.height > 0)
+                                        {
+                                            const double maxW = static_cast<double>(pexelThumbW_);
+                                            const double maxH = static_cast<double>(pexelThumbH_);
+                                            const double srcW = static_cast<double>(downloaded->info.width);
+                                            const double srcH = static_cast<double>(downloaded->info.height);
+                                            double scale = std::min(maxW / srcW, maxH / srcH);
+                                            // avoid upscaling small images
+                                            scale = std::min(1.0, scale);
+                                            auto thumbUnique = downloaded->scale(scale);
+                                            if (thumbUnique)
+                                            {
+                                                thumb = std::move(thumbUnique);
+                                            }
+                                        }
+
+                                        PexelsItem item;
+                                        item.full = full;
+                                        item.thumb = thumb ? thumb : full; // fallback
+                                        item.texId = 0;
+                                        // store original src map key used so we can display source in UI if needed
+                                        item.url = srcUrl;
+
+                                        const std::lock_guard<std::mutex> lock(pexelsMutex_);
+                                        pexelsResults_.push_back(std::move(item));
+                                    }
+                                    catch (const std::exception& ex)
+                                    {
+                                        common::logWarn("Pexels download exception: %s", ex.what());
+                                    }
+                                }
+
+                                // Mark loading finished
+                                {
+                                    const std::lock_guard<std::mutex> lock(pexelsMutex_);
+                                    pexelsLoading_ = false;
+                                }
+                            })
+                            .detach();
+
+                        if (results.empty())
+                        {
+                            common::logInfo("Pexels: no results for '%s'", search_buf);
+                        }
+                    }
+                }
+                catch (const std::exception& ex)
+                {
+                    common::logError("Pexels search failed: %s", ex.what());
+                }
+            }
+
+            ImGui::SliderInt("Results", &numResults, 1, 30);
+            ImGui::EndMenu();
+        }
+
         // Add new menu for text layer
         if (ImGui::BeginMenu("Load text..."))
         {
@@ -167,7 +312,7 @@ void UI::paintMainWindow()
             ImGui::Separator();
             ImGui::Text("Text Styling");
 
-            ImGui::SliderInt("Font Scale", &textScale, 0.05, 25, "%dx");
+            ImGui::SliderInt("Font Scale", &textScale, 1, 25, "%dx");
             ImGui::ColorEdit4("Text Color", reinterpret_cast<float*>(&textColor), ImGuiColorEditFlags_NoInputs);
 
             ImGui::Checkbox("Use Background", &useBackground);
@@ -631,6 +776,100 @@ void UI::paintMainWindow()
     {
         mediaBrowserVisible_ = mediaBrowserUI_->render();
     }
+
+    // Render Pexels search results window (grid of thumbnails)
+    {
+        const std::lock_guard<std::mutex> lock(pexelsMutex_);
+        if (showPexelsResults_)
+        {
+            ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Search Results", &showPexelsResults_, ImGuiWindowFlags_None))
+            {
+                if (pexelsLoading_)
+                {
+                    ImGui::Text("Downloading images...");
+                    ImGui::Separator();
+                }
+
+                const float thumbW = static_cast<float>(pexelThumbW_);
+                const float thumbH = static_cast<float>(pexelThumbH_);
+                const float padding = 6.0f;
+
+                // Let ImGui position thumbnails with a simple wrapping layout and 6px padding.
+                // This preserves aspect ratio for thumbnails and avoids a strict column grid.
+                const float paddingInner = padding; // 6.0f
+                const float availXInner = ImGui::GetContentRegionAvail().x;
+                float currentLineX = 0.0f;
+
+                for (size_t i = 0; i < pexelsResults_.size(); ++i)
+                {
+                    auto& item = pexelsResults_[i];
+
+                    // Ensure thumbnail GL texture exists (create on main thread)
+                    if (item.thumb && item.texId == 0)
+                        item.texId = createGLTextureFromImage(item.thumb);
+
+                    // Determine display size (use actual thumbnail size to keep aspect)
+                    float displayW = thumbW;
+                    float displayH = thumbH;
+                    if (item.thumb)
+                    {
+                        displayW = static_cast<float>(item.thumb->info.width);
+                        displayH = static_cast<float>(item.thumb->info.height);
+                    }
+
+                    // Clamp to available width so drawing always stays inside the window
+                    displayW = std::min(displayW, availXInner);
+
+                    // Place next item on the same line only when it still fits.
+                    if (i > 0)
+                    {
+                        const float nextWidth = currentLineX + paddingInner + displayW;
+                        if (nextWidth <= availXInner)
+                        {
+                            ImGui::SameLine(0.0f, paddingInner);
+                            currentLineX += paddingInner;
+                        }
+                        else
+                        {
+                            currentLineX = 0.0f;
+                        }
+                    }
+
+                    ImGui::PushID(static_cast<int>(i));
+
+                    if (item.texId != 0 && item.thumb)
+                    {
+                        ImGui::Image((ImTextureID)(intptr_t)item.texId, ImVec2(displayW, displayH));
+                    }
+                    else
+                    {
+                        ImGui::Dummy(ImVec2(thumbW, thumbH));
+                    }
+
+                    // Click handler (click on the thumbnail cell)
+                    if (ImGui::IsItemClicked())
+                    {
+                        if (item.full && application_)
+                        {
+                            auto copy = item.full->deepCopy();
+                            if (copy)
+                            {
+                                common::logInfo("Using image from Pexels search for face swap: %s", item.url.c_str());
+                                application_->setTargetImage(std::move(copy));
+                            }
+                        }
+                    }
+
+                    ImGui::PopID();
+
+                    // Track consumed width in the current row
+                    currentLineX += displayW;
+                }
+            }
+            ImGui::End();
+        }
+    }
 }
 void UI::renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
                                 const std::string& type)
@@ -675,6 +914,8 @@ void UI::renderCollapsingHeader(const std::string& headerName, const std::vector
 
                             layerManager_->addLayer(newLayer);
                         }
+                        common::logWarn(
+                            "UI - Application pointer not connected, adding target image as a layer instead");
                     }
                 }
                 ImGui::EndGroup();
@@ -749,16 +990,16 @@ void UI::paintDeviceConfigurationTabs()
             // Add webcam type indicator
             switch (webcam->getType())
             {
-            case WebcamType::VIRTUAL_INPUT:
-                tabName = "(Vir) " + tabName;
-                break;
-            case WebcamType::VIRTUAL_OUTPUT:
-                tabName += "(Out) " + tabName;
-                break;
-            default:
-            case WebcamType::PHYSICAL_INPUT:
-                tabName += "(Phy) " + tabName;
-                break;
+                case WebcamType::VIRTUAL_INPUT:
+                    tabName = "(Vir) " + tabName;
+                    break;
+                case WebcamType::VIRTUAL_OUTPUT:
+                    tabName += "(Out) " + tabName;
+                    break;
+                default:
+                case WebcamType::PHYSICAL_INPUT:
+                    tabName += "(Phy) " + tabName;
+                    break;
             }
 
             // Create tab without close button
@@ -852,6 +1093,47 @@ ImVec4 getProfileColorFromDuration(int64_t duration)
     // Use default color range (10ms green, 40ms red)
     return getProfileColorFromDurationWithRange(duration, Profiler::ColorRange());
 }
+
+// Create a GL texture from an Image (must be called from the main / GL thread)
+GLuint UI::createGLTextureFromImage(const std::shared_ptr<Image>& img)
+{
+    if (!img || img->empty() || img->info.width == 0 || img->info.height == 0)
+    {
+        return 0;
+    }
+
+    GLenum format = (img->info.pixelSizeBytes == 4) ? GL_RGBA : GL_RGB;
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, format, static_cast<GLsizei>(img->info.width),
+                 static_cast<GLsizei>(img->info.height), 0, format, GL_UNSIGNED_BYTE, img->data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return tex;
+}
+
+
+void UI::cleanupPexelsTextures()
+{
+    const std::lock_guard<std::mutex> lock(pexelsMutex_);
+    for (auto& it : pexelsResults_)
+    {
+        if (it.texId != 0)
+        {
+            GLuint t = it.texId;
+            glDeleteTextures(1, &t);
+            it.texId = 0;
+        }
+    }
+    pexelsResults_.clear();
+}
+
 
 // Helper function to find the topmost layer under mouse position
 Layer* UI::findLayerUnderMouse(const std::vector<Layer>& layers, const ImVec2& mousePos)

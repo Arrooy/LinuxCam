@@ -4,16 +4,14 @@
 
 #include <cstring>
 #include <fcntl.h>
-#include <iostream>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <vector>
 
-#include "LinuxFace/common.h"
 #include "LinuxFace/webcam.h"
-
+#include "LinuxFace/codecFactory.h"
 namespace linuxface
 {
 

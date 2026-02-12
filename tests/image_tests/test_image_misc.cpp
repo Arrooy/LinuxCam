@@ -32,3 +32,19 @@ TEST(ImageMisc, IsFullyOpaque)
     Image img(Pixel(1, 2, 3, 255), 2, 2);
     EXPECT_TRUE(img.isFullyOpaque());
 }
+
+// Basic UrlImageDownloader tests to validate constructor and error handling
+#include "LinuxFace/Image/urlImageDownloader.h"
+
+TEST(UrlImageDownloader, ConstructorDoesNotCrash)
+{
+    UrlImageDownloader d;
+    SUCCEED();
+}
+
+TEST(UrlImageDownloader, EmptyUrlReturnsFalse)
+{
+    UrlImageDownloader d;
+    std::unique_ptr<Image> img;
+    EXPECT_FALSE(d.downloadToImage("", img));
+}

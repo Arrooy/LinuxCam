@@ -144,6 +144,17 @@ add_library(turbojpeg INTERFACE)
 target_include_directories(turbojpeg INTERFACE ${TURBOJPEG_INCLUDE_DIR} ${JPEG_INCLUDE_DIR})
 target_link_libraries(turbojpeg INTERFACE ${TURBOJPEG_LIBRARY})
 
+# libcurl
+find_package(CURL REQUIRED)
+
+# json
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.2
+)
+FetchContent_MakeAvailable(json)
+
 # ========= ONNX Runtime Setup =========
 FetchContent_Declare(
     onnxruntime
@@ -392,6 +403,8 @@ target_link_libraries(linuxface
     ${FFMPEG_LIBRARIES}
     drogon
     datachannel-static
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
 )
 
 # Enable coverage for the main library

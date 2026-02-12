@@ -70,7 +70,7 @@ class UI
     void connect(std::shared_ptr<Application> app) { application_ = app; }
 
     // Cleanup the UI system
-    void shutdown() const;
+    void shutdown();
 
     // Start a new frame (call this at the beginning of your render loop)
     static void newFrame();
@@ -119,12 +119,34 @@ class UI
     // Tracked camera state On/Off
     std::unordered_map<std::string, bool> cameraDesiredStates;
 
+    // --- Pexels search UI state ---
+    struct PexelsItem
+    {
+        std::shared_ptr<Image> full;      // full-size downloaded image
+        std::shared_ptr<Image> thumb;     // scaled thumbnail
+        GLuint texId{0};                  // GL texture for thumbnail (created on main thread)
+        std::string url;                  // source url
+    };
+
+    std::vector<PexelsItem> pexelsResults_;
+    std::mutex pexelsMutex_;
+    bool pexelsLoading_{false};
+    bool showPexelsResults_{false};
+    int pexelThumbW_{160};
+    int pexelThumbH_{90};
+
     // UI drawing functions
     void paintMainWindow();
     void paintDeviceConfigurationTabs();
     // Helper method to render collapsing headers dynamically
     void renderCollapsingHeader(const std::string& headerName, const std::vector<std::string>& items,
                                 const std::string& type);
+
+    // Helper: upload thumbnail image to GL texture (must be called on main / GL thread)
+    GLuint createGLTextureFromImage(const std::shared_ptr<Image>& img);
+
+    // Helper: free any GL textures created for Pexels results
+    void cleanupPexelsTextures();
 };
 } // namespace linuxface
 

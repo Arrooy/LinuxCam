@@ -7,12 +7,11 @@
 #include <sys/ioctl.h>
 #include <utility>
 
-#include "LinuxFace/common.h"
+#include "LinuxFace/math_utils.h"
 
 using namespace linuxface;
 
-Webcam::Webcam(std::string name, std::string devicePath, WebcamType type, unsigned int width,
-               unsigned int height)
+Webcam::Webcam(std::string name, std::string devicePath, WebcamType type, unsigned int width, unsigned int height)
     : name_(std::move(name)), device_path_(std::move(devicePath)), type_(type)
 {
     std::vector<FrameSize> frameSizes;
@@ -110,35 +109,35 @@ bool Webcam::updateDeviceCapabilities()
             fmt.format = ImageFormat::JPEG;
             fmt.pixelformat = fmtdesc.pixelformat;
             common::logInfo("Webcam::updateDeviceCapabilities - Camera supports MJPEG format (%s)",
-                             fmt.description.c_str());
+                            fmt.description.c_str());
         }
         else if (fmtdesc.pixelformat == V4L2_PIX_FMT_SGBRG8)
         {
             fmt.format = ImageFormat::SGBRG8;
             fmt.pixelformat = fmtdesc.pixelformat;
             common::logInfo("Webcam::updateDeviceCapabilities - Camera supports Bayer format (%s)",
-                             fmt.description.c_str());
+                            fmt.description.c_str());
         }
         else if (fmtdesc.pixelformat == V4L2_PIX_FMT_Z16)
         {
             fmt.format = ImageFormat::DEPTH_Z16;
             fmt.pixelformat = fmtdesc.pixelformat;
             common::logInfo("Webcam::updateDeviceCapabilities - Camera supports Z16 format (%s)",
-                             fmt.description.c_str());
+                            fmt.description.c_str());
         }
         else if (fmtdesc.pixelformat == V4L2_PIX_FMT_UYVY)
         {
             fmt.format = ImageFormat::UYUV422;
             fmt.pixelformat = fmtdesc.pixelformat;
             common::logInfo("Webcam::updateDeviceCapabilities - Camera supports UYUV422 format (%s)",
-                             fmt.description.c_str());
+                            fmt.description.c_str());
         }
         else if (fmtdesc.pixelformat == V4L2_PIX_FMT_YUYV)
         {
             fmt.format = ImageFormat::YUYV422;
             fmt.pixelformat = fmtdesc.pixelformat;
             common::logInfo("Webcam::updateDeviceCapabilities - Camera supports YUYV422 format (%s)",
-                             fmt.description.c_str());
+                            fmt.description.c_str());
         }
 
         else
@@ -148,7 +147,7 @@ bool Webcam::updateDeviceCapabilities()
             // TODO(arroyo): Some cameras provide metadata instead of video.
             // maybe we can support that also
             common::logWarn("Webcam::updateDeviceCapabilities - Camera supports unknown format: %s",
-                             fmt.description.c_str());
+                            fmt.description.c_str());
             continue; // Skip unsupported formats
         }
 
@@ -204,7 +203,7 @@ bool Webcam::updateDeviceCapabilities()
     if (capabilities_.formats.empty())
     {
         common::logWarn("Webcam::UpdateDeviceCapabilities - This input device does not have any capabilities for "
-                         "V4L2_BUF_TYPE_VIDEO_CAPTURE.");
+                        "V4L2_BUF_TYPE_VIDEO_CAPTURE.");
         return false;
     }
 
@@ -256,8 +255,8 @@ void Webcam::selectBestFormat()
         selectedSize.selectedFPS = bestFpsIndex;
 
         common::logInfo("Webcam: Selected format is %s with frame size of %dx%d (%d FPS). And with pixel format %u",
-                         bestFormat->description.c_str(), selectedSize.width, selectedSize.height,
-                         selectedSize.getFps(selectedSize.selectedFPS), bestFormat->pixelformat);
+                        bestFormat->description.c_str(), selectedSize.width, selectedSize.height,
+                        selectedSize.getFps(selectedSize.selectedFPS), bestFormat->pixelformat);
         selectedFormat_ = std::make_unique<Format>(*bestFormat);
     }
     else
@@ -266,8 +265,8 @@ void Webcam::selectBestFormat()
         auto& electedSize = capabilities_.formats[0].sizes[0];
         capabilities_.formats[0].selectedFrameSize = 0u;
         electedSize.selectedFPS = 0u;
-        common::logError("Webcam: No suitable format found, selecting first one of %dx%d and %d FPS",
-                          electedSize.width, electedSize.height, electedSize.getFps(electedSize.selectedFPS));
+        common::logError("Webcam: No suitable format found, selecting first one of %dx%d and %d FPS", electedSize.width,
+                         electedSize.height, electedSize.getFps(electedSize.selectedFPS));
         selectedFormat_ = std::make_unique<Format>(capabilities_.formats[0]);
     }
 }
@@ -306,7 +305,7 @@ std::tuple<unsigned int, unsigned int, double> Webcam::findBestFrameSize(const F
                 continue;
             }
         }
-        const double distance = calculateDistance(size.width, size.height, desiredWidth, desiredHeight);
+        const double distance = math_utils::distance(size.width, size.height, desiredWidth, desiredHeight);
 
         if (distance <= bestDistance)
         {
@@ -329,13 +328,6 @@ std::tuple<unsigned int, unsigned int, double> Webcam::findBestFrameSize(const F
 
     return {bestIndex, bestFpsIndex, bestDistance};
 }
-// TODO(arroyo): This should be in math utils.
-double Webcam::calculateDistance(unsigned int width1, unsigned int height1, unsigned int width2, unsigned int height2)
-{
-    const double dx = static_cast<double>(width1) - static_cast<double>(width2);
-    const double dy = static_cast<double>(height1) - static_cast<double>(height2);
-    return std::sqrt(dx * dx + dy * dy);
-}
 
 bool Webcam::configureDeviceFormat() const
 {
@@ -354,7 +346,7 @@ bool Webcam::configureDeviceFormat() const
         format.fmt.pix.height = frameSize.height;
         format.fmt.pix.field = V4L2_FIELD_NONE;
         common::logInfo("WebCam::configureDeviceFormat - %s - Trying to set format: pixfmt=%d, width=%d, height=%d",
-                         name_.c_str(), format.fmt.pix.pixelformat, format.fmt.pix.width, format.fmt.pix.height);
+                        name_.c_str(), format.fmt.pix.pixelformat, format.fmt.pix.width, format.fmt.pix.height);
 
         if (ioctl(fd_, VIDIOC_S_FMT, &format) < 0)
         {
@@ -487,14 +479,14 @@ bool Webcam::requeueFrame(struct v4l2_buffer& buf) const
                 break;
             case ENOMEM:
                 common::logError("Webcam::requeueFrame - %s - Not enough memory for buffer %d", name_.c_str(),
-                                  buf.index);
+                                 buf.index);
                 break;
             case EIO:
                 common::logError("Webcam::requeueFrame - %s - I/O error for buffer %d", name_.c_str(), buf.index);
                 break;
             default:
                 common::logError("Webcam::requeueFrame - %s - Unknown error %d for buffer %d (flags: 0x%x)",
-                                  name_.c_str(), errno, buf.index, buf.flags);
+                                 name_.c_str(), errno, buf.index, buf.flags);
                 common::errnoLog("Webcam::requeueFrame - VIDIOC_QBUF");
                 break;
         }

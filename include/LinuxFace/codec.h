@@ -717,14 +717,14 @@ class YUV422 : public Decoder
             return false;
         }
 
-        const size_t expectedSize = width_ * height_ * 2;
+        const size_t expectedSize = static_cast<size_t>(width_ * height_ * 2u);
         if (srcImage.size() < expectedSize)
         {
             common::logError("YUV422::decode - Input buffer too small: %zu < %zu", srcImage.size(), expectedSize);
             return false;
         }
 
-        const size_t rgbSize = width_ * height_ * 3;
+        const size_t rgbSize = static_cast<size_t>(width_ * height_ * 3u);
         if (outImage.size() != rgbSize)
         {
             outImage.resize(rgbSize);
@@ -734,7 +734,7 @@ class YUV422 : public Decoder
         outImage.info = srcImage.info;
         outImage.info.width = width_;
         outImage.info.height = height_;
-        outImage.info.pixelSizeBytes = 3;
+        outImage.info.pixelSizeBytes = 3u;
         outImage.info.TJPixelFormat = TJPF_RGB;
 
         return decodeYUV(srcImage, outImage, pxConvert);

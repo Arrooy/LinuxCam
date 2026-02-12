@@ -32,4 +32,4 @@ WFLW
 .github/instructions
 tests/**/results
 .cache/
-
+.env

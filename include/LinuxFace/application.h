@@ -27,6 +27,9 @@
 #include "LinuxFace/web/wsInputDevice.h"
 #include "LinuxFace/window.h"
 
+// Web-scraping API clients
+#include "LinuxFace/webscraping/pexelsAPI.h"
+
 namespace linuxface
 {
 
@@ -45,12 +48,21 @@ class Application : public std::enable_shared_from_this<Application>
     // Shutdown the application
     void shutdown();
 
+    // Set target image directly from an in-memory Image (preferred when available)
+    void setTargetImage(std::unique_ptr<Image> image);
+
+    // Trigger single-loop profiler capture on next frame
+    void requestLoopCapture() { captureNextLoop_ = true; }
+
+    // Check if running in headless mode
+    bool isHeadless() const { return headlessMode_; }
+
   private:
     void connectWindowResize();
     void calculateCompositeBounds(const std::vector<Layer>& layers, int windowWidth, int windowHeight, float& minX,
                                   float& minY, float& maxX, float& maxY);
-    bool createCompositeImage(const std::vector<Layer>& layers, float minX,
-                              float minY, unsigned int compositeWidth, unsigned int compositeHeight);
+    bool createCompositeImage(const std::vector<Layer>& layers, float minX, float minY, unsigned int compositeWidth,
+                              unsigned int compositeHeight);
 
     Window window_;
     std::unique_ptr<UI> ui_;
@@ -99,6 +111,9 @@ class Application : public std::enable_shared_from_this<Application>
     // Headless mode flag (no GUI available)
     bool headlessMode_{false};
 
+    // Pexels API client
+    std::unique_ptr<PexelsAPI> pexelsApi_;
+
     // Main loop methods
     bool update();
     void process(std::unique_ptr<Image>& image);
@@ -106,13 +121,6 @@ class Application : public std::enable_shared_from_this<Application>
     void stopWebServer();
     bool initializeWebSocket();
     void handleTargetImageUpdate(const std::vector<uint8_t>& imageData);
-
-  public:
-    // Trigger single-loop profiler capture on next frame
-    void requestLoopCapture() { captureNextLoop_ = true; }
-    
-    // Check if running in headless mode
-    bool isHeadless() const { return headlessMode_; }
 };
 
 } // namespace linuxface

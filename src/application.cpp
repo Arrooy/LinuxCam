@@ -100,6 +100,34 @@ Application::~Application()
     shutdown();
 }
 
+void Application::setTargetImage(std::unique_ptr<Image> image)
+{
+    if (!image)
+    {
+        common::logError("Application::setTargetImage - null image received");
+        return;
+    }
+
+    common::logInfo("Application::setTargetImage - setting in-memory target image (%lux%lu)",
+                    image->info.width, image->info.height);
+
+    // Move into application storage
+    target_img_ = std::move(image);
+
+    // Prepare embedding for swapping (if pipeline ready)
+    if (swapPipeline_ && target_img_)
+    {
+        if (swapPipeline_->prepareTargetEmbedding(target_img_))
+        {
+            common::logInfo("Application - Target face embedding updated successfully (in-memory)");
+        }
+        else
+        {
+            common::logError("Application - Failed to prepare target face embedding (in-memory)");
+        }
+    }
+}
+
 bool Application::initialize()
 {
     std::signal(SIGINT, signalHandler);
@@ -225,6 +253,26 @@ bool Application::initialize()
                 }
             }
         }
+    }
+
+    // Initialize Pexels API client from environment (via Config)
+    try
+    {
+        const std::string pexelsKey = Config::getInstance().getEnv("PEXELS_API_KEY", "");
+        if (!pexelsKey.empty())
+        {
+            pexelsApi_ = std::make_unique<PexelsAPI>(pexelsKey);
+            linuxface::common::logInfo("Pexels client initialized (key length=%zu)", pexelsKey.size());
+        }
+        else
+        {
+            linuxface::common::logDebug("PEXELS_API_KEY not found in env; skipping Pexels client initialization");
+        }
+    }
+    catch (const std::exception& ex)
+    {
+        linuxface::common::logWarn("Failed to initialize PexelsAPI: %s", ex.what());
+        pexelsApi_.reset();
     }
 
     // Start loading models in a background thread

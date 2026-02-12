@@ -5,8 +5,9 @@
 #include <linux/videodev2.h>
 #include <thread>
 
-#include "LinuxFace/codec.h"
 #include "LinuxFace/webcam.h"
+#include "LinuxFace/codecFactory.h"
+
 namespace linuxface
 {
 

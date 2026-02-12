@@ -251,8 +251,8 @@ class Config
         {
             // In headless mode, window properties are optional
             windowTitle_ = window["title"] ? window["title"].as<std::string>() : "LinuxFace (Headless)";
-            windowWidth_ = window["width"] ? window["width"].as<int>() : 0;
-            windowHeight_ = window["height"] ? window["height"].as<int>() : 0;
+            windowWidth_ = window["width"] ? window["width"].as<unsigned int>() : 0;
+            windowHeight_ = window["height"] ? window["height"].as<unsigned int>() : 0;
             common::logInfo("Running in headless mode - no GUI window will be created");
             return true;
         }
@@ -270,14 +270,14 @@ class Config
             common::logError("Missing width field in window section");
             return false;
         }
-        windowWidth_ = window["width"].as<int>();
+        windowWidth_ = window["width"].as<unsigned int>();
 
         if (!window["height"])
         {
             common::logError("Missing height field in window section");
             return false;
         }
-        windowHeight_ = window["height"].as<int>();
+        windowHeight_ = window["height"].as<unsigned int>();
         return true;
     }
 
@@ -444,6 +444,9 @@ class Config
             common::logError("Config: YAML file missing or invalid");
             return false;
         }
+
+        env_ = loadEnv("../.env");
+
         if (config_["enable_gpu"])
         {
             enableGPU_ = config_["enable_gpu"].as<bool>();
@@ -506,6 +509,38 @@ class Config
         return defaultValue;
     }
 
+    std::unordered_map<std::string,std::string> loadEnv(const std::string &filename) {
+        std::unordered_map<std::string,std::string> env;
+        std::ifstream file(filename);
+        std::string line;
+        while(std::getline(file, line)) {
+            auto eq = line.find('=');
+            if(eq != std::string::npos) {
+                env[line.substr(0, eq)] = line.substr(eq + 1);
+            }
+        }
+        if (env.empty())
+        {
+            common::logError("No environment variables loaded from %s", filename.c_str());
+        }
+        else
+        {
+            common::logInfo("Loaded %zu environment variables from %s", env.size(), filename.c_str());
+        }
+        return env;
+    }
+
+    std::string getEnv(const std::string& key, const std::string& defaultValue = "") const
+    {
+        auto it = env_.find(key);
+        if (it != env_.end())
+        {
+            return it->second;
+        }
+        common::logError("Environment variable '%s' not found, returning default value", key.c_str());
+        return defaultValue;
+    }
+
   private:
     YAML::Node config_;
     std::vector<WebcamDevice> cameras_;
@@ -521,6 +556,8 @@ class Config
     unsigned int windowHeight_{};
     std::string windowTitle_;
     bool headless_{false};
+
+    std::unordered_map<std::string, std::string> env_;
 
     // Helper function to ensure path ends with exactly one "/"
     static std::string normalizePath(const std::string& path)
