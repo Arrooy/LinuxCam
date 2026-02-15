@@ -18,14 +18,145 @@
 
 ## 📋 Table of Contents
 
-- [Installation](#️-installation)
+- [Docker Installation (Recommended)](#-docker-installation-recommended)
+- [Native Installation](#️-native-installation)
 - [Quick Start](#-quick-start)
 - [Usage](#-usage)
 - [Development](#-development)
 - [Contributing](#-contributing)
 - [License](#-license)
 
-## 🛠️ Installation
+## 🐳 Docker Installation (Recommended)
+
+The easiest way to run LinuxCam is using Docker with GPU support. This method handles all dependencies automatically and provides a consistent environment.
+
+### Prerequisites
+
+**System Requirements:**
+- Linux host with NVIDIA GPU
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+- NVIDIA Container Toolkit
+
+**Installation Steps:**
+
+1. **Install Docker and Docker Compose**
+   ```bash
+   # Install Docker
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sudo sh get-docker.sh
+   sudo usermod -aG docker $USER
+   
+   # Install Docker Compose (if not included)
+   sudo apt-get update
+   sudo apt-get install docker-compose-plugin
+   ```
+
+2. **Install NVIDIA Container Toolkit**
+   ```bash
+   # Add NVIDIA package repositories
+   distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+   curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+   curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | \
+       sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+   
+   # Install NVIDIA container toolkit
+   sudo apt-get update
+   sudo apt-get install -y nvidia-container-toolkit
+   
+   # Restart Docker daemon
+   sudo systemctl restart docker
+   
+   # Verify installation
+   docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
+   ```
+
+3. **Clone Repository**
+   ```bash
+   git clone --recurse-submodules https://github.com/Arrooy/LinuxCam.git
+   cd LinuxCam
+   ```
+
+4. **Setup Virtual Camera on Host**
+   ```bash
+   # Run the setup script (requires sudo)
+   sudo bash scripts/setup_v4l2loopback.sh
+   ```
+
+5. **Generate SSL Certificates**
+   ```bash
+   # Generate self-signed certificates for HTTPS
+   bash scripts/generate_ssl_certs.sh
+   ```
+
+6. **Enable X11 Access for Docker**
+   ```bash
+   # Allow Docker containers to access X11 display
+   xhost +local:docker
+   ```
+   > **Note:** This needs to be run once per session. Add to `~/.bashrc` for automatic execution.
+
+7. **Run with Docker Compose**
+   ```bash
+   # Build and start the container
+   docker-compose up -d
+   
+   # View logs
+   docker-compose logs -f
+   
+   # Stop the container
+   docker-compose down
+   ```
+
+**Quick Start Alternative:**
+```bash
+# One-line setup (after cloning repo)
+sudo bash scripts/setup_v4l2loopback.sh && \
+bash scripts/generate_ssl_certs.sh && \
+xhost +local:docker && \
+docker-compose up
+```
+
+### Docker Configuration
+
+**Custom Configuration:**
+- Mount your own `config.yaml`: Edit `docker-compose.yml` volumes section
+- Use different camera device: Change device mappings in `docker-compose.yml`
+- Adjust GPU memory: Modify resource limits in `docker-compose.yml`
+
+**Development Mode:**
+```bash
+# Use development container with source code mounted
+docker-compose -f docker-compose.dev.yml up -d
+
+# Enter the container for development
+docker exec -it linuxface-dev bash
+
+# Inside container: build and run
+cd /workspace/build
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake --build . -j$(nproc)
+./LinuxFace
+```
+
+**Common Docker Commands:**
+```bash
+# Enter running container
+docker exec -it linuxface-dev bash
+
+# View container logs
+docker logs -f linuxface-dev
+
+# Restart container
+docker restart linuxface-dev
+
+# Stop and remove container
+docker-compose -f docker-compose.dev.yml down
+```
+
+---
+
+## 🛠️ Native Installation
 
 ### Prerequisites
 
@@ -44,7 +175,10 @@
 sudo apt-get install nasm cmake build-essential
 
 # Image processing libraries
-sudo apt-get install libjxl-dev libopenblas-dev liblapack-dev
+sudo apt-get install libopenblas-dev liblapack-dev
+
+# Web framework dependencies (Drogon)
+sudo apt-get install libjsoncpp-dev uuid-dev zlib1g-dev libssl-dev pkg-config
 
 # Video processing libraries
 sudo apt-get install libavdevice-dev libavfilter-dev libavformat-dev
@@ -238,6 +372,47 @@ Options:
 ```
 
 ## 🔧 Development
+
+### Development Environments
+
+LinuxCam supports multiple development workflows:
+
+#### VS Code Dev Container (Recommended)
+
+The easiest way to start developing is using VS Code with Dev Containers:
+
+1. **Prerequisites**: Docker, VS Code, and the "Dev Containers" extension
+2. **Open in Container**: Open the project in VS Code and click "Reopen in Container"
+3. **Start Coding**: All dependencies, tools, and extensions are automatically configured
+
+The devcontainer includes:
+- Full C++ development environment with IntelliSense
+- CMake and build tools pre-configured
+- Debugging support with GDB
+- GPU access for testing
+- All project dependencies
+
+#### Docker Development Container
+
+For development without VS Code:
+
+```bash
+# Start development container with source code mounted
+docker-compose -f docker-compose.dev.yml up -d
+
+# Enter the container
+docker-compose -f docker-compose.dev.yml exec linuxface-dev /bin/bash
+
+# Build the project
+cd /workspace
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+make -j$(nproc)
+```
+
+#### Native Development
+
+For traditional local development, see the [Native Installation](#-native-installation) section.
 
 ### Code Style
 

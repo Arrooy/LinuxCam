@@ -1,0 +1,134 @@
+{
+    "name": "LinuxCam Development",
+    
+    // Use docker-compose for complete development environment
+    "dockerComposeFile": "../docker-compose.dev.yml",
+    "service": "linuxface-dev",
+    "workspaceFolder": "/workspace",
+    // Configure properties specific to VS Code
+    "customizations": {
+        "vscode": {
+            // Extensions to install in the container
+            "extensions": [
+                // C++ development
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vscode.cmake-tools",
+                "twxs.cmake",
+                // Git and version control
+                "eamodio.gitlens",
+                "mhutchie.git-graph",
+                // Code quality
+                "llvm-vs-code-extensions.vscode-clangd",
+                "notskm.clang-tidy",
+                // Python (for scripts)
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                // Docker
+                "ms-azuretools.vscode-docker",
+                // YAML
+                "redhat.vscode-yaml",
+                // Markdown
+                "yzhang.markdown-all-in-one",
+                // Utilities
+                "aaron-bond.better-comments",
+                "christian-kohler.path-intellisense",
+                "streetsidesoftware.code-spell-checker"
+            ],
+            // VS Code settings
+            "settings": {
+                // C++ settings
+                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+                "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
+                "C_Cpp.default.compilerPath": "/usr/bin/g++-12",
+                "C_Cpp.default.cStandard": "c11",
+                "C_Cpp.default.cppStandard": "c++17",
+                // CMake settings
+                "cmake.configureOnOpen": true,
+                "cmake.buildDirectory": "${workspaceFolder}/build",
+                "cmake.generator": "Ninja",
+                "cmake.configureArgs": [
+                    "-DCMAKE_BUILD_TYPE=Debug",
+                    "-DENABLE_TESTING=ON",
+                    "-DENABLE_COVERAGE=ON"
+                ],
+                // Editor settings
+                "editor.formatOnSave": true,
+                "editor.rulers": [
+                    100
+                ],
+                "editor.tabSize": 4,
+                "editor.insertSpaces": true,
+                // Files settings
+                "files.associations": {
+                    "*.hpp": "cpp",
+                    "*.cpp": "cpp",
+                    "*.h": "c",
+                    "*.c": "c"
+                },
+                "files.trimTrailingWhitespace": true,
+                "files.insertFinalNewline": true,
+                // Terminal settings
+                "terminal.integrated.defaultProfile.linux": "bash",
+                // Git settings
+                "git.autofetch": true,
+                "git.confirmSync": false,
+                // Python settings
+                "python.defaultInterpreterPath": "/usr/bin/python3",
+                "python.linting.enabled": true,
+                "python.linting.pylintEnabled": true,
+                "python.formatting.provider": "black"
+            }
+        }
+    },
+    // Features to add to the container
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    // Use 'forwardPorts' to make a list of ports inside the container available locally
+    "forwardPorts": [
+        8443,
+        1234,
+        5678
+    ],
+    // Port attributes
+    "portsAttributes": {
+        "8443": {
+            "label": "Web Server (HTTPS)",
+            "onAutoForward": "notify"
+        },
+        "1234": {
+            "label": "GDB Debug Port",
+            "onAutoForward": "silent"
+        },
+        "5678": {
+            "label": "Additional Debug Port",
+            "onAutoForward": "silent"
+        }
+    },
+    // Run commands after container is created
+    "postCreateCommand": "git config --global --add safe.directory /workspace",
+    // Run commands after the container starts
+    "postStartCommand": "echo 'LinuxCam development container ready!'",
+    // Comment out to run as root instead
+    "remoteUser": "linuxface",
+    // Mount additional volumes
+    "mounts": [
+        // Preserve bash history
+        "source=linuxface-bash-history,target=/home/linuxface/.bash_history,type=volume",
+        // Preserve VS Code extensions
+        "source=linuxface-vscode-extensions,target=/home/linuxface/.vscode-server/extensions,type=volume",
+        // SSH keys for git operations (if available on host)
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/linuxface/.ssh,type=bind,consistency=cached,readonly"
+    ],
+    // Set environment variables
+    "containerEnv": {
+        "DISPLAY": "${localEnv:DISPLAY}",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_TESTING": "ON"
+    },
+    // Note: GPU support, capabilities, and security options are configured
+    // in docker-compose.dev.yml since we're using dockerComposeFile
+    "shutdownAction": "stopCompose"
+}

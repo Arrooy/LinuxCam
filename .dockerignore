@@ -1,0 +1,122 @@
+# Docker build context ignore patterns
+
+# Git
+.git/
+.github/
+.gitignore
+.gitmodules
+.gitattributes
+
+# Build directories (exclude completely)
+build/
+build*/
+build-*/
+build_valgrind/
+cmake-build-*/
+out/
+dist/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+docs/
+DOCKER_IMPLEMENTATION_PLAN.md
+
+# Test artifacts
+Testing/
+*.log
+*.xml
+*.html
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CPackConfig.cmake
+CPackSourceConfig.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled files (will be built in container)
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.exe
+LinuxFace
+linuxface_tests
+
+# Dependencies (will be fetched during build)
+_deps/
+external/*/build/
+
+# Large binary files that will be downloaded (exclude to reduce context)
+# Models will be volume-mounted at runtime or downloaded during build if needed
+models/
+WFLW/
+
+# Uploads and runtime data
+uploads/*
+!uploads/.gitkeep
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+debug_*
+
+# Package manager
+node_modules/
+vendor/
+
+# System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Valgrind
+valgrind_output.txt
+
+# Code coverage
+*.gcov
+coverage.xml
+htmlcov/
+
+# Editor backup
+*~
+\#*\#
+.\#*
+
+# Clang-tidy
+.clang-tidy-*

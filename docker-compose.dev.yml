@@ -1,0 +1,129 @@
+# Development docker-compose using multi-stage Dockerfile
+services:
+  linuxface-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development  # Use the development stage
+      args:
+        BUILD_TYPE: Debug
+        ENABLE_TESTING: "ON"
+        ENABLE_CUDA: "ON"
+        DEV_TOOLS: "ON"  # Include all dev tools
+        # Proxy configuration for build-time
+        HTTP_PROXY: ${HTTP_PROXY:-http://proxy.bcn.rd.hpicorp.net:8080}
+        HTTPS_PROXY: ${HTTPS_PROXY:-http://proxy.bcn.rd.hpicorp.net:8080}
+        NO_PROXY: ${NO_PROXY:-127.0.0.1,localhost,15.,.hpicorp.net,.hpicloud.net}
+        http_proxy: ${http_proxy:-http://proxy.bcn.rd.hpicorp.net:8080}
+        https_proxy: ${https_proxy:-http://proxy.bcn.rd.hpicorp.net:8080}
+        no_proxy: ${no_proxy:-127.0.0.1,localhost,15.,.hpicorp.net,.hpicloud.net}
+    image: linuxcam:dev
+    container_name: linuxface-dev
+
+    # Use NVIDIA runtime for GPU access
+    runtime: nvidia
+
+    # Override entrypoint for development - just keep container running
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "echo 'Development container ready. Use: docker exec -it linuxface-dev bash' && sleep infinity"]
+
+    # Environment variables
+    environment:
+      # NVIDIA GPU configuration
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+      # Display for GUI applications
+      - DISPLAY=${DISPLAY:-:0}
+      - XAUTHORITY=/tmp/.Xauthority
+      # Development environment
+      - CMAKE_BUILD_TYPE=Debug
+      - ENABLE_COVERAGE=ON
+      - ENABLE_TESTING=ON
+
+    # Allow access to video devices via cgroup rules
+    # This allows any video device to be accessed without explicit mapping
+    device_cgroup_rules:
+      - 'c 81:* rmw'  # Video devices (character device 81)
+      - 'c 226:* rmw' # DRI devices for GPU
+
+    # Volumes - mount source code for live development
+    volumes:
+      # Mount entire project directory
+      - .:/workspace:rw
+      # X11 socket for GUI applications
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # X11 authentication
+      - ${HOME}/.Xauthority:/tmp/.Xauthority:ro
+      # Mount /dev for camera access (gives access to all video devices)
+      - /dev:/dev:rw
+      # Configuration file
+      - ./config.yaml:/app/config.yaml:ro
+      # Models directory
+      - ./models:/app/models:ro
+      # SSL certificates
+      - ./ssl:/app/ssl:ro
+      # SSH keys for git operations (optional)
+      - ${HOME}/.ssh:/home/linuxface/.ssh:ro
+      # Git configuration (optional)
+      - ${HOME}/.gitconfig:/home/linuxface/.gitconfig:ro
+      # Preserve bash history
+      - linuxface-dev-bash-history:/home/linuxface/.bash_history
+      # Preserve CMake cache
+      - linuxface-dev-cmake-cache:/workspace/build
+
+    # Port mappings
+    ports:
+      # Web server (HTTPS)
+      - "8443:8443"
+      # GDB debugging port
+      - "1234:1234"
+      # Additional debugging port
+      - "5678:5678"
+
+    # Networking
+    network_mode: bridge
+
+    # Resource limits (adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]
+          memory: 4G
+
+    # Security options - more relaxed for development
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE # For debugging with gdb
+      - SYS_ADMIN # For device operations
+
+    # Keep container running for interactive development
+    stdin_open: true
+    tty: true
+
+    # Restart policy
+    restart: unless-stopped
+
+    # IPC mode for shared memory
+    ipc: host
+
+    # Working directory
+    working_dir: /workspace
+
+# Define volumes
+volumes:
+  linuxface-dev-bash-history:
+    driver: local
+  linuxface-dev-cmake-cache:
+    driver: local
+
+# Optional: Define networks
+networks:
+  default:
+    name: linuxface_dev_network
+    driver: bridge

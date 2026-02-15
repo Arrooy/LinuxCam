@@ -89,7 +89,11 @@ jobs:
             libswresample-dev \
             libswscale-dev \
             libavutil-dev \
-            libjxl-dev \
+            libjsoncpp-dev \
+            uuid-dev \
+            zlib1g-dev \
+            libssl-dev \
+            pkg-config \
             unzip
 
       - name: Setup ccache
